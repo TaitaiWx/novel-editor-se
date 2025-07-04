@@ -5,22 +5,84 @@ interface CodeViewerProps {
   filePath: string | null;
 }
 
+// 获取语言类型用于语法高亮类名
+const getLanguageFromPath = (path: string): string => {
+  const ext = path.split('.').pop()?.toLowerCase();
+  const languageMap: Record<string, string> = {
+    js: 'javascript',
+    ts: 'typescript',
+    jsx: 'javascript',
+    tsx: 'typescript',
+    json: 'json',
+    css: 'css',
+    scss: 'scss',
+    html: 'html',
+    md: 'markdown',
+    py: 'python',
+    java: 'java',
+    cpp: 'cpp',
+    c: 'c',
+    go: 'go',
+    rs: 'rust',
+    php: 'php',
+    rb: 'ruby',
+    swift: 'swift',
+    kt: 'kotlin',
+    dart: 'dart',
+  };
+  return languageMap[ext || ''] || 'text';
+};
+
+// 简单的代码高亮（基本关键字）
+const highlightCode = (code: string, language: string): string => {
+  if (language === 'javascript' || language === 'typescript') {
+    return code
+      .replace(
+        /\b(const|let|var|function|class|import|export|from|default|if|else|for|while|return|try|catch|finally|async|await|true|false|null|undefined)\b/g,
+        '<span class="keyword">$1</span>'
+      )
+      .replace(/'([^']*?)'/g, '<span class="string">\'$1\'</span>')
+      .replace(/"([^"]*?)"/g, '<span class="string">"$1"</span>')
+      .replace(/\/\/.*$/gm, '<span class="comment">$&</span>')
+      .replace(/\/\*[\s\S]*?\*\//g, '<span class="comment">$&</span>');
+  }
+
+  if (language === 'json') {
+    return code
+      .replace(/"([^"]*?)":/g, '<span class="property">"$1"</span>:')
+      .replace(/:\s*"([^"]*?)"/g, ': <span class="string">"$1"</span>')
+      .replace(/:\s*(true|false|null)/g, ': <span class="keyword">$1</span>')
+      .replace(/:\s*(\d+)/g, ': <span class="number">$1</span>');
+  }
+
+  return code;
+};
+
 const CodeViewer: React.FC<CodeViewerProps> = ({ filePath }) => {
   const [content, setContent] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadContent = async () => {
       if (!filePath) {
         setContent('');
+        setError(null);
         return;
       }
+
+      setLoading(true);
+      setError(null);
 
       try {
         const fileContent = await window.electron.ipcRenderer.invoke('read-file', filePath);
         setContent(fileContent);
       } catch (error) {
         console.error('Error reading file:', error);
-        setContent('Error loading file content');
+        setError(`无法读取文件: ${filePath}`);
+        setContent('');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -30,17 +92,67 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ filePath }) => {
   if (!filePath) {
     return (
       <div className="code-viewer empty">
-        <p>请选择一个文件来查看内容</p>
+        <div className="empty-content">
+          <div className="empty-icon">📁</div>
+          <h3>选择文件开始阅读</h3>
+          <p>从左侧文件树中选择一个文件来查看其内容</p>
+        </div>
       </div>
     );
   }
 
+  if (loading) {
+    return (
+      <div className="code-viewer loading">
+        <div className="loading-content">
+          <div className="loading-spinner"></div>
+          <p>正在加载文件内容...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="code-viewer error">
+        <div className="error-content">
+          <div className="error-icon">⚠️</div>
+          <h3>文件加载失败</h3>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const language = getLanguageFromPath(filePath);
+  const highlightedContent = highlightCode(content, language);
+  const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || '';
+
   return (
     <div className="code-viewer">
-      <div className="file-path">{filePath}</div>
-      <pre className="code-content">
-        <code>{content}</code>
-      </pre>
+      <div className="file-header">
+        <div className="file-info">
+          <span className="file-name">{fileName}</span>
+          <span className="file-path">{filePath}</span>
+        </div>
+        <div className="file-stats">
+          <span className="language-badge">{language}</span>
+          <span className="line-count">{content.split('\n').length} 行</span>
+        </div>
+      </div>
+      <div className="code-container">
+        <div className="line-numbers">
+          {content.split('\n').map((_, index) => (
+            <div key={index + 1} className="line-number">
+              {index + 1}
+            </div>
+          ))}
+        </div>
+        <div
+          className={`code-content language-${language}`}
+          dangerouslySetInnerHTML={{ __html: highlightedContent }}
+        />
+      </div>
     </div>
   );
 };

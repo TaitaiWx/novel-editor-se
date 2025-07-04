@@ -1,66 +1,219 @@
 .app {
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+/* 主要内容区域 - 直接占满整个窗口 */
+.app-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* 左侧面板 */
+.left-panel {
+  width: 320px;
+  min-width: 220px;
+  max-width: 500px;
+  background-color: #252526;
+  border-right: 1px solid #3d3d3d;
+  display: flex;
+  flex-direction: column;
+  resize: horizontal;
+  overflow: hidden;
+}
+
+/* 右侧面板 */
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 面板头部样式 */
+.panel-header {
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  flex-shrink: 0;
+
+  .header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+
+    h3 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 500;
+      color: #cccccc;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .open-folder-icon {
+      background: none;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 3px;
+      transition: background-color 0.2s;
+
+      &:hover:not(:disabled) {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      &:active:not(:disabled) {
+        background-color: rgba(255, 255, 255, 0.05);
+      }
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  .current-folder {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    font-size: 11px;
+
+    .folder-path {
+      color: #cccccc;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    .file-count {
+      background-color: #0e639c;
+      color: #ffffff;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-size: 9px;
+      font-weight: 500;
+      margin-left: 8px;
+    }
+  }
+
+  /* 右侧面板的头部 */
+  .right-panel & {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+
+    h3 {
+      font-size: 13px;
+      color: #ffffff;
+      text-transform: none;
+      letter-spacing: normal;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-indicator {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background-color: #16a085;
+      color: #ffffff;
+      font-weight: 500;
+    }
+  }
+}
+
+.panel-content {
+  flex: 1;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.app-container {
-  width: 100%;
-  height: 100%;
+/* 空状态和加载状态 */
+.empty-state,
+.loading-state {
+  flex: 1;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
 
-  .sidebar {
-    width: 300px;
-    background-color: #252526;
-    border-right: 1px solid #3d3d3d;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-
-    .file-explorer {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-
-      h3 {
-        margin: 0;
-        padding: 16px;
-        font-size: 14px;
-        color: #ccc;
-        font-weight: normal;
-        background-color: #2d2d2d;
-      }
-    }
-
-    .dependency-view {
-      border-top: 1px solid #3d3d3d;
-    }
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
   }
 
-  .content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+  h4 {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 8px 0;
+    color: #ffffff;
+  }
 
-    .code-view {
-      flex: 1;
-      overflow: hidden;
-    }
+  p {
+    color: #888888;
+    font-size: 13px;
+    margin: 0;
+    text-align: center;
+    line-height: 1.4;
+  }
 
-    .notes-panel {
-      height: 200px;
-      background-color: #252526;
-      border-top: 1px solid #3d3d3d;
-      padding: 16px;
+  .loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #333333;
+    border-top: 3px solid #0e639c;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+  }
+}
 
-      h3 {
-        margin-bottom: 12px;
-        font-size: 14px;
-        color: #ccc;
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .left-panel {
+    width: 280px;
+    min-width: 200px;
+  }
+
+  .panel-header {
+    .current-folder {
+      .folder-path {
+        max-width: 120px;
       }
     }
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
   }
 }

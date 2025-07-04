@@ -4,19 +4,45 @@ import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => {
   const isElectronMain = process.env.VITE_ELECTRON_MAIN === 'true';
+  const isPreload = process.env.VITE_PRELOAD === 'true';
 
-  if (isElectronMain) {
-    // 主进程和预加载脚本构建配置
+  if (isPreload) {
+    // Preload 脚本构建配置 - 使用 CommonJS 格式
     return {
       build: {
         outDir: './dist',
         emptyOutDir: false,
         lib: {
-          entry: {
-            main: resolve(__dirname, 'src/main/index.ts'),
-            preload: resolve(__dirname, 'src/main/preload.ts'),
+          entry: resolve(__dirname, 'src/main/preload.ts'),
+          formats: ['cjs'],
+          fileName: () => 'preload.js',
+        },
+        rollupOptions: {
+          external: ['electron'],
+          output: {
+            format: 'cjs',
+            entryFileNames: 'preload.js',
           },
+        },
+      },
+      resolve: {
+        alias: {
+          '@': resolve(__dirname, 'src'),
+        },
+      },
+    };
+  }
+
+  if (isElectronMain) {
+    // 主进程构建配置
+    return {
+      build: {
+        outDir: './dist',
+        emptyOutDir: false,
+        lib: {
+          entry: resolve(__dirname, 'src/main/index.ts'),
           formats: ['es'],
+          fileName: () => 'main.mjs',
         },
         rollupOptions: {
           external: [
@@ -29,7 +55,8 @@ export default defineConfig(({ mode }) => {
             /^node:/,
           ],
           output: {
-            entryFileNames: '[name].mjs',
+            format: 'es',
+            entryFileNames: 'main.mjs',
           },
         },
       },

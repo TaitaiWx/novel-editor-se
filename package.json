@@ -4,10 +4,11 @@
   "description": "",
   "main": "./dist/main.mjs",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development concurrently \"pnpm build:main && pnpm build:renderer --watch\" \"wait-on dist/main.mjs && nodemon --watch src/main --ext ts,mjs --exec electron .\"",
+    "dev": "cross-env NODE_ENV=development concurrently \"pnpm build:main && pnpm build:preload && pnpm build:renderer --watch\" \"wait-on dist/main.mjs && nodemon --watch src/main --ext ts,mjs --exec electron .\"",
     "build:main": "cross-env VITE_ELECTRON_MAIN=true vite build",
+    "build:preload": "cross-env VITE_PRELOAD=true vite build",
     "build:renderer": "vite build",
-    "build": "pnpm build:main && pnpm build:renderer",
+    "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "start": "electron .",
     "build:prod": "cross-env NODE_ENV=production pnpm build",
     "package": "pnpm build:prod && electron-builder",
