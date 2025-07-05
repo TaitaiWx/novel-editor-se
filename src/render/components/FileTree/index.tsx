@@ -1,4 +1,8 @@
 import React from 'react';
+import { AiFillFolder, AiOutlineFileText, AiOutlineCode, AiOutlineFile } from 'react-icons/ai';
+import { DiJavascript1, DiReact, DiPython, DiHtml5, DiCss3 } from 'react-icons/di';
+import { VscJson } from 'react-icons/vsc';
+import { AiOutlineFileMarkdown } from 'react-icons/ai';
 import './styles.scss';
 
 interface FileNode {
@@ -17,33 +21,33 @@ interface FileTreeProps {
 // 获取文件图标
 const getFileIcon = (name: string, type: 'file' | 'directory') => {
   if (type === 'directory') {
-    return { icon: '📁', className: 'folder' };
+    return { icon: <AiFillFolder />, className: 'folder' };
   }
 
   const ext = name.split('.').pop()?.toLowerCase();
   switch (ext) {
     case 'js':
-      return { icon: '🟨', className: 'js' };
+      return { icon: <DiJavascript1 />, className: 'js' };
     case 'ts':
-      return { icon: '🔷', className: 'ts' };
+      return { icon: <AiOutlineCode />, className: 'ts' };
     case 'jsx':
     case 'tsx':
-      return { icon: '⚛️', className: 'jsx' };
+      return { icon: <DiReact />, className: 'jsx' };
     case 'json':
-      return { icon: '📄', className: 'json' };
+      return { icon: <VscJson />, className: 'json' };
     case 'md':
-      return { icon: '📝', className: 'md' };
+      return { icon: <AiOutlineFileMarkdown />, className: 'md' };
     case 'css':
     case 'scss':
-      return { icon: '🎨', className: 'css' };
+      return { icon: <DiCss3 />, className: 'css' };
     case 'html':
-      return { icon: '🌐', className: 'html' };
+      return { icon: <DiHtml5 />, className: 'html' };
     case 'txt':
-      return { icon: '📄', className: 'txt' };
+      return { icon: <AiOutlineFileText />, className: 'txt' };
     case 'py':
-      return { icon: '🐍', className: 'py' };
+      return { icon: <DiPython />, className: 'py' };
     default:
-      return { icon: '📄', className: 'file' };
+      return { icon: <AiOutlineFile />, className: 'file' };
   }
 };
 

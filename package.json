@@ -25,13 +25,15 @@
     "directory-tree": "^3.5.2",
     "fs-extra": "^11.3.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.5.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.0.10",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
+    "@types/react-icons": "^3.0.0",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
     "@vitejs/plugin-react": "^4.3.4",
