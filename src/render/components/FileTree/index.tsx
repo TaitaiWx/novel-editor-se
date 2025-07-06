@@ -3,7 +3,7 @@ import { AiFillFolder, AiOutlineFileText, AiOutlineCode, AiOutlineFile } from 'r
 import { DiJavascript1, DiReact, DiPython, DiHtml5, DiCss3 } from 'react-icons/di';
 import { VscJson } from 'react-icons/vsc';
 import { AiOutlineFileMarkdown } from 'react-icons/ai';
-import './styles.scss';
+import styles from './styles.module.scss';
 
 interface FileNode {
   name: string;
@@ -91,27 +91,27 @@ const FileTreeItem: React.FC<{
   const { icon, className } = getFileIcon(node.name, node.type);
 
   return (
-    <div className="file-tree-item">
+    <div className={styles.fileTreeItem}>
       <div
-        className={`item-header ${node.type} ${isSelected ? 'selected' : ''}`}
+        className={`${styles.itemHeader} ${styles[node.type]} ${isSelected ? styles.selected : ''}`}
         onClick={handleClick}
         style={{ paddingLeft: `${8 + level * 16}px` }}
       >
         <span
-          className={`expand-icon ${isExpanded ? 'expanded' : ''} ${
-            node.type === 'file' ? 'hidden' : ''
+          className={`${styles.expandIcon} ${isExpanded ? styles.expanded : ''} ${
+            node.type === 'file' ? styles.hidden : ''
           }`}
         >
           ▶
         </span>
-        <span className={`file-icon ${className}`}>{icon}</span>
-        <span className="item-name">{node.name}</span>
+        <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
+        <span className={styles.itemName}>{node.name}</span>
         {node.type === 'file' && fileInfo && (
-          <span className="item-size">{formatFileSize(fileInfo.size)}</span>
+          <span className={styles.itemSize}>{formatFileSize(fileInfo.size)}</span>
         )}
       </div>
       {node.type === 'directory' && isExpanded && node.children && (
-        <div className="item-children">
+        <div className={styles.itemChildren}>
           {node.children.map((child) => (
             <FileTreeItem
               key={child.path}
@@ -129,7 +129,7 @@ const FileTreeItem: React.FC<{
 
 const FileTree: React.FC<FileTreeProps> = ({ files, onFileSelect, selectedFile }) => {
   return (
-    <div className="file-tree">
+    <div className={styles.fileTree}>
       {files.map((file) => (
         <FileTreeItem
           key={file.path}

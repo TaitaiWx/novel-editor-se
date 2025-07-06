@@ -1,0 +1,324 @@
+.codeViewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+
+  &.empty {
+    .emptyContent {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 2rem;
+
+      .emptyIcon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.6;
+      }
+
+      h3 {
+        font-size: 1.2rem;
+        margin-bottom: 0.5rem;
+        color: #ffffff;
+      }
+
+      p {
+        color: #888;
+        font-size: 0.9rem;
+        margin: 0;
+      }
+    }
+  }
+
+  &.loading {
+    .loadingContent {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 2rem;
+
+      .loadingSpinner {
+        width: 2rem;
+        height: 2rem;
+        border: 3px solid #333;
+        border-top: 3px solid #007acc;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+      }
+
+      p {
+        color: #888;
+        font-size: 0.9rem;
+        margin: 0;
+      }
+    }
+  }
+
+  &.error {
+    .errorContent {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 2rem;
+
+      .errorIcon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.8;
+      }
+
+      h3 {
+        font-size: 1.2rem;
+        margin-bottom: 0.5rem;
+        color: #f85149;
+      }
+
+      p {
+        color: #888;
+        font-size: 0.9rem;
+        margin: 0;
+      }
+    }
+  }
+}
+
+.fileHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background-color: #2d2d2d;
+  border-bottom: 2px solid #404040;
+  flex-shrink: 0;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #007acc, transparent);
+    opacity: 0.3;
+  }
+
+  .fileInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+
+    .fileName {
+      font-weight: 600;
+      color: #ffffff;
+      font-size: 0.9rem;
+    }
+
+    .filePath {
+      font-size: 0.75rem;
+      color: #888;
+      opacity: 0.8;
+    }
+  }
+
+  .fileStats {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+
+    .languageBadge {
+      background-color: #007acc;
+      color: #ffffff;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .lineCount {
+      color: #888;
+      font-size: 0.75rem;
+    }
+  }
+}
+
+.codeContainer {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+
+  .lineNumbers {
+    background-color: #252526;
+    color: #858585;
+    padding: 1rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    text-align: right;
+    user-select: none;
+    border-right: 2px solid #404040;
+    min-width: 3rem;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: -2px;
+      bottom: 0;
+      width: 1px;
+      background: linear-gradient(180deg, transparent, #007acc, transparent);
+      opacity: 0.2;
+    }
+
+    .lineNumber {
+      padding-right: 0.5rem;
+      white-space: nowrap;
+    }
+  }
+
+  .codeContent {
+    flex: 1;
+    padding: 1rem;
+    overflow: auto;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+
+    // 语法高亮样式
+    :global(.keyword) {
+      color: #569cd6;
+      font-weight: 500;
+    }
+
+    :global(.string) {
+      color: #ce9178;
+    }
+
+    :global(.comment) {
+      color: #6a9955;
+      font-style: italic;
+    }
+
+    :global(.property) {
+      color: #9cdcfe;
+    }
+
+    :global(.number) {
+      color: #b5cea8;
+    }
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* 滚动条样式 */
+.codeContent::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.codeContent::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.codeContent::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+
+  &:hover {
+    background: #555;
+  }
+}
+
+.lineNumbers::-webkit-scrollbar {
+  width: 8px;
+}
+
+.lineNumbers::-webkit-scrollbar-track {
+  background: #252526;
+}
+
+.lineNumbers::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+
+  &:hover {
+    background: #555;
+  }
+}
+
+// 方格线样式 - 与字体大小相匹配
+.withGrid {
+  .codeContent {
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        repeating-linear-gradient(90deg,
+          transparent,
+          transparent calc(1ch - 1px),
+          rgba(255, 255, 255, 0.1) calc(1ch - 1px),
+          rgba(255, 255, 255, 0.1) 1ch),
+        repeating-linear-gradient(0deg,
+          transparent,
+          transparent calc(1.5em - 1px),
+          rgba(255, 255, 255, 0.08) calc(1.5em - 1px),
+          rgba(255, 255, 255, 0.08) 1.5em);
+      pointer-events: none;
+      z-index: 1;
+    }
+  }
+}
+
+// 行线样式 - 每行一条线
+.withRowLines {
+  .codeContent {
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        repeating-linear-gradient(0deg,
+          transparent,
+          transparent calc(1.5em - 1px),
+          rgba(255, 255, 255, 0.12) calc(1.5em - 1px),
+          rgba(255, 255, 255, 0.12) 1.5em);
+      pointer-events: none;
+      z-index: 1;
+    }
+  }
+}

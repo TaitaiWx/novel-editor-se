@@ -1,0 +1,13 @@
+.filePanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #252526;
+
+  .filePanelContent {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+}

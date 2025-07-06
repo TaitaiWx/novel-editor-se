@@ -1,0 +1,139 @@
+.fileTree {
+  padding: 0.5rem 0;
+  overflow-y: auto;
+  flex: 1;
+
+  .fileTreeItem {
+    .itemHeader {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      user-select: none;
+      font-size: 0.8rem;
+
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+      }
+
+      &.selected {
+        background-color: #094771;
+        color: #ffffff;
+      }
+
+      .expandIcon {
+        width: 0.8rem;
+        height: 0.8rem;
+        transition: transform 0.2s;
+        color: #bbb;
+        font-size: 0.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &.expanded {
+          transform: rotate(90deg);
+        }
+
+        &.hidden {
+          visibility: hidden;
+        }
+      }
+
+      .fileIcon {
+        width: 1rem;
+        height: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        svg {
+          color: inherit;
+        }
+
+        &.folder {
+          color: #dcb67a;
+        }
+
+        &.js {
+          color: #f7df1e;
+        }
+
+        &.ts {
+          color: #7bb7ff;
+        }
+
+        &.jsx {
+          color: #61dafb;
+        }
+
+        &.json {
+          color: #30d9ff;
+        }
+
+        &.md {
+          color: #6bb6ff;
+        }
+
+        &.css {
+          color: #42a5f5;
+        }
+
+        &.html {
+          color: #e34c26;
+        }
+
+        &.txt {
+          color: #e8e8e8;
+        }
+
+        &.py {
+          color: #4db6e6;
+        }
+
+        &.file {
+          color: #e8e8e8;
+        }
+      }
+
+      .itemName {
+        flex: 1;
+        color: #d4d4d4;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .itemSize {
+        font-size: 0.7rem;
+        color: #888;
+        margin-left: 0.5rem;
+        white-space: nowrap;
+      }
+    }
+
+    .itemChildren {
+      // 子项目的样式继承父级，无需额外定义
+    }
+  }
+
+  /* 滚动条样式 */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+  }
+}

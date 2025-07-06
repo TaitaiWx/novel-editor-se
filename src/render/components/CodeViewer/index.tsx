@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import './styles.scss';
+import styles from './styles.module.scss';
 
 interface CodeViewerProps {
   filePath: string | null;
+  showGrid?: boolean;
+  showRowLines?: boolean;
 }
 
 // 获取语言类型用于语法高亮类名
@@ -58,7 +60,11 @@ const highlightCode = (code: string, language: string): string => {
   return code;
 };
 
-const CodeViewer: React.FC<CodeViewerProps> = ({ filePath }) => {
+const CodeViewer: React.FC<CodeViewerProps> = ({
+  filePath,
+  showGrid = false,
+  showRowLines = false,
+}) => {
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,9 +97,9 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ filePath }) => {
 
   if (!filePath) {
     return (
-      <div className="code-viewer empty">
-        <div className="empty-content">
-          <div className="empty-icon">📁</div>
+      <div className={`${styles.codeViewer} ${styles.empty}`}>
+        <div className={styles.emptyContent}>
+          <div className={styles.emptyIcon}>📁</div>
           <h3>选择文件开始阅读</h3>
           <p>从左侧文件树中选择一个文件来查看其内容</p>
         </div>
@@ -103,9 +109,9 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ filePath }) => {
 
   if (loading) {
     return (
-      <div className="code-viewer loading">
-        <div className="loading-content">
-          <div className="loading-spinner"></div>
+      <div className={`${styles.codeViewer} ${styles.loading}`}>
+        <div className={styles.loadingContent}>
+          <div className={styles.loadingSpinner}></div>
           <p>正在加载文件内容...</p>
         </div>
       </div>
@@ -114,9 +120,9 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ filePath }) => {
 
   if (error) {
     return (
-      <div className="code-viewer error">
-        <div className="error-content">
-          <div className="error-icon">⚠️</div>
+      <div className={`${styles.codeViewer} ${styles.error}`}>
+        <div className={styles.errorContent}>
+          <div className={styles.errorIcon}>⚠️</div>
           <h3>文件加载失败</h3>
           <p>{error}</p>
         </div>
@@ -129,27 +135,29 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ filePath }) => {
   const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || '';
 
   return (
-    <div className="code-viewer">
-      <div className="file-header">
-        <div className="file-info">
-          <span className="file-name">{fileName}</span>
-          <span className="file-path">{filePath}</span>
+    <div
+      className={`${styles.codeViewer} ${showGrid ? styles.withGrid : ''} ${showRowLines ? styles.withRowLines : ''}`}
+    >
+      <div className={styles.fileHeader}>
+        <div className={styles.fileInfo}>
+          <span className={styles.fileName}>{fileName}</span>
+          <span className={styles.filePath}>{filePath}</span>
         </div>
-        <div className="file-stats">
-          <span className="language-badge">{language}</span>
-          <span className="line-count">{content.split('\n').length} 行</span>
+        <div className={styles.fileStats}>
+          <span className={styles.languageBadge}>{language}</span>
+          <span className={styles.lineCount}>{content.split('\n').length} 行</span>
         </div>
       </div>
-      <div className="code-container">
-        <div className="line-numbers">
+      <div className={styles.codeContainer}>
+        <div className={styles.lineNumbers}>
           {content.split('\n').map((_, index) => (
-            <div key={index + 1} className="line-number">
+            <div key={index + 1} className={styles.lineNumber}>
               {index + 1}
             </div>
           ))}
         </div>
         <div
-          className={`code-content language-${language}`}
+          className={`${styles.codeContent} language-${language}`}
           dangerouslySetInnerHTML={{ __html: highlightedContent }}
         />
       </div>
