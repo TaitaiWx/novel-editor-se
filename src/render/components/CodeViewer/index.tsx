@@ -131,8 +131,8 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
   }
 
   const language = getLanguageFromPath(filePath);
-  const highlightedContent = highlightCode(content, language);
   const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || '';
+  const lines = content.split('\n');
 
   return (
     <div
@@ -150,16 +150,21 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
       </div>
       <div className={styles.codeContainer}>
         <div className={styles.lineNumbers}>
-          {content.split('\n').map((_, index) => (
+          {lines.map((_, index) => (
             <div key={index + 1} className={styles.lineNumber}>
               {index + 1}
             </div>
           ))}
         </div>
-        <div
-          className={`${styles.codeContent} language-${language}`}
-          dangerouslySetInnerHTML={{ __html: highlightedContent }}
-        />
+        <div className={`${styles.codeContent} language-${language}`}>
+          {lines.map((line, index) => (
+            <div
+              key={index}
+              className={styles.codeLine}
+              dangerouslySetInnerHTML={{ __html: highlightCode(line, language) || '&nbsp;' }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

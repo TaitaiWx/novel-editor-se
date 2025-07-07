@@ -1,3 +1,6 @@
+@use '../../styles/animation.scss';
+
+// CodeViewer 主容器
 .codeViewer {
   display: flex;
   flex-direction: column;
@@ -6,6 +9,7 @@
   color: #d4d4d4;
   font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 
+  // 空状态样式
   &.empty {
     .emptyContent {
       display: flex;
@@ -36,6 +40,7 @@
     }
   }
 
+  // 加载状态样式
   &.loading {
     .loadingContent {
       display: flex;
@@ -64,6 +69,7 @@
     }
   }
 
+  // 错误状态样式
   &.error {
     .errorContent {
       display: flex;
@@ -93,8 +99,62 @@
       }
     }
   }
+
+  // 方格线状态
+  &.withGrid {
+    .codeContent {
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        right: 1rem;
+        bottom: 1rem;
+        background-image:
+          repeating-linear-gradient(90deg,
+            transparent,
+            transparent calc(0.8ch - 1px),
+            rgba(255, 255, 255, 0.1) calc(0.8ch - 1px),
+            rgba(255, 255, 255, 0.1) 0.8ch),
+          repeating-linear-gradient(0deg,
+            transparent,
+            transparent calc(1.5em - 1px),
+            rgba(255, 255, 255, 0.08) calc(1.5em - 1px),
+            rgba(255, 255, 255, 0.08) 1.5em);
+        pointer-events: none;
+        z-index: 1;
+      }
+    }
+  }
+
+  // 行线状态
+  &.withRowLines {
+    .codeContent {
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        top: calc(1rem + 1.5em - 1px); // 从第一行底部开始
+        left: 0;
+        right: 0;
+        bottom: 1rem;
+        background-image:
+          repeating-linear-gradient(0deg,
+            rgba(255, 255, 255, 0.15) 0px,
+            rgba(255, 255, 255, 0.15) 1px,
+            transparent 1px,
+            transparent 1.5em);
+        pointer-events: none;
+        z-index: 1;
+      }
+    }
+  }
 }
 
+// FileHeader 组件样式
 .fileHeader {
   display: flex;
   justify-content: space-between;
@@ -116,6 +176,7 @@
     opacity: 0.3;
   }
 
+  // 文件信息区域
   .fileInfo {
     display: flex;
     flex-direction: column;
@@ -134,6 +195,7 @@
     }
   }
 
+  // 文件统计区域
   .fileStats {
     display: flex;
     gap: 0.5rem;
@@ -156,22 +218,25 @@
   }
 }
 
+// CodeContainer 组件样式
 .codeContainer {
   display: flex;
   flex: 1;
   overflow: hidden;
 
+  // 行号区域
   .lineNumbers {
     background-color: #252526;
     color: #858585;
     padding: 1rem 0.5rem;
     font-size: 0.8rem;
-    line-height: 1.5;
+    line-height: 1.5em;
     text-align: right;
     user-select: none;
     border-right: 2px solid #404040;
     min-width: 3rem;
     position: relative;
+    font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 
     &::after {
       content: '';
@@ -187,9 +252,12 @@
     .lineNumber {
       padding-right: 0.5rem;
       white-space: nowrap;
+      height: 1.5em;
+      line-height: 1.5em;
     }
   }
 
+  // 代码内容区域
   .codeContent {
     flex: 1;
     padding: 1rem;
@@ -198,6 +266,22 @@
     line-height: 1.5;
     white-space: pre-wrap;
     word-wrap: break-word;
+    font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+
+    // 代码行样式
+    .codeLine {
+      display: block;
+      height: 1.5em;
+      line-height: 1.5em;
+      white-space: pre;
+      overflow: visible;
+
+      // 确保空行也占据相同高度
+      &:empty::before {
+        content: ' ';
+        visibility: hidden;
+      }
+    }
 
     // 语法高亮样式
     :global(.keyword) {
@@ -221,38 +305,29 @@
     :global(.number) {
       color: #b5cea8;
     }
+
+    // 滚动条样式
+    &::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: #1e1e1e;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #424242;
+      border-radius: 4px;
+
+      &:hover {
+        background: #555;
+      }
+    }
   }
 }
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-/* 滚动条样式 */
-.codeContent::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.codeContent::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.codeContent::-webkit-scrollbar-thumb {
-  background: #424242;
-  border-radius: 4px;
-
-  &:hover {
-    background: #555;
-  }
-}
-
+// 行号区域滚动条样式
 .lineNumbers::-webkit-scrollbar {
   width: 8px;
 }
@@ -267,58 +342,5 @@
 
   &:hover {
     background: #555;
-  }
-}
-
-// 方格线样式 - 与字体大小相匹配
-.withGrid {
-  .codeContent {
-    position: relative;
-
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-image:
-        repeating-linear-gradient(90deg,
-          transparent,
-          transparent calc(1ch - 1px),
-          rgba(255, 255, 255, 0.1) calc(1ch - 1px),
-          rgba(255, 255, 255, 0.1) 1ch),
-        repeating-linear-gradient(0deg,
-          transparent,
-          transparent calc(1.5em - 1px),
-          rgba(255, 255, 255, 0.08) calc(1.5em - 1px),
-          rgba(255, 255, 255, 0.08) 1.5em);
-      pointer-events: none;
-      z-index: 1;
-    }
-  }
-}
-
-// 行线样式 - 每行一条线
-.withRowLines {
-  .codeContent {
-    position: relative;
-
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-image:
-        repeating-linear-gradient(0deg,
-          transparent,
-          transparent calc(1.5em - 1px),
-          rgba(255, 255, 255, 0.12) calc(1.5em - 1px),
-          rgba(255, 255, 255, 0.12) 1.5em);
-      pointer-events: none;
-      z-index: 1;
-    }
   }
 }
