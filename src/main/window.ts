@@ -6,26 +6,49 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 窗口配置
-const WINDOW_CONFIG = {
-  width: 1400,
-  height: 900,
-  minWidth: 800,
-  minHeight: 600,
-  webPreferences: {
-    nodeIntegration: false,
-    contextIsolation: true,
-    preload: join(__dirname, 'preload.js'),
-    webSecurity: true,
-  },
-  titleBarStyle: 'default' as const,
-  show: false, // 等待页面加载完成后再显示
-  title: '小说编辑器',
-};
+// 根据平台获取窗口配置
+function getWindowConfig() {
+  const baseConfig = {
+    width: 1400,
+    height: 900,
+    minWidth: 800,
+    minHeight: 600,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: join(__dirname, 'preload.js'),
+      webSecurity: true,
+    },
+    show: false, // 等待页面加载完成后再显示
+    title: '小说编辑器',
+    autoHideMenuBar: true, // 自动隐藏菜单栏（Windows/Linux）
+  };
+
+  // 根据平台设置特定配置
+  if (process.platform === 'darwin') {
+    // macOS 配置
+    return {
+      ...baseConfig,
+      frame: false,
+      titleBarStyle: 'hiddenInset' as const,
+      titleBarOverlay: false,
+      trafficLightPosition: { x: -100, y: -100 }, // 将系统按钮移出可见区域
+    };
+  } else {
+    // Windows/Linux 配置
+    return {
+      ...baseConfig,
+      frame: false,
+      titleBarStyle: 'hidden' as const,
+      titleBarOverlay: false,
+    };
+  }
+}
 
 // 创建主窗口
 export function createMainWindow(): BrowserWindow {
-  const mainWindow = new BrowserWindow(WINDOW_CONFIG);
+  const windowConfig = getWindowConfig();
+  const mainWindow = new BrowserWindow(windowConfig);
 
   // 加载应用页面
   mainWindow.loadFile(join(__dirname, 'index.html'));

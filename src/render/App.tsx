@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
 import { FileNode } from './types';
@@ -136,6 +137,9 @@ const App: React.FC = () => {
 
   return (
     <div className={styles.app}>
+      {/* 自定义标题栏 */}
+      <TitleBar title="小说编辑器" />
+
       <div className={styles.appMain}>
         {/* 左侧文件面板 */}
         <div className={styles.leftPanel}>

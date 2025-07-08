@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld('electron', {
         'create-file',
         'create-directory',
         'refresh-folder',
+        'window-minimize',
+        'window-maximize',
+        'window-close',
+        'window-is-maximized',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);

@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 import dirTree from 'directory-tree';
 import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import path from 'path';
@@ -181,5 +181,36 @@ export function setupIPC() {
       console.error('Error refreshing folder:', error);
       throw new Error(`Failed to refresh folder: ${folderPath}`);
     }
+  });
+
+  // 窗口控制方法
+  ipcMain.handle('window-minimize', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (window) {
+      window.minimize();
+    }
+  });
+
+  ipcMain.handle('window-maximize', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (window) {
+      if (window.isMaximized()) {
+        window.unmaximize();
+      } else {
+        window.maximize();
+      }
+    }
+  });
+
+  ipcMain.handle('window-close', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (window) {
+      window.close();
+    }
+  });
+
+  ipcMain.handle('window-is-maximized', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    return window ? window.isMaximized() : false;
   });
 }

@@ -6,14 +6,16 @@
   background-color: #1e1e1e;
   color: #d4d4d4;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  overflow: hidden;
 }
 
-/* 主要内容区域 - 直接占满整个窗口 */
+/* 主要内容区域 - 减去标题栏高度 */
 .appMain {
   flex: 1;
   display: flex;
   overflow: hidden;
-  height: 100vh;
+  height: calc(100vh - 32px);
+  /* 减去标题栏高度 */
 }
 
 /* 左侧面板 */

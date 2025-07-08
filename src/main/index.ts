@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import { createMainWindow, setupWindowEvents } from './window';
 import { setupIPC } from './ipc-handlers';
 
@@ -9,6 +9,9 @@ if (process.platform === 'darwin') {
 
 // 应用准备就绪时创建窗口
 app.whenReady().then(() => {
+  // 禁用默认菜单（Windows/Linux上的File、Edit等菜单）
+  Menu.setApplicationMenu(null);
+
   // 设置 IPC 通信
   setupIPC();
 

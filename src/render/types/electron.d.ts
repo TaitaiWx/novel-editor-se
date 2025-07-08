@@ -41,6 +41,10 @@ declare interface Window {
         dirName: string
       ): Promise<{ success: boolean; dirPath: string }>;
       invoke(channel: 'refresh-folder', folderPath: string): Promise<OpenLocalResult>;
+      invoke(channel: 'window-minimize'): Promise<void>;
+      invoke(channel: 'window-maximize'): Promise<void>;
+      invoke(channel: 'window-close'): Promise<void>;
+      invoke(channel: 'window-is-maximized'): Promise<boolean>;
       invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     };
   };

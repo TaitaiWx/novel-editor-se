@@ -1,0 +1,14 @@
+{
+  "name": "Novel Editor SE",
+  "version": "1.0.0",
+  "description": "A modern text editor for creators",
+  "author": "Your Name",
+  "settings": {
+    "theme": "dark",
+    "fontSize": 14,
+    "wordWrap": true,
+    "autoSave": true
+  },
+  "recentFiles": [],
+  "bookmarks": []
+}
