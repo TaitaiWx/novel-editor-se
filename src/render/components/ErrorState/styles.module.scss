@@ -1,0 +1,130 @@
+// 引入通用动画样式
+@use '../../styles/animation.scss';
+
+.errorStateContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+
+  &.small {
+    padding: 1rem;
+
+    .errorIcon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .errorTitle {
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .errorMessage {
+      font-size: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .retryButton {
+      padding: 0.25rem 0.75rem;
+      font-size: 0.75rem;
+    }
+  }
+
+  &.medium {
+    padding: 2rem;
+
+    .errorIcon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .errorTitle {
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .errorMessage {
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .retryButton {
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+    }
+  }
+
+  &.large {
+    padding: 3rem;
+
+    .errorIcon {
+      font-size: 4rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .errorTitle {
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .errorMessage {
+      font-size: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .retryButton {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+    }
+  }
+}
+
+.errorIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.8;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.errorTitle {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+  color: #f85149;
+  font-weight: 600;
+}
+
+.errorMessage {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 0 0 1rem 0;
+  line-height: 1.4;
+}
+
+.retryButton {
+  background-color: #007acc;
+  color: #ffffff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+
+  &:hover {
+    background-color: #005a9e;
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.3);
+  }
+}

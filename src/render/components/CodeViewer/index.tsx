@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import LoadingSpinner from '../LoadingSpinner';
+import ErrorState from '../ErrorState';
+import EmptyState from '../EmptyState';
 import styles from './styles.module.scss';
 
 interface CodeViewerProps {
@@ -98,11 +101,12 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
   if (!filePath) {
     return (
       <div className={`${styles.codeViewer} ${styles.empty}`}>
-        <div className={styles.emptyContent}>
-          <div className={styles.emptyIcon}>📁</div>
-          <h3>选择文件开始阅读</h3>
-          <p>从左侧文件树中选择一个文件来查看其内容</p>
-        </div>
+        <EmptyState
+          icon="📁"
+          title="选择文件开始阅读"
+          description="从左侧文件树中选择一个文件来查看其内容"
+          variant="file"
+        />
       </div>
     );
   }
@@ -110,10 +114,7 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
   if (loading) {
     return (
       <div className={`${styles.codeViewer} ${styles.loading}`}>
-        <div className={styles.loadingContent}>
-          <div className={styles.loadingSpinner}></div>
-          <p>正在加载文件内容...</p>
-        </div>
+        <LoadingSpinner message="正在加载文件内容..." size="medium" />
       </div>
     );
   }
@@ -121,11 +122,36 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
   if (error) {
     return (
       <div className={`${styles.codeViewer} ${styles.error}`}>
-        <div className={styles.errorContent}>
-          <div className={styles.errorIcon}>⚠️</div>
-          <h3>文件加载失败</h3>
-          <p>{error}</p>
-        </div>
+        <ErrorState
+          icon="⚠️"
+          title="文件加载失败"
+          message={error}
+          size="medium"
+          onRetry={() => {
+            setError(null);
+            setLoading(false);
+            // 触发重新加载
+            if (filePath) {
+              const loadContent = async () => {
+                setLoading(true);
+                try {
+                  const fileContent = await window.electron.ipcRenderer.invoke(
+                    'read-file',
+                    filePath
+                  );
+                  setContent(fileContent);
+                } catch (error) {
+                  console.error('Error reading file:', error);
+                  setError(`无法读取文件: ${filePath}`);
+                  setContent('');
+                } finally {
+                  setLoading(false);
+                }
+              };
+              loadContent();
+            }
+          }}
+        />
       </div>
     );
   }

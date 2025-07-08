@@ -1,4 +1,5 @@
-@use '../../styles/animation.scss';
+// 引入通用动画样式
+@import '../../styles/animation.scss';
 
 // CodeViewer 主容器
 .codeViewer {
@@ -9,95 +10,14 @@
   color: #d4d4d4;
   font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 
-  // 空状态样式
-  &.empty {
-    .emptyContent {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      text-align: center;
-      padding: 2rem;
-
-      .emptyIcon {
-        font-size: 4rem;
-        margin-bottom: 1rem;
-        opacity: 0.6;
-      }
-
-      h3 {
-        font-size: 1.2rem;
-        margin-bottom: 0.5rem;
-        color: #ffffff;
-      }
-
-      p {
-        color: #888;
-        font-size: 0.9rem;
-        margin: 0;
-      }
-    }
-  }
-
-  // 加载状态样式
-  &.loading {
-    .loadingContent {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      text-align: center;
-      padding: 2rem;
-
-      .loadingSpinner {
-        width: 2rem;
-        height: 2rem;
-        border: 3px solid #333;
-        border-top: 3px solid #007acc;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-bottom: 1rem;
-      }
-
-      p {
-        color: #888;
-        font-size: 0.9rem;
-        margin: 0;
-      }
-    }
-  }
-
-  // 错误状态样式
+  // 使用抽象组件时的容器样式
+  &.empty,
+  &.loading,
   &.error {
-    .errorContent {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      text-align: center;
-      padding: 2rem;
-
-      .errorIcon {
-        font-size: 3rem;
-        margin-bottom: 1rem;
-        opacity: 0.8;
-      }
-
-      h3 {
-        font-size: 1.2rem;
-        margin-bottom: 0.5rem;
-        color: #f85149;
-      }
-
-      p {
-        color: #888;
-        font-size: 0.9rem;
-        margin: 0;
-      }
-    }
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
   }
 
   // 方格线状态
