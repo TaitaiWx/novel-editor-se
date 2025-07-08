@@ -14,6 +14,20 @@ interface TitleBarProps {
 
 const TitleBar: React.FC<TitleBarProps> = ({ title = '小说编辑器', showControls = true }) => {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [platform, setPlatform] = useState<string>('');
+
+  // 获取平台信息
+  useEffect(() => {
+    const getPlatform = () => {
+      const userAgent = navigator.userAgent.toLowerCase();
+      if (userAgent.includes('win')) return 'windows';
+      if (userAgent.includes('mac')) return 'darwin';
+      if (userAgent.includes('linux')) return 'linux';
+      return 'unknown';
+    };
+
+    setPlatform(getPlatform());
+  }, []);
 
   // 检查窗口是否最大化
   useEffect(() => {
@@ -58,7 +72,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ title = '小说编辑器', showCont
   };
 
   return (
-    <div className={styles.titleBar}>
+    <div className={`${styles.titleBar} ${platform ? styles[platform] : ''}`}>
       <div className={styles.titleBarContent}>
         {/* 应用图标和标题 */}
         <div className={styles.titleSection}>
