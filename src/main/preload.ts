@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electron', {
       const validChannels = [
         'open-local-folder',
         'read-file',
+        'write-file',
         'get-file-info',
         'get-default-data-path',
         'create-file',

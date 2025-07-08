@@ -58,6 +58,17 @@ export function setupIPC() {
     }
   });
 
+  // 写入文件内容
+  ipcMain.handle('write-file', async (event, filePath: string, content: string) => {
+    try {
+      await writeFile(filePath, content, 'utf-8');
+      return { success: true };
+    } catch (error) {
+      console.error('Error writing file:', error);
+      throw new Error(`Failed to write file: ${filePath}`);
+    }
+  });
+
   // 获取文件信息
   ipcMain.handle('get-file-info', async (event, filePath: string) => {
     try {

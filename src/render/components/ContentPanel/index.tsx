@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import PanelHeader from '../PanelHeader';
-import CodeViewer from '../CodeViewer';
+import TextEditor from '../TextEditor';
 import SettingsButton from '../SettingsButton';
 import styles from './styles.module.scss';
 
@@ -39,7 +39,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({ selectedFile }) => {
       />
 
       <div className={styles.contentPanelContent}>
-        <CodeViewer filePath={selectedFile} showGrid={showGrid} showRowLines={showRowLines} />
+        <TextEditor filePath={selectedFile} showGrid={showGrid} showRowLines={showRowLines} />
       </div>
     </div>
   );

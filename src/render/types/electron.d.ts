@@ -23,6 +23,11 @@ declare interface Window {
     ipcRenderer: {
       invoke(channel: 'open-local-folder'): Promise<OpenLocalResult | null>;
       invoke(channel: 'read-file', filePath: string): Promise<string>;
+      invoke(
+        channel: 'write-file',
+        filePath: string,
+        content: string
+      ): Promise<{ success: boolean }>;
       invoke(channel: 'get-file-info', filePath: string): Promise<FileInfo>;
       invoke(channel: 'get-default-data-path'): Promise<string>;
       invoke(
