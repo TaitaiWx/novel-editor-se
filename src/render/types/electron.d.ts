@@ -18,6 +18,11 @@ interface FileInfo {
   isFile: boolean;
 }
 
+interface ShortcutInfo {
+  accelerator: string;
+  description: string;
+}
+
 declare interface Window {
   electron: {
     ipcRenderer: {
@@ -45,7 +50,13 @@ declare interface Window {
       invoke(channel: 'window-maximize'): Promise<void>;
       invoke(channel: 'window-close'): Promise<void>;
       invoke(channel: 'window-is-maximized'): Promise<boolean>;
+      invoke(channel: 'app-quit'): Promise<void>;
+      invoke(channel: 'dev-tools-toggle'): Promise<void>;
+      invoke(channel: 'window-toggle-fullscreen'): Promise<void>;
+      invoke(channel: 'get-shortcuts'): Promise<ShortcutInfo[]>;
       invoke(channel: string, ...args: unknown[]): Promise<unknown>;
+      on(channel: string, listener: (...args: any[]) => void): void;
+      removeAllListeners(channel: string): void;
     };
   };
 }

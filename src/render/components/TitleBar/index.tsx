@@ -5,6 +5,7 @@ import {
   VscChromeRestore,
   VscChromeClose,
 } from 'react-icons/vsc';
+import ShortcutsHelp from '../ShortcutsHelp';
 import styles from './styles.module.scss';
 
 interface TitleBarProps {
@@ -82,6 +83,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ title = '小说编辑器', showCont
 
         {/* 拖拽区域 */}
         <div className={styles.dragRegion} />
+
+        {/* 快捷键帮助按钮 */}
+        <div className={styles.helpSection}>
+          <ShortcutsHelp />
+        </div>
 
         {/* 窗口控制按钮 */}
         {showControls && (

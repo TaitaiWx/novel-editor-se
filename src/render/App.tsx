@@ -3,6 +3,7 @@ import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
 import { FileNode } from './types';
+import { initKeyboardShortcuts, cleanupKeyboardShortcuts } from './utils/keyboardShortcuts';
 import styles from './App.module.scss';
 
 const App: React.FC = () => {
@@ -11,14 +12,21 @@ const App: React.FC = () => {
   const [folderPath, setFolderPath] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // 组件挂载时加载默认路径
+  // 组件挂载时加载默认路径和初始化快捷键
   React.useEffect(() => {
+    // 初始化键盘快捷键
+    initKeyboardShortcuts();
+
     // 延迟一点时间确保 Electron 完全初始化
     const timer = setTimeout(() => {
       loadDefaultPath();
     }, 100);
 
-    return () => clearTimeout(timer);
+    // 清理函数
+    return () => {
+      clearTimeout(timer);
+      cleanupKeyboardShortcuts();
+    };
   }, []);
 
   const loadDefaultPath = async () => {

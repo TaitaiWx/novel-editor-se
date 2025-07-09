@@ -1,7 +1,8 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import dirTree from 'directory-tree';
 import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import path from 'path';
+import { shortcutManager } from './shortcuts';
 
 // 类型定义
 export interface FileNode {
@@ -212,5 +213,33 @@ export function setupIPC() {
   ipcMain.handle('window-is-maximized', () => {
     const window = BrowserWindow.getFocusedWindow();
     return window ? window.isMaximized() : false;
+  });
+
+  // 键盘快捷键相关的IPC处理
+  ipcMain.handle('app-quit', () => {
+    app.quit();
+  });
+
+  ipcMain.handle('dev-tools-toggle', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (window) {
+      if (window.webContents.isDevToolsOpened()) {
+        window.webContents.closeDevTools();
+      } else {
+        window.webContents.openDevTools();
+      }
+    }
+  });
+
+  ipcMain.handle('window-toggle-fullscreen', () => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (window) {
+      window.setFullScreen(!window.isFullScreen());
+    }
+  });
+
+  // 获取所有快捷键列表
+  ipcMain.handle('get-shortcuts', () => {
+    return shortcutManager.getAllShortcuts();
   });
 }
