@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import type { FileNode } from './types';
 import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
-import { FileNode } from './types';
-import { initKeyboardShortcuts, cleanupKeyboardShortcuts } from './utils/keyboardShortcuts';
 import styles from './App.module.scss';
+import { initKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/initKeyboardShortcuts';
+import { cleanupKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/cleanupKeyboardShortcuts';
 
 const App: React.FC = () => {
   const [files, setFiles] = useState<FileNode[]>([]);

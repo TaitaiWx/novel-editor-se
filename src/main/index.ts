@@ -1,7 +1,8 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import { createMainWindow, setupWindowEvents } from './window';
 import { setupIPC } from './ipc-handlers';
-import { shortcutManager } from './shortcuts';
+import { registerAllShortcuts } from './shortcuts/registerAllShortcuts';
+import { unregisterAllShortcuts } from './shortcuts/unregisterAllShortcuts';
 
 // 设置安全恢复状态支持
 if (process.platform === 'darwin') {
@@ -20,7 +21,7 @@ app.whenReady().then(() => {
   setupWindowEvents();
 
   // 注册全局快捷键
-  shortcutManager.registerAll();
+  registerAllShortcuts();
 
   // 创建主窗口
   createMainWindow();
@@ -43,7 +44,7 @@ app.on('window-all-closed', () => {
 // 应用即将退出时的清理工作
 app.on('before-quit', () => {
   // 注销所有快捷键
-  shortcutManager.unregisterAll();
+  unregisterAllShortcuts();
 });
 
 // 防止多个实例

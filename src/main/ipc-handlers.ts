@@ -2,7 +2,7 @@ import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import dirTree from 'directory-tree';
 import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import path from 'path';
-import { shortcutManager } from './shortcuts';
+import { getAllShortcuts } from './shortcuts/getAllShortcuts';
 
 // 类型定义
 export interface FileNode {
@@ -240,6 +240,6 @@ export function setupIPC() {
 
   // 获取所有快捷键列表
   ipcMain.handle('get-shortcuts', () => {
-    return shortcutManager.getAllShortcuts();
+    return getAllShortcuts();
   });
 }

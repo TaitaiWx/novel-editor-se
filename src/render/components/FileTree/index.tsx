@@ -3,14 +3,8 @@ import { AiFillFolder, AiOutlineFileText, AiOutlineCode, AiOutlineFile } from 'r
 import { DiJavascript1, DiReact, DiPython, DiHtml5, DiCss3 } from 'react-icons/di';
 import { VscJson } from 'react-icons/vsc';
 import { AiOutlineFileMarkdown } from 'react-icons/ai';
+import type { FileNode, FileInfo } from '../../types';
 import styles from './styles.module.scss';
-
-interface FileNode {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  children?: FileNode[];
-}
 
 interface FileTreeProps {
   files: FileNode[];
@@ -67,7 +61,7 @@ const FileTreeItem: React.FC<{
   level?: number;
 }> = ({ node, onFileSelect, selectedFile, level = 0 }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const [fileInfo, setFileInfo] = React.useState<any>(null);
+  const [fileInfo, setFileInfo] = React.useState<FileInfo | null>(null);
   const isSelected = selectedFile === node.path;
 
   // 获取文件信息

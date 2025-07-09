@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { keyboardShortcutManager, ShortcutInfo } from '../../utils/keyboardShortcuts';
+import type { ShortcutInfo } from '../../types';
 import styles from './styles.module.scss';
+import { getShortcutInfo } from './shortcuts/getShortcutInfo';
+import { formatShortcutText } from './shortcuts/formatShortcutText';
 
 interface ShortcutsHelpProps {
   onClose?: () => void;
@@ -13,10 +15,10 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ onClose }) => {
   useEffect(() => {
     // 加载快捷键列表
     const loadShortcuts = async () => {
-      const shortcutList = await keyboardShortcutManager.getAllShortcuts();
+      const shortcutList = await getShortcutInfo();
       setShortcuts(shortcutList);
     };
-    
+
     loadShortcuts();
   }, []);
 
@@ -45,25 +47,19 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ onClose }) => {
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.header}>
               <h3>键盘快捷键</h3>
-              <button
-                className={styles.closeButton}
-                onClick={handleClose}
-                aria-label="关闭"
-              >
+              <button className={styles.closeButton} onClick={handleClose} aria-label="关闭">
                 ×
               </button>
             </div>
-            
+
             <div className={styles.content}>
               <div className={styles.shortcutsList}>
                 {shortcuts.map((shortcut, index) => (
                   <div key={index} className={styles.shortcutItem}>
                     <div className={styles.shortcutKeys}>
-                      {keyboardShortcutManager.formatShortcutText(shortcut.accelerator)}
+                      {formatShortcutText(shortcut.accelerator)}
                     </div>
-                    <div className={styles.shortcutDescription}>
-                      {shortcut.description}
-                    </div>
+                    <div className={styles.shortcutDescription}>{shortcut.description}</div>
                   </div>
                 ))}
               </div>
