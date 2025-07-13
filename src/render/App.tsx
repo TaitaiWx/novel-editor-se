@@ -6,12 +6,16 @@ import ContentPanel from './components/ContentPanel';
 import styles from './App.module.scss';
 import { initKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/initKeyboardShortcuts';
 import { cleanupKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/cleanupKeyboardShortcuts';
+import { useFileEventEmitter } from './hooks/useFileEvents';
 
 const App: React.FC = () => {
   const [files, setFiles] = useState<FileNode[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [folderPath, setFolderPath] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  
+  // 文件事件发射器
+  const { emitFileSelected } = useFileEventEmitter();
 
   // 组件挂载时加载默认路径和初始化快捷键
   React.useEffect(() => {
@@ -138,6 +142,10 @@ const App: React.FC = () => {
 
   const handleFileSelect = async (filePath: string) => {
     try {
+      // 发出文件选中事件
+      emitFileSelected(filePath);
+      
+      // 更新状态
       setSelectedFile(filePath);
     } catch (error) {
       console.error('Error selecting file:', error);

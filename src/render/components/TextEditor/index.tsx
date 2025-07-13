@@ -3,6 +3,7 @@ import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
 import styles from './styles.module.scss';
+import { useFileEventEmitter } from '../../hooks/useFileEvents';
 
 interface TextEditorProps {
   filePath: string | null;
@@ -10,6 +11,7 @@ interface TextEditorProps {
   showRowLines?: boolean;
   readOnly?: boolean;
   onContentChange?: (content: string) => void;
+  onCursorPositionChange?: (position: { line: number; column: number }) => void;
 }
 
 // 获取文件类型用于语法高亮类名
@@ -33,6 +35,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   showRowLines = false,
   readOnly = false,
   onContentChange,
+  onCursorPositionChange,
 }) => {
   const [content, setContent] = useState<string>('');
   const [originalContent, setOriginalContent] = useState<string>('');
@@ -41,6 +44,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const [currentLine, setCurrentLine] = useState<number>(1);
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  // 文件事件发射器
+  const { emitFileLoading, emitFileLoaded, emitFileLoadError } = useFileEventEmitter();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
@@ -66,8 +72,19 @@ const TextEditor: React.FC<TextEditorProps> = ({
     const cursorPosition = textarea.selectionStart;
     const textBeforeCursor = textarea.value.substring(0, cursorPosition);
     const lineNumber = textBeforeCursor.split('\n').length;
+    
+    // 计算列数
+    const lineStart = textBeforeCursor.lastIndexOf('\n') + 1;
+    const column = cursorPosition - lineStart + 1;
+    
     setCurrentLine(lineNumber);
-  }, []);
+    
+    // 调用父组件的回调函数
+    onCursorPositionChange?.({
+      line: lineNumber,
+      column: column,
+    });
+  }, [onCursorPositionChange]);
 
   // 自动保存文件
   const autoSaveFile = useCallback(async () => {
@@ -83,6 +100,15 @@ const TextEditor: React.FC<TextEditorProps> = ({
       if (targetPath === filePath) {
         setOriginalContent(targetContent);
         setLastSaved(new Date());
+        
+        // 触发保存完成事件，用于统计
+        window.dispatchEvent(new CustomEvent('save', {
+          detail: {
+            filePath: targetPath,
+            content: targetContent,
+            timestamp: Date.now()
+          }
+        }));
       }
     } catch (error) {
       console.error('Auto-save failed:', error);
@@ -194,6 +220,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
         return;
       }
 
+      // 发出文件开始加载事件
+      emitFileLoading(filePath);
+      
       setLoading(true);
       setError(null);
 
@@ -207,20 +236,30 @@ const TextEditor: React.FC<TextEditorProps> = ({
         currentFilePathRef.current = filePath;
         currentContentRef.current = fileContent;
         currentOriginalContentRef.current = fileContent;
+        
+        // 发出文件加载完成事件
+        emitFileLoaded(filePath, fileContent);
+        
+        // 通知父组件内容已加载
+        onContentChange?.(fileContent);
       } catch (error) {
         console.error('Error reading file:', error);
-        setError(`无法读取文件: ${filePath}`);
+        const errorMessage = `无法读取文件: ${filePath}`;
+        setError(errorMessage);
         setContent('');
         setOriginalContent('');
         currentContentRef.current = '';
         currentOriginalContentRef.current = '';
+        
+        // 发出文件加载失败事件
+        emitFileLoadError(filePath, errorMessage);
       } finally {
         setLoading(false);
       }
     };
 
     loadContent();
-  }, [filePath]);
+  }, [filePath, emitFileLoading, emitFileLoaded, emitFileLoadError]); // 移除 onContentChange 依赖项
 
   // 监听选择和滚动事件
   useEffect(() => {
@@ -275,6 +314,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
             // 触发重新加载
             if (filePath) {
               const loadContent = async () => {
+                // 发出文件开始加载事件
+                emitFileLoading(filePath);
+                
                 setLoading(true);
                 try {
                   const fileContent = await window.electron.ipcRenderer.invoke(
@@ -285,11 +327,21 @@ const TextEditor: React.FC<TextEditorProps> = ({
                   setOriginalContent(fileContent);
                   currentContentRef.current = fileContent;
                   currentOriginalContentRef.current = fileContent;
+                  
+                  // 发出文件加载完成事件
+                  emitFileLoaded(filePath, fileContent);
+                  
+                  // 通知父组件内容已加载
+                  onContentChange?.(fileContent);
                 } catch (error) {
                   console.error('Error reading file:', error);
-                  setError(`无法读取文件: ${filePath}`);
+                  const errorMessage = `无法读取文件: ${filePath}`;
+                  setError(errorMessage);
                   setContent('');
                   setOriginalContent('');
+                  
+                  // 发出文件加载失败事件
+                  emitFileLoadError(filePath, errorMessage);
                 } finally {
                   setLoading(false);
                 }
