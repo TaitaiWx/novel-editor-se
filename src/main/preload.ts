@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electron', {
         'dev-tools-toggle',
         'window-toggle-fullscreen',
         'get-shortcuts',
+        'toggle-outline',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -32,6 +33,7 @@ contextBridge.exposeInMainWorld('electron', {
         'shortcut-open-folder',
         'shortcut-save-file',
         'shortcut-save-as-file',
+        'toggle-outline',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.on(channel, listener);
@@ -45,6 +47,7 @@ contextBridge.exposeInMainWorld('electron', {
         'shortcut-open-folder',
         'shortcut-save-file',
         'shortcut-save-as-file',
+        'toggle-outline',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.removeAllListeners(channel);

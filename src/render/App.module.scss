@@ -13,16 +13,12 @@
 .appMain {
   flex: 1;
   display: grid;
-  grid-template-columns: 320px 280px 1fr;
+  grid-template-columns: 320px 1fr;
   gap: 0;
   overflow: hidden;
   height: calc(100vh - 32px);
+  position: relative;
   /* 减去标题栏高度 */
-  transition: grid-template-columns 0.3s ease;
-
-  &.appMainCollapsed {
-    grid-template-columns: 320px 40px 1fr;
-  }
 }
 
 /* 左侧面板 */
@@ -49,20 +45,37 @@
   }
 }
 
-/* 中间大纲面板 */
+/* 中间内容面板 */
 .centerPanel {
-  background-color: #252526;
-  border-right: 2px solid #404040;
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background-color: #1e1e1e;
   position: relative;
+}
 
-  &::after {
+/* 右侧面板 */
+.rightPanel {
+  background-color: #252526;
+  border-left: 2px solid #404040;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  min-width: 280px;
+  max-width: 500px;
+  z-index: 10;
+
+  &::before {
     content: '';
     position: absolute;
     top: 0;
-    right: -2px;
+    left: -2px;
     bottom: 0;
     width: 1px;
     background: linear-gradient(180deg, transparent 0%, #007acc 20%, #007acc 80%, transparent 100%);
@@ -70,17 +83,14 @@
   }
 }
 
-/* 右侧面板 */
-.rightPanel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 /* 响应式设计 */
 @media (max-width: 768px) {
   .leftPanel {
+    width: 280px;
+    min-width: 200px;
+  }
+  
+  .rightPanel {
     width: 280px;
     min-width: 200px;
   }

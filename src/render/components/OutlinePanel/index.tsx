@@ -10,6 +10,8 @@ interface OutlinePanelProps {
   documentContent: string;
   currentLine: number;
   onNavigateToLine: (lineNumber: number) => void;
+  isVisible?: boolean;
+  onToggleVisibility?: () => void;
   isCollapsed?: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
 }
@@ -19,6 +21,8 @@ const OutlinePanel: React.FC<OutlinePanelProps> = ({
   documentContent,
   currentLine,
   onNavigateToLine,
+  isVisible = true,
+  onToggleVisibility,
   isCollapsed = false,
   onCollapseChange,
 }) => {
@@ -84,6 +88,7 @@ const OutlinePanel: React.FC<OutlinePanelProps> = ({
         title={getFileName(selectedFile)}
         itemCount={outline.length}
         onCollapse={() => onCollapseChange?.(true)}
+        onClose={onToggleVisibility}
       />
       
       <div className={styles.outlinePanelContent}>

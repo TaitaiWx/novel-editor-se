@@ -68,7 +68,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [documentContent, setDocumentContent] = useState<string>('');
   const [currentLine, setCurrentLine] = useState<number>(1);
-  const [isOutlineVisible, setIsOutlineVisible] = useState<boolean>(false);
+  const [isOutlineVisible, setIsOutlineVisible] = useState<boolean>(true); // 默认开启
   
   // 输入对话框状态
   const [inputDialog, setInputDialog] = useState<{
@@ -86,12 +86,22 @@ const App: React.FC = () => {
     // 初始化键盘快捷键
     initKeyboardShortcuts();
 
-    // 监听大纲切换快捷键
+    // 监听大纲切换快捷键 Ctrl+Alt+Q
     if (window.electron?.ipcRenderer) {
       window.electron.ipcRenderer.on('toggle-outline', () => {
         setIsOutlineVisible(prev => !prev);
       });
     }
+
+    // 添加全局快捷键监听
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && e.key === 'q') {
+        e.preventDefault();
+        setIsOutlineVisible(prev => !prev);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
 
     // 延迟一点时间确保 Electron 完全初始化
     const timer = setTimeout(() => {
@@ -102,6 +112,7 @@ const App: React.FC = () => {
     return () => {
       clearTimeout(timer);
       cleanupKeyboardShortcuts();
+      document.removeEventListener('keydown', handleKeyDown);
       if (window.electron?.ipcRenderer) {
         window.electron.ipcRenderer.removeAllListeners('toggle-outline');
       }
@@ -299,25 +310,29 @@ const App: React.FC = () => {
           />
         </div>
 
-        {/* 右侧内容面板 */}
-        <div className={styles.rightPanel}>
+        {/* 中间内容面板 */}
+        <div className={styles.centerPanel}>
           <ContentPanel 
             selectedFile={selectedFile} 
             onContentChange={handleContentChange}
             currentLine={currentLine}
           />
         </div>
+        
+        {/* 右侧大纲面板 */}
+        {isOutlineVisible && (
+          <div className={styles.rightPanel}>
+            <OutlinePanel
+              selectedFile={selectedFile}
+              documentContent={documentContent}
+              currentLine={currentLine}
+              onNavigateToLine={handleNavigateToLine}
+              isVisible={isOutlineVisible}
+              onToggleVisibility={() => setIsOutlineVisible(false)}
+            />
+          </div>
+        )}
       </div>
-
-      {/* 大纲侧边栏 */}
-      <OutlinePanel
-        selectedFile={selectedFile}
-        documentContent={documentContent}
-        currentLine={currentLine}
-        onNavigateToLine={handleNavigateToLine}
-        isVisible={isOutlineVisible}
-        onToggleVisibility={() => setIsOutlineVisible(false)}
-      />
 
       {/* 全局预览窗 */}
       <GlobalPreviewWindow />

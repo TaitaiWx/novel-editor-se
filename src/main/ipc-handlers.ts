@@ -290,4 +290,11 @@ export function setupIPC() {
   ipcMain.handle('get-shortcuts', () => {
     return getAllShortcuts();
   });
+
+  // 切换大纲视图
+  ipcMain.handle('toggle-outline', () => {
+    // 这个处理器只是为了让IPC通道被授权
+    // 实际的切换逻辑在渲染进程中处理
+    return { success: true };
+  });
 }

@@ -11,6 +11,7 @@ import { quitApp } from './quitApp';
 import { minimizeWindow } from './minimizeWindow';
 import { toggleFullscreen } from './toggleFullscreen';
 import { reloadWindow } from './reloadWindow';
+import { toggleOutline } from './toggleOutline';
 
 /**
  * 快捷键配置数组
@@ -65,6 +66,13 @@ export const shortcutConfigs: ShortcutConfig[] = [
     accelerator: process.platform === 'darwin' ? 'Cmd+Shift+S' : 'Ctrl+Shift+S',
     description: '另存为',
     action: saveAsFile,
+  },
+
+  // 大纲视图切换
+  {
+    accelerator: 'Ctrl+Alt+Q',
+    description: '切换大纲视图',
+    action: toggleOutline,
   },
 
   // 开发模式下的刷新

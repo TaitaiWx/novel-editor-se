@@ -1,14 +1,15 @@
 import React from 'react';
-import { IoChevronBack } from 'react-icons/io5';
+import { IoChevronBack, IoClose } from 'react-icons/io5';
 import styles from './styles.module.scss';
 
 interface OutlineHeaderProps {
   title: string;
   itemCount: number;
   onCollapse: () => void;
+  onClose?: () => void;
 }
 
-const OutlineHeader: React.FC<OutlineHeaderProps> = ({ title, itemCount, onCollapse }) => {
+const OutlineHeader: React.FC<OutlineHeaderProps> = ({ title, itemCount, onCollapse, onClose }) => {
   return (
     <div className={styles.outlineHeader}>
       <div className={styles.headerContent}>
@@ -20,6 +21,15 @@ const OutlineHeader: React.FC<OutlineHeaderProps> = ({ title, itemCount, onColla
         </div>
         
         <div className={styles.headerActions}>
+          {onClose && (
+            <button
+              className={styles.closeButton}
+              onClick={onClose}
+              title="关闭大纲面板"
+            >
+              <IoClose size={16} />
+            </button>
+          )}
           <button
             className={styles.collapseButton}
             onClick={onCollapse}

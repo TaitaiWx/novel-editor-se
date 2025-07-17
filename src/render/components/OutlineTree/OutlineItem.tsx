@@ -104,6 +104,8 @@ const OutlineItem: React.FC<OutlineItemProps> = ({
               item={child}
               currentLine={currentLine}
               onNavigateToLine={onNavigateToLine}
+              documentContent={documentContent}
+              filePath={filePath}
             />
           ))}
         </div>
