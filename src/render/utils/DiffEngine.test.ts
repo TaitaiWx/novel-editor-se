@@ -133,7 +133,7 @@ export function runMemoryTests() {
     console.timeEnd(`内存测试 ${i + 1}`);
     
     // 模拟垃圾回收，通过释放大对象的引用
-    result.operations = null;
+    result.operations = [];
     result = null;
     oldText = null;
     newText = null;
