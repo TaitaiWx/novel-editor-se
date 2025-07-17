@@ -268,7 +268,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
     };
 
     loadContent();
-  }, [filePath, emitFileLoading, emitFileLoaded, emitFileLoadError]); // 移除 onContentChange 依赖项
+  }, [filePath, emitFileLoading, emitFileLoaded, emitFileLoadError, onContentChange]); // 添加 onContentChange 依赖项
 
   // 监听选择和滚动事件
   useEffect(() => {
