@@ -204,13 +204,13 @@ class StatsManager {
     };
   }
 
-  // 清理格式字符，只保留实际文字
+  // 清理格式字符，只保留实际文字和标点符号
   private cleanContentForCounting(text: string): string {
     return text
       .replace(/\r?\n/g, '') // 去除换行符
       .replace(/\t/g, '') // 去除制表符
       .replace(/\s+/g, '') // 去除所有空白字符（空格、制表符等）
-      .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, ''); // 只保留中文、英文、数字
+      .replace(/[^\u4e00-\u9fa5a-zA-Z0-9.,!?;:'"()\-]/g, ''); // 保留中文、英文、数字和常见标点符号
   }
 
   // 更新每日统计
