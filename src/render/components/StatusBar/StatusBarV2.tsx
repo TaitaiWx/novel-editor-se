@@ -353,7 +353,7 @@ const StatusBarV2: React.FC<StatusBarV2Props> = ({ selectedFile, content, cursor
     if (content) {
       const cleanContent = cleanContentForCounting(content);
       setCurrentDocumentStats({
-        inputChars: Math.floor(cleanContent.length * 0.8), // 模拟输入字数
+        inputChars: Math.floor(cleanContent.length * SIMULATED_INPUT_RATIO), // 模拟输入字数
         totalChars: cleanContent.length,
         totalLines: content.split('\n').length,
       });
