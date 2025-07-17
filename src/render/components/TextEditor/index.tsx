@@ -10,6 +10,7 @@ interface TextEditorProps {
   showRowLines?: boolean;
   readOnly?: boolean;
   onContentChange?: (content: string) => void;
+  currentLine?: number;
 }
 
 // 获取文件类型用于语法高亮类名
@@ -33,12 +34,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
   showRowLines = false,
   readOnly = false,
   onContentChange,
+  currentLine,
 }) => {
   const [content, setContent] = useState<string>('');
   const [originalContent, setOriginalContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentLine, setCurrentLine] = useState<number>(1);
+  const [internalCurrentLine, setInternalCurrentLine] = useState<number>(1);
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
@@ -66,7 +68,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
     const cursorPosition = textarea.selectionStart;
     const textBeforeCursor = textarea.value.substring(0, cursorPosition);
     const lineNumber = textBeforeCursor.split('\n').length;
-    setCurrentLine(lineNumber);
+    setInternalCurrentLine(lineNumber);
   }, []);
 
   // 自动保存文件
@@ -113,6 +115,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
     },
     [onContentChange, autoSaveFile, readOnly]
   );
+
+  // 监听外部传入的currentLine变化
+  useEffect(() => {
+    if (currentLine && currentLine !== internalCurrentLine) {
+      setInternalCurrentLine(currentLine);
+    }
+  }, [currentLine, internalCurrentLine]);
 
   // 快捷键处理（手动强制保存）
   const handleKeyDown = useCallback(

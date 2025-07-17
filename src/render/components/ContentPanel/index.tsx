@@ -6,9 +6,11 @@ import styles from './styles.module.scss';
 
 interface ContentPanelProps {
   selectedFile: string | null;
+  onContentChange?: (content: string) => void;
+  currentLine?: number;
 }
 
-const ContentPanel: React.FC<ContentPanelProps> = ({ selectedFile }) => {
+const ContentPanel: React.FC<ContentPanelProps> = ({ selectedFile, onContentChange, currentLine }) => {
   const [showGrid, setShowGrid] = useState(false);
   const [showRowLines, setShowRowLines] = useState(false);
   const getFileName = (filePath: string | null) => {
@@ -39,7 +41,13 @@ const ContentPanel: React.FC<ContentPanelProps> = ({ selectedFile }) => {
       />
 
       <div className={styles.contentPanelContent}>
-        <TextEditor filePath={selectedFile} showGrid={showGrid} showRowLines={showRowLines} />
+        <TextEditor 
+          filePath={selectedFile} 
+          showGrid={showGrid} 
+          showRowLines={showRowLines}
+          onContentChange={onContentChange}
+          currentLine={currentLine}
+        />
       </div>
     </div>
   );
