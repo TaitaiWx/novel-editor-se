@@ -44,7 +44,8 @@ const OutlinePanel: React.FC<OutlinePanelProps> = ({
         setOutline(result);
       } catch (err) {
         console.error('Failed to parse document:', err);
-        setError('解析文档失败');
+        const errorDetails = err instanceof Error ? err.message : '未知错误';
+        setError(`解析文档失败: ${errorDetails}`);
         setOutline([]);
       } finally {
         setIsLoading(false);
