@@ -353,7 +353,7 @@ export class DiffEngine {
    * 计算文本中的行数
    */
   private countLines(text: string): number {
-    return (text.match(/\n/g) || []).length + 1;
+    return text.split('\n').length;
   }
 
   /**
