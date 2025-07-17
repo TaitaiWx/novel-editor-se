@@ -132,10 +132,11 @@ export function runMemoryTests() {
     const result = diff(oldText, newText);
     console.timeEnd(`内存测试 ${i + 1}`);
     
-    // 强制垃圾回收（如果可用）
-    if ((window as any).gc) {
-      (window as any).gc();
-    }
+    // 模拟垃圾回收，通过释放大对象的引用
+    result.operations = null;
+    result = null;
+    oldText = null;
+    newText = null;
   }
   
   console.log('内存测试完成');
