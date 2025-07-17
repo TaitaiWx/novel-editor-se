@@ -4,9 +4,11 @@ import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import OutlinePanel from './components/OutlinePanel';
 import ContentPanel from './components/ContentPanel';
+import { GlobalPreviewWindow } from './components/DocumentPreview';
 import styles from './App.module.scss';
 import { initKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/initKeyboardShortcuts';
 import { cleanupKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/cleanupKeyboardShortcuts';
+import { useFileEventEmitter } from './hooks/useFileEvents';
 
 // 自定义输入对话框组件
 const InputDialog: React.FC<{
@@ -66,7 +68,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [documentContent, setDocumentContent] = useState<string>('');
   const [currentLine, setCurrentLine] = useState<number>(1);
-  const [isOutlineCollapsed, setIsOutlineCollapsed] = useState<boolean>(false);
+  const [isOutlineVisible, setIsOutlineVisible] = useState<boolean>(false);
   
   // 输入对话框状态
   const [inputDialog, setInputDialog] = useState<{
@@ -76,10 +78,20 @@ const App: React.FC = () => {
     onConfirm: (value: string) => void;
   } | null>(null);
 
+  // 文件事件发射器
+  const { emitFileSelected } = useFileEventEmitter();
+
   // 组件挂载时加载默认路径和初始化快捷键
   React.useEffect(() => {
     // 初始化键盘快捷键
     initKeyboardShortcuts();
+
+    // 监听大纲切换快捷键
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.on('toggle-outline', () => {
+        setIsOutlineVisible(prev => !prev);
+      });
+    }
 
     // 延迟一点时间确保 Electron 完全初始化
     const timer = setTimeout(() => {
@@ -90,6 +102,9 @@ const App: React.FC = () => {
     return () => {
       clearTimeout(timer);
       cleanupKeyboardShortcuts();
+      if (window.electron?.ipcRenderer) {
+        window.electron.ipcRenderer.removeAllListeners('toggle-outline');
+      }
     };
   }, []);
 
@@ -224,6 +239,9 @@ const App: React.FC = () => {
           setDocumentContent('');
         }
       }
+      
+      // 发射文件选择事件
+      emitFileSelected(filePath);
     } catch (error) {
       console.error('Error selecting file:', error);
     }
@@ -265,7 +283,7 @@ const App: React.FC = () => {
       {/* 自定义标题栏 */}
       <TitleBar title="小说编辑器" />
 
-      <div className={`${styles.appMain} ${isOutlineCollapsed ? styles.appMainCollapsed : ''}`}>
+      <div className={styles.appMain}>
         {/* 左侧文件面板 */}
         <div className={styles.leftPanel}>
           <FilePanel
@@ -281,18 +299,6 @@ const App: React.FC = () => {
           />
         </div>
 
-        {/* 中间大纲面板 */}
-        <div className={`${styles.centerPanel} ${isOutlineCollapsed ? styles.centerPanelCollapsed : ''}`}>
-          <OutlinePanel
-            selectedFile={selectedFile}
-            documentContent={documentContent}
-            currentLine={currentLine}
-            onNavigateToLine={handleNavigateToLine}
-            isCollapsed={isOutlineCollapsed}
-            onCollapseChange={setIsOutlineCollapsed}
-          />
-        </div>
-
         {/* 右侧内容面板 */}
         <div className={styles.rightPanel}>
           <ContentPanel 
@@ -302,6 +308,19 @@ const App: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* 大纲侧边栏 */}
+      <OutlinePanel
+        selectedFile={selectedFile}
+        documentContent={documentContent}
+        currentLine={currentLine}
+        onNavigateToLine={handleNavigateToLine}
+        isVisible={isOutlineVisible}
+        onToggleVisibility={() => setIsOutlineVisible(false)}
+      />
+
+      {/* 全局预览窗 */}
+      <GlobalPreviewWindow />
 
       {/* 输入对话框 */}
       {inputDialog && (
