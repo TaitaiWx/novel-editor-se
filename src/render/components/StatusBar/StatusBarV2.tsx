@@ -348,17 +348,21 @@ const StatusBarV2: React.FC<StatusBarV2Props> = ({ selectedFile, content, cursor
       .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, ''); // 只保留中文、英文、数字
   };
 
+  // Memoize the cleaned content
+  const memoizedCleanContent = useMemo(() => {
+    return content ? cleanContentForCounting(content) : '';
+  }, [content]);
+
   // 更新当前文档统计
   useEffect(() => {
     if (content) {
-      const cleanContent = cleanContentForCounting(content);
       setCurrentDocumentStats({
-        inputChars: Math.floor(cleanContent.length * SIMULATED_INPUT_RATIO), // 模拟输入字数
-        totalChars: cleanContent.length,
+        inputChars: Math.floor(memoizedCleanContent.length * SIMULATED_INPUT_RATIO), // 模拟输入字数
+        totalChars: memoizedCleanContent.length,
         totalLines: content.split('\n').length,
       });
     }
-  }, [content]);
+  }, [content, memoizedCleanContent]);
 
   // 格式化时间显示
   const formatTime = (seconds: number): string => {
