@@ -1,7 +1,3 @@
-/**
- * Electron API 类型定义
- */
-
 import type { FileInfo, OpenLocalResult, ShortcutInfo } from './File';
 
 export interface ElectronAPI {

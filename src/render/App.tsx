@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { FileNode } from './types';
+import type { FileNode } from '../types';
 import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import OutlinePanel from './components/OutlinePanel';
@@ -69,7 +69,7 @@ const App: React.FC = () => {
   const [documentContent, setDocumentContent] = useState<string>('');
   const [currentLine, setCurrentLine] = useState<number>(1);
   const [isOutlineVisible, setIsOutlineVisible] = useState<boolean>(true); // 默认开启
-  
+
   // 输入对话框状态
   const [inputDialog, setInputDialog] = useState<{
     isOpen: boolean;
@@ -89,7 +89,7 @@ const App: React.FC = () => {
     // 监听大纲切换快捷键 Ctrl+Alt+Q
     if (window.electron?.ipcRenderer) {
       window.electron.ipcRenderer.on('toggle-outline', () => {
-        setIsOutlineVisible(prev => !prev);
+        setIsOutlineVisible((prev) => !prev);
       });
     }
 
@@ -97,7 +97,7 @@ const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.altKey && e.key === 'q') {
         e.preventDefault();
-        setIsOutlineVisible(prev => !prev);
+        setIsOutlineVisible((prev) => !prev);
       }
     };
 
@@ -239,7 +239,7 @@ const App: React.FC = () => {
     try {
       setSelectedFile(filePath);
       setCurrentLine(1);
-      
+
       // 立即读取文件内容以更新大纲
       if (window.electron?.ipcRenderer) {
         try {
@@ -250,7 +250,7 @@ const App: React.FC = () => {
           setDocumentContent('');
         }
       }
-      
+
       // 发射文件选择事件
       emitFileSelected(filePath);
     } catch (error) {
@@ -260,23 +260,23 @@ const App: React.FC = () => {
 
   const handleNavigateToLine = (lineNumber: number) => {
     setCurrentLine(lineNumber);
-    
+
     // 滚动到指定行的逻辑
     setTimeout(() => {
       const textarea = document.querySelector('textarea');
       if (textarea) {
         const lines = textarea.value.split('\n');
         let position = 0;
-        
+
         // 计算到目标行的字符位置
         for (let i = 0; i < lineNumber - 1 && i < lines.length; i++) {
           position += lines[i].length + 1; // +1 for newline
         }
-        
+
         // 设置光标位置
         textarea.setSelectionRange(position, position);
         textarea.focus();
-        
+
         // 滚动到可见位置
         const lineHeight = 24; // 估计的行高
         const scrollTop = (lineNumber - 1) * lineHeight;
@@ -312,13 +312,13 @@ const App: React.FC = () => {
 
         {/* 中间内容面板 */}
         <div className={styles.centerPanel}>
-          <ContentPanel 
-            selectedFile={selectedFile} 
+          <ContentPanel
+            selectedFile={selectedFile}
             onContentChange={handleContentChange}
             currentLine={currentLine}
           />
         </div>
-        
+
         {/* 右侧大纲面板 */}
         {isOutlineVisible && (
           <div className={styles.rightPanel}>

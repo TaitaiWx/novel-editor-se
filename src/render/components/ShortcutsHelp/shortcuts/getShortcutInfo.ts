@@ -1,7 +1,7 @@
 /**
  * 获取快捷键信息
  */
-import type { ShortcutInfo } from '../../../types';
+import type { ShortcutInfo } from '../../../../types';
 
 export const getShortcutInfo = async (): Promise<ShortcutInfo[]> => {
   try {

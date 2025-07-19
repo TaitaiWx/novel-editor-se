@@ -3,7 +3,7 @@ import { AiFillFolder, AiOutlineFileText, AiOutlineCode, AiOutlineFile } from 'r
 import { DiJavascript1, DiReact, DiPython, DiHtml5, DiCss3 } from 'react-icons/di';
 import { VscJson } from 'react-icons/vsc';
 import { AiOutlineFileMarkdown } from 'react-icons/ai';
-import type { FileNode, FileInfo } from '../../types';
+import type { FileNode, FileInfo } from '../../../types';
 import styles from './styles.module.scss';
 
 interface FileTreeProps {

@@ -1,4 +1,4 @@
-import { FileEvent, FileEventType } from '../types/FileEvent';
+import { FileEvent, FileEventType } from '../../types/FileEvent';
 
 // 事件监听器类型
 type EventListener = (event: FileEvent) => void;
@@ -13,7 +13,7 @@ class FileEventBus {
     if (!this.listeners.has(type)) {
       this.listeners.set(type, new Set());
     }
-    
+
     const listenerSet = this.listeners.get(type)!;
     listenerSet.add(callback);
 
@@ -41,7 +41,7 @@ class FileEventBus {
   emit(event: FileEvent): void {
     const listenerSet = this.listeners.get(event.type);
     if (listenerSet) {
-      listenerSet.forEach(callback => {
+      listenerSet.forEach((callback) => {
         try {
           callback(event);
         } catch (error) {
@@ -63,7 +63,7 @@ class FileEventBus {
       filePath,
       content,
       error,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
     return event;
   }
@@ -94,4 +94,4 @@ export const emitFileEvent = (
 };
 
 // 导出类型
-export type { EventListener }; 
+export type { EventListener };

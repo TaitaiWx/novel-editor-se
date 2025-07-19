@@ -3,7 +3,7 @@ import PanelHeader from '../PanelHeader';
 import LoadingSpinner from '../LoadingSpinner';
 import EmptyState from '../EmptyState';
 import FileTree from '../FileTree';
-import { FileNode } from '../../types';
+import { FileNode } from '../../../types';
 import styles from './styles.module.scss';
 
 interface FilePanelProps {
