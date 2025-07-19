@@ -1,5 +1,5 @@
 import { handleNewFile, handleOpenFolder, handleSaveFile, handleSaveAsFile } from './file';
-import { MappingType } from './types';
+import type { MappingType } from '../types';
 
 /**
  * 快捷键处理器映射

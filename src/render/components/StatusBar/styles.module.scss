@@ -1,3 +1,82 @@
+// StatusBarV2 样式
+.statusBarV2 {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #2d2d2d;
+  border-top: 1px solid #404040;
+  color: #d4d4d4;
+  font-size: 0.75rem;
+  line-height: 1;
+  min-height: 28px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+
+  // 添加顶部装饰线
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #007acc, transparent);
+    opacity: 0.3;
+  }
+
+  // 滚动条样式
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #2d2d2d;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #424242;
+    border-radius: 2px;
+
+    &:hover {
+      background: #555;
+    }
+  }
+}
+
+.statusSection {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  cursor: help;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+
+  &.clickable {
+    cursor: pointer;
+  }
+}
+
+.icon {
+  font-size: 0.9rem;
+  color: #007acc;
+  flex-shrink: 0;
+}
+
+.value {
+  color: #ffffff;
+  font-weight: 600;
+  flex-shrink: 0;
+
+  &.notice {
+    font-size: 12px;
+    opacity: 0.8;
+  }
+}
+
 .statusBar {
   display: flex;
   align-items: center;

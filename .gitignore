@@ -30,3 +30,6 @@ build/
 Thumbs.db
 
 design.md
+
+# Local NPM configuration
+.npmrc

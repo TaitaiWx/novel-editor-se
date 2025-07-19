@@ -104,13 +104,15 @@ const TextEditor: React.FC<TextEditorProps> = ({
         setLastSaved(new Date());
         
         // 触发保存完成事件，用于统计
-        window.dispatchEvent(new CustomEvent('save', {
-          detail: {
-            filePath: targetPath,
-            content: targetContent,
-            timestamp: Date.now()
-          }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('save', {
+            detail: {
+              filePath: targetPath,
+              content: targetContent,
+              timestamp: Date.now(),
+            },
+          })
+        );
       }
     } catch (error) {
       console.error('Auto-save failed:', error);
@@ -126,6 +128,11 @@ const TextEditor: React.FC<TextEditorProps> = ({
       setContent(newContent);
       currentContentRef.current = newContent;
       onContentChange?.(newContent);
+
+      // 标记内容变化（用于有效时间计算）
+      if (window.statsManager && newContent !== currentOriginalContentRef.current) {
+        window.statsManager.markContentChange();
+      }
 
       // 清除之前的自动保存定时器
       if (autoSaveTimeoutRef.current) {

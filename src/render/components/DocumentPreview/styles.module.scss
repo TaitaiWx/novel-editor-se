@@ -1,14 +1,15 @@
 @use '../../styles/animation.scss';
 
+// 原有的预览容器样式
 .previewContainer {
   position: fixed;
   z-index: 10000;
   background-color: #2d2d2d;
-  border: 2px solid #404040;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  max-width: 400px;
-  max-height: 300px;
+  border: clamp(0.125rem, 0.2vw, 0.25rem) solid #404040;
+  border-radius: clamp(0.5rem, 0.6vw, 0.75rem);
+  box-shadow: 0 clamp(0.5rem, 0.8vw, 0.75rem) clamp(2rem, 3vw, 2.5rem) rgba(0, 0, 0, 0.4);
+  max-width: clamp(20rem, 30vw, 25rem);
+  max-height: clamp(15rem, 25vh, 18.75rem);
   overflow: hidden;
   animation: previewFadeIn 0.2s ease-out;
 
@@ -18,23 +19,136 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 1px;
+    height: clamp(0.0625rem, 0.1vw, 0.125rem);
     background: linear-gradient(90deg, transparent 0%, #007acc 20%, #007acc 80%, transparent 100%);
     opacity: 0.6;
   }
+}
+
+// 全局预览窗样式
+.previewWindow {
+  position: absolute;
+  min-width: clamp(15rem, 20vw, 25rem);
+  min-height: clamp(3.75rem, 8vh, 6.25rem);
+  max-width: clamp(25rem, 40vw, 37.5rem);
+  max-height: clamp(18.75rem, 35vh, 25rem);
+  background: #2d2d2d;
+  border: 0.0625rem solid #404040;
+  border-radius: clamp(0.25rem, 0.5vw, 0.375rem);
+  box-shadow: 0 clamp(0.125rem, 0.5vw, 0.25rem) clamp(0.5rem, 1vw, 1rem) rgba(0, 0, 0, 0.4);
+  padding: clamp(0.5rem, 1vw, 0.75rem);
+  z-index: 1000;
+  font-size: clamp(0.75rem, 1.5vw, 0.875rem);
+  line-height: 1.4;
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(clamp(0.125rem, 0.25vw, 0.1875rem));
+  backdrop-filter: blur(clamp(0.125rem, 0.25vw, 0.1875rem));
+  pointer-events: auto;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: clamp(0.0625rem, 0.1vw, 0.125rem);
+    background: linear-gradient(90deg, transparent 0%, #007acc 20%, #007acc 80%, transparent 100%);
+    opacity: 0.6;
+  }
+
+  // 动画状态样式
+  &.showing {
+    animation: previewFadeIn 0.1s ease-out forwards;
+  }
+
+  &.visible {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+
+  &.hiding {
+    animation: previewFadeOut 0.1s ease-in forwards;
+  }
+
+  &.transitioning {
+    animation: previewTransition 0.1s ease-in-out forwards;
+  }
+}
+
+.previewWindowHeader {
+  display: flex;
+  align-items: center;
+  margin-bottom: clamp(0.5rem, 0.8vw, 0.75rem);
+  padding-bottom: clamp(0.5rem, 0.8vw, 0.75rem);
+  border-bottom: clamp(0.0625rem, 0.1vw, 0.125rem) solid #404040;
+  pointer-events: none;
+}
+
+.previewWindowTitle {
+  color: #d4d4d4;
+  font-weight: bold;
+  font-size: clamp(0.75rem, 1vw, 0.875rem);
+}
+
+.previewWindowContent {
+  color: #d4d4d4;
+  font-size: clamp(0.6875rem, 0.9vw, 0.8125rem);
+  line-height: 1.5;
+  height: clamp(17rem, 25vh, 21.25rem);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.loadingContainer {
+  text-align: center;
+  padding: clamp(1.25rem, 2vw, 1.5rem);
+}
+
+.loadingIcon {
+  font-size: clamp(1.25rem, 1.8vw, 1.5rem);
+  margin-bottom: clamp(0.5rem, 0.8vw, 0.75rem);
+}
+
+.loadingText {
+  color: #d4d4d4;
+  font-size: clamp(0.75rem, 1vw, 0.875rem);
+}
+
+.previewTextContent {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: clamp(0.625rem, 0.85vw, 0.75rem);
+  line-height: 1.4;
+  flex: 1;
+  overflow: auto;
+  color: #d4d4d4;
+}
+
+.previewWindowFooter {
+  margin-top: clamp(0.5rem, 0.8vw, 0.75rem);
+  padding-top: clamp(0.5rem, 0.8vw, 0.75rem);
+  border-top: clamp(0.0625rem, 0.1vw, 0.125rem) solid #404040;
+  font-size: clamp(0.5625rem, 0.75vw, 0.6875rem);
+  color: #888;
+  text-align: right;
+  pointer-events: none;
 }
 
 .previewHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: clamp(0.5rem, 0.8vw, 0.75rem) clamp(0.75rem, 1.2vw, 1rem);
   background-color: #252526;
-  border-bottom: 1px solid #404040;
-  min-height: 36px;
+  border-bottom: clamp(0.0625rem, 0.1vw, 0.125rem) solid #404040;
+  min-height: clamp(2.25rem, 3vw, 2.75rem);
 
   .previewTitle {
-    font-size: 0.75rem;
+    font-size: clamp(0.625rem, 0.85vw, 0.75rem);
     font-weight: 500;
     color: #d4d4d4;
     white-space: nowrap;
@@ -44,18 +158,18 @@
   }
 
   .closeButton {
-    width: 20px;
-    height: 20px;
+    width: clamp(1.25rem, 1.8vw, 1.5rem);
+    height: clamp(1.25rem, 1.8vw, 1.5rem);
     background: none;
     border: none;
     color: #888;
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: clamp(0.1875rem, 0.25vw, 0.25rem);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
-    margin-left: 8px;
+    font-size: clamp(0.75rem, 1vw, 0.875rem);
+    margin-left: clamp(0.5rem, 0.8vw, 0.75rem);
     transition: all 0.2s;
 
     &:hover {
@@ -70,14 +184,14 @@
 }
 
 .previewContent {
-  padding: 12px;
-  max-height: 200px;
+  padding: clamp(0.75rem, 1.2vw, 1rem);
+  max-height: clamp(10rem, 18vh, 12.5rem);
   overflow-y: auto;
   background-color: #1e1e1e;
 
   .previewText {
     margin: 0;
-    font-size: 0.75rem;
+    font-size: clamp(0.625rem, 0.85vw, 0.75rem);
     line-height: 1.4;
     color: #d4d4d4;
     font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -94,15 +208,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 60px;
-    font-size: 1.5rem;
+    height: clamp(3.75rem, 5vh, 4.5rem);
+    font-size: clamp(1.25rem, 1.8vw, 1.5rem);
     color: #888;
     animation: spin 1s linear infinite;
   }
 
   // 滚动条样式
   &::-webkit-scrollbar {
-    width: 6px;
+    width: clamp(0.375rem, 0.5vw, 0.5rem);
   }
 
   &::-webkit-scrollbar-track {
@@ -111,7 +225,7 @@
 
   &::-webkit-scrollbar-thumb {
     background: #424242;
-    border-radius: 3px;
+    border-radius: clamp(0.1875rem, 0.25vw, 0.25rem);
 
     &:hover {
       background: #555;
@@ -120,39 +234,18 @@
 }
 
 .previewFooter {
-  padding: 6px 12px;
+  padding: clamp(0.375rem, 0.6vw, 0.5rem) clamp(0.75rem, 1.2vw, 1rem);
   background-color: #252526;
-  border-top: 1px solid #404040;
-  min-height: 28px;
+  border-top: clamp(0.0625rem, 0.1vw, 0.125rem) solid #404040;
+  min-height: clamp(1.75rem, 2.5vh, 2.25rem);
   display: flex;
   align-items: center;
 
   .previewInfo {
-    font-size: 0.7rem;
+    font-size: clamp(0.5625rem, 0.75vw, 0.6875rem);
     color: #888;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-}
-
-// 动画
-@keyframes previewFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
   }
 } 

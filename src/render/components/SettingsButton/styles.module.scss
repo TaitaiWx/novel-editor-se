@@ -1,5 +1,6 @@
 .settingsButton {
   position: relative;
+  z-index: 100; /* 确保高于大纲面板的z-index:10 */
   display: inline-block;
 
   .settingsToggle {
@@ -36,7 +37,7 @@
     border: 1px solid #404040;
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
+    z-index: 1001; /* 确保下拉菜单在最上层 */
     min-width: 200px;
     padding: 8px;
     margin-top: 4px;

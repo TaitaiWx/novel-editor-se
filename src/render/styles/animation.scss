@@ -237,6 +237,50 @@
   animation: shake 0.5s ease-in-out;
 }
 
+// 文档预览淡入动画
+@keyframes previewFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(clamp(-0.625rem, -1vw, -0.75rem));
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+// 文档预览淡出动画
+@keyframes previewFadeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.95) translateY(clamp(-0.625rem, -1vw, -0.75rem));
+  }
+}
+
+// 预览窗过渡动画（内容切换时）
+@keyframes previewTransition {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.3;
+    transform: scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 // ===================================
 // 动画时长变量
 // ===================================
