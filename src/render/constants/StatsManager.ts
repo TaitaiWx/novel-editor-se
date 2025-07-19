@@ -28,6 +28,9 @@ export class StatsManager {
   // 文件初始状态跟踪
   private fileInitialContent: Map<string, string> = new Map();
 
+  // 每个文件的最后保存状态跟踪
+  private fileLastSavedContent: Map<string, string> = new Map();
+
   // 时间追踪相关
   private totalTimeInterval: NodeJS.Timeout | null = null;
   private effectiveTimeInterval: NodeJS.Timeout | null = null;
@@ -108,15 +111,19 @@ export class StatsManager {
 
     // 确定用于比较的旧内容
     let oldContent = '';
-    if (this.lastStatVersion?.content) {
-      // 如果有上一个保存版本，使用它作为比较基准
-      oldContent = this.lastStatVersion.content;
+
+    // 优先使用该文件的最后保存内容作为比较基准
+    if (this.fileLastSavedContent.has(filePath)) {
+      oldContent = this.fileLastSavedContent.get(filePath)!;
     } else {
-      // 如果是第一次保存，使用文件的初始内容作为比较基准
+      // 如果没有保存记录，使用文件的初始内容（文件打开时的内容）
       oldContent = this.fileInitialContent.get(filePath) || '';
     }
 
-    // 更新版本
+    // 更新该文件的最后保存内容
+    this.fileLastSavedContent.set(filePath, content);
+
+    // 更新版本（保持全局的版本追踪）
     this.lastStatVersion = this.latestSavedVersion;
     this.latestSavedVersion = newVersion;
 
@@ -143,8 +150,15 @@ export class StatsManager {
     this.currentDocumentChars = totalChars;
 
     // 记录文件的初始内容（用于第一次保存时的differ计算）
-    if (filePath && !this.fileInitialContent.has(filePath)) {
+    // 每次文件切换都更新该文件的初始状态，确保以当前打开时的内容为基准
+    if (filePath) {
       this.fileInitialContent.set(filePath, content);
+
+      // 如果该文件还没有保存记录，也将当前内容作为"最后保存"的基准
+      // 这样第一次保存时不会把现有内容算作新输入
+      if (!this.fileLastSavedContent.has(filePath)) {
+        this.fileLastSavedContent.set(filePath, content);
+      }
     }
 
     // 立即通知文档统计更新（文件切换时实时更新文档字数，不更新时间）
@@ -492,11 +506,19 @@ export class StatsManager {
   // 清理文件初始内容缓存（当文件关闭或不再需要时调用）
   clearFileInitialContent(filePath: string): void {
     this.fileInitialContent.delete(filePath);
+    this.fileLastSavedContent.delete(filePath);
   }
 
   // 清理所有文件初始内容缓存
   clearAllFileInitialContent(): void {
     this.fileInitialContent.clear();
+    this.fileLastSavedContent.clear();
+  }
+
+  // 重置文件保存状态（用于测试或调试）
+  resetFileState(filePath: string): void {
+    this.fileInitialContent.delete(filePath);
+    this.fileLastSavedContent.delete(filePath);
   }
 
   // 清理资源
@@ -520,5 +542,6 @@ export class StatsManager {
     this.subscribers.clear();
     this.documentsUpdateCallbacks.clear();
     this.fileInitialContent.clear();
+    this.fileLastSavedContent.clear();
   }
 }

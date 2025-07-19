@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import type { FileNode } from './types';
+import type { FileNode } from '../types/File';
 import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import OutlinePanel from './components/OutlinePanel';
@@ -20,6 +20,9 @@ const App: React.FC = () => {
   const [documentContent, setDocumentContent] = useState<string>('');
   const [currentLine, setCurrentLine] = useState<number>(1);
   const [isOutlineVisible, setIsOutlineVisible] = useState<boolean>(true); // 默认开启
+  const [cursorPosition, setCursorPosition] = useState<{ line: number; column: number } | null>(
+    null
+  );
 
   // 输入对话框状态
   const [inputDialog, setInputDialog] = useState<{
