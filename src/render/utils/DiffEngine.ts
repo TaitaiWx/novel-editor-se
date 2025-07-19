@@ -83,26 +83,29 @@ export class DiffEngine {
    */
   private simpleDiff(oldText: string, newText: string): DiffResult {
     const operations: DiffOperation[] = [];
-    let i = 0, j = 0;
+    let i = 0,
+      j = 0;
     let addedLines = 0;
     let deletedLines = 0;
 
     while (i < oldText.length || j < newText.length) {
       // 寻找下一个相同字符的位置
       let matchLength = 0;
-      while (i + matchLength < oldText.length && 
-             j + matchLength < newText.length && 
-             oldText[i + matchLength] === newText[j + matchLength]) {
+      while (
+        i + matchLength < oldText.length &&
+        j + matchLength < newText.length &&
+        oldText[i + matchLength] === newText[j + matchLength]
+      ) {
         matchLength++;
       }
-      
+
       if (matchLength > 0) {
         // 找到相同部分
         operations.push({
           type: 'equal',
           content: oldText.substring(i, i + matchLength),
           startIndex: i,
-          endIndex: i + matchLength
+          endIndex: i + matchLength,
         });
         i += matchLength;
         j += matchLength;
@@ -114,7 +117,7 @@ export class DiffEngine {
             type: 'delete',
             content: oldText[i],
             startIndex: i,
-            endIndex: i + 1
+            endIndex: i + 1,
           });
           deletedLines++;
           i++;
@@ -124,7 +127,7 @@ export class DiffEngine {
             type: 'delete',
             content: oldText[i],
             startIndex: i,
-            endIndex: i + 1
+            endIndex: i + 1,
           });
           deletedLines++;
           i++;
@@ -134,7 +137,7 @@ export class DiffEngine {
             type: 'add',
             content: newText[j],
             startIndex: j,
-            endIndex: j + 1
+            endIndex: j + 1,
           });
           addedLines++;
           j++;
@@ -146,7 +149,7 @@ export class DiffEngine {
       operations,
       addedLines,
       deletedLines,
-      totalChanges: addedLines + deletedLines
+      totalChanges: addedLines + deletedLines,
     };
   }
 
@@ -161,40 +164,40 @@ export class DiffEngine {
     // 计算需要处理的块数
     const oldChunks = Math.ceil(oldText.length / this.options.chunkSize);
     const newChunks = Math.ceil(newText.length / this.options.chunkSize);
-    
+
     let oldPos = 0;
     let newPos = 0;
-    
+
     for (let i = 0; i < Math.max(oldChunks, newChunks); i++) {
       const oldChunk = oldText.substring(oldPos, oldPos + this.options.chunkSize);
       const newChunk = newText.substring(newPos, newPos + this.options.chunkSize);
-      
+
       if (oldChunk === newChunk) {
         // 块相同，添加equal操作
         operations.push({
           type: 'equal',
           content: oldChunk,
           startIndex: oldPos,
-          endIndex: oldPos + oldChunk.length
+          endIndex: oldPos + oldChunk.length,
         });
         oldPos += oldChunk.length;
         newPos += newChunk.length;
       } else {
         // 块不同，使用简单算法处理这个块
         const chunkResult = this.simpleDiff(oldChunk, newChunk);
-        
+
         // 调整索引并合并操作
         for (const op of chunkResult.operations) {
           operations.push({
             ...op,
             startIndex: op.startIndex + oldPos,
-            endIndex: op.endIndex + oldPos
+            endIndex: op.endIndex + oldPos,
           });
         }
-        
+
         addedLines += chunkResult.addedLines;
         deletedLines += chunkResult.deletedLines;
-        
+
         oldPos += oldChunk.length;
         newPos += newChunk.length;
       }
@@ -204,7 +207,7 @@ export class DiffEngine {
       operations,
       addedLines,
       deletedLines,
-      totalChanges: addedLines + deletedLines
+      totalChanges: addedLines + deletedLines,
     };
   }
 
@@ -231,12 +234,12 @@ export class DiffEngine {
 
       // 在窗口内寻找最长公共子序列
       const lcs = this.findLongestCommonSubsequence(oldWindow, newWindow);
-      
+
       if (lcs.length > 0) {
         // 找到公共部分
         const commonStart = lcs[0];
         const commonEnd = lcs[lcs.length - 1];
-        
+
         // 添加删除操作（如果有）
         if (commonStart.oldIndex > 0) {
           const deletedContent = oldWindow.substring(0, commonStart.oldIndex);
@@ -244,11 +247,11 @@ export class DiffEngine {
             type: 'delete',
             content: deletedContent,
             startIndex: oldPos,
-            endIndex: oldPos + commonStart.oldIndex
+            endIndex: oldPos + commonStart.oldIndex,
           });
-          deletedLines += this.countLines(deletedContent);
+          deletedLines += this.calculateLineCount(deletedContent);
         }
-        
+
         // 添加新增操作（如果有）
         if (commonStart.newIndex > 0) {
           const addedContent = newWindow.substring(0, commonStart.newIndex);
@@ -256,20 +259,20 @@ export class DiffEngine {
             type: 'add',
             content: addedContent,
             startIndex: newPos,
-            endIndex: newPos + commonStart.newIndex
+            endIndex: newPos + commonStart.newIndex,
           });
-          addedLines += this.countLines(addedContent);
+          addedLines += this.calculateLineCount(addedContent);
         }
-        
+
         // 添加相等操作
         const commonContent = oldWindow.substring(commonStart.oldIndex, commonEnd.oldIndex + 1);
         operations.push({
           type: 'equal',
           content: commonContent,
           startIndex: oldPos + commonStart.oldIndex,
-          endIndex: oldPos + commonEnd.oldIndex + 1
+          endIndex: oldPos + commonEnd.oldIndex + 1,
         });
-        
+
         // 更新位置
         oldPos += commonEnd.oldIndex + 1;
         newPos += commonEnd.newIndex + 1;
@@ -281,21 +284,21 @@ export class DiffEngine {
             type: 'delete',
             content: deletedContent,
             startIndex: oldPos,
-            endIndex: oldLength
+            endIndex: oldLength,
           });
-          deletedLines += this.countLines(deletedContent);
+          deletedLines += this.calculateLineCount(deletedContent);
           oldPos = oldLength;
         }
-        
+
         if (newPos < newLength) {
           const addedContent = newText.substring(newPos);
           operations.push({
             type: 'add',
             content: addedContent,
             startIndex: newPos,
-            endIndex: newLength
+            endIndex: newLength,
           });
-          addedLines += this.countLines(addedContent);
+          addedLines += this.calculateLineCount(addedContent);
           newPos = newLength;
         }
       }
@@ -305,20 +308,25 @@ export class DiffEngine {
       operations,
       addedLines,
       deletedLines,
-      totalChanges: addedLines + deletedLines
+      totalChanges: addedLines + deletedLines,
     };
   }
 
   /**
    * 寻找最长公共子序列
    */
-  private findLongestCommonSubsequence(str1: string, str2: string): Array<{oldIndex: number, newIndex: number}> {
+  private findLongestCommonSubsequence(
+    str1: string,
+    str2: string
+  ): Array<{ oldIndex: number; newIndex: number }> {
     const len1 = str1.length;
     const len2 = str2.length;
-    
+
     // 使用动态规划算法
-    const dp: number[][] = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
-    
+    const dp: number[][] = Array(len1 + 1)
+      .fill(null)
+      .map(() => Array(len2 + 1).fill(0));
+
     // 填充DP表
     for (let i = 1; i <= len1; i++) {
       for (let j = 1; j <= len2; j++) {
@@ -329,11 +337,12 @@ export class DiffEngine {
         }
       }
     }
-    
+
     // 回溯找到LCS
-    const lcs: Array<{oldIndex: number, newIndex: number}> = [];
-    let i = len1, j = len2;
-    
+    const lcs: Array<{ oldIndex: number; newIndex: number }> = [];
+    let i = len1,
+      j = len2;
+
     while (i > 0 && j > 0) {
       if (str1[i - 1] === str2[j - 1]) {
         lcs.unshift({ oldIndex: i - 1, newIndex: j - 1 });
@@ -345,14 +354,14 @@ export class DiffEngine {
         j--;
       }
     }
-    
+
     return lcs;
   }
 
   /**
    * 计算文本中的行数
    */
-  private countLines(text: string): number {
+  private calculateLineCount(text: string): number {
     return text.split('\n').length;
   }
 
@@ -362,30 +371,35 @@ export class DiffEngine {
   lineDiff(oldText: string, newText: string): DiffResult {
     const oldLines = oldText.split('\n');
     const newLines = newText.split('\n');
-    
+
     const operations: DiffOperation[] = [];
     let addedLines = 0;
     let deletedLines = 0;
-    
-    let i = 0, j = 0;
-    
+
+    let i = 0,
+      j = 0;
+
     while (i < oldLines.length || j < newLines.length) {
       // 寻找下一个相同的行
       let matchLength = 0;
-      while (i + matchLength < oldLines.length && 
-             j + matchLength < newLines.length && 
-             oldLines[i + matchLength] === newLines[j + matchLength]) {
+      while (
+        i + matchLength < oldLines.length &&
+        j + matchLength < newLines.length &&
+        oldLines[i + matchLength] === newLines[j + matchLength]
+      ) {
         matchLength++;
       }
-      
+
       if (matchLength > 0) {
         // 找到相同的行
-        const equalContent = oldLines.slice(i, i + matchLength).join('\n') + (i + matchLength < oldLines.length ? '\n' : '');
+        const equalContent =
+          oldLines.slice(i, i + matchLength).join('\n') +
+          (i + matchLength < oldLines.length ? '\n' : '');
         operations.push({
           type: 'equal',
           content: equalContent,
           startIndex: i,
-          endIndex: i + matchLength
+          endIndex: i + matchLength,
         });
         i += matchLength;
         j += matchLength;
@@ -397,7 +411,7 @@ export class DiffEngine {
             type: 'delete',
             content: oldLines[i] + '\n',
             startIndex: i,
-            endIndex: i + 1
+            endIndex: i + 1,
           });
           deletedLines++;
           i++;
@@ -407,7 +421,7 @@ export class DiffEngine {
             type: 'delete',
             content: oldLines[i] + '\n',
             startIndex: i,
-            endIndex: i + 1
+            endIndex: i + 1,
           });
           deletedLines++;
           i++;
@@ -417,19 +431,19 @@ export class DiffEngine {
             type: 'add',
             content: newLines[j] + '\n',
             startIndex: j,
-            endIndex: j + 1
+            endIndex: j + 1,
           });
           addedLines++;
           j++;
         }
       }
     }
-    
+
     return {
       operations,
       addedLines,
       deletedLines,
-      totalChanges: addedLines + deletedLines
+      totalChanges: addedLines + deletedLines,
     };
   }
 
@@ -440,22 +454,25 @@ export class DiffEngine {
     // 简单的词分割（按空格和标点符号）
     const oldWords = oldText.split(/(\s+|[^\w\s])/);
     const newWords = newText.split(/(\s+|[^\w\s])/);
-    
+
     const operations: DiffOperation[] = [];
     let addedLines = 0;
     let deletedLines = 0;
-    
-    let i = 0, j = 0;
-    
+
+    let i = 0,
+      j = 0;
+
     while (i < oldWords.length || j < newWords.length) {
       // 寻找下一个相同的词
       let matchLength = 0;
-      while (i + matchLength < oldWords.length && 
-             j + matchLength < newWords.length && 
-             oldWords[i + matchLength] === newWords[j + matchLength]) {
+      while (
+        i + matchLength < oldWords.length &&
+        j + matchLength < newWords.length &&
+        oldWords[i + matchLength] === newWords[j + matchLength]
+      ) {
         matchLength++;
       }
-      
+
       if (matchLength > 0) {
         // 找到相同的词
         const equalContent = oldWords.slice(i, i + matchLength).join('');
@@ -463,7 +480,7 @@ export class DiffEngine {
           type: 'equal',
           content: equalContent,
           startIndex: i,
-          endIndex: i + matchLength
+          endIndex: i + matchLength,
         });
         i += matchLength;
         j += matchLength;
@@ -475,7 +492,7 @@ export class DiffEngine {
             type: 'delete',
             content: oldWords[i],
             startIndex: i,
-            endIndex: i + 1
+            endIndex: i + 1,
           });
           deletedLines++;
           i++;
@@ -485,7 +502,7 @@ export class DiffEngine {
             type: 'delete',
             content: oldWords[i],
             startIndex: i,
-            endIndex: i + 1
+            endIndex: i + 1,
           });
           deletedLines++;
           i++;
@@ -495,19 +512,19 @@ export class DiffEngine {
             type: 'add',
             content: newWords[j],
             startIndex: j,
-            endIndex: j + 1
+            endIndex: j + 1,
           });
           addedLines++;
           j++;
         }
       }
     }
-    
+
     return {
       operations,
       addedLines,
       deletedLines,
-      totalChanges: addedLines + deletedLines
+      totalChanges: addedLines + deletedLines,
     };
   }
 }
@@ -541,4 +558,4 @@ export const lineDiff = (oldText: string, newText: string, options?: DiffOptions
 export const wordDiff = (oldText: string, newText: string, options?: DiffOptions): DiffResult => {
   const engine = createDiffEngine(options);
   return engine.wordDiff(oldText, newText);
-}; 
+};
