@@ -7,16 +7,7 @@ import {
   AiOutlineLoading3Quarters,
 } from 'react-icons/ai';
 import styles from './styles.module.scss';
-
-interface ActionButtonsProps {
-  onCreateFile?: () => void;
-  onCreateDirectory?: () => void;
-  onRefresh?: () => void;
-  onOpenFolder?: () => void;
-  isLoading?: boolean;
-  hasFolder?: boolean;
-  folderButtonTitle?: string;
-}
+import { ActionButtonsProps } from './type';
 
 const ActionButtons: React.FC<ActionButtonsProps> = ({
   onCreateFile,

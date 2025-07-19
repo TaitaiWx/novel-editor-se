@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { ShortcutInfo } from '../../types';
+import type { ShortcutInfo } from '../../../types';
 import styles from './styles.module.scss';
 import { getShortcutInfo } from './shortcuts/getShortcutInfo';
 import { formatShortcutText } from './shortcuts/formatShortcutText';

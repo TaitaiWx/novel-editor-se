@@ -20,9 +20,6 @@ const App: React.FC = () => {
   const [documentContent, setDocumentContent] = useState<string>('');
   const [currentLine, setCurrentLine] = useState<number>(1);
   const [isOutlineVisible, setIsOutlineVisible] = useState<boolean>(true); // 默认开启
-  const [cursorPosition, setCursorPosition] = useState<{ line: number; column: number } | null>(
-    null
-  );
 
   // 输入对话框状态
   const [inputDialog, setInputDialog] = useState<{

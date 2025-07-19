@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { FileEvent, FileEventType, FileState } from '../types/FileEvent';
+import { FileEvent, FileEventType, FileState } from '../../types/FileEvent';
 import { fileEventBus, EventListener } from '../utils/FileEventBus';
 
 // 文件事件监听器配置
@@ -72,12 +72,18 @@ export const useFileEvents = (listeners: FileEventListeners) => {
 
     // 订阅各种事件
     if (listeners.onFileSelected) {
-      const unsubscribe = fileEventBus.subscribe(FileEventType.FILE_SELECTED, listeners.onFileSelected);
+      const unsubscribe = fileEventBus.subscribe(
+        FileEventType.FILE_SELECTED,
+        listeners.onFileSelected
+      );
       unsubscribes.push(unsubscribe);
     }
 
     if (listeners.onFileLoading) {
-      const unsubscribe = fileEventBus.subscribe(FileEventType.FILE_LOADING, listeners.onFileLoading);
+      const unsubscribe = fileEventBus.subscribe(
+        FileEventType.FILE_LOADING,
+        listeners.onFileLoading
+      );
       unsubscribes.push(unsubscribe);
     }
 
@@ -87,12 +93,18 @@ export const useFileEvents = (listeners: FileEventListeners) => {
     }
 
     if (listeners.onFileLoadError) {
-      const unsubscribe = fileEventBus.subscribe(FileEventType.FILE_LOAD_ERROR, listeners.onFileLoadError);
+      const unsubscribe = fileEventBus.subscribe(
+        FileEventType.FILE_LOAD_ERROR,
+        listeners.onFileLoadError
+      );
       unsubscribes.push(unsubscribe);
     }
 
     if (listeners.onFileChanged) {
-      const unsubscribe = fileEventBus.subscribe(FileEventType.FILE_CHANGED, listeners.onFileChanged);
+      const unsubscribe = fileEventBus.subscribe(
+        FileEventType.FILE_CHANGED,
+        listeners.onFileChanged
+      );
       unsubscribes.push(unsubscribe);
     }
 
@@ -101,7 +113,7 @@ export const useFileEvents = (listeners: FileEventListeners) => {
 
     // 清理函数
     return () => {
-      unsubscribes.forEach(unsubscribe => unsubscribe());
+      unsubscribes.forEach((unsubscribe) => unsubscribe());
       unsubscribeRefs.current = [];
     };
   }, [
@@ -114,7 +126,7 @@ export const useFileEvents = (listeners: FileEventListeners) => {
 
   // 返回手动取消订阅的方法
   const unsubscribe = useCallback(() => {
-    unsubscribeRefs.current.forEach(unsubscribe => unsubscribe());
+    unsubscribeRefs.current.forEach((unsubscribe) => unsubscribe());
     unsubscribeRefs.current = [];
   }, []);
 
@@ -136,7 +148,9 @@ export const useFileEventEmitter = () => {
   }, []);
 
   const emitFileLoadError = useCallback((filePath: string, error: string) => {
-    fileEventBus.emit(fileEventBus.createEvent(FileEventType.FILE_LOAD_ERROR, filePath, undefined, error));
+    fileEventBus.emit(
+      fileEventBus.createEvent(FileEventType.FILE_LOAD_ERROR, filePath, undefined, error)
+    );
   }, []);
 
   const emitFileChanged = useCallback((filePath: string, content: string) => {
@@ -150,4 +164,4 @@ export const useFileEventEmitter = () => {
     emitFileLoadError,
     emitFileChanged,
   };
-}; 
+};
