@@ -38,7 +38,6 @@ export class StatsManager {
   private lastContentChangeTime: number = 0; // 最后一次内容变化时间
   private isUserActive: boolean = true;
   private isContentChanging: boolean = false; // 是否正在进行内容变化
-  private inactivityThreshold: number = 30000; // 30秒无活动视为非有效时间
   private contentChangeStopDelay: number = 10000; // 内容变化后10秒停止计时
   private contentChangeStopTimeout: NodeJS.Timeout | null = null;
 
