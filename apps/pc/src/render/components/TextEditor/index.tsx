@@ -1,4 +1,12 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useLayoutEffect,
+  startTransition,
+} from 'react';
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
@@ -25,6 +33,7 @@ interface TextEditorProps {
   filePath: string | null;
   showGrid?: boolean;
   showRowLines?: boolean;
+  wordWrap?: boolean;
   readOnly?: boolean;
   encoding?: string;
   scrollToLine?: ScrollToLineRequest | null;
@@ -55,6 +64,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   filePath,
   showGrid = false,
   showRowLines = false,
+  wordWrap = false,
   readOnly = false,
   encoding = 'UTF-8',
   scrollToLine,
@@ -74,6 +84,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const [isLargeFile, setIsLargeFile] = useState(false);
 
   const [isFocused, setIsFocused] = useState(false);
+  // Measured line height in px — drives line-number positioning, highlight,
+  // and the --lh CSS custom property used by row-line / grid gradients.
+  const [lineHeight, setLineHeight] = useState(DEFAULT_LINE_HEIGHT);
 
   // Virtualized line numbers state
   const [visibleLineRange, setVisibleLineRange] = useState({ start: 0, end: 50 });
@@ -96,9 +109,11 @@ const TextEditor: React.FC<TextEditorProps> = ({
     if (lineHeightRef.current > 0) return lineHeightRef.current;
     if (!textareaRef.current) return DEFAULT_LINE_HEIGHT;
     const computed = parseFloat(getComputedStyle(textareaRef.current).lineHeight);
-    lineHeightRef.current = computed || DEFAULT_LINE_HEIGHT;
-    return lineHeightRef.current;
-  }, []);
+    const lh = computed || DEFAULT_LINE_HEIGHT;
+    lineHeightRef.current = lh;
+    if (lh !== lineHeight) setLineHeight(lh);
+    return lh;
+  }, [lineHeight]);
 
   // Compute visible line range from scroll position
   const updateVisibleRange = useCallback(() => {
@@ -304,15 +319,31 @@ const TextEditor: React.FC<TextEditorProps> = ({
           filePath,
           encoding
         );
-        setContent(fileContent);
-        setOriginalContent(fileContent);
-        setIsLargeFile(fileContent.length > LARGE_FILE_THRESHOLD);
-        setLastSaved(null);
-        setCurrentLine(1);
 
+        // Update refs immediately (synchronous, no re-render)
         currentFilePathRef.current = filePath;
         currentContentRef.current = fileContent;
         currentOriginalContentRef.current = fileContent;
+
+        // Guarantee the LoadingSpinner has been painted and its
+        // compositor-layer animations are running before we commit the
+        // heavy textarea content to the DOM.  Two rAFs = one full
+        // paint-cycle on Chromium.
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        );
+
+        // React 18 startTransition: defer the heavy DOM update so the
+        // LoadingSpinner stays visible and animated while React prepares
+        // the new UI with the large content in the background.
+        startTransition(() => {
+          setContent(fileContent);
+          setOriginalContent(fileContent);
+          setIsLargeFile(fileContent.length > LARGE_FILE_THRESHOLD);
+          setLastSaved(null);
+          setCurrentLine(1);
+          setLoading(false);
+        });
 
         onContentChange?.(fileContent);
         onCursorChange?.({ line: 1, column: 1 });
@@ -328,7 +359,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
         setOriginalContent('');
         currentContentRef.current = '';
         currentOriginalContentRef.current = '';
-      } finally {
         setLoading(false);
       }
     };
@@ -416,6 +446,22 @@ const TextEditor: React.FC<TextEditorProps> = ({
     updateVisibleRange();
   }, [content, updateVisibleRange]);
 
+  // Measure actual line height once the textarea is in the DOM, then
+  // propagate it to CSS custom property and state so every consumer
+  // (line numbers, row-line / grid gradients, highlight) stays in sync.
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const computed = parseFloat(getComputedStyle(textarea).lineHeight);
+    const lh = computed > 0 ? computed : DEFAULT_LINE_HEIGHT;
+    if (lineHeightRef.current !== lh) {
+      lineHeightRef.current = lh;
+      setLineHeight(lh);
+    }
+    // Set CSS custom property so SCSS gradients match the JS value exactly.
+    textarea.closest(`.${styles.textEditor}`)?.setAttribute('style', `--lh: ${lh}px`);
+  }, [content]); // re-run after content renders (editor may just have mounted)
+
   const lineCount = useMemo(() => {
     if (content.length === 0) return 1;
     let count = 1;
@@ -433,31 +479,34 @@ const TextEditor: React.FC<TextEditorProps> = ({
     : '';
   const hasChanges = content !== originalContent;
 
-  // Virtualized line numbers: only render visible lines
+  // Virtualized line numbers: absolute positioning eliminates spacer-based
+  // cumulative float errors that cause drift over thousands of lines.
   const lineNumberElements = useMemo(() => {
-    const lh = lineHeightRef.current || DEFAULT_LINE_HEIGHT;
+    const lh = lineHeight;
     const start = Math.max(0, visibleLineRange.start);
     const end = Math.min(lineCount, visibleLineRange.end);
     const totalHeight = lineCount * lh;
-    const topPad = start * lh;
-    const bottomPad = Math.max(0, totalHeight - end * lh);
 
     const elements: React.ReactNode[] = [];
-    elements.push(<div key="top-spacer" style={{ height: topPad, flexShrink: 0 }} />);
     for (let i = start; i < end; i++) {
       const lineNum = i + 1;
       elements.push(
         <div
           key={lineNum}
           className={`${styles.lineNumber} ${lineNum === currentLine ? styles.currentLine : ''}`}
+          style={{ top: i * lh }}
         >
           {lineNum}
         </div>
       );
     }
-    elements.push(<div key="bottom-spacer" style={{ height: bottomPad, flexShrink: 0 }} />);
-    return elements;
-  }, [visibleLineRange, lineCount, currentLine]);
+
+    return (
+      <div className={styles.lineNumbersInner} style={{ height: totalHeight }}>
+        {elements}
+      </div>
+    );
+  }, [visibleLineRange, lineCount, currentLine, lineHeight]);
 
   if (!filePath) {
     return (
@@ -556,7 +605,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
           {isFocused && <div ref={lineHighlightRef} className={styles.lineHighlight} />}
           <textarea
             ref={textareaRef}
-            className={`${styles.editorContent} language-${language}`}
+            className={`${styles.editorContent} ${wordWrap ? styles.wordWrap : ''} language-${language}`}
             value={content}
             onChange={(e) => handleContentChange(e.target.value)}
             onKeyDown={handleKeyDown}

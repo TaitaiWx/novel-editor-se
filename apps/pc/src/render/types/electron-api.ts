@@ -8,6 +8,7 @@ export interface ElectronAPI {
   ipcRenderer: {
     invoke(channel: 'open-local-folder'): Promise<OpenLocalResult | null>;
     invoke(channel: 'read-file', filePath: string): Promise<string>;
+    invoke(channel: 'read-file', filePath: string, encoding: string): Promise<string>;
     invoke(channel: 'write-file', filePath: string, content: string): Promise<{ success: boolean }>;
     invoke(channel: 'get-file-info', filePath: string): Promise<FileInfo>;
     invoke(channel: 'get-default-data-path'): Promise<string>;
@@ -30,6 +31,8 @@ export interface ElectronAPI {
     invoke(channel: 'dev-tools-toggle'): Promise<void>;
     invoke(channel: 'window-toggle-fullscreen'): Promise<void>;
     invoke(channel: 'get-shortcuts'): Promise<ShortcutInfo[]>;
+    invoke(channel: 'get-app-version'): Promise<string>;
+    invoke(channel: 'update-install'): Promise<void>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     on(channel: string, listener: (...args: any[]) => void): void;
     removeAllListeners(channel: string): void;

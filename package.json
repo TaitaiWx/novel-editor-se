@@ -13,6 +13,7 @@
     "lint:fix": "eslint 'apps/*/src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}' --fix",
     "format": "prettier --write 'apps/*/src/**/*.{ts,tsx,css,scss}' 'packages/*/src/**/*.{ts,tsx,css,scss}'",
     "clean": "pnpm -r clean && rm -rf node_modules dist",
+    "typecheck": "pnpm -r typecheck",
     "release:beta": "npm version prerelease --preid=beta && git push origin main --follow-tags",
     "release:minor": "npm version preminor --preid=beta && git push origin main --follow-tags",
     "release:stable": "npm version minor && git push origin main --follow-tags"

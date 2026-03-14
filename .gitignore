@@ -19,6 +19,7 @@ build/
 *.njsproj
 *.sln
 *.sw?
+*.tsbuildinfo
 
 # Logs and databases
 *.log

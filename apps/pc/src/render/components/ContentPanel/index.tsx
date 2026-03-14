@@ -39,6 +39,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
 }) => {
   const [showGrid, setShowGrid] = useState(false);
   const [showRowLines, setShowRowLines] = useState(false);
+  const [wordWrap, setWordWrap] = useState(false);
 
   return (
     <div className={styles.contentPanel}>
@@ -53,6 +54,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
           filePath={activeTab}
           showGrid={showGrid}
           showRowLines={showRowLines}
+          wordWrap={wordWrap}
           encoding={encoding}
           scrollToLine={scrollToLine}
           onContentChange={onContentChange}
@@ -64,6 +66,8 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
               onToggleGrid={setShowGrid}
               showRowLines={showRowLines}
               onToggleRowLines={setShowRowLines}
+              wordWrap={wordWrap}
+              onToggleWordWrap={setWordWrap}
             />
           }
         />

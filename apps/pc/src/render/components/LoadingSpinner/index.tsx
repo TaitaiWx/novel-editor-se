@@ -31,18 +31,19 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
         </defs>
         {/* Background track */}
         <circle className={styles.track} cx="25" cy="25" r="20" fill="none" strokeWidth="3" />
-        {/* Animated arc */}
-        <circle
-          className={styles.arc}
-          cx="25"
-          cy="25"
-          r="20"
-          fill="none"
-          stroke="url(#loading-gradient)"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeDasharray="80 126"
-        />
+        {/* Animated arc — wrapped in <g> for compositor-only transform rotation */}
+        <g className={styles.arcGroup}>
+          <circle
+            cx="25"
+            cy="25"
+            r="20"
+            fill="none"
+            stroke="url(#loading-gradient)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray="80 126"
+          />
+        </g>
         {/* Pulsing center dot */}
         <circle className={styles.pulse} cx="25" cy="25" r="3" fill="#569cd6" />
       </svg>

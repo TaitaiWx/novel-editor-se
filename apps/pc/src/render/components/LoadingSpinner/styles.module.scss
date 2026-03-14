@@ -4,6 +4,9 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  // Isolate spinner into its own compositor layer so animations survive
+  // main-thread blocking (e.g. 4 MB textarea layout).
+  contain: layout style paint;
 
   &.small {
     padding: 1rem;
@@ -42,14 +45,22 @@
   stroke: rgba(255, 255, 255, 0.06);
 }
 
-.arc {
+// Use a secondary transform rotation on the arc group instead of
+// stroke-dasharray animation. stroke-dasharray/dashoffset are NOT
+// compositor-friendly — they block on the main thread and freeze
+// when React commits a heavy DOM update. The fixed dasharray plus
+// a reversed rotation creates the same visual "sweep" effect using
+// only GPU-accelerated transform properties.
+.arcGroup {
   transform-origin: center;
-  animation: spinnerDash 1.4s ease-in-out infinite;
+  animation: arcSweep 1.4s ease-in-out infinite alternate;
+  will-change: transform;
 }
 
 .pulse {
   transform-origin: center;
   animation: spinnerPulse 1.4s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .loadingMessage {
@@ -60,33 +71,25 @@
   letter-spacing: 0.3px;
 }
 
-// Use unique prefixed names to avoid conflicts with global animation.scss keyframes
-// (CSS Modules does NOT scope @keyframes by default in Vite)
 @keyframes spinnerRotate {
   100% {
     transform: rotate(360deg);
   }
 }
 
-@keyframes spinnerDash {
+// Sweep arc back and forth via rotation — compositor only
+@keyframes arcSweep {
   0% {
-    stroke-dasharray: 1 126;
-    stroke-dashoffset: 0;
-  }
-
-  50% {
-    stroke-dasharray: 80 126;
-    stroke-dashoffset: -30;
+    transform: rotate(0deg);
   }
 
   100% {
-    stroke-dasharray: 1 126;
-    stroke-dashoffset: -126;
+    transform: rotate(270deg);
   }
 }
 
-// Use transform:scale instead of SVG `r` attribute (poor CSS animation support)
 @keyframes spinnerPulse {
+
   0%,
   100% {
     opacity: 0.3;

@@ -42,6 +42,9 @@ importers:
 
   apps/pc:
     dependencies:
+      '@novel-editor/helpers':
+        specifier: workspace:*
+        version: link:../../packages/helpers
       '@novel-editor/store':
         specifier: workspace:*
         version: link:../../packages/store
@@ -124,6 +127,12 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+    devDependencies:
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+
+  packages/helpers:
     devDependencies:
       rimraf:
         specifier: ^6.0.1

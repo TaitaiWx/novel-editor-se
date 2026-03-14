@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { formatNumber } from '@novel-editor/helpers';
 import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 
@@ -44,7 +45,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
   useEffect(() => {
     window.electron?.ipcRenderer
       ?.invoke('get-app-version')
-      .then((v: string) => setAppVersion(v))
+      .then((v) => setAppVersion(v))
       .catch(() => setAppVersion('1.0.0'));
   }, []);
 
@@ -53,7 +54,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
     if (!ipc) return;
     const handler = () => setUpdateReady(true);
     ipc.on('update-downloaded', handler);
-    return () => ipc.removeListener('update-downloaded', handler);
+    return () => ipc.removeAllListeners('update-downloaded');
   }, []);
 
   const handleRestartUpdate = useCallback(async () => {
@@ -84,9 +85,9 @@ const StatusBar: React.FC<StatusBarProps> = ({
               行 {currentLine}, 列 {currentColumn}
             </span>
             <span className={styles.separator}>|</span>
-            <span className={styles.item}>{lineCount} 行</span>
+            <span className={styles.item}>{formatNumber(lineCount)} 行</span>
             <span className={styles.separator}>|</span>
-            <span className={styles.item}>{charCount} 字</span>
+            <span className={styles.item}>{formatNumber(charCount)} 字</span>
           </>
         )}
       </div>

@@ -318,7 +318,7 @@ const FileTree: React.FC<FileTreeProps> = ({
             onCancelCreate={onCancelCreate}
           />
           {/* Render input after the selected root-level item */}
-          {selectedRootPath === file.path && onInlineCreate && onCancelCreate && (
+          {selectedRootPath === file.path && creatingType && onInlineCreate && onCancelCreate && (
             <InlineCreateInput
               type={creatingType}
               onSubmit={(name) => onInlineCreate(creatingType, name)}

@@ -1,18 +1,14 @@
 {
-  "name": "@novel-editor/cli",
+  "name": "@novel-editor/helpers",
   "version": "1.0.0",
   "private": true,
-  "description": "Novel Editor - CLI tool",
+  "description": "Shared helper utilities for Novel Editor",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "build": "echo 'CLI build not yet configured'",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@novel-editor/store": "workspace:*"
   },
   "devDependencies": {
     "rimraf": "^6.0.1"

@@ -14,7 +14,8 @@
     "start": "electron .",
     "build:prod": "cross-env NODE_ENV=production pnpm build",
     "package": "pnpm build:prod && electron-builder",
-    "clean": "rimraf dist build out"
+    "clean": "rimraf dist build out",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@novel-editor/helpers": "workspace:*",

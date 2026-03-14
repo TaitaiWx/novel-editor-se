@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AiOutlineSetting } from 'react-icons/ai';
-import { BsGrid, BsTextLeft } from 'react-icons/bs';
+import { BsGrid, BsTextLeft, BsTextWrap } from 'react-icons/bs';
 import styles from './styles.module.scss';
 
 interface SettingsButtonProps {
@@ -8,6 +8,8 @@ interface SettingsButtonProps {
   onToggleGrid: (show: boolean) => void;
   showRowLines: boolean;
   onToggleRowLines: (show: boolean) => void;
+  wordWrap: boolean;
+  onToggleWordWrap: (wrap: boolean) => void;
 }
 
 const SettingsButton: React.FC<SettingsButtonProps> = ({
@@ -15,6 +17,8 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
   onToggleGrid,
   showRowLines,
   onToggleRowLines,
+  wordWrap,
+  onToggleWordWrap,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -47,6 +51,10 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
     onToggleRowLines(!showRowLines);
   };
 
+  const handleToggleWordWrap = () => {
+    onToggleWordWrap(!wordWrap);
+  };
+
   return (
     <div className={styles.settingsButton} ref={dropdownRef}>
       <button className={styles.settingsToggle} onClick={toggleDropdown} title="显示设置">
@@ -74,6 +82,18 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
             >
               <BsTextLeft />
               <span>显示行线</span>
+              <div className={styles.toggle}>
+                <div className={styles.toggleSlider}></div>
+              </div>
+            </button>
+          </div>
+          <div className={styles.settingItem}>
+            <button
+              className={`${styles.toggleButton} ${wordWrap ? styles.active : ''}`}
+              onClick={handleToggleWordWrap}
+            >
+              <BsTextWrap />
+              <span>自动换行</span>
               <div className={styles.toggle}>
                 <div className={styles.toggleSlider}></div>
               </div>
