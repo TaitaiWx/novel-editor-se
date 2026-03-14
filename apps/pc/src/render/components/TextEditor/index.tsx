@@ -478,8 +478,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
       view.destroy();
       viewRef.current = null;
     };
-    // Only run on mount/unmount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update readOnly
@@ -638,7 +636,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
     };
 
     loadContent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, encoding]);
 
   // Scroll to line
