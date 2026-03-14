@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Novel Editor - Electron desktop application",
+  "author": "Novel Editor Team",
   "main": "./dist/main.mjs",
   "scripts": {
     "dev": "cross-env NODE_ENV=development concurrently --kill-others --success first \"pnpm build:main && pnpm build:preload && pnpm build:renderer --watch\" \"wait-on dist/main.mjs && nodemon --watch src/main --ext ts,mjs --exec electron .\"",
@@ -16,6 +17,7 @@
     "clean": "rimraf dist build out"
   },
   "dependencies": {
+    "@novel-editor/helpers": "workspace:*",
     "@novel-editor/store": "workspace:*",
     "directory-tree": "^3.5.2",
     "electron-updater": "^6.8.3",
