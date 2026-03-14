@@ -1,12 +1,17 @@
-import React, {
-  useEffect,
-  useState,
-  useRef,
-  useCallback,
-  useMemo,
-  useLayoutEffect,
-  startTransition,
-} from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { Compartment, EditorState } from '@codemirror/state';
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+  placeholder,
+} from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { markdown } from '@codemirror/lang-markdown';
+import { json } from '@codemirror/lang-json';
+import { javascript } from '@codemirror/lang-javascript';
+import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
@@ -14,10 +19,6 @@ import styles from './styles.module.scss';
 
 /** Threshold: files larger than this show a performance warning */
 const LARGE_FILE_THRESHOLD = 500_000; // 500KB
-/** Buffer lines rendered above/below viewport for smooth scrolling */
-const LINE_BUFFER = 10;
-/** Default line height in px (14px * 1.6) */
-const DEFAULT_LINE_HEIGHT = 22.4;
 
 interface CursorPosition {
   line: number;
@@ -31,8 +32,6 @@ interface ScrollToLineRequest {
 
 interface TextEditorProps {
   filePath: string | null;
-  showGrid?: boolean;
-  showRowLines?: boolean;
   wordWrap?: boolean;
   readOnly?: boolean;
   encoding?: string;
@@ -60,10 +59,272 @@ const getLanguageFromPath = (path: string): string => {
   return languageMap[ext || ''] || 'text';
 };
 
+const getLanguageExtension = (lang: string) => {
+  switch (lang) {
+    case 'markdown':
+      return markdown();
+    case 'json':
+      return json();
+    case 'javascript':
+    case 'typescript':
+      return javascript({ typescript: lang === 'typescript' });
+    default:
+      return [];
+  }
+};
+
+/** Dark theme matching the existing editor style */
+const darkTheme = EditorView.theme(
+  {
+    '&': {
+      backgroundColor: '#1e1e1e',
+      color: '#d4d4d4',
+      height: '100%',
+      fontSize: '14px',
+    },
+    '.cm-content': {
+      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+      caretColor: '#d4d4d4',
+      padding: '12px 0',
+      lineHeight: '1.6',
+    },
+    '.cm-cursor': {
+      borderLeftColor: '#d4d4d4',
+    },
+    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
+      backgroundColor: 'rgba(0, 122, 204, 0.3) !important',
+    },
+    '.cm-activeLine': {
+      background:
+        'linear-gradient(90deg, rgba(140, 100, 220, 0.08) 0%, rgba(140, 100, 220, 0.05) 60%, rgba(140, 100, 220, 0.02) 100%)',
+    },
+    '.cm-activeLineGutter': {
+      backgroundColor: 'rgba(140, 100, 220, 0.06)',
+      color: '#c8b8e8',
+    },
+    '.cm-gutters': {
+      backgroundColor: '#1e1e1e',
+      color: '#555',
+      border: 'none',
+      borderRight: '1px solid #2d2d2d',
+      minWidth: '48px',
+    },
+    '.cm-lineNumbers .cm-gutterElement': {
+      padding: '0 12px 0 8px',
+      minWidth: '32px',
+    },
+    '.cm-scroller': {
+      overflow: 'auto',
+      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+    },
+    '&.cm-focused': {
+      outline: 'none',
+    },
+    // Scrollbar styling
+    '.cm-scroller::-webkit-scrollbar': {
+      width: '8px',
+      height: '8px',
+    },
+    '.cm-scroller::-webkit-scrollbar-track': {
+      background: 'transparent',
+    },
+    '.cm-scroller::-webkit-scrollbar-thumb': {
+      background: '#424242',
+      borderRadius: '4px',
+    },
+    '.cm-scroller::-webkit-scrollbar-thumb:hover': {
+      background: '#555',
+    },
+    '.cm-scroller::-webkit-scrollbar-corner': {
+      background: 'transparent',
+    },
+    // ── Search panel ──
+    '.cm-panels': {
+      backgroundColor: '#252526',
+      color: '#d4d4d4',
+      fontFamily:
+        "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+    },
+    '.cm-panels.cm-panels-top': {
+      borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+    },
+    '.cm-panels.cm-panels-bottom': {
+      borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+      boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.25)',
+    },
+    // Search form — full width row layout
+    '.cm-search': {
+      width: '100%',
+      boxSizing: 'border-box',
+      padding: '8px 12px',
+      display: 'flex',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: '4px 6px',
+      fontSize: '13px',
+    },
+    // Text input fields (Find / Replace)
+    '.cm-search input[type="text"], .cm-search input[main-field], .cm-search input[name="search"], .cm-search input[name="replace"]':
+      {
+        flex: '1 1 180px',
+        minWidth: '0',
+      },
+    '.cm-search input, .cm-search select': {
+      backgroundColor: '#1e1e1e',
+      color: '#d4d4d4',
+      border: '1px solid #383838',
+      borderRadius: '5px',
+      padding: '5px 10px',
+      height: '28px',
+      boxSizing: 'border-box',
+      fontSize: '13px',
+      outline: 'none',
+      fontFamily: "'Fira Code', 'Monaco', 'Menlo', monospace",
+      transition: 'border-color 0.15s, box-shadow 0.15s',
+    },
+    '.cm-search input::placeholder': {
+      color: '#555',
+    },
+    '.cm-search input:focus': {
+      borderColor: '#007acc',
+      boxShadow: '0 0 0 1px rgba(0, 122, 204, 0.2)',
+    },
+    // Action buttons — pill shape, subtle
+    '.cm-search button': {
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+      color: '#ccc',
+      border: '1px solid rgba(255, 255, 255, 0.08)',
+      borderRadius: '5px',
+      padding: '4px 10px',
+      height: '28px',
+      boxSizing: 'border-box',
+      fontSize: '12px',
+      cursor: 'pointer',
+      whiteSpace: 'nowrap',
+      transition: 'all 0.15s ease',
+      lineHeight: '1',
+    },
+    '.cm-search button:hover': {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      borderColor: 'rgba(255, 255, 255, 0.15)',
+      color: '#fff',
+    },
+    '.cm-search button:active': {
+      backgroundColor: 'rgba(255, 255, 255, 0.14)',
+      transform: 'scale(0.97)',
+    },
+    // Close button — icon-only, right-aligned
+    '.cm-search button[name="close"]': {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '28px',
+      height: '28px',
+      padding: '0',
+      marginLeft: 'auto',
+      flexShrink: '0',
+      fontSize: '16px',
+      color: '#666',
+      backgroundColor: 'transparent',
+      border: 'none',
+      borderRadius: '6px',
+      transition: 'all 0.15s ease',
+    },
+    '.cm-search button[name="close"]:hover': {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      color: '#d4d4d4',
+    },
+    '.cm-search button[name="close"]:active': {
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      transform: 'scale(0.92)',
+    },
+    // Checkbox labels — compact, inline
+    '.cm-search label': {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '3px',
+      fontSize: '12px',
+      color: '#999',
+      cursor: 'pointer',
+      padding: '2px 4px',
+      borderRadius: '4px',
+      transition: 'color 0.15s ease',
+      userSelect: 'none',
+      whiteSpace: 'nowrap',
+    },
+    '.cm-search label:hover': {
+      color: '#d4d4d4',
+    },
+    '.cm-search label input[type="checkbox"]': {
+      accentColor: '#007acc',
+      margin: '0',
+      width: '13px',
+      height: '13px',
+      flex: 'none',
+    },
+    '.cm-search .cm-button': {
+      backgroundImage: 'none',
+    },
+    // br = flex line break (preserves CM6 row structure)
+    '.cm-search br': {
+      display: 'block',
+      width: '100%',
+      height: '0',
+      flexBasis: '100%',
+      content: "''",
+    },
+    // Replace buttons — subtle blue accent
+    '.cm-search button[name="replace"], .cm-search button[name="replaceAll"]': {
+      backgroundColor: 'rgba(0, 122, 204, 0.12)',
+      color: '#569cd6',
+      borderColor: 'rgba(0, 122, 204, 0.15)',
+    },
+    '.cm-search button[name="replace"]:hover, .cm-search button[name="replaceAll"]:hover': {
+      backgroundColor: 'rgba(0, 122, 204, 0.22)',
+      borderColor: 'rgba(0, 122, 204, 0.3)',
+      color: '#7bb8e8',
+    },
+    '.cm-search button[name="replace"]:active, .cm-search button[name="replaceAll"]:active': {
+      backgroundColor: 'rgba(0, 122, 204, 0.3)',
+    },
+    // Search match highlights
+    '.cm-searchMatch': {
+      backgroundColor: 'rgba(255, 200, 0, 0.15)',
+      outline: '1px solid rgba(255, 200, 0, 0.3)',
+      borderRadius: '2px',
+    },
+    '.cm-searchMatch.cm-searchMatch-selected': {
+      backgroundColor: 'rgba(255, 150, 0, 0.28)',
+      outline: '1px solid rgba(255, 150, 0, 0.5)',
+    },
+  },
+  { dark: true }
+);
+
+/** Chinese localization for CM6 search panel */
+const chinesePhrases = EditorState.phrases.of({
+  Find: '查找',
+  Replace: '替换',
+  next: '下一个',
+  previous: '上一个',
+  all: '全部',
+  'match case': '区分大小写',
+  'by word': '全字匹配',
+  regexp: '正则表达式',
+  replace: '替换',
+  'replace all': '全部替换',
+  close: '✕',
+  'current match': '当前匹配',
+  'on line': '在第',
+  'replaced $ matches': '已替换 $ 处匹配',
+  'replaced match on line $': '已替换第 $ 行的匹配',
+  'Go to line': '跳转到行',
+  go: '跳转',
+});
+
 const TextEditor: React.FC<TextEditorProps> = ({
   filePath,
-  showGrid = false,
-  showRowLines = false,
   wordWrap = false,
   readOnly = false,
   encoding = 'UTF-8',
@@ -74,188 +335,215 @@ const TextEditor: React.FC<TextEditorProps> = ({
   settingsComponent,
 }) => {
   const isUntitled = isUntitledPath(filePath);
-  const [content, setContent] = useState<string>('');
-  const [originalContent, setOriginalContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentLine, setCurrentLine] = useState<number>(1);
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isLargeFile, setIsLargeFile] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  const [isFocused, setIsFocused] = useState(false);
-  // Measured line height in px — drives line-number positioning, highlight,
-  // and the --lh CSS custom property used by row-line / grid gradients.
-  const [lineHeight, setLineHeight] = useState(DEFAULT_LINE_HEIGHT);
-
-  // Virtualized line numbers state
-  const [visibleLineRange, setVisibleLineRange] = useState({ start: 0, end: 50 });
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
-  const lineHighlightRef = useRef<HTMLDivElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lineHeightRef = useRef<number>(0);
+
+  // Compartments for dynamic reconfiguration
+  const readOnlyCompartment = useRef(new Compartment());
+  const wordWrapCompartment = useRef(new Compartment());
+  const languageCompartment = useRef(new Compartment());
 
   const currentFilePathRef = useRef<string | null>(null);
   const currentContentRef = useRef<string>('');
   const currentOriginalContentRef = useRef<string>('');
-
-  const handleScrollRef = useRef<() => void>(() => {});
-  const updateCurrentLineRef = useRef<() => void>(() => {});
   const lastScrollIdRef = useRef(0);
 
-  const getLineHeight = useCallback((): number => {
-    if (lineHeightRef.current > 0) return lineHeightRef.current;
-    if (!textareaRef.current) return DEFAULT_LINE_HEIGHT;
-    const computed = parseFloat(getComputedStyle(textareaRef.current).lineHeight);
-    const lh = computed || DEFAULT_LINE_HEIGHT;
-    lineHeightRef.current = lh;
-    if (lh !== lineHeight) setLineHeight(lh);
-    return lh;
-  }, [lineHeight]);
+  // Stable refs for callbacks to avoid re-creating EditorView
+  const onContentChangeRef = useRef(onContentChange);
+  const onCursorChangeRef = useRef(onCursorChange);
+  const onSaveUntitledRef = useRef(onSaveUntitled);
+  const readOnlyRef = useRef(readOnly);
+  const filePathRef = useRef(filePath);
+  const isUntitledRef = useRef(isUntitled);
 
-  // Compute visible line range from scroll position
-  const updateVisibleRange = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const lh = getLineHeight();
-    const scrollTop = textarea.scrollTop;
-    const viewportHeight = textarea.clientHeight;
-    const startLine = Math.max(0, Math.floor(scrollTop / lh) - LINE_BUFFER);
-    const endLine = Math.ceil((scrollTop + viewportHeight) / lh) + LINE_BUFFER;
-    setVisibleLineRange((prev) => {
-      if (prev.start === startLine && prev.end === endLine) return prev;
-      return { start: startLine, end: endLine };
-    });
-  }, [getLineHeight]);
-
-  const updateLineHighlight = useCallback(
-    (startLine: number, endLine?: number) => {
-      if (!lineHighlightRef.current || !textareaRef.current) return;
-      const lineHeight = getLineHeight();
-      const padding = 12;
-      const scrollTop = textareaRef.current.scrollTop;
-      const end = endLine ?? startLine;
-      const top = (startLine - 1) * lineHeight + padding - scrollTop;
-      const height = (end - startLine + 1) * lineHeight;
-      lineHighlightRef.current.style.top = `${top}px`;
-      lineHighlightRef.current.style.height = `${height}px`;
-    },
-    [getLineHeight]
-  );
-
-  const handleScroll = useCallback(() => {
-    if (textareaRef.current && lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-    updateLineHighlight(currentLine);
-    updateVisibleRange();
-  }, [currentLine, updateLineHighlight, updateVisibleRange]);
-  handleScrollRef.current = handleScroll;
-
-  const updateCurrentLine = useCallback(() => {
-    if (!textareaRef.current) return;
-
-    const textarea = textareaRef.current;
-    const selStart = textarea.selectionStart;
-    const selEnd = textarea.selectionEnd;
-    const textBeforeStart = textarea.value.substring(0, selStart);
-    const startLines = textBeforeStart.split('\n');
-    const startLine = startLines.length;
-    const columnNumber = startLines[startLines.length - 1].length + 1;
-
-    const textBeforeEnd = textarea.value.substring(0, selEnd);
-    const endLine = textBeforeEnd.split('\n').length;
-
-    setCurrentLine(startLine);
-    updateLineHighlight(startLine, endLine);
-    onCursorChange?.({ line: startLine, column: columnNumber });
-  }, [onCursorChange, updateLineHighlight]);
-  updateCurrentLineRef.current = updateCurrentLine;
+  useEffect(() => {
+    onContentChangeRef.current = onContentChange;
+  }, [onContentChange]);
+  useEffect(() => {
+    onCursorChangeRef.current = onCursorChange;
+  }, [onCursorChange]);
+  useEffect(() => {
+    onSaveUntitledRef.current = onSaveUntitled;
+  }, [onSaveUntitled]);
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
+  useEffect(() => {
+    filePathRef.current = filePath;
+    isUntitledRef.current = isUntitledPath(filePath);
+  }, [filePath]);
 
   const autoSaveFile = useCallback(async () => {
     const targetPath = currentFilePathRef.current;
     const targetContent = currentContentRef.current;
 
-    if (!targetPath || readOnly || targetContent === currentOriginalContentRef.current) return;
+    if (!targetPath || readOnlyRef.current || targetContent === currentOriginalContentRef.current)
+      return;
     if (isUntitledPath(targetPath)) return;
 
     setAutoSaving(true);
     try {
       await window.electron.ipcRenderer.invoke('write-file', targetPath, targetContent);
-      if (targetPath === filePath) {
-        setOriginalContent(targetContent);
+      if (targetPath === filePathRef.current) {
+        currentOriginalContentRef.current = targetContent;
+        setHasChanges(false);
         setLastSaved(new Date());
       }
-    } catch (error) {
-      console.error('Auto-save failed:', error);
+    } catch (err) {
+      console.error('Auto-save failed:', err);
     } finally {
       setAutoSaving(false);
     }
-  }, [filePath, readOnly]);
+  }, []);
 
-  const handleContentChange = useCallback(
-    (newContent: string) => {
-      setContent(newContent);
-      currentContentRef.current = newContent;
-      onContentChange?.(newContent);
+  const scheduleAutoSave = useCallback(() => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    if (!readOnlyRef.current) {
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        autoSaveFile();
+      }, 2000);
+    }
+  }, [autoSaveFile]);
 
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
+  // Create / destroy EditorView
+  useEffect(() => {
+    if (!editorContainerRef.current) return;
 
-      if (!readOnly) {
-        autoSaveTimeoutRef.current = setTimeout(() => {
-          autoSaveFile();
-        }, 2000);
-      }
-    },
-    [onContentChange, autoSaveFile, readOnly]
-  );
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: '',
+        extensions: [
+          lineNumbers(),
+          highlightActiveLine(),
+          highlightSelectionMatches(),
+          history(),
+          search({ top: true }),
+          keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+          darkTheme,
+          chinesePhrases,
+          placeholder('开始输入您的内容...'),
+          readOnlyCompartment.current.of(EditorView.editable.of(!readOnly)),
+          wordWrapCompartment.current.of(wordWrap ? EditorView.lineWrapping : []),
+          languageCompartment.current.of([]),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              const doc = update.state.doc.toString();
+              currentContentRef.current = doc;
+              const changed = doc !== currentOriginalContentRef.current;
+              setHasChanges(changed);
+              onContentChangeRef.current?.(doc);
+              scheduleAutoSave();
+            }
+            if (update.selectionSet || update.docChanged) {
+              const pos = update.state.selection.main.head;
+              const line = update.state.doc.lineAt(pos);
+              onCursorChangeRef.current?.({
+                line: line.number,
+                column: pos - line.from + 1,
+              });
+            }
+          }),
+          // Ctrl/Cmd+S keybinding
+          keymap.of([
+            {
+              key: 'Mod-s',
+              run: () => {
+                if (isUntitledRef.current && filePathRef.current && onSaveUntitledRef.current) {
+                  onSaveUntitledRef.current(filePathRef.current, currentContentRef.current);
+                } else {
+                  autoSaveFile();
+                }
+                return true;
+              },
+            },
+          ]),
+        ],
+      }),
+      parent: editorContainerRef.current,
+    });
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        if (isUntitled && filePath && onSaveUntitled) {
-          onSaveUntitled(filePath, currentContentRef.current);
-        } else {
-          autoSaveFile();
-        }
-      }
-    },
-    [autoSaveFile, isUntitled, filePath, onSaveUntitled]
-  );
+    viewRef.current = view;
 
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+    // Only run on mount/unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update readOnly
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: readOnlyCompartment.current.reconfigure(EditorView.editable.of(!readOnly)),
+    });
+  }, [readOnly]);
+
+  // Update word wrap
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: wordWrapCompartment.current.reconfigure(wordWrap ? EditorView.lineWrapping : []),
+    });
+  }, [wordWrap]);
+
+  // Update language extension when filePath changes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !filePath) return;
+    const lang = isUntitled ? 'text' : getLanguageFromPath(filePath);
+    const langExt = getLanguageExtension(lang);
+    view.dispatch({
+      effects: languageCompartment.current.reconfigure(langExt),
+    });
+  }, [filePath, isUntitled]);
+
+  // Save on unmount
   useEffect(() => {
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
-
       if (
         currentFilePathRef.current &&
         !isUntitledPath(currentFilePathRef.current) &&
         currentContentRef.current !== currentOriginalContentRef.current &&
-        !readOnly
+        !readOnlyRef.current
       ) {
         window.electron.ipcRenderer
           .invoke('write-file', currentFilePathRef.current, currentContentRef.current)
-          .catch((error) => {
-            console.error('Failed to save on unmount:', error);
+          .catch((err) => {
+            console.error('Failed to save on unmount:', err);
           });
       }
     };
-  }, [readOnly]);
+  }, []);
 
+  // Load file content
   useEffect(() => {
-    const savePreviousFile = async () => {
+    const loadContent = async () => {
+      const view = viewRef.current;
+
+      // Save previous file before switching
       if (
         currentFilePathRef.current &&
+        filePath !== currentFilePathRef.current &&
         !isUntitledPath(currentFilePathRef.current) &&
         currentContentRef.current !== currentOriginalContentRef.current &&
-        !readOnly
+        !readOnlyRef.current
       ) {
         try {
           await window.electron.ipcRenderer.invoke(
@@ -263,50 +551,44 @@ const TextEditor: React.FC<TextEditorProps> = ({
             currentFilePathRef.current,
             currentContentRef.current
           );
-        } catch (error) {
-          console.error('Failed to save previous file:', error);
+        } catch (err) {
+          console.error('Failed to save previous file:', err);
         }
       }
-    };
 
-    if (filePath !== currentFilePathRef.current) {
-      savePreviousFile();
-    }
-
-    currentFilePathRef.current = filePath;
-    currentContentRef.current = content;
-    currentOriginalContentRef.current = originalContent;
-  }, [filePath, content, originalContent, readOnly]);
-
-  useEffect(() => {
-    const loadContent = async () => {
       if (!filePath) {
-        setContent('');
-        setOriginalContent('');
-        setError(null);
-        setIsLargeFile(false);
         currentFilePathRef.current = null;
         currentContentRef.current = '';
         currentOriginalContentRef.current = '';
+        setError(null);
+        setIsLargeFile(false);
+        setHasChanges(false);
+        if (view) {
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: '' },
+          });
+        }
         onContentChange?.('');
         onCursorChange?.({ line: 1, column: 1 });
         return;
       }
 
       if (isUntitledPath(filePath)) {
-        setContent('');
-        setOriginalContent('');
-        setError(null);
-        setLoading(false);
-        setLastSaved(null);
-        setCurrentLine(1);
-        setIsLargeFile(false);
         currentFilePathRef.current = filePath;
         currentContentRef.current = '';
         currentOriginalContentRef.current = '';
+        setError(null);
+        setLoading(false);
+        setLastSaved(null);
+        setIsLargeFile(false);
+        setHasChanges(false);
+        if (view) {
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: '' },
+          });
+        }
         onContentChange?.('');
         onCursorChange?.({ line: 1, column: 1 });
-        requestAnimationFrame(() => updateLineHighlight(1));
         return;
       }
 
@@ -320,43 +602,35 @@ const TextEditor: React.FC<TextEditorProps> = ({
           encoding
         );
 
-        // Update refs immediately (synchronous, no re-render)
         currentFilePathRef.current = filePath;
         currentContentRef.current = fileContent;
         currentOriginalContentRef.current = fileContent;
 
-        // Guarantee the LoadingSpinner has been painted and its
-        // compositor-layer animations are running before we commit the
-        // heavy textarea content to the DOM.  Two rAFs = one full
-        // paint-cycle on Chromium.
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-        );
+        if (view) {
+          const lang = getLanguageFromPath(filePath);
+          const langExt = getLanguageExtension(lang);
 
-        // React 18 startTransition: defer the heavy DOM update so the
-        // LoadingSpinner stays visible and animated while React prepares
-        // the new UI with the large content in the background.
-        startTransition(() => {
-          setContent(fileContent);
-          setOriginalContent(fileContent);
-          setIsLargeFile(fileContent.length > LARGE_FILE_THRESHOLD);
-          setLastSaved(null);
-          setCurrentLine(1);
-          setLoading(false);
-        });
+          // Replace document content and reconfigure compartments
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: fileContent },
+            effects: [
+              languageCompartment.current.reconfigure(langExt),
+              readOnlyCompartment.current.reconfigure(EditorView.editable.of(!readOnly)),
+              wordWrapCompartment.current.reconfigure(wordWrap ? EditorView.lineWrapping : []),
+            ],
+          });
+        }
+
+        setIsLargeFile(fileContent.length > LARGE_FILE_THRESHOLD);
+        setLastSaved(null);
+        setHasChanges(false);
+        setLoading(false);
 
         onContentChange?.(fileContent);
         onCursorChange?.({ line: 1, column: 1 });
-
-        requestAnimationFrame(() => {
-          updateLineHighlight(1);
-          updateVisibleRange();
-        });
-      } catch (error) {
-        console.error('Error reading file:', error);
+      } catch (err) {
+        console.error('Error reading file:', err);
         setError(`无法读取文件: ${filePath}`);
-        setContent('');
-        setOriginalContent('');
         currentContentRef.current = '';
         currentOriginalContentRef.current = '';
         setLoading(false);
@@ -364,112 +638,23 @@ const TextEditor: React.FC<TextEditorProps> = ({
     };
 
     loadContent();
-  }, [
-    filePath,
-    encoding,
-    onContentChange,
-    onCursorChange,
-    updateLineHighlight,
-    updateVisibleRange,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filePath, encoding]);
 
-  // Event listeners (stable ref proxy)
+  // Scroll to line
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const onScroll = () => handleScrollRef.current();
-    const onCursorUpdate = () => updateCurrentLineRef.current();
-
-    let keyupTimer: ReturnType<typeof setTimeout> | null = null;
-    const onKeyupDebounced = () => {
-      if (keyupTimer) clearTimeout(keyupTimer);
-      keyupTimer = setTimeout(onCursorUpdate, 30);
-    };
-
-    textarea.addEventListener('scroll', onScroll);
-    textarea.addEventListener('click', onCursorUpdate);
-    textarea.addEventListener('keyup', onKeyupDebounced);
-    textarea.addEventListener('focus', onCursorUpdate);
-
-    return () => {
-      if (keyupTimer) clearTimeout(keyupTimer);
-      textarea.removeEventListener('scroll', onScroll);
-      textarea.removeEventListener('click', onCursorUpdate);
-      textarea.removeEventListener('keyup', onKeyupDebounced);
-      textarea.removeEventListener('focus', onCursorUpdate);
-    };
-  }, []);
-
-  // Scroll to a specific line when requested (id-guarded to prevent re-triggering)
-  useEffect(() => {
-    if (!scrollToLine || !textareaRef.current) return;
+    const view = viewRef.current;
+    if (!scrollToLine || !view) return;
     if (scrollToLine.id <= lastScrollIdRef.current) return;
     lastScrollIdRef.current = scrollToLine.id;
 
-    const lh = getLineHeight();
-    const textarea = textareaRef.current;
-    const targetTop = (scrollToLine.line - 1) * lh;
-    const viewportHeight = textarea.clientHeight;
-    // Center the target line in the viewport
-    textarea.scrollTop = Math.max(0, targetTop - viewportHeight / 3);
-
-    // Sync line numbers scroll immediately
-    if (lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = textarea.scrollTop;
-    }
-
-    // Update cursor position to the target line
-    const text = currentContentRef.current;
-    let charIndex = 0;
-    let lineNum = 1;
-    for (let i = 0; i < text.length && lineNum < scrollToLine.line; i++) {
-      if (text.charCodeAt(i) === 10) lineNum++;
-      charIndex = i + 1;
-    }
-    textarea.setSelectionRange(charIndex, charIndex);
-    textarea.focus();
-    setCurrentLine(scrollToLine.line);
-    updateLineHighlight(scrollToLine.line);
-    updateVisibleRange();
-
-    // Re-sync line numbers after React re-render
-    requestAnimationFrame(() => {
-      if (lineNumbersRef.current && textareaRef.current) {
-        lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
-      }
+    const lineInfo = view.state.doc.line(Math.min(scrollToLine.line, view.state.doc.lines));
+    view.dispatch({
+      selection: { anchor: lineInfo.from },
+      scrollIntoView: true,
     });
-  }, [scrollToLine, getLineHeight, updateLineHighlight, updateVisibleRange]);
-
-  // Initialize visible range on mount and when content changes
-  useLayoutEffect(() => {
-    updateVisibleRange();
-  }, [content, updateVisibleRange]);
-
-  // Measure actual line height once the textarea is in the DOM, then
-  // propagate it to CSS custom property and state so every consumer
-  // (line numbers, row-line / grid gradients, highlight) stays in sync.
-  useLayoutEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const computed = parseFloat(getComputedStyle(textarea).lineHeight);
-    const lh = computed > 0 ? computed : DEFAULT_LINE_HEIGHT;
-    if (lineHeightRef.current !== lh) {
-      lineHeightRef.current = lh;
-      setLineHeight(lh);
-    }
-    // Set CSS custom property so SCSS gradients match the JS value exactly.
-    textarea.closest(`.${styles.textEditor}`)?.setAttribute('style', `--lh: ${lh}px`);
-  }, [content]); // re-run after content renders (editor may just have mounted)
-
-  const lineCount = useMemo(() => {
-    if (content.length === 0) return 1;
-    let count = 1;
-    for (let i = 0; i < content.length; i++) {
-      if (content.charCodeAt(i) === 10) count++;
-    }
-    return count;
-  }, [content]);
+    view.focus();
+  }, [scrollToLine]);
 
   const language = filePath && !isUntitled ? getLanguageFromPath(filePath) : 'text';
   const fileName = filePath
@@ -477,147 +662,106 @@ const TextEditor: React.FC<TextEditorProps> = ({
       ? filePath.replace('__untitled__:', '')
       : filePath.split('/').pop() || filePath.split('\\').pop() || ''
     : '';
-  const hasChanges = content !== originalContent;
 
-  // Virtualized line numbers: absolute positioning eliminates spacer-based
-  // cumulative float errors that cause drift over thousands of lines.
-  const lineNumberElements = useMemo(() => {
-    const lh = lineHeight;
-    const start = Math.max(0, visibleLineRange.start);
-    const end = Math.min(lineCount, visibleLineRange.end);
-    const totalHeight = lineCount * lh;
-
-    const elements: React.ReactNode[] = [];
-    for (let i = start; i < end; i++) {
-      const lineNum = i + 1;
-      elements.push(
-        <div
-          key={lineNum}
-          className={`${styles.lineNumber} ${lineNum === currentLine ? styles.currentLine : ''}`}
-          style={{ top: i * lh }}
-        >
-          {lineNum}
-        </div>
-      );
-    }
-
-    return (
-      <div className={styles.lineNumbersInner} style={{ height: totalHeight }}>
-        {elements}
-      </div>
-    );
-  }, [visibleLineRange, lineCount, currentLine, lineHeight]);
-
-  if (!filePath) {
-    return (
-      <div className={`${styles.textEditor} ${styles.empty}`}>
-        <EmptyState
-          icon="📝"
-          title="选择文件开始编辑"
-          description="从左侧文件树中选择一个文件来开始编辑"
-          variant="file"
-        />
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className={`${styles.textEditor} ${styles.loading}`}>
-        <LoadingSpinner message="正在加载文件内容..." size="medium" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`${styles.textEditor} ${styles.error}`}>
-        <ErrorState
-          icon="⚠️"
-          title="文件加载失败"
-          message={error}
-          size="medium"
-          onRetry={() => {
-            setError(null);
-            setLoading(false);
-            if (filePath) {
-              const loadContent = async () => {
-                setLoading(true);
-                try {
-                  const fileContent = await window.electron.ipcRenderer.invoke(
-                    'read-file',
-                    filePath
-                  );
-                  setContent(fileContent);
-                  setOriginalContent(fileContent);
-                  currentContentRef.current = fileContent;
-                  currentOriginalContentRef.current = fileContent;
-                } catch (error) {
-                  console.error('Error reading file:', error);
-                  setError(`无法读取文件: ${filePath}`);
-                  setContent('');
-                  setOriginalContent('');
-                } finally {
-                  setLoading(false);
-                }
-              };
-              loadContent();
-            }
-          }}
-        />
-      </div>
-    );
-  }
+  // Determine which overlay to show (if any)
+  const showEmpty = !filePath;
+  const showLoading = !!filePath && loading;
+  const showError = !!filePath && !loading && !!error;
+  const showEditor = !!filePath && !loading && !error;
 
   return (
-    <div
-      className={`${styles.textEditor} ${showGrid ? styles.withGrid : ''} ${
-        showRowLines ? styles.withRowLines : ''
-      }`}
-    >
-      <div className={styles.fileHeader}>
-        <div className={styles.fileInfo}>
-          <span className={styles.fileName}>
-            {fileName}
-            {hasChanges && <span className={styles.unsavedIndicator}>*</span>}
-          </span>
-          <span className={styles.languageBadge}>{language}</span>
-          {isLargeFile && <span className={styles.largeFileBadge}>大文件</span>}
-          {!readOnly && (
-            <span className={styles.autoSaveStatus}>
-              {autoSaving
-                ? '保存中...'
-                : hasChanges
-                  ? '未保存'
-                  : lastSaved
-                    ? `${lastSaved.toLocaleTimeString()}`
-                    : '已保存'}
+    <div className={styles.textEditor}>
+      {/* File header — only visible when a file is active */}
+      {showEditor && (
+        <div className={styles.fileHeader}>
+          <div className={styles.fileInfo}>
+            <span className={styles.fileName}>
+              {fileName}
+              {hasChanges && <span className={styles.unsavedIndicator}>*</span>}
             </span>
-          )}
+            <span className={styles.languageBadge}>{language}</span>
+            {isLargeFile && <span className={styles.largeFileBadge}>大文件</span>}
+            {!readOnly && (
+              <span className={styles.autoSaveStatus}>
+                {autoSaving
+                  ? '保存中...'
+                  : hasChanges
+                    ? '未保存'
+                    : lastSaved
+                      ? `${lastSaved.toLocaleTimeString()}`
+                      : '已保存'}
+              </span>
+            )}
+          </div>
+          <div className={styles.fileActions}>{settingsComponent}</div>
         </div>
-        <div className={styles.fileActions}>{settingsComponent}</div>
+      )}
+
+      {/* Editor container — ALWAYS rendered so the EditorView DOM node is never removed */}
+      <div className={styles.editorContainer} style={{ display: showEditor ? undefined : 'none' }}>
+        <div ref={editorContainerRef} className={styles.cmHost} />
       </div>
-      <div className={styles.editorContainer}>
-        <div className={styles.lineNumbers} ref={lineNumbersRef}>
-          {lineNumberElements}
-        </div>
-        <div className={styles.editorWrapper}>
-          {isFocused && <div ref={lineHighlightRef} className={styles.lineHighlight} />}
-          <textarea
-            ref={textareaRef}
-            className={`${styles.editorContent} ${wordWrap ? styles.wordWrap : ''} language-${language}`}
-            value={content}
-            onChange={(e) => handleContentChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onSelect={updateCurrentLine}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            readOnly={readOnly}
-            placeholder={readOnly ? '' : '开始输入您的内容...'}
-            spellCheck={false}
+
+      {/* Overlay states */}
+      {showEmpty && (
+        <div className={styles.overlay}>
+          <EmptyState
+            icon="📝"
+            title="选择文件开始编辑"
+            description="从左侧文件树中选择一个文件来开始编辑"
+            variant="file"
           />
         </div>
-      </div>
+      )}
+      {showLoading && (
+        <div className={styles.overlay}>
+          <LoadingSpinner message="正在加载文件内容..." size="medium" />
+        </div>
+      )}
+      {showError && (
+        <div className={styles.overlay}>
+          <ErrorState
+            icon="⚠️"
+            title="文件加载失败"
+            message={error!}
+            size="medium"
+            onRetry={() => {
+              setError(null);
+              setLoading(false);
+              if (filePath) {
+                const retryLoad = async () => {
+                  setLoading(true);
+                  try {
+                    const fileContent = await window.electron.ipcRenderer.invoke(
+                      'read-file',
+                      filePath
+                    );
+                    const view = viewRef.current;
+                    if (view) {
+                      view.dispatch({
+                        changes: {
+                          from: 0,
+                          to: view.state.doc.length,
+                          insert: fileContent,
+                        },
+                      });
+                    }
+                    currentContentRef.current = fileContent;
+                    currentOriginalContentRef.current = fileContent;
+                    setHasChanges(false);
+                  } catch (err) {
+                    console.error('Error reading file:', err);
+                    setError(`无法读取文件: ${filePath}`);
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                retryLoad();
+              }
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

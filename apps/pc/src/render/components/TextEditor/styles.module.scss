@@ -1,58 +1,11 @@
 @use '../../styles/animation.scss';
 
-// Central line-height value in pixels — kept in sync with the JS-computed
-// `--lh` custom property set on .textEditor at runtime.  The fallback
-// `22.4px` matches `14px * 1.6`.
-$lh-fallback: 22.4px;
-$padding-top: 12px;
-$padding-left: 16px;
-
 .textEditor {
-  // JS sets this after measuring getComputedStyle(textarea).lineHeight
-  --lh: #{$lh-fallback};
-
   display: flex;
   flex-direction: column;
   height: 100%;
   background-color: #1e1e1e;
   color: #d4d4d4;
-  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-
-  &.empty,
-  &.loading,
-  &.error {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-  }
-
-  &.withGrid {
-    .editorContent {
-      background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(0deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-      background-size: 1ch var(--lh);
-      background-attachment: local;
-      background-position: $padding-left $padding-top;
-    }
-  }
-
-  &.withRowLines {
-    .editorContent {
-      background-image: linear-gradient(0deg,
-          transparent 0px,
-          transparent calc(var(--lh) - 1px),
-          rgba(255, 255, 255, 0.12) calc(var(--lh) - 1px),
-          rgba(255, 255, 255, 0.12) var(--lh));
-      background-size: 100% var(--lh);
-      background-attachment: local;
-      background-position: 0 $padding-top;
-    }
-
-    .lineNumbers .lineNumber {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-  }
 }
 
 // Tab-style file header - single compact line
@@ -128,186 +81,25 @@ $padding-left: 16px;
 
 // Editor area
 .editorContainer {
-  display: flex;
   flex: 1;
   overflow: hidden;
   position: relative;
 }
 
-.editorWrapper {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
-
-// Purple current-line highlight
-.lineHighlight {
-  position: absolute;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: linear-gradient(90deg,
-      rgba(140, 100, 220, 0.08) 0%,
-      rgba(140, 100, 220, 0.05) 60%,
-      rgba(140, 100, 220, 0.02) 100%);
-  border-left: 2px solid rgba(160, 120, 240, 0.4);
-  transition: top 0.05s ease-out;
-}
-
-.lineNumbers {
-  background-color: #1e1e1e;
-  color: #555;
-  padding: $padding-top 0;
-  font-size: 14px;
-  line-height: var(--lh);
-  text-align: right;
-  user-select: none;
-  border-right: 1px solid #2d2d2d;
-  min-width: 48px;
-  position: relative;
-  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  overflow: hidden;
-
-  .lineNumber {
-    position: absolute;
-    left: 0;
-    right: 0;
-    padding-right: 12px;
-    padding-left: 8px;
-    white-space: nowrap;
-    height: var(--lh);
-    line-height: var(--lh);
-    box-sizing: border-box;
-
-    &.currentLine {
-      color: #c8b8e8;
-      background-color: rgba(140, 100, 220, 0.06);
-    }
-  }
-
-  &::-webkit-scrollbar {
-    width: 0;
-  }
-}
-
-.lineNumbersInner {
-  position: relative;
-}
-
-.editorContent {
-  position: relative;
-  z-index: 1;
-  width: 100%;
+// CodeMirror host — fills the editor container
+.cmHost {
   height: 100%;
-  padding: $padding-top $padding-left;
-  font-size: 14px;
-  line-height: var(--lh);
-  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  background-color: transparent;
-  color: #d4d4d4;
-  border: none;
-  outline: none;
-  resize: none;
-  white-space: pre;
-  overflow-wrap: normal;
-  overflow-x: auto;
-  overflow-y: auto;
-  tab-size: 4;
 
-  &.wordWrap {
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    overflow-x: hidden;
+  // Ensure the CM editor fills the host
+  :global(.cm-editor) {
+    height: 100%;
   }
+}
 
-  &::placeholder {
-    color: #555;
-    font-style: italic;
-  }
-
-  &::selection {
-    background-color: rgba(0, 122, 204, 0.3);
-  }
-
-  &:focus {
-    outline: none;
-  }
-
-  &::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: #424242;
-    border-radius: 4px;
-
-    &:hover {
-      background: #555;
-    }
-  }
-
-  &::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-
-  &.language-markdown {
-
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-      color: #569cd6;
-      font-weight: bold;
-    }
-
-    a {
-      color: #4fc3f7;
-      text-decoration: underline;
-    }
-
-    code {
-      background-color: rgba(255, 255, 255, 0.1);
-      padding: 0.125rem 0.25rem;
-      border-radius: 0.125rem;
-      color: #ce9178;
-    }
-
-    blockquote {
-      border-left: 4px solid #6a9955;
-      margin-left: 0;
-      padding-left: 1rem;
-      color: #6a9955;
-      font-style: italic;
-    }
-  }
-
-  &.language-text {
-    color: #d4d4d4;
-  }
-
-  &.language-json {
-    .property {
-      color: #9cdcfe;
-    }
-
-    .string {
-      color: #ce9178;
-    }
-
-    .number {
-      color: #b5cea8;
-    }
-
-    .keyword {
-      color: #569cd6;
-    }
-  }
+// Full-size overlay for empty / loading / error states
+.overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
 }

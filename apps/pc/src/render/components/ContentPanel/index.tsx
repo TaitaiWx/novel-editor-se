@@ -37,8 +37,6 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   onCursorChange,
   onSaveUntitled,
 }) => {
-  const [showGrid, setShowGrid] = useState(false);
-  const [showRowLines, setShowRowLines] = useState(false);
   const [wordWrap, setWordWrap] = useState(false);
 
   return (
@@ -52,24 +50,13 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
       <div className={styles.contentPanelContent}>
         <TextEditor
           filePath={activeTab}
-          showGrid={showGrid}
-          showRowLines={showRowLines}
           wordWrap={wordWrap}
           encoding={encoding}
           scrollToLine={scrollToLine}
           onContentChange={onContentChange}
           onCursorChange={onCursorChange}
           onSaveUntitled={onSaveUntitled}
-          settingsComponent={
-            <SettingsButton
-              showGrid={showGrid}
-              onToggleGrid={setShowGrid}
-              showRowLines={showRowLines}
-              onToggleRowLines={setShowRowLines}
-              wordWrap={wordWrap}
-              onToggleWordWrap={setWordWrap}
-            />
-          }
+          settingsComponent={<SettingsButton wordWrap={wordWrap} onToggleWordWrap={setWordWrap} />}
         />
       </div>
     </div>
