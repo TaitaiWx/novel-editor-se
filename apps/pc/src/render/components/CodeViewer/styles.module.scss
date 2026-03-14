@@ -1,0 +1,270 @@
+@use '../../styles/animation.scss';
+
+// CodeViewer 主容器
+.codeViewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+
+  // 使用抽象组件时的容器样式
+  &.empty,
+  &.loading,
+  &.error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  // 方格线状态
+  &.withGrid {
+    .codeContent {
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        right: 1rem;
+        bottom: 1rem;
+        background-image:
+          repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent calc(0.8ch - 1px),
+            rgba(255, 255, 255, 0.1) calc(0.8ch - 1px),
+            rgba(255, 255, 255, 0.1) 0.8ch
+          ),
+          repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent calc(1.5em - 1px),
+            rgba(255, 255, 255, 0.08) calc(1.5em - 1px),
+            rgba(255, 255, 255, 0.08) 1.5em
+          );
+        pointer-events: none;
+        z-index: 1;
+      }
+    }
+  }
+
+  // 行线状态
+  &.withRowLines {
+    .codeContent {
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        top: calc(1rem + 1.5em - 1px); // 从第一行底部开始
+        left: 0;
+        right: 0;
+        bottom: 1rem;
+        background-image: repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.15) 0px,
+          rgba(255, 255, 255, 0.15) 1px,
+          transparent 1px,
+          transparent 1.5em
+        );
+        pointer-events: none;
+        z-index: 1;
+      }
+    }
+  }
+}
+
+// FileHeader 组件样式
+.fileHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background-color: #2d2d2d;
+  border-bottom: 2px solid #404040;
+  flex-shrink: 0;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #007acc, transparent);
+    opacity: 0.3;
+  }
+
+  // 文件信息区域
+  .fileInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+
+    .fileName {
+      font-weight: 600;
+      color: #ffffff;
+      font-size: 0.9rem;
+    }
+
+    .filePath {
+      font-size: 0.75rem;
+      color: #888;
+      opacity: 0.8;
+    }
+  }
+
+  // 文件统计区域
+  .fileStats {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+
+    .languageBadge {
+      background-color: #007acc;
+      color: #ffffff;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .lineCount {
+      color: #888;
+      font-size: 0.75rem;
+    }
+  }
+}
+
+// CodeContainer 组件样式
+.codeContainer {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+
+  // 行号区域
+  .lineNumbers {
+    background-color: #252526;
+    color: #858585;
+    padding: 1rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1.5em;
+    text-align: right;
+    user-select: none;
+    border-right: 2px solid #404040;
+    min-width: 3rem;
+    position: relative;
+    font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: -2px;
+      bottom: 0;
+      width: 1px;
+      background: linear-gradient(180deg, transparent, #007acc, transparent);
+      opacity: 0.2;
+    }
+
+    .lineNumber {
+      padding-right: 0.5rem;
+      white-space: nowrap;
+      height: 1.5em;
+      line-height: 1.5em;
+    }
+  }
+
+  // 代码内容区域
+  .codeContent {
+    flex: 1;
+    padding: 1rem;
+    overflow: auto;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+
+    // 代码行样式
+    .codeLine {
+      display: block;
+      height: 1.5em;
+      line-height: 1.5em;
+      white-space: pre;
+      overflow: visible;
+
+      // 确保空行也占据相同高度
+      &:empty::before {
+        content: ' ';
+        visibility: hidden;
+      }
+    }
+
+    // 语法高亮样式
+    :global(.keyword) {
+      color: #569cd6;
+      font-weight: 500;
+    }
+
+    :global(.string) {
+      color: #ce9178;
+    }
+
+    :global(.comment) {
+      color: #6a9955;
+      font-style: italic;
+    }
+
+    :global(.property) {
+      color: #9cdcfe;
+    }
+
+    :global(.number) {
+      color: #b5cea8;
+    }
+
+    // 滚动条样式
+    &::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: #1e1e1e;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #424242;
+      border-radius: 4px;
+
+      &:hover {
+        background: #555;
+      }
+    }
+  }
+}
+
+// 行号区域滚动条样式
+.lineNumbers::-webkit-scrollbar {
+  width: 8px;
+}
+
+.lineNumbers::-webkit-scrollbar-track {
+  background: #252526;
+}
+
+.lineNumbers::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+
+  &:hover {
+    background: #555;
+  }
+}

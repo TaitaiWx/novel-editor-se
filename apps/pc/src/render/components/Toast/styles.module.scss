@@ -1,0 +1,241 @@
+// Toast container - bottom-right stacking area
+.container {
+  position: fixed;
+  bottom: 36px; // above StatusBar
+  right: 16px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+}
+
+// Individual toast — frosted glass, no left bar
+.toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 280px;
+  max-width: 420px;
+  pointer-events: auto;
+  overflow: hidden;
+  animation: slideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+
+  // Default (info)
+  background-color: rgba(30, 45, 65, 0.72);
+  border: 1px solid rgba(86, 156, 214, 0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+}
+
+.toast.dismissing {
+  animation: fadeOut 0.3s ease forwards;
+}
+
+// ===== Success =====
+.success {
+  background-color: rgba(20, 50, 35, 0.72);
+  border-color: rgba(78, 201, 176, 0.18);
+
+  .icon {
+    color: #4ec9b0;
+  }
+
+  .message {
+    color: #c5e8de;
+  }
+
+  .closeBtn {
+    color: rgba(78, 201, 176, 0.5);
+
+    &:hover {
+      color: #4ec9b0;
+      background-color: rgba(78, 201, 176, 0.1);
+    }
+  }
+
+  .progressBar {
+    background-color: #4ec9b0;
+  }
+}
+
+// ===== Error =====
+.error {
+  background-color: rgba(60, 22, 22, 0.72);
+  border-color: rgba(244, 135, 113, 0.18);
+
+  .icon {
+    color: #f48771;
+  }
+
+  .message {
+    color: #f0ccc5;
+  }
+
+  .closeBtn {
+    color: rgba(244, 135, 113, 0.5);
+
+    &:hover {
+      color: #f48771;
+      background-color: rgba(244, 135, 113, 0.1);
+    }
+  }
+
+  .progressBar {
+    background-color: #f48771;
+  }
+}
+
+// ===== Warning =====
+.warning {
+  background-color: rgba(55, 45, 15, 0.72);
+  border-color: rgba(232, 196, 74, 0.18);
+
+  .icon {
+    color: #e8c44a;
+  }
+
+  .message {
+    color: #ede0b5;
+  }
+
+  .closeBtn {
+    color: rgba(232, 196, 74, 0.5);
+
+    &:hover {
+      color: #e8c44a;
+      background-color: rgba(232, 196, 74, 0.1);
+    }
+  }
+
+  .progressBar {
+    background-color: #e8c44a;
+  }
+}
+
+// ===== Info =====
+.info {
+  .icon {
+    color: #569cd6;
+  }
+
+  .message {
+    color: #bed3eb;
+  }
+
+  .closeBtn {
+    color: rgba(86, 156, 214, 0.5);
+
+    &:hover {
+      color: #569cd6;
+      background-color: rgba(86, 156, 214, 0.1);
+    }
+  }
+
+  .progressBar {
+    background-color: #569cd6;
+  }
+}
+
+// Icon
+.icon {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 700;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #569cd6;
+}
+
+// Message text
+.message {
+  flex: 1;
+  font-size: 13px;
+  color: #d4d4d4;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+// Close button
+.closeBtn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  line-height: 1;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
+
+  &:hover {
+    color: #d4d4d4;
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+// Progress bar — bright accent on translucent bg
+.progressBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  border-radius: 0 0 10px 10px;
+  background-color: #569cd6;
+  opacity: 0.85;
+  animation: progressShrink linear forwards;
+  transform-origin: left center;
+}
+
+// Animations
+@keyframes progressShrink {
+  0% {
+    transform: scaleX(1);
+    opacity: 0.85;
+  }
+
+  100% {
+    transform: scaleX(0);
+    opacity: 0.1;
+  }
+}
+
+@keyframes slideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(50px) scale(0.95);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(50px) scale(0.95);
+  }
+}

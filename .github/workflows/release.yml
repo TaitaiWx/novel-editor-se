@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # macOS
+          - os: macos-latest
+            arch: x64
+            electron-args: --x64
+          - os: macos-latest
+            arch: arm64
+            electron-args: --arm64
+          # Windows
+          - os: windows-latest
+            arch: x64
+            electron-args: --x64
+          - os: windows-latest
+            arch: arm64
+            electron-args: --arm64
+          # Linux
+          - os: ubuntu-latest
+            arch: x64
+            electron-args: --x64
+          - os: ubuntu-latest
+            arch: arm64
+            electron-args: --arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+        working-directory: apps/pc
+
+      - name: Package Electron app
+        run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never
+        working-directory: apps/pc
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            apps/pc/build/*.dmg
+            apps/pc/build/*.zip
+            apps/pc/build/*.exe
+            apps/pc/build/*.msi
+            apps/pc/build/*.AppImage
+            apps/pc/build/*.deb
+            apps/pc/build/*.rpm
+            apps/pc/build/*.yml
+          if-no-files-found: ignore
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

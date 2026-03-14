@@ -1,0 +1,45 @@
+@use '../../styles/animation.scss';
+
+.actionButtons {
+  display: flex;
+  gap: 4px;
+
+  .actionButton {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    color: #d4d4d4;
+    min-width: 24px;
+    height: 24px;
+
+    &:hover:not(:disabled) {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+
+    &:active:not(:disabled) {
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    svg {
+      width: 14px;
+      height: 14px;
+      color: inherit;
+    }
+
+    .loadingIcon {
+      animation: spin 1s linear infinite;
+    }
+  }
+}

@@ -42,19 +42,19 @@
 ### 安装依赖
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 启动开发服务器
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 ### 构建
 
 ```bash
-npm run build
+pnpm build
 ```
 
 ## 项目结构

@@ -30,3 +30,9 @@ build/
 Thumbs.db
 
 design.md
+.npmrc
+
+.spec-workflow/
+.claude/
+
+large-novel.txt

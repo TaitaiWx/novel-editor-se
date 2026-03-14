@@ -1,55 +1,27 @@
 {
   "name": "novel-editor-se",
   "version": "1.0.0",
-  "description": "",
-  "main": "./dist/main.mjs",
-  "scripts": {
-    "dev": "cross-env NODE_ENV=development concurrently \"pnpm build:main && pnpm build:preload && pnpm build:renderer --watch\" \"wait-on dist/main.mjs && nodemon --watch src/main --ext ts,mjs --exec electron .\"",
-    "build:main": "cross-env VITE_ELECTRON_MAIN=true vite build",
-    "build:preload": "cross-env VITE_PRELOAD=true vite build",
-    "build:renderer": "vite build",
-    "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
-    "start": "electron .",
-    "build:prod": "cross-env NODE_ENV=production pnpm build",
-    "package": "pnpm build:prod && electron-builder",
-    "lint": "eslint '**/*.{js,jsx,ts,tsx}'",
-    "lint:fix": "eslint '**/*.{js,jsx,ts,tsx}' --fix",
-    "format": "prettier --write '**/*.{js,jsx,ts,tsx,css,md,json}'",
-    "clean": "rimraf dist build out"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "private": true,
+  "description": "Novel Editor - Cross-platform writing tool",
   "packageManager": "pnpm@10.12.4",
-  "dependencies": {
-    "directory-tree": "^3.5.2",
-    "fs-extra": "^11.3.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-icons": "^5.5.0"
+  "scripts": {
+    "dev": "pnpm --filter @novel-editor/pc dev",
+    "build": "pnpm --filter @novel-editor/pc build",
+    "start": "pnpm --filter @novel-editor/pc start",
+    "package": "pnpm --filter @novel-editor/pc package",
+    "lint": "eslint 'apps/*/src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}'",
+    "lint:fix": "eslint 'apps/*/src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}' --fix",
+    "format": "prettier --write 'apps/*/src/**/*.{ts,tsx,css,scss}' 'packages/*/src/**/*.{ts,tsx,css,scss}'",
+    "clean": "pnpm -r clean && rm -rf node_modules dist"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
-    "@types/node": "^24.0.10",
-    "@types/react": "^18.0.0",
-    "@types/react-dom": "^18.0.0",
-    "@types/react-icons": "^3.0.0",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
-    "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^9.1.2",
-    "cross-env": "^7.0.3",
-    "electron": "^28.0.0",
-    "electron-builder": "^24.0.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.0.2",
     "eslint-plugin-prettier": "^5.2.3",
-    "nodemon": "^3.1.0",
     "prettier": "^3.5.2",
-    "rimraf": "^6.0.1",
-    "sass": "^1.72.0",
-    "vite": "^6.2.0",
-    "wait-on": "^7.2.0"
+    "typescript": "^5.7.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

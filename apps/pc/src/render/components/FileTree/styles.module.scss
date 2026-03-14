@@ -1,0 +1,181 @@
+.fileTree {
+  padding: 4px 0;
+  overflow-y: auto;
+  flex: 1;
+
+  .fileTreeItem {
+    .itemHeader {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      transition: background-color 0.12s;
+      user-select: none;
+      font-size: 13px;
+      border-radius: 4px;
+      margin: 1px 6px;
+
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.07);
+      }
+
+      &.selected {
+        background-color: rgba(0, 122, 204, 0.22);
+
+        .itemName {
+          color: #fff;
+          font-weight: 500;
+        }
+      }
+
+      // Directory items: slightly bolder
+      &.directory {
+        .itemName {
+          font-weight: 600;
+          color: #e0e0e0;
+        }
+      }
+
+      .expandIcon {
+        width: 0.8rem;
+        height: 0.8rem;
+        transition: transform 0.15s ease;
+        color: #999;
+        font-size: 0.55rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &.expanded {
+          transform: rotate(90deg);
+        }
+
+        &.hidden {
+          visibility: hidden;
+        }
+      }
+
+      .fileIcon {
+        width: 1rem;
+        height: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+
+        svg {
+          color: inherit;
+          font-size: 15px;
+        }
+
+        &.folder {
+          color: #e8b84a;
+        }
+
+        &.js {
+          color: #f7df1e;
+        }
+
+        &.ts {
+          color: #3178c6;
+        }
+
+        &.jsx {
+          color: #61dafb;
+        }
+
+        &.json {
+          color: #f0c040;
+        }
+
+        &.md {
+          color: #519aba;
+        }
+
+        &.css {
+          color: #56b6f7;
+        }
+
+        &.html {
+          color: #e44d26;
+        }
+
+        &.txt {
+          color: #bbb;
+        }
+
+        &.py {
+          color: #3776ab;
+        }
+
+        &.file {
+          color: #999;
+        }
+      }
+
+      .itemName {
+        flex: 1;
+        color: #ccc;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.4;
+      }
+
+      .itemSize {
+        font-size: 10px;
+        color: #666;
+        margin-left: auto;
+        padding-left: 8px;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .inlineInput {
+        flex: 1;
+        background: #1a1a2e;
+        border: 1px solid #007acc;
+        border-radius: 3px;
+        color: #e0e0e0;
+        font-size: 13px;
+        font-family: inherit;
+        padding: 2px 6px;
+        outline: none;
+        min-width: 0;
+        box-shadow: 0 0 0 1px rgba(0, 122, 204, 0.3);
+
+        &::placeholder {
+          color: #555;
+        }
+
+        &:focus {
+          border-color: #1a8cff;
+          box-shadow: 0 0 0 1px rgba(26, 140, 255, 0.4);
+        }
+      }
+    }
+
+    .itemChildren {
+      // Children inherit structure from parent
+    }
+  }
+
+  // Scrollbar
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  }
+}

@@ -1,0 +1,300 @@
+@use '../../styles/animation.scss';
+
+.textEditor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+
+  &.empty,
+  &.loading,
+  &.error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  &.withGrid {
+    .editorContent {
+      background-image:
+        repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent calc(0.8ch - 1px),
+          rgba(255, 255, 255, 0.1) calc(0.8ch - 1px),
+          rgba(255, 255, 255, 0.1) 0.8ch
+        ),
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent calc(1.6em - 1px),
+          rgba(255, 255, 255, 0.08) calc(1.6em - 1px),
+          rgba(255, 255, 255, 0.08) 1.6em
+        );
+      background-attachment: local;
+      background-position: 0 12px;
+    }
+  }
+
+  &.withRowLines {
+    .editorContent {
+      background-image: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent calc(1.6em - 1px),
+        rgba(255, 255, 255, 0.12) calc(1.6em - 1px),
+        rgba(255, 255, 255, 0.12) 1.6em
+      );
+      background-attachment: local;
+      background-position: 0 12px;
+    }
+
+    .lineNumbers .lineNumber {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+  }
+}
+
+// Tab-style file header - single compact line
+.fileHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  height: 35px;
+  background-color: #252526;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.fileInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fileName {
+  font-size: 13px;
+  font-weight: 500;
+  color: #d4d4d4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+}
+
+.unsavedIndicator {
+  color: #d4d4d4;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.languageBadge {
+  background-color: rgba(0, 122, 204, 0.12);
+  color: #569cd6;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.largeFileBadge {
+  background-color: rgba(204, 122, 0, 0.15);
+  color: #d4a053;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.autoSaveStatus {
+  color: #555;
+  font-size: 11px;
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+}
+
+.fileActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+// Editor area
+.editorContainer {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.editorWrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+// Purple current-line highlight
+.lineHighlight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(140, 100, 220, 0.08) 0%,
+    rgba(140, 100, 220, 0.05) 60%,
+    rgba(140, 100, 220, 0.02) 100%
+  );
+  border-left: 2px solid rgba(160, 120, 240, 0.4);
+  transition: top 0.05s ease-out;
+}
+
+.lineNumbers {
+  background-color: #1e1e1e;
+  color: #555;
+  padding: 12px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: right;
+  user-select: none;
+  border-right: 1px solid #2d2d2d;
+  min-width: 48px;
+  position: relative;
+  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  overflow: hidden;
+
+  .lineNumber {
+    padding-right: 12px;
+    padding-left: 8px;
+    white-space: nowrap;
+    height: 1.6em;
+    line-height: 1.6;
+
+    &.currentLine {
+      color: #c8b8e8;
+      background-color: rgba(140, 100, 220, 0.06);
+    }
+  }
+
+  &::-webkit-scrollbar {
+    width: 0;
+  }
+}
+
+.editorContent {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background-color: transparent;
+  color: #d4d4d4;
+  border: none;
+  outline: none;
+  resize: none;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  overflow-y: auto;
+  tab-size: 4;
+
+  &::placeholder {
+    color: #555;
+    font-style: italic;
+  }
+
+  &::selection {
+    background-color: rgba(0, 122, 204, 0.3);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #424242;
+    border-radius: 4px;
+
+    &:hover {
+      background: #555;
+    }
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  &.language-markdown {
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      color: #569cd6;
+      font-weight: bold;
+    }
+
+    a {
+      color: #4fc3f7;
+      text-decoration: underline;
+    }
+
+    code {
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 0.125rem 0.25rem;
+      border-radius: 0.125rem;
+      color: #ce9178;
+    }
+
+    blockquote {
+      border-left: 4px solid #6a9955;
+      margin-left: 0;
+      padding-left: 1rem;
+      color: #6a9955;
+      font-style: italic;
+    }
+  }
+
+  &.language-text {
+    color: #d4d4d4;
+  }
+
+  &.language-json {
+    .property {
+      color: #9cdcfe;
+    }
+    .string {
+      color: #ce9178;
+    }
+    .number {
+      color: #b5cea8;
+    }
+    .keyword {
+      color: #569cd6;
+    }
+  }
+}

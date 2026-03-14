@@ -1,0 +1,100 @@
+.loadingSpinnerContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+
+  &.small {
+    padding: 1rem;
+
+    .loadingMessage {
+      font-size: 0.8rem;
+      margin-top: 8px;
+    }
+  }
+
+  &.medium {
+    padding: 2rem;
+
+    .loadingMessage {
+      font-size: 0.875rem;
+      margin-top: 12px;
+    }
+  }
+
+  &.large {
+    padding: 3rem;
+
+    .loadingMessage {
+      font-size: 1rem;
+      margin-top: 16px;
+    }
+  }
+}
+
+.spinner {
+  animation: spinnerRotate 1.8s linear infinite;
+  will-change: transform;
+}
+
+.track {
+  stroke: rgba(255, 255, 255, 0.06);
+}
+
+.arc {
+  transform-origin: center;
+  animation: spinnerDash 1.4s ease-in-out infinite;
+}
+
+.pulse {
+  transform-origin: center;
+  animation: spinnerPulse 1.4s ease-in-out infinite;
+}
+
+.loadingMessage {
+  margin: 12px 0 0 0;
+  color: #777;
+  font-size: 13px;
+  text-align: center;
+  letter-spacing: 0.3px;
+}
+
+// Use unique prefixed names to avoid conflicts with global animation.scss keyframes
+// (CSS Modules does NOT scope @keyframes by default in Vite)
+@keyframes spinnerRotate {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spinnerDash {
+  0% {
+    stroke-dasharray: 1 126;
+    stroke-dashoffset: 0;
+  }
+
+  50% {
+    stroke-dasharray: 80 126;
+    stroke-dashoffset: -30;
+  }
+
+  100% {
+    stroke-dasharray: 1 126;
+    stroke-dashoffset: -126;
+  }
+}
+
+// Use transform:scale instead of SVG `r` attribute (poor CSS animation support)
+@keyframes spinnerPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.67);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(1.33);
+  }
+}

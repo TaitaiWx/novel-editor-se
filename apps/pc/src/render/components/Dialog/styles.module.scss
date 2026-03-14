@@ -1,0 +1,146 @@
+// Overlay - dark backdrop with blur
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  animation: overlayIn 0.15s ease-out;
+}
+
+// Dialog box
+.dialog {
+  background-color: #252526;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  width: 400px;
+  max-width: calc(100vw - 40px);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.6),
+    0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: dialogIn 0.2s ease-out;
+  overflow: hidden;
+}
+
+// Header
+.header {
+  padding: 16px 20px 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #d4d4d4;
+  line-height: 1.4;
+}
+
+// Body
+.body {
+  padding: 12px 20px 0;
+}
+
+.message {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #888;
+  line-height: 1.5;
+}
+
+// Prompt input
+.input {
+  width: 100%;
+  background-color: #1e1e1e;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  color: #d4d4d4;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+
+  &::placeholder {
+    color: #666;
+  }
+
+  &:focus {
+    border-color: #007acc;
+  }
+}
+
+// Footer with action buttons
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+}
+
+// Shared button base
+.cancelBtn,
+.confirmBtn {
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+  line-height: 1.4;
+}
+
+// Cancel button
+.cancelBtn {
+  background-color: #333;
+  color: #d4d4d4;
+
+  &:hover {
+    background-color: #3d3d3d;
+  }
+
+  &:active {
+    background-color: #404040;
+  }
+}
+
+// Confirm button - subtle accent
+.confirmBtn {
+  background-color: rgba(0, 122, 204, 0.2);
+  color: #569cd6;
+
+  &:hover {
+    background-color: rgba(0, 122, 204, 0.3);
+  }
+
+  &:active {
+    background-color: rgba(0, 122, 204, 0.4);
+  }
+}
+
+// Animations
+@keyframes overlayIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

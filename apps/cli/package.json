@@ -1,0 +1,19 @@
+{
+  "name": "@novel-editor/cli",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Novel Editor - CLI tool",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "echo 'CLI build not yet configured'",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@novel-editor/store": "workspace:*"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1"
+  }
+}
