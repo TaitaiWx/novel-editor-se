@@ -32,15 +32,11 @@ export default async function notarizeApp(context) {
     return;
   }
 
-  const appBundleId = context.packager.appInfo.id;
-
   await notarize({
-    appBundleId,
     appPath,
     appleApiKey: appleApiKeyPath,
     appleApiKeyId: process.env.APPLE_API_KEY_ID,
     appleApiIssuer: process.env.APPLE_API_ISSUER,
-    tool: 'notarytool',
   });
   console.log('[notarize] App notarization completed with App Store Connect API key.');
 }
