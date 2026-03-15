@@ -154,7 +154,7 @@
 1. **同步 API**：`better-sqlite3` 是同步的，避免了 `node-sqlite3` 的回调/Promise 嵌套，代码简洁
 2. **性能**：WAL 模式提供优秀的读写并发性能，远超 JSON 文件读写
 3. **零配置**：嵌入式数据库，无需额外安装或运行数据库服务
-4. **Electron 友好**：作为 native addon，项目已通过 `electron-builder install-app-deps` 固化 Electron ABI 重建流程
+4. **Electron 友好**：作为 native addon，项目已通过 `electron-rebuild` 固化 Electron ABI 重建流程
 5. **事务支持**：批量操作可用事务保证原子性
 
 ### 版本存储策略

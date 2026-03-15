@@ -66,8 +66,8 @@ jobs:
         env:
           CI: true
 
-      - name: Install target native app deps
-        run: pnpm exec electron-builder install-app-deps --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+      - name: Rebuild native app deps
+        run: pnpm exec electron-rebuild -f -w better-sqlite3 -a ${{ matrix.arch }}
         working-directory: apps/pc
 
       - name: Prepare App Store Connect API credentials
