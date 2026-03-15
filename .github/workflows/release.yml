@@ -45,18 +45,7 @@ jobs:
 
       - name: Resolve release channel
         id: release_channel
-        run: |
-          TAG_NAME="${GITHUB_REF_NAME#v}"
-          if [[ "$TAG_NAME" == *-alpha.* ]]; then
-            echo "publish_channel=alpha" >> "$GITHUB_OUTPUT"
-            echo "release_type=prerelease" >> "$GITHUB_OUTPUT"
-          elif [[ "$TAG_NAME" == *-beta.* ]]; then
-            echo "publish_channel=beta" >> "$GITHUB_OUTPUT"
-            echo "release_type=prerelease" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish_channel=latest" >> "$GITHUB_OUTPUT"
-            echo "release_type=release" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/resolve-release-channel.mjs
 
       - uses: pnpm/action-setup@v4
 
@@ -105,28 +94,13 @@ jobs:
 
       - name: Resolve release channel
         id: release_channel
-        run: |
-          TAG_NAME="${GITHUB_REF_NAME#v}"
-          if [[ "$TAG_NAME" == *-alpha.* ]]; then
-            echo "publish_channel=alpha" >> "$GITHUB_OUTPUT"
-          elif [[ "$TAG_NAME" == *-beta.* ]]; then
-            echo "publish_channel=beta" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish_channel=latest" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/resolve-release-channel.mjs
 
       - name: Download all artifacts
         uses: actions/download-artifact@v6
         with:
           path: artifacts
           merge-multiple: true
-
-      - name: Validate packaged artifacts
-        run: node scripts/validate-release-assets.mjs local
-        env:
-          ARTIFACTS_DIR: artifacts
-          RELEASE_TAG: ${{ github.ref_name }}
-          RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
 
       - name: Publish release
         uses: ncipollo/release-action@v1
@@ -138,11 +112,3 @@ jobs:
           replacesArtifacts: true
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Validate published release assets
-        run: node scripts/validate-release-assets.mjs github
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-          RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

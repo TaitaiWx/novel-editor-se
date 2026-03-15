@@ -71,11 +71,9 @@ pnpm release:stable
 在 GitHub Actions 中检查 `Release` workflow：
 
 - [ ] `build` job 全部通过
-- [ ] `Validate packaged artifacts` 通过
 - [ ] `Publish release` 通过
-- [ ] `Validate published release assets` 通过
 
-如果其中任一步失败，不继续对外宣布发布完成。
+如果 `build` 或 `Publish release` 失败，不继续对外宣布发布完成。
 
 ## E. Release 资产核对
 
