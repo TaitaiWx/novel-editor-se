@@ -64,7 +64,8 @@ jobs:
         run: pnpm build
         working-directory: apps/pc
 
-      - name: Package Electron app
+      - name: Package Electron app (macOS)
+        if: runner.os == 'macOS'
         run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never
         working-directory: apps/pc
         env:
@@ -73,6 +74,14 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOVEL_EDITOR_RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
+
+      - name: Package Electron app (Windows/Linux)
+        if: runner.os != 'macOS'
+        run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never
+        working-directory: apps/pc
+        env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NOVEL_EDITOR_RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
 
