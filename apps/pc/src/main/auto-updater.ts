@@ -71,7 +71,7 @@ interface GithubRelease {
 }
 
 let updaterState: PersistedUpdaterState | null = null;
-let updaterStatus: UpdateStatus = {
+const updaterStatus: UpdateStatus = {
   channel: inferDefaultChannel(app.getVersion()),
   channelFile: getChannelMetadataFile(inferDefaultChannel(app.getVersion())),
   currentVersion: app.getVersion(),
