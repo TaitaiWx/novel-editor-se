@@ -4,8 +4,23 @@
  * 从 StatusBar 触发，以模态弹窗展示当前文件的 SQLite 版本快照历史。
  * 点击某个版本可打开 DiffEditor 对比。
  */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { VscHistory, VscDiffAdded, VscClose, VscEdit, VscTrash } from 'react-icons/vsc';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+  VscHistory,
+  VscDiffAdded,
+  VscClose,
+  VscEdit,
+  VscTrash,
+  VscFileMedia,
+  VscFilePdf,
+  VscMusic,
+  VscCode,
+  VscMarkdown,
+  VscJson,
+  VscFile,
+  VscSearch,
+  VscListFilter,
+} from 'react-icons/vsc';
 import { useToast } from '../Toast';
 import { useDialog } from '../Dialog';
 import styles from './styles.module.scss';
@@ -40,8 +55,8 @@ interface PreviewState {
   snapshotMessage: string;
   mimeType: string;
   byteSize: number;
-  dataUrl: string;
-  kind: 'image' | 'pdf';
+  dataUrl?: string;
+  kind: 'image' | 'pdf' | 'audio' | 'binary';
   currentDataUrl?: string | null;
   currentByteSize?: number | null;
   currentMimeType?: string | null;
@@ -56,6 +71,307 @@ interface BinaryReadResult {
 interface PdfPreviewContentProps {
   dataUrl: string;
 }
+
+type SnapshotTimeFilter = 'all' | 'today' | '7d' | '30d';
+
+type FileTypeMeta = {
+  kind: 'text' | 'image' | 'audio' | 'pdf' | 'binary';
+  label: string;
+  icon: React.ReactNode;
+};
+
+const CLIENT_MIME_BY_EXT: Record<string, string> = {
+  '.md': 'text/markdown',
+  '.txt': 'text/plain',
+  '.json': 'application/json',
+  '.yml': 'application/yaml',
+  '.yaml': 'application/yaml',
+  '.ts': 'text/typescript',
+  '.tsx': 'text/typescript',
+  '.js': 'text/javascript',
+  '.jsx': 'text/javascript',
+  '.scss': 'text/x-scss',
+  '.css': 'text/css',
+  '.html': 'text/html',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.flac': 'audio/flac',
+};
+
+const formatByteSize = (byteSize: number | null | undefined) => {
+  if (!byteSize) {
+    return '0 KB';
+  }
+
+  if (byteSize < 1024) {
+    return `${byteSize} B`;
+  }
+
+  if (byteSize < 1024 * 1024) {
+    return `${(byteSize / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(byteSize / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const formatDuration = (seconds: number | null) => {
+  if (seconds === null || !Number.isFinite(seconds)) {
+    return '时长读取中';
+  }
+
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
+const buildDataUrl = (mimeType: string, base64Content: string) =>
+  `data:${mimeType};base64,${base64Content}`;
+
+const buildTextDataUrl = (mimeType: string, content: string) =>
+  `data:${mimeType};charset=utf-8,${encodeURIComponent(content)}`;
+
+const guessMimeTypeByPath = (filePath: string | null) => {
+  if (!filePath) {
+    return 'application/octet-stream';
+  }
+
+  const normalizedPath = filePath.toLowerCase();
+  const matchedEntry = Object.entries(CLIENT_MIME_BY_EXT).find(([ext]) =>
+    normalizedPath.endsWith(ext)
+  );
+  return matchedEntry?.[1] ?? 'application/octet-stream';
+};
+
+const getFileTypeMeta = (mimeType: string): FileTypeMeta => {
+  if (mimeType === 'application/pdf') {
+    return { kind: 'pdf', label: 'PDF', icon: <VscFilePdf /> };
+  }
+
+  if (mimeType.startsWith('image/')) {
+    return { kind: 'image', label: '图片', icon: <VscFileMedia /> };
+  }
+
+  if (mimeType.startsWith('audio/')) {
+    return { kind: 'audio', label: '音频', icon: <VscMusic /> };
+  }
+
+  if (mimeType === 'application/json') {
+    return { kind: 'text', label: 'JSON', icon: <VscJson /> };
+  }
+
+  if (mimeType === 'text/markdown') {
+    return { kind: 'text', label: 'Markdown', icon: <VscMarkdown /> };
+  }
+
+  if (mimeType.startsWith('text/')) {
+    return { kind: 'text', label: '文本', icon: <VscCode /> };
+  }
+
+  return { kind: 'binary', label: '二进制', icon: <VscFile /> };
+};
+
+const drawWaveform = (canvas: HTMLCanvasElement, audioBuffer: AudioBuffer) => {
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return;
+  }
+
+  const width = canvas.width;
+  const height = canvas.height;
+  const channelData = audioBuffer.getChannelData(0);
+  const step = Math.max(1, Math.floor(channelData.length / width));
+  const centerY = height / 2;
+
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = '#11161c';
+  context.fillRect(0, 0, width, height);
+
+  const gradient = context.createLinearGradient(0, 0, width, 0);
+  gradient.addColorStop(0, '#569cd6');
+  gradient.addColorStop(1, '#4ec9b0');
+
+  context.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(0, centerY);
+  context.lineTo(width, centerY);
+  context.stroke();
+
+  context.fillStyle = gradient;
+  for (let x = 0; x < width; x += 1) {
+    let min = 1;
+    let max = -1;
+    const start = x * step;
+    const end = Math.min(start + step, channelData.length);
+    for (let index = start; index < end; index += 1) {
+      const sample = channelData[index];
+      if (sample < min) min = sample;
+      if (sample > max) max = sample;
+    }
+
+    const amplitude = Math.max(Math.abs(min), Math.abs(max));
+    const barHeight = Math.max(2, amplitude * (height - 20));
+    context.fillRect(x, centerY - barHeight / 2, 1, barHeight);
+  }
+};
+
+interface AudioPreviewCardProps {
+  title: string;
+  dataUrl?: string | null;
+  mimeType?: string | null;
+  byteSize?: number | null;
+  emptyText: string;
+}
+
+const AudioPreviewCard: React.FC<AudioPreviewCardProps> = ({
+  title,
+  dataUrl,
+  mimeType,
+  byteSize,
+  emptyText,
+}) => {
+  const [duration, setDuration] = useState<number | null>(null);
+  const [sampleRate, setSampleRate] = useState<number | null>(null);
+  const [channels, setChannels] = useState<number | null>(null);
+  const [bitrateKbps, setBitrateKbps] = useState<number | null>(null);
+  const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let audioContext: AudioContext | null = null;
+
+    const analyzeAudio = async () => {
+      if (!dataUrl) {
+        setDuration(null);
+        setSampleRate(null);
+        setChannels(null);
+        setBitrateKbps(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(dataUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const AudioContextCtor = window.AudioContext;
+        if (!AudioContextCtor) {
+          return;
+        }
+
+        audioContext = new AudioContextCtor();
+        const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+
+        if (disposed) {
+          return;
+        }
+
+        setDuration(decoded.duration);
+        setSampleRate(decoded.sampleRate);
+        setChannels(decoded.numberOfChannels);
+        if (byteSize && decoded.duration > 0) {
+          setBitrateKbps(Math.round((byteSize * 8) / decoded.duration / 1000));
+        } else {
+          setBitrateKbps(null);
+        }
+
+        if (waveformCanvasRef.current) {
+          drawWaveform(waveformCanvasRef.current, decoded);
+        }
+      } catch {
+        if (!disposed) {
+          setSampleRate(null);
+          setChannels(null);
+          setBitrateKbps(null);
+        }
+      } finally {
+        if (audioContext) {
+          void audioContext.close();
+        }
+      }
+    };
+
+    void analyzeAudio();
+
+    return () => {
+      disposed = true;
+      if (audioContext && audioContext.state !== 'closed') {
+        void audioContext.close();
+      }
+    };
+  }, [byteSize, dataUrl]);
+
+  return (
+    <div className={styles.audioComparePane}>
+      <div className={styles.audioCompareLabel}>{title}</div>
+      {dataUrl ? (
+        <>
+          <canvas
+            ref={waveformCanvasRef}
+            className={styles.waveformCanvas}
+            width={560}
+            height={144}
+          />
+          <audio
+            className={styles.audioPlayer}
+            controls
+            preload="metadata"
+            onLoadedMetadata={(event) => {
+              setDuration(
+                Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : null
+              );
+            }}
+          >
+            <source src={dataUrl} type={mimeType ?? undefined} />
+          </audio>
+          <div className={styles.audioMetaGrid}>
+            <div className={styles.audioMetaItem}>
+              <span className={styles.audioMetaLabel}>格式</span>
+              <span className={styles.audioMetaValue}>{mimeType ?? '未知'}</span>
+            </div>
+            <div className={styles.audioMetaItem}>
+              <span className={styles.audioMetaLabel}>大小</span>
+              <span className={styles.audioMetaValue}>{formatByteSize(byteSize)}</span>
+            </div>
+            <div className={styles.audioMetaItem}>
+              <span className={styles.audioMetaLabel}>时长</span>
+              <span className={styles.audioMetaValue}>{formatDuration(duration)}</span>
+            </div>
+            <div className={styles.audioMetaItem}>
+              <span className={styles.audioMetaLabel}>采样率</span>
+              <span className={styles.audioMetaValue}>
+                {sampleRate ? `${Math.round(sampleRate)} Hz` : '读取中'}
+              </span>
+            </div>
+            <div className={styles.audioMetaItem}>
+              <span className={styles.audioMetaLabel}>声道</span>
+              <span className={styles.audioMetaValue}>
+                {channels ? `${channels} 声道` : '读取中'}
+              </span>
+            </div>
+            <div className={styles.audioMetaItem}>
+              <span className={styles.audioMetaLabel}>估算码率</span>
+              <span className={styles.audioMetaValue}>
+                {bitrateKbps ? `${bitrateKbps} kbps` : '读取中'}
+              </span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className={styles.previewPlaceholder}>{emptyText}</div>
+      )}
+    </div>
+  );
+};
 
 const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({ dataUrl }) => {
   const [loading, setLoading] = useState(true);
@@ -273,10 +589,27 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
   const [loading, setLoading] = useState(false);
   const [previewState, setPreviewState] = useState<PreviewState | null>(null);
   const [snapshotJob, setSnapshotJob] = useState<SnapshotJobStatus | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [timeFilter, setTimeFilter] = useState<SnapshotTimeFilter>('all');
   const modalRef = useRef<HTMLDivElement>(null);
   const pollTimerRef = useRef<number | null>(null);
   const toast = useToast();
   const dialog = useDialog();
+
+  const loadCurrentBinaryFile = useCallback(async () => {
+    if (!filePath) {
+      return null;
+    }
+
+    try {
+      return (await window.electron.ipcRenderer.invoke(
+        'read-file-binary',
+        filePath
+      )) as BinaryReadResult;
+    } catch {
+      return null;
+    }
+  }, [filePath]);
 
   // 加载当前文件的版本历史
   const loadHistory = useCallback(async () => {
@@ -449,27 +782,50 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
           mimeType: string;
           byteSize: number;
         };
-        if (snapshotFile.isBinary || snapshotFile.content === null) {
-          if (snapshotFile.base64Content && snapshotFile.mimeType.startsWith('image/')) {
-            let currentBinary: BinaryReadResult | null = null;
-            try {
-              currentBinary = (await window.electron.ipcRenderer.invoke(
-                'read-file-binary',
-                filePath
-              )) as BinaryReadResult;
-            } catch {
-              currentBinary = null;
-            }
 
+        if (snapshotFile.mimeType === 'image/svg+xml' && snapshotFile.content !== null) {
+          let currentSvgContent: string | null = null;
+          try {
+            currentSvgContent = (await window.electron.ipcRenderer.invoke(
+              'read-file',
+              filePath
+            )) as string;
+          } catch {
+            currentSvgContent = null;
+          }
+
+          setPreviewState({
+            snapshotId: snapshot.id,
+            snapshotMessage: snapshot.message,
+            mimeType: snapshotFile.mimeType,
+            byteSize: snapshotFile.byteSize,
+            dataUrl: buildTextDataUrl(snapshotFile.mimeType, snapshotFile.content),
+            kind: 'image',
+            currentDataUrl: currentSvgContent
+              ? buildTextDataUrl(snapshotFile.mimeType, currentSvgContent)
+              : null,
+            currentByteSize: currentSvgContent ? new Blob([currentSvgContent]).size : null,
+            currentMimeType: currentSvgContent ? snapshotFile.mimeType : null,
+          });
+          return;
+        }
+
+        if (snapshotFile.isBinary || snapshotFile.content === null) {
+          const currentBinary = await loadCurrentBinaryFile();
+          const snapshotDataUrl = snapshotFile.base64Content
+            ? buildDataUrl(snapshotFile.mimeType, snapshotFile.base64Content)
+            : undefined;
+
+          if (snapshotDataUrl && snapshotFile.mimeType.startsWith('image/')) {
             setPreviewState({
               snapshotId: snapshot.id,
               snapshotMessage: snapshot.message,
               mimeType: snapshotFile.mimeType,
               byteSize: snapshotFile.byteSize,
-              dataUrl: `data:${snapshotFile.mimeType};base64,${snapshotFile.base64Content}`,
+              dataUrl: snapshotDataUrl,
               kind: 'image',
               currentDataUrl: currentBinary
-                ? `data:${currentBinary.mimeType};base64,${currentBinary.base64Content}`
+                ? buildDataUrl(currentBinary.mimeType, currentBinary.base64Content)
                 : null,
               currentByteSize: currentBinary?.byteSize ?? null,
               currentMimeType: currentBinary?.mimeType ?? null,
@@ -477,19 +833,44 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
             return;
           }
 
-          if (snapshotFile.base64Content && snapshotFile.mimeType === 'application/pdf') {
+          if (snapshotDataUrl && snapshotFile.mimeType === 'application/pdf') {
             setPreviewState({
               snapshotId: snapshot.id,
               snapshotMessage: snapshot.message,
               mimeType: snapshotFile.mimeType,
               byteSize: snapshotFile.byteSize,
-              dataUrl: `data:${snapshotFile.mimeType};base64,${snapshotFile.base64Content}`,
+              dataUrl: snapshotDataUrl,
               kind: 'pdf',
             });
             return;
           }
 
-          toast.info(`当前文件是二进制资源（${snapshotFile.mimeType}），暂不支持该类型预览`);
+          if (snapshotDataUrl && snapshotFile.mimeType.startsWith('audio/')) {
+            setPreviewState({
+              snapshotId: snapshot.id,
+              snapshotMessage: snapshot.message,
+              mimeType: snapshotFile.mimeType,
+              byteSize: snapshotFile.byteSize,
+              dataUrl: snapshotDataUrl,
+              kind: 'audio',
+              currentDataUrl: currentBinary
+                ? buildDataUrl(currentBinary.mimeType, currentBinary.base64Content)
+                : null,
+              currentByteSize: currentBinary?.byteSize ?? null,
+              currentMimeType: currentBinary?.mimeType ?? null,
+            });
+            return;
+          }
+
+          setPreviewState({
+            snapshotId: snapshot.id,
+            snapshotMessage: snapshot.message,
+            mimeType: snapshotFile.mimeType,
+            byteSize: snapshotFile.byteSize,
+            kind: 'binary',
+            currentByteSize: currentBinary?.byteSize ?? null,
+            currentMimeType: currentBinary?.mimeType ?? null,
+          });
           return;
         }
         if (!onDiffRequest) return;
@@ -501,7 +882,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
         toast.error(`加载版本失败: ${err instanceof Error ? err.message : '未知错误'}`);
       }
     },
-    [folderPath, filePath, onDiffRequest, toast, onClose]
+    [folderPath, loadCurrentBinaryFile, onDiffRequest, toast, onClose]
   );
 
   const handleRestoreSnapshot = useCallback(
@@ -545,6 +926,33 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
     return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   };
 
+  const activeMimeType = previewState?.mimeType ?? guessMimeTypeByPath(filePath);
+  const fileTypeMeta = useMemo(() => getFileTypeMeta(activeMimeType), [activeMimeType]);
+
+  const filteredSnapshots = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const now = Date.now();
+
+    return snapshots.filter((snapshot) => {
+      const snapshotTime = new Date(snapshot.date).getTime();
+      const queryMatched =
+        normalizedQuery.length === 0 || snapshot.message.toLowerCase().includes(normalizedQuery);
+
+      let timeMatched = true;
+      if (timeFilter === 'today') {
+        const today = new Date();
+        const snapshotDate = new Date(snapshot.date);
+        timeMatched = snapshotDate.toDateString() === today.toDateString();
+      } else if (timeFilter === '7d') {
+        timeMatched = now - snapshotTime <= 7 * 24 * 60 * 60 * 1000;
+      } else if (timeFilter === '30d') {
+        timeMatched = now - snapshotTime <= 30 * 24 * 60 * 60 * 1000;
+      }
+
+      return queryMatched && timeMatched;
+    });
+  }, [searchQuery, snapshots, timeFilter]);
+
   if (!visible) return null;
 
   const fileName = filePath
@@ -563,6 +971,10 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
           <div className={styles.modalTitle}>
             <span>版本历史</span>
             {fileName && <span className={styles.fileName}>{fileName}</span>}
+            <span className={`${styles.fileTypeBadge} ${styles[`fileType${fileTypeMeta.kind}`]}`}>
+              {fileTypeMeta.icon}
+              <span>{fileTypeMeta.label}</span>
+            </span>
           </div>
           <div className={styles.modalActions}>
             {folderPath && (
@@ -610,6 +1022,40 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
 
         {/* 模态框内容 */}
         <div className={styles.modalContent}>
+          <div className={styles.filterBar}>
+            <div className={styles.filterSearchWrap}>
+              <VscSearch className={styles.filterIcon} />
+              <input
+                className={styles.filterSearchInput}
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="按版本说明筛选"
+              />
+            </div>
+            <div className={styles.filterActions}>
+              <span className={styles.filterLabel}>
+                <VscListFilter />
+                <span>时间范围</span>
+              </span>
+              {[
+                ['all', '全部'],
+                ['today', '今天'],
+                ['7d', '7 天'],
+                ['30d', '30 天'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  className={`${styles.filterChip} ${timeFilter === value ? styles.filterChipActive : ''}`}
+                  onClick={() => setTimeFilter(value as SnapshotTimeFilter)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className={styles.filterSummary}>
+              {filteredSnapshots.length} / {snapshots.length}
+            </div>
+          </div>
           {previewState && (
             <div className={styles.previewPanel}>
               <div className={styles.previewHeader}>
@@ -617,7 +1063,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
                   <div className={styles.previewTitle}>版本预览</div>
                   <div className={styles.previewMeta}>
                     {previewState.snapshotMessage} · {previewState.mimeType} ·{' '}
-                    {Math.round(previewState.byteSize / 1024)} KB
+                    {formatByteSize(previewState.byteSize)}
                   </div>
                 </div>
                 <div className={styles.previewActions}>
@@ -655,7 +1101,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
                         alt={previewState.snapshotMessage}
                       />
                       <div className={styles.imageCompareMeta}>
-                        {previewState.mimeType} · {Math.round(previewState.byteSize / 1024)} KB
+                        {previewState.mimeType} · {formatByteSize(previewState.byteSize)}
                       </div>
                     </div>
                     <div className={styles.imageComparePane}>
@@ -669,7 +1115,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
                           />
                           <div className={styles.imageCompareMeta}>
                             {previewState.currentMimeType} ·{' '}
-                            {Math.round((previewState.currentByteSize ?? 0) / 1024)} KB
+                            {formatByteSize(previewState.currentByteSize)}
                           </div>
                         </>
                       ) : (
@@ -677,8 +1123,62 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
                       )}
                     </div>
                   </div>
+                ) : previewState.kind === 'pdf' ? (
+                  <PdfPreviewContent dataUrl={previewState.dataUrl ?? ''} />
+                ) : previewState.kind === 'audio' ? (
+                  <div className={styles.audioCompareLayout}>
+                    <AudioPreviewCard
+                      title="版本快照"
+                      dataUrl={previewState.dataUrl}
+                      mimeType={previewState.mimeType}
+                      byteSize={previewState.byteSize}
+                      emptyText="当前快照音频无法加载"
+                    />
+                    <AudioPreviewCard
+                      title="当前文件"
+                      dataUrl={previewState.currentDataUrl}
+                      mimeType={previewState.currentMimeType}
+                      byteSize={previewState.currentByteSize}
+                      emptyText="当前文件暂时无法读取"
+                    />
+                  </div>
                 ) : (
-                  <PdfPreviewContent dataUrl={previewState.dataUrl} />
+                  <div className={styles.binaryInfoLayout}>
+                    <div className={styles.binaryInfoCard}>
+                      <div className={styles.binaryInfoTitle}>版本快照</div>
+                      <div className={styles.binaryInfoRow}>
+                        <span className={styles.binaryInfoLabel}>MIME</span>
+                        <span className={styles.binaryInfoValue}>{previewState.mimeType}</span>
+                      </div>
+                      <div className={styles.binaryInfoRow}>
+                        <span className={styles.binaryInfoLabel}>大小</span>
+                        <span className={styles.binaryInfoValue}>
+                          {formatByteSize(previewState.byteSize)}
+                        </span>
+                      </div>
+                      <div className={styles.binaryInfoHint}>
+                        当前类型暂不适合做结构化内容预览，但已经保留了专用元信息对比。
+                      </div>
+                    </div>
+                    <div className={styles.binaryInfoCard}>
+                      <div className={styles.binaryInfoTitle}>当前文件</div>
+                      <div className={styles.binaryInfoRow}>
+                        <span className={styles.binaryInfoLabel}>MIME</span>
+                        <span className={styles.binaryInfoValue}>
+                          {previewState.currentMimeType ?? '无法读取'}
+                        </span>
+                      </div>
+                      <div className={styles.binaryInfoRow}>
+                        <span className={styles.binaryInfoLabel}>大小</span>
+                        <span className={styles.binaryInfoValue}>
+                          {formatByteSize(previewState.currentByteSize)}
+                        </span>
+                      </div>
+                      <div className={styles.binaryInfoHint}>
+                        可先恢复到目标版本，或使用系统关联应用进一步检查差异。
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -694,9 +1194,14 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
               <span>暂无版本记录</span>
               <span className={styles.emptyHint}>点击右上角「保存版本」来创建第一个版本快照</span>
             </div>
+          ) : filteredSnapshots.length === 0 ? (
+            <div className={styles.emptyState}>
+              <span>没有符合筛选条件的版本</span>
+              <span className={styles.emptyHint}>可以清空关键词或调整时间范围</span>
+            </div>
           ) : (
             <div className={styles.timeline}>
-              {snapshots.map((snapshot, i) => (
+              {filteredSnapshots.map((snapshot, i) => (
                 <div
                   key={snapshot.id}
                   className={styles.commitItem}
@@ -708,7 +1213,14 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
                     {i < snapshots.length - 1 && <div className={styles.timelineLine} />}
                   </div>
                   <div className={styles.commitInfo}>
-                    <span className={styles.commitMessage}>{snapshot.message}</span>
+                    <span className={styles.commitMessageRow}>
+                      <span
+                        className={`${styles.commitTypeBadge} ${styles[`fileType${fileTypeMeta.kind}`]}`}
+                      >
+                        {fileTypeMeta.icon}
+                      </span>
+                      <span className={styles.commitMessage}>{snapshot.message}</span>
+                    </span>
                     <span className={styles.commitMeta}>
                       <span className={styles.commitAuthor}>{snapshot.totalFiles} 个文件</span>
                       <span className={styles.commitDate}>{formatDate(snapshot.date)}</span>

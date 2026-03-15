@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { Suspense, lazy, useState, useCallback, useRef, useMemo } from 'react';
 import type { FileNode } from './types';
 import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
@@ -7,14 +7,15 @@ import RightPanel from './components/RightPanel';
 import StatusBar from './components/StatusBar';
 import ContextMenu from './components/ContextMenu';
 import ShortcutsHelp from './components/ShortcutsHelp';
-import VersionTimeline from './components/VersionTimeline';
-import DiffEditor from './components/DiffEditor';
 import { useToast } from './components/Toast';
 import { useDialog } from './components/Dialog';
 import type { ContextMenuEvent } from './components/FileTree';
 import styles from './App.module.scss';
 import { initKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/initKeyboardShortcuts';
 import { cleanupKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/cleanupKeyboardShortcuts';
+
+const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
+const DiffEditor = lazy(() => import('./components/DiffEditor'));
 
 type CreatingType = 'file' | 'directory' | null;
 
@@ -548,13 +549,15 @@ const App: React.FC = () => {
         {/* 中间内容面板 */}
         <div className={styles.centerPanel}>
           {diffState ? (
-            <DiffEditor
-              original={diffState.original}
-              modified={diffState.modified}
-              originalLabel={diffState.originalLabel}
-              modifiedLabel={diffState.modifiedLabel}
-              onClose={handleCloseDiff}
-            />
+            <Suspense fallback={<div className={styles.lazyFallback}>正在加载差异编辑器...</div>}>
+              <DiffEditor
+                original={diffState.original}
+                modified={diffState.modified}
+                originalLabel={diffState.originalLabel}
+                modifiedLabel={diffState.modifiedLabel}
+                onClose={handleCloseDiff}
+              />
+            </Suspense>
           ) : (
             <ContentPanel
               openTabs={openTabs}
@@ -592,14 +595,24 @@ const App: React.FC = () => {
       </div>
 
       {/* 版本历史模态框 */}
-      <VersionTimeline
-        visible={showVersionHistory}
-        onClose={() => setShowVersionHistory(false)}
-        folderPath={folderPath}
-        filePath={activeTab}
-        onDiffRequest={handleDiffRequest}
-        onRestoreFile={handleVersionRestore}
-      />
+      {showVersionHistory && (
+        <Suspense
+          fallback={
+            <div className={styles.lazyOverlay}>
+              <div className={styles.lazyModal}>正在加载版本历史...</div>
+            </div>
+          }
+        >
+          <VersionTimeline
+            visible={showVersionHistory}
+            onClose={() => setShowVersionHistory(false)}
+            folderPath={folderPath}
+            filePath={activeTab}
+            onDiffRequest={handleDiffRequest}
+            onRestoreFile={handleVersionRestore}
+          />
+        </Suspense>
+      )}
 
       {/* 状态栏 */}
       {!focusMode && (

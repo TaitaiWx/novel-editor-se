@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2c1e3f"/>
+      <stop offset="100%" stop-color="#824f6c"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <circle cx="910" cy="155" r="78" fill="#ffd9a0" opacity="0.9"/>
+  <rect x="0" y="560" width="1200" height="240" fill="#190f26"/>
+  <path d="M0 610 C160 560 300 560 468 603 C680 655 920 676 1200 598 L1200 800 L0 800 Z" fill="#4e2d4f"/>
+  <path d="M0 648 C184 610 354 604 520 638 C720 680 940 698 1200 638 L1200 800 L0 800 Z" fill="#6d3d67"/>
+  <rect x="180" y="248" width="250" height="198" rx="18" fill="#fff5ea" opacity="0.92"/>
+  <rect x="210" y="282" width="180" height="18" rx="9" fill="#7b4256" opacity="0.78"/>
+  <rect x="210" y="316" width="160" height="12" rx="6" fill="#b07f94" opacity="0.72"/>
+  <rect x="210" y="340" width="172" height="12" rx="6" fill="#b07f94" opacity="0.55"/>
+  <rect x="210" y="386" width="116" height="30" rx="15" fill="#f08b59"/>
+  <text x="730" y="128" fill="#fdf6f0" font-size="56" font-family="PingFang SC, Helvetica, Arial, sans-serif">北境行记</text>
+  <text x="732" y="186" fill="#ead3da" font-size="24" font-family="PingFang SC, Helvetica, Arial, sans-serif">Scene Board / v2</text>
+  <text x="110" y="674" fill="#fff1ea" font-size="28" font-family="PingFang SC, Helvetica, Arial, sans-serif">第一幕：夜火营地</text>
+  <text x="110" y="714" fill="#f1d2d8" font-size="20" font-family="PingFang SC, Helvetica, Arial, sans-serif">队伍决定提前出发，风险随之增加。</text>
+</svg>

@@ -6,6 +6,8 @@ directories:
   output: build
   buildResources: resources
 
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
 files:
   - dist/**/*
   - package.json
@@ -35,6 +37,7 @@ win:
   target:
     - target: nsis
       arch:
+        - ia32
         - x64
         - arm64
 
@@ -48,10 +51,14 @@ linux:
   target:
     - target: AppImage
       arch:
+        - ia32
+        - armv7l
         - x64
         - arm64
     - target: deb
       arch:
+        - ia32
+        - armv7l
         - x64
         - arm64
   category: Office

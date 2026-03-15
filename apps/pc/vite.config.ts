@@ -91,6 +91,41 @@ export default defineConfig(({ mode }) => {
         output: {
           entryFileNames: 'render.js',
           chunkFileNames: '[name].[hash].js',
+          manualChunks: (id) => {
+            if (id.includes('pdfjs-dist')) {
+              return 'vendor-pdf';
+            }
+
+            if (id.includes('@codemirror/merge')) {
+              return 'vendor-diff';
+            }
+
+            if (id.includes('@codemirror/lang-') || id.includes('@lezer/')) {
+              return 'vendor-editor-lang';
+            }
+
+            if (
+              id.includes('@codemirror/state') ||
+              id.includes('@codemirror/view') ||
+              id.includes('@codemirror/commands') ||
+              id.includes('@codemirror/search') ||
+              id.includes('@codemirror/language')
+            ) {
+              return 'vendor-editor-core';
+            }
+
+            if (id.includes('@codemirror')) {
+              return 'vendor-editor-extra';
+            }
+
+            if (id.includes('react-icons')) {
+              return 'vendor-icons';
+            }
+
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+              return 'vendor-react';
+            }
+          },
           assetFileNames: (assetInfo) => {
             const name = assetInfo.name || '';
             if (name.endsWith('.css')) {

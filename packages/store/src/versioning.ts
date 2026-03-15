@@ -37,6 +37,11 @@ const MIME_BY_EXT: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.flac': 'audio/flac',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
   '.zip': 'application/zip',
 };
 

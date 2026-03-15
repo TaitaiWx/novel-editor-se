@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#132238"/>
+      <stop offset="100%" stop-color="#2d4f67"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <circle cx="241" cy="170" r="96" fill="#f2c16d" opacity="0.92"/>
+  <rect x="0" y="560" width="1200" height="240" fill="#111827"/>
+  <path d="M0 570 C180 510 340 515 520 565 C730 625 930 620 1200 540 L1200 800 L0 800 Z" fill="#203347"/>
+  <path d="M0 615 C210 555 360 560 540 610 C730 664 945 666 1200 590 L1200 800 L0 800 Z" fill="#29475d"/>
+  <rect x="720" y="260" width="220" height="180" rx="16" fill="#e7eef7" opacity="0.9"/>
+  <rect x="745" y="285" width="170" height="18" rx="9" fill="#40617d" opacity="0.72"/>
+  <rect x="745" y="320" width="145" height="12" rx="6" fill="#91a6ba" opacity="0.75"/>
+  <rect x="745" y="344" width="160" height="12" rx="6" fill="#91a6ba" opacity="0.55"/>
+  <rect x="745" y="388" width="96" height="28" rx="14" fill="#cf6c5a"/>
+  <text x="110" y="128" fill="#f5f7fa" font-size="56" font-family="PingFang SC, Helvetica, Arial, sans-serif">北境行记</text>
+  <text x="112" y="186" fill="#d1d9e6" font-size="24" font-family="PingFang SC, Helvetica, Arial, sans-serif">Scene Board / v1</text>
+  <text x="110" y="666" fill="#edf2f7" font-size="28" font-family="PingFang SC, Helvetica, Arial, sans-serif">第一幕：雪原营地</text>
+  <text x="110" y="706" fill="#c6d2df" font-size="20" font-family="PingFang SC, Helvetica, Arial, sans-serif">冲突仍在远处，但队伍已经分裂。</text>
+</svg>

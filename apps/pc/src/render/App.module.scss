@@ -67,6 +67,39 @@
   position: relative;
 }
 
+.lazyFallback {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b8b8b;
+  font-size: 13px;
+  background: #1e1e1e;
+}
+
+.lazyOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+.lazyModal {
+  min-width: 220px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1f1f1f;
+  color: #d4d4d4;
+  font-size: 13px;
+  text-align: center;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
 /* ========== Focus Mode ========== */
 .focusMode {
   /* 专注模式：编辑器全宽，仅隐藏 TitleBar / Sidebar / RightPanel / StatusBar */

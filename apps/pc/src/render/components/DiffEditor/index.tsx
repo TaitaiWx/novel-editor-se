@@ -3,10 +3,10 @@
  *
  * 用于版本对比、修订查看。左侧为原始内容，右侧为修改后内容。
  */
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
-import { MergeView } from '@codemirror/merge';
+import { MergeView, goToNextChunk, goToPreviousChunk } from '@codemirror/merge';
 import styles from './styles.module.scss';
 
 interface DiffEditorProps {
@@ -68,6 +68,7 @@ const DiffEditor: React.FC<DiffEditorProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mergeViewRef = useRef<MergeView | null>(null);
+  const [chunkCount, setChunkCount] = useState(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -87,20 +88,42 @@ const DiffEditor: React.FC<DiffEditorProps> = ({
         extensions: [...sharedExtensions, EditorState.readOnly.of(true)],
       },
       parent: containerRef.current,
-      collapseUnchanged: { margin: 3, minSize: 4 },
+      collapseUnchanged: { margin: 4, minSize: 6 },
+      highlightChanges: true,
+      gutter: true,
+      diffConfig: {
+        scanLimit: 2000,
+      },
     });
 
     mergeViewRef.current = view;
+    setChunkCount(view.chunks.length);
 
     return () => {
       view.destroy();
       mergeViewRef.current = null;
+      setChunkCount(0);
     };
   }, [original, modified]);
 
   const handleClose = useCallback(() => {
     onClose?.();
   }, [onClose]);
+
+  const handleNavigateChunk = useCallback((direction: 'previous' | 'next') => {
+    const editorView = mergeViewRef.current?.b;
+    if (!editorView) {
+      return;
+    }
+
+    editorView.focus();
+    if (direction === 'previous') {
+      goToPreviousChunk(editorView);
+      return;
+    }
+
+    goToNextChunk(editorView);
+  }, []);
 
   return (
     <div className={styles.diffEditor}>
@@ -111,6 +134,25 @@ const DiffEditor: React.FC<DiffEditorProps> = ({
           <span className={styles.label}>{modifiedLabel}</span>
         </div>
         <div className={styles.headerRight}>
+          <span className={styles.summaryBadge}>
+            {chunkCount > 0 ? `共 ${chunkCount} 处变更` : '两个版本内容一致'}
+          </span>
+          <button
+            className={styles.navButton}
+            onClick={() => handleNavigateChunk('previous')}
+            disabled={chunkCount === 0}
+            title="定位到上一处变更"
+          >
+            上一处
+          </button>
+          <button
+            className={styles.navButton}
+            onClick={() => handleNavigateChunk('next')}
+            disabled={chunkCount === 0}
+            title="定位到下一处变更"
+          >
+            下一处
+          </button>
           <button className={styles.closeButton} onClick={handleClose} title="关闭对比">
             ✕
           </button>

@@ -14,21 +14,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS
+          # macOS: Electron 仅支持 x64 / arm64，不支持 ia32 或 arm32
           - os: macos-latest
             arch: x64
             electron-args: --x64
           - os: macos-latest
             arch: arm64
             electron-args: --arm64
-          # Windows
+          # Windows: Electron 支持 ia32 / x64 / arm64，不支持 arm32
+          - os: windows-latest
+            arch: ia32
+            electron-args: --ia32
           - os: windows-latest
             arch: x64
             electron-args: --x64
           - os: windows-latest
             arch: arm64
             electron-args: --arm64
-          # Linux
+          # Linux: Electron 支持 ia32 / x64 / arm64 / armv7l
+          - os: ubuntu-latest
+            arch: ia32
+            electron-args: --ia32
+          - os: ubuntu-latest
+            arch: armv7l
+            electron-args: --armv7l
           - os: ubuntu-latest
             arch: x64
             electron-args: --x64
@@ -50,6 +59,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          CI: true
 
       - name: Build application
         run: pnpm build

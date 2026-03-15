@@ -39,6 +39,42 @@
     gap: 8px;
 }
 
+.summaryBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(86, 156, 214, 0.12);
+    border: 1px solid rgba(86, 156, 214, 0.2);
+    color: #9cdcfe;
+    font-size: 12px;
+}
+
+.navButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #3a3d41;
+    background: #2a2d2e;
+    color: #d4d4d4;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled) {
+        background: #343739;
+        border-color: #4f5358;
+    }
+
+    &:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+}
+
 .closeButton {
     display: flex;
     align-items: center;
@@ -106,19 +142,56 @@
 
     // Diff 高亮色
     :global(.cm-changedLine) {
-        background: rgba(0, 122, 204, 0.08);
+        background: rgba(77, 163, 255, 0.12);
     }
 
     :global(.cm-changedText) {
-        background: rgba(0, 122, 204, 0.2);
+        background: rgba(77, 163, 255, 0.24);
+        border-radius: 3px;
     }
 
     :global(.cm-deletedChunk) {
-        background: rgba(241, 76, 76, 0.08);
+        background: rgba(255, 120, 117, 0.12);
+        border-inline-start: 3px solid rgba(255, 120, 117, 0.7);
     }
 
     :global(.cm-insertedLine) {
-        background: rgba(78, 201, 176, 0.08);
+        background: rgba(78, 201, 176, 0.16);
+        text-decoration: none;
+    }
+
+    :global(.cm-deletedLine) {
+        background: rgba(255, 120, 117, 0.16);
+        text-decoration: none;
+    }
+
+    :global(.cm-inlineChangedLine) {
+        background: rgba(224, 175, 104, 0.14);
+    }
+
+    :global(.cm-deletedText) {
+        background: rgba(255, 120, 117, 0.22);
+        border-radius: 3px;
+    }
+
+    :global(.cm-changeGutter) {
+        width: 6px;
+    }
+
+    :global(.cm-changedLineGutter) {
+        background: linear-gradient(180deg, #6cb6ff 0%, #2f81f7 100%);
+    }
+
+    :global(.cm-deletedLineGutter) {
+        background: linear-gradient(180deg, #ffb3ad 0%, #ff7875 100%);
+    }
+
+    :global(.cm-collapseWidget) {
+        color: #7f848e;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 999px;
+        padding: 2px 8px;
     }
 
     // Scrollbar
