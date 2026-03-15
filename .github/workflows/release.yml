@@ -64,7 +64,7 @@ jobs:
         working-directory: apps/pc
 
       - name: Package Electron app
-        run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never -c.publish.channel=${{ steps.release_channel.outputs.publish_channel }}
+        run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never
         working-directory: apps/pc
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
