@@ -56,7 +56,7 @@ interface PreviewState {
   mimeType: string;
   byteSize: number;
   dataUrl?: string;
-  kind: 'image' | 'pdf' | 'audio' | 'binary';
+  kind: 'image' | 'pdf' | 'audio' | 'video' | 'binary';
   currentDataUrl?: string | null;
   currentByteSize?: number | null;
   currentMimeType?: string | null;
@@ -70,12 +70,14 @@ interface BinaryReadResult {
 
 interface PdfPreviewContentProps {
   dataUrl: string;
+  currentPage: number;
+  onPageChange: (page: number) => void;
 }
 
 type SnapshotTimeFilter = 'all' | 'today' | '7d' | '30d';
 
 type FileTypeMeta = {
-  kind: 'text' | 'image' | 'audio' | 'pdf' | 'binary';
+  kind: 'text' | 'image' | 'audio' | 'video' | 'pdf' | 'binary';
   label: string;
   icon: React.ReactNode;
 };
@@ -106,6 +108,9 @@ const CLIENT_MIME_BY_EXT: Record<string, string> = {
   '.m4a': 'audio/mp4',
   '.aac': 'audio/aac',
   '.flac': 'audio/flac',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
 };
 
 const formatByteSize = (byteSize: number | null | undefined) => {
@@ -164,6 +169,10 @@ const getFileTypeMeta = (mimeType: string): FileTypeMeta => {
 
   if (mimeType.startsWith('audio/')) {
     return { kind: 'audio', label: '音频', icon: <VscMusic /> };
+  }
+
+  if (mimeType.startsWith('video/')) {
+    return { kind: 'video', label: '视频', icon: <VscFileMedia /> };
   }
 
   if (mimeType === 'application/json') {
@@ -373,14 +382,57 @@ const AudioPreviewCard: React.FC<AudioPreviewCardProps> = ({
   );
 };
 
-const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({ dataUrl }) => {
+interface VideoPreviewCardProps {
+  title: string;
+  dataUrl?: string | null;
+  mimeType?: string | null;
+  byteSize?: number | null;
+  emptyText: string;
+}
+
+const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
+  title,
+  dataUrl,
+  mimeType,
+  byteSize,
+  emptyText,
+}) => {
+  return (
+    <div className={styles.audioComparePane}>
+      <div className={styles.audioCompareLabel}>{title}</div>
+      {dataUrl ? (
+        <>
+          <video className={styles.videoPlayer} src={dataUrl} controls preload="metadata" />
+          <div className={styles.videoMetaGrid}>
+            <div className={styles.videoMetaItem}>
+              <span className={styles.videoMetaLabel}>MIME</span>
+              <span className={styles.videoMetaValue}>{mimeType ?? '未知'}</span>
+            </div>
+            <div className={styles.videoMetaItem}>
+              <span className={styles.videoMetaLabel}>大小</span>
+              <span className={styles.videoMetaValue}>{formatByteSize(byteSize)}</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className={styles.previewPlaceholder}>{emptyText}</div>
+      )}
+    </div>
+  );
+};
+
+const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({
+  dataUrl,
+  currentPage,
+  onPageChange,
+}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pageCount, setPageCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [mainPageDataUrl, setMainPageDataUrl] = useState<string | null>(null);
   const [thumbnailMap, setThumbnailMap] = useState<Record<number, string>>({});
   const pdfDocumentRef = useRef<PdfDocumentProxy | null>(null);
+  const safeCurrentPage = pageCount > 0 ? Math.min(Math.max(currentPage, 1), pageCount) : 1;
 
   const renderPageToDataUrl = useCallback(async (pageNumber: number, scale: number) => {
     const pdfDocument = pdfDocumentRef.current;
@@ -412,7 +464,6 @@ const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({ dataUrl }) => {
         setError(null);
         setThumbnailMap({});
         setMainPageDataUrl(null);
-        setCurrentPage(1);
 
         const pdfjs = (await import('pdfjs-dist')) as PdfJsModule;
         const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
@@ -475,7 +526,7 @@ const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({ dataUrl }) => {
 
     const updateMainPage = async () => {
       try {
-        const renderedPage = await renderPageToDataUrl(currentPage, 1.35);
+        const renderedPage = await renderPageToDataUrl(safeCurrentPage, 1.35);
         if (!disposed) {
           setMainPageDataUrl(renderedPage);
         }
@@ -490,7 +541,7 @@ const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({ dataUrl }) => {
     return () => {
       disposed = true;
     };
-  }, [currentPage, renderPageToDataUrl]);
+  }, [renderPageToDataUrl, safeCurrentPage]);
 
   if (loading) {
     return <div className={styles.previewPlaceholder}>正在渲染 PDF 页面...</div>;
@@ -509,8 +560,8 @@ const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({ dataUrl }) => {
           return (
             <button
               key={pageNumber}
-              className={`${styles.pdfThumbButton} ${pageNumber === currentPage ? styles.pdfThumbButtonActive : ''}`}
-              onClick={() => setCurrentPage(pageNumber)}
+              className={`${styles.pdfThumbButton} ${pageNumber === safeCurrentPage ? styles.pdfThumbButtonActive : ''}`}
+              onClick={() => onPageChange(pageNumber)}
             >
               <span className={styles.pdfThumbNumber}>第 {pageNumber} 页</span>
               {thumbnail ? (
@@ -526,18 +577,18 @@ const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({ dataUrl }) => {
         <div className={styles.pdfToolbar}>
           <button
             className={styles.pdfPageButton}
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={safeCurrentPage <= 1}
+            onClick={() => onPageChange(Math.max(1, safeCurrentPage - 1))}
           >
             上一页
           </button>
           <span className={styles.pdfPageIndicator}>
-            第 {currentPage} / {pageCount} 页
+            第 {safeCurrentPage} / {pageCount} 页
           </span>
           <button
             className={styles.pdfPageButton}
-            disabled={currentPage >= pageCount}
-            onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
+            disabled={safeCurrentPage >= pageCount}
+            onClick={() => onPageChange(Math.min(pageCount, safeCurrentPage + 1))}
           >
             下一页
           </button>
@@ -547,7 +598,7 @@ const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({ dataUrl }) => {
             <img
               className={styles.pdfMainImage}
               src={mainPageDataUrl}
-              alt={`PDF 第 ${currentPage} 页`}
+              alt={`PDF 第 ${safeCurrentPage} 页`}
             />
           ) : (
             <div className={styles.previewPlaceholder}>正在渲染当前页...</div>
@@ -591,6 +642,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
   const [snapshotJob, setSnapshotJob] = useState<SnapshotJobStatus | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [timeFilter, setTimeFilter] = useState<SnapshotTimeFilter>('all');
+  const [pdfComparePage, setPdfComparePage] = useState(1);
   const modalRef = useRef<HTMLDivElement>(null);
   const pollTimerRef = useRef<number | null>(null);
   const toast = useToast();
@@ -640,6 +692,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
   useEffect(() => {
     if (!visible) {
       setPreviewState(null);
+      setPdfComparePage(1);
       setSnapshotJob(null);
       if (pollTimerRef.current) {
         window.clearTimeout(pollTimerRef.current);
@@ -647,6 +700,10 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
       }
     }
   }, [visible]);
+
+  useEffect(() => {
+    setPdfComparePage(1);
+  }, [previewState?.snapshotId, previewState?.kind]);
 
   // 关闭事件：ESC 键 / 点击遮罩
   useEffect(() => {
@@ -841,6 +898,11 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
               byteSize: snapshotFile.byteSize,
               dataUrl: snapshotDataUrl,
               kind: 'pdf',
+              currentDataUrl: currentBinary
+                ? buildDataUrl(currentBinary.mimeType, currentBinary.base64Content)
+                : null,
+              currentByteSize: currentBinary?.byteSize ?? null,
+              currentMimeType: currentBinary?.mimeType ?? null,
             });
             return;
           }
@@ -853,6 +915,23 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
               byteSize: snapshotFile.byteSize,
               dataUrl: snapshotDataUrl,
               kind: 'audio',
+              currentDataUrl: currentBinary
+                ? buildDataUrl(currentBinary.mimeType, currentBinary.base64Content)
+                : null,
+              currentByteSize: currentBinary?.byteSize ?? null,
+              currentMimeType: currentBinary?.mimeType ?? null,
+            });
+            return;
+          }
+
+          if (snapshotDataUrl && snapshotFile.mimeType.startsWith('video/')) {
+            setPreviewState({
+              snapshotId: snapshot.id,
+              snapshotMessage: snapshot.message,
+              mimeType: snapshotFile.mimeType,
+              byteSize: snapshotFile.byteSize,
+              dataUrl: snapshotDataUrl,
+              kind: 'video',
               currentDataUrl: currentBinary
                 ? buildDataUrl(currentBinary.mimeType, currentBinary.base64Content)
                 : null,
@@ -1124,7 +1203,37 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
                     </div>
                   </div>
                 ) : previewState.kind === 'pdf' ? (
-                  <PdfPreviewContent dataUrl={previewState.dataUrl ?? ''} />
+                  <div className={styles.pdfCompareLayout}>
+                    <div className={styles.pdfComparePane}>
+                      <div className={styles.imageCompareLabel}>版本快照</div>
+                      <div className={styles.imageCompareMeta}>
+                        {previewState.mimeType} · {formatByteSize(previewState.byteSize)}
+                      </div>
+                      <PdfPreviewContent
+                        dataUrl={previewState.dataUrl ?? ''}
+                        currentPage={pdfComparePage}
+                        onPageChange={setPdfComparePage}
+                      />
+                    </div>
+                    <div className={styles.pdfComparePane}>
+                      <div className={styles.imageCompareLabel}>当前文件</div>
+                      {previewState.currentDataUrl ? (
+                        <>
+                          <div className={styles.imageCompareMeta}>
+                            {previewState.currentMimeType} ·{' '}
+                            {formatByteSize(previewState.currentByteSize)}
+                          </div>
+                          <PdfPreviewContent
+                            dataUrl={previewState.currentDataUrl}
+                            currentPage={pdfComparePage}
+                            onPageChange={setPdfComparePage}
+                          />
+                        </>
+                      ) : (
+                        <div className={styles.previewPlaceholder}>当前文件暂时无法读取</div>
+                      )}
+                    </div>
+                  </div>
                 ) : previewState.kind === 'audio' ? (
                   <div className={styles.audioCompareLayout}>
                     <AudioPreviewCard
@@ -1135,6 +1244,23 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
                       emptyText="当前快照音频无法加载"
                     />
                     <AudioPreviewCard
+                      title="当前文件"
+                      dataUrl={previewState.currentDataUrl}
+                      mimeType={previewState.currentMimeType}
+                      byteSize={previewState.currentByteSize}
+                      emptyText="当前文件暂时无法读取"
+                    />
+                  </div>
+                ) : previewState.kind === 'video' ? (
+                  <div className={styles.videoCompareLayout}>
+                    <VideoPreviewCard
+                      title="版本快照"
+                      dataUrl={previewState.dataUrl}
+                      mimeType={previewState.mimeType}
+                      byteSize={previewState.byteSize}
+                      emptyText="当前快照视频无法加载"
+                    />
+                    <VideoPreviewCard
                       title="当前文件"
                       dataUrl={previewState.currentDataUrl}
                       mimeType={previewState.currentMimeType}

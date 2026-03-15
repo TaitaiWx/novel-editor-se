@@ -1,7 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AiOutlineEye } from 'react-icons/ai';
+import { VscCode } from 'react-icons/vsc';
 import TabBar from '../TabBar';
 import TextEditor from '../TextEditor';
 import SettingsButton from '../SettingsButton';
+import ResourceViewer, {
+  BinaryContentViewer,
+  isPreviewableResourcePath,
+  isTextBackedPreviewResourcePath,
+} from '../ResourceViewer';
 import styles from './styles.module.scss';
 
 interface CursorPosition {
@@ -40,6 +47,46 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   onSaveUntitled,
 }) => {
   const [wordWrap, setWordWrap] = useState(false);
+  const [viewMode, setViewMode] = useState<'preview' | 'content'>('content');
+
+  const isPreviewableResource = useMemo(() => isPreviewableResourcePath(activeTab), [activeTab]);
+  const isTextBackedPreviewResource = useMemo(
+    () => isTextBackedPreviewResourcePath(activeTab),
+    [activeTab]
+  );
+  const canWrapText =
+    !isPreviewableResource || (viewMode === 'content' && isTextBackedPreviewResource);
+
+  useEffect(() => {
+    setViewMode(isPreviewableResource ? 'preview' : 'content');
+  }, [activeTab, isPreviewableResource]);
+
+  useEffect(() => {
+    if (!activeTab || (isPreviewableResource && viewMode === 'preview')) {
+      onContentChange?.('');
+    }
+  }, [activeTab, isPreviewableResource, onContentChange, viewMode]);
+
+  const settingsComponent = (
+    <SettingsButton
+      wordWrap={canWrapText ? wordWrap : undefined}
+      onToggleWordWrap={canWrapText ? setWordWrap : undefined}
+      items={
+        isPreviewableResource
+          ? [
+              {
+                key: 'view-mode',
+                label: viewMode === 'preview' ? '展示内容' : '展示预览',
+                icon: viewMode === 'preview' ? <VscCode /> : <AiOutlineEye />,
+                active: viewMode === 'content',
+                onClick: () =>
+                  setViewMode((currentMode) => (currentMode === 'preview' ? 'content' : 'preview')),
+              },
+            ]
+          : []
+      }
+    />
+  );
 
   return (
     <div className={styles.contentPanel}>
@@ -50,17 +97,23 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
         onTabClose={onTabClose}
       />
       <div className={styles.contentPanelContent}>
-        <TextEditor
-          filePath={activeTab}
-          reloadToken={reloadToken}
-          wordWrap={wordWrap}
-          encoding={encoding}
-          scrollToLine={scrollToLine}
-          onContentChange={onContentChange}
-          onCursorChange={onCursorChange}
-          onSaveUntitled={onSaveUntitled}
-          settingsComponent={<SettingsButton wordWrap={wordWrap} onToggleWordWrap={setWordWrap} />}
-        />
+        {isPreviewableResource && viewMode === 'preview' ? (
+          <ResourceViewer filePath={activeTab} settingsComponent={settingsComponent} />
+        ) : isPreviewableResource && !isTextBackedPreviewResource ? (
+          <BinaryContentViewer filePath={activeTab} settingsComponent={settingsComponent} />
+        ) : (
+          <TextEditor
+            filePath={activeTab}
+            reloadToken={reloadToken}
+            wordWrap={wordWrap}
+            encoding={encoding}
+            scrollToLine={scrollToLine}
+            onContentChange={onContentChange}
+            onCursorChange={onCursorChange}
+            onSaveUntitled={onSaveUntitled}
+            settingsComponent={settingsComponent}
+          />
+        )}
       </div>
     </div>
   );

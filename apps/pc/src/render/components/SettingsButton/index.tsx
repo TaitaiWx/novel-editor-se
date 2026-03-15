@@ -3,12 +3,25 @@ import { AiOutlineSetting } from 'react-icons/ai';
 import { BsTextWrap } from 'react-icons/bs';
 import styles from './styles.module.scss';
 
-interface SettingsButtonProps {
-  wordWrap: boolean;
-  onToggleWordWrap: (wrap: boolean) => void;
+export interface SettingsToggleItem {
+  key: string;
+  label: string;
+  icon?: React.ReactNode;
+  active?: boolean;
+  onClick: () => void;
 }
 
-const SettingsButton: React.FC<SettingsButtonProps> = ({ wordWrap, onToggleWordWrap }) => {
+interface SettingsButtonProps {
+  wordWrap?: boolean;
+  onToggleWordWrap?: (wrap: boolean) => void;
+  items?: SettingsToggleItem[];
+}
+
+const SettingsButton: React.FC<SettingsButtonProps> = ({
+  wordWrap,
+  onToggleWordWrap,
+  items = [],
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -33,8 +46,26 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({ wordWrap, onToggleWordW
   };
 
   const handleToggleWordWrap = () => {
+    if (typeof wordWrap !== 'boolean' || !onToggleWordWrap) {
+      return;
+    }
     onToggleWordWrap(!wordWrap);
   };
+
+  const settingItems = [
+    ...(typeof wordWrap === 'boolean' && onToggleWordWrap
+      ? [
+          {
+            key: 'word-wrap',
+            label: '自动换行',
+            icon: <BsTextWrap />,
+            active: wordWrap,
+            onClick: handleToggleWordWrap,
+          },
+        ]
+      : []),
+    ...items,
+  ];
 
   return (
     <div className={styles.settingsButton} ref={dropdownRef}>
@@ -42,20 +73,22 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({ wordWrap, onToggleWordW
         <AiOutlineSetting />
       </button>
 
-      {isOpen && (
+      {isOpen && settingItems.length > 0 && (
         <div className={styles.settingsDropdown}>
-          <div className={styles.settingItem}>
-            <button
-              className={`${styles.toggleButton} ${wordWrap ? styles.active : ''}`}
-              onClick={handleToggleWordWrap}
-            >
-              <BsTextWrap />
-              <span>自动换行</span>
-              <div className={styles.toggle}>
-                <div className={styles.toggleSlider}></div>
-              </div>
-            </button>
-          </div>
+          {settingItems.map((item) => (
+            <div key={item.key} className={styles.settingItem}>
+              <button
+                className={`${styles.toggleButton} ${item.active ? styles.active : ''}`}
+                onClick={item.onClick}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+                <div className={styles.toggle}>
+                  <div className={styles.toggleSlider}></div>
+                </div>
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -83,6 +83,12 @@
     border-color: rgba(78, 201, 176, 0.2);
 }
 
+.fileTypevideo {
+    color: #7ec9ff;
+    background: rgba(126, 201, 255, 0.12);
+    border-color: rgba(126, 201, 255, 0.2);
+}
+
 .fileTypepdf {
     color: #ff9b8f;
     background: rgba(255, 120, 117, 0.12);
@@ -398,6 +404,13 @@
     width: 100%;
 }
 
+.videoCompareLayout {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+
 .imageComparePane {
     display: flex;
     flex-direction: column;
@@ -461,7 +474,22 @@
     gap: 10px;
 }
 
+.videoMetaGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
 .audioMetaItem {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.videoMetaItem {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -476,11 +504,30 @@
     font-size: 11px;
 }
 
+.videoMetaLabel {
+    color: #8d8d8d;
+    font-size: 11px;
+}
+
 .audioMetaValue,
 .binaryInfoValue {
     color: #f0f0f0;
     font-size: 12px;
     word-break: break-all;
+}
+
+.videoMetaValue {
+    color: #f0f0f0;
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.videoPlayer {
+    width: 100%;
+    max-height: 320px;
+    border-radius: 8px;
+    background: #090b0f;
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .binaryInfoLayout {
@@ -518,6 +565,26 @@
     width: 100%;
     height: 100%;
     min-height: 50vh;
+}
+
+.pdfCompareLayout {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    width: 100%;
+    min-height: 50vh;
+}
+
+.pdfComparePane {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .pdfSidebar {
@@ -634,8 +701,10 @@
     }
 
     .imageCompareLayout,
+    .pdfCompareLayout,
     .pdfPreviewLayout,
     .audioCompareLayout,
+    .videoCompareLayout,
     .binaryInfoLayout {
         grid-template-columns: 1fr;
     }
