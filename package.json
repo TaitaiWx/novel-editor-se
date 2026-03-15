@@ -1,6 +1,6 @@
 {
   "name": "novel-editor-se",
-  "version": "1.0.1-beta.1",
+  "version": "1.0.1-beta.2",
   "private": true,
   "description": "Novel Editor - Cross-platform writing tool",
   "packageManager": "pnpm@10.12.4",
