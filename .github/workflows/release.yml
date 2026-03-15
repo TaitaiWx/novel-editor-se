@@ -14,14 +14,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS: Electron 仅支持 x64 / arm64，不支持 ia32 或 arm32
+          # macOS: 通过独立任务分别产出 x64 / arm64，避免单次打包同时触发双架构重建
           - os: macos-latest
             arch: x64
             electron-args: --x64
           - os: macos-latest
             arch: arm64
             electron-args: --arm64
-          # Windows: Electron 支持 ia32 / x64 / arm64，不支持 arm32
+          # Windows: 单任务单架构，交给 CLI 参数控制目标架构
           - os: windows-latest
             arch: ia32
             electron-args: --ia32
@@ -31,19 +31,10 @@ jobs:
           - os: windows-latest
             arch: arm64
             electron-args: --arm64
-          # Linux: Electron 支持 ia32 / x64 / arm64 / armv7l
-          - os: ubuntu-latest
-            arch: ia32
-            electron-args: --ia32
-          - os: ubuntu-latest
-            arch: armv7l
-            electron-args: --armv7l
+          # Linux runner 上 better-sqlite3 的跨架构重建不稳定，仅发布原生可稳定产出的 x64
           - os: ubuntu-latest
             arch: x64
             electron-args: --x64
-          - os: ubuntu-latest
-            arch: arm64
-            electron-args: --arm64
 
     runs-on: ${{ matrix.os }}
 

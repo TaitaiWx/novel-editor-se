@@ -22,13 +22,7 @@ mac:
   category: public.app-category.productivity
   target:
     - target: dmg
-      arch:
-        - x64
-        - arm64
     - target: zip
-      arch:
-        - x64
-        - arm64
   hardenedRuntime: true
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
@@ -36,10 +30,6 @@ mac:
 win:
   target:
     - target: nsis
-      arch:
-        - ia32
-        - x64
-        - arm64
 
 nsis:
   oneClick: false
@@ -50,22 +40,14 @@ nsis:
 linux:
   target:
     - target: AppImage
-      arch:
-        - ia32
-        - armv7l
-        - x64
-        - arm64
     - target: deb
-      arch:
-        - ia32
-        - armv7l
-        - x64
-        - arm64
   category: Office
   maintainer: Novel Editor Team
 
 publish:
   provider: github
+  owner: TaitaiWx
+  repo: novel-editor-se
 
 # Auto-update configuration
 # electron-updater reads this to check for updates on GitHub Releases

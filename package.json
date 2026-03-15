@@ -3,9 +3,14 @@
   "version": "1.0.1-beta.3",
   "private": true,
   "description": "Novel Editor - Cross-platform writing tool",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TaitaiWx/novel-editor-se.git"
+  },
   "packageManager": "pnpm@10.12.4",
   "scripts": {
     "postinstall": "pnpm run rebuild:native",
+    "version": "node ./scripts/sync-app-versions.mjs && git add package.json apps/*/package.json",
     "dev": "pnpm --filter @novel-editor/pc dev",
     "build": "pnpm --filter @novel-editor/pc build",
     "start": "pnpm --filter @novel-editor/pc start",
