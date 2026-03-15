@@ -17,6 +17,7 @@ interface ScrollToLineRequest {
 interface ContentPanelProps {
   openTabs: string[];
   activeTab: string | null;
+  reloadToken?: number;
   encoding?: string;
   scrollToLine?: ScrollToLineRequest | null;
   onTabSelect: (filePath: string) => void;
@@ -29,6 +30,7 @@ interface ContentPanelProps {
 const ContentPanel: React.FC<ContentPanelProps> = ({
   openTabs,
   activeTab,
+  reloadToken,
   encoding,
   scrollToLine,
   onTabSelect,
@@ -50,6 +52,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
       <div className={styles.contentPanelContent}>
         <TextEditor
           filePath={activeTab}
+          reloadToken={reloadToken}
           wordWrap={wordWrap}
           encoding={encoding}
           scrollToLine={scrollToLine}

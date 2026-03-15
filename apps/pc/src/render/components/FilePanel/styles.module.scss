@@ -60,6 +60,61 @@
     flex-direction: column;
   }
 
+  .searchBar {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+    gap: 6px;
+    flex-shrink: 0;
+
+    .searchIcon {
+      color: #666;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .searchInput {
+      flex: 1;
+      background: #2d2d2d;
+      border: 1px solid #404040;
+      border-radius: 3px;
+      color: #d4d4d4;
+      font-size: 12px;
+      padding: 3px 6px;
+      outline: none;
+      font-family: inherit;
+
+      &:focus {
+        border-color: #007acc;
+      }
+
+      &::placeholder {
+        color: #666;
+      }
+    }
+
+    .searchClear {
+      background: none;
+      border: none;
+      color: #666;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0 2px;
+      line-height: 1;
+      flex-shrink: 0;
+
+      &:hover {
+        color: #d4d4d4;
+      }
+    }
+  }
+
+  .explorerAction.active {
+    color: #007acc;
+  }
+
   .workspaceSection {
     display: flex;
     flex-direction: column;

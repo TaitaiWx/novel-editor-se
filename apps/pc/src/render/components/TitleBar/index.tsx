@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   VscChromeMinimize,
   VscChromeMaximize,
   VscChromeRestore,
   VscChromeClose,
 } from 'react-icons/vsc';
-import ShortcutsHelp from '../ShortcutsHelp';
 import styles from './styles.module.scss';
 
 interface TitleBarProps {
@@ -13,6 +12,7 @@ interface TitleBarProps {
   showControls?: boolean;
   focusMode?: boolean;
   onToggleFocusMode?: () => void;
+  onShowShortcuts?: () => void;
 }
 
 const TitleBar: React.FC<TitleBarProps> = ({
@@ -20,11 +20,11 @@ const TitleBar: React.FC<TitleBarProps> = ({
   showControls = true,
   focusMode = false,
   onToggleFocusMode,
+  onShowShortcuts,
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [platform, setPlatform] = useState<string>('');
 
-  // 获取平台信息
   useEffect(() => {
     const getPlatform = () => {
       const userAgent = navigator.userAgent.toLowerCase();
@@ -33,11 +33,9 @@ const TitleBar: React.FC<TitleBarProps> = ({
       if (userAgent.includes('linux')) return 'linux';
       return 'unknown';
     };
-
     setPlatform(getPlatform());
   }, []);
 
-  // 检查窗口是否最大化
   useEffect(() => {
     const checkMaximized = async () => {
       if (window.electron?.ipcRenderer) {
@@ -45,64 +43,70 @@ const TitleBar: React.FC<TitleBarProps> = ({
           const maximized = await window.electron.ipcRenderer.invoke('window-is-maximized');
           setIsMaximized(maximized);
         } catch (error) {
-          console.error('Error checking window maximized state:', error);
+          console.error('检查窗口状态失败:', error);
         }
       }
     };
-
     checkMaximized();
   }, []);
 
-  const handleMinimize = async () => {
+  const handleMinimize = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-minimize');
     } catch (error) {
-      console.error('Error minimizing window:', error);
+      console.error('最小化失败:', error);
     }
-  };
+  }, []);
 
-  const handleMaximize = async () => {
+  const handleMaximize = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-maximize');
-      // 切换最大化状态
-      setIsMaximized(!isMaximized);
+      setIsMaximized((prev) => !prev);
     } catch (error) {
-      console.error('Error maximizing window:', error);
+      console.error('最大化失败:', error);
     }
-  };
+  }, []);
 
-  const handleClose = async () => {
+  const handleClose = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-close');
     } catch (error) {
-      console.error('Error closing window:', error);
+      console.error('关闭失败:', error);
     }
-  };
+  }, []);
 
   return (
     <div className={`${styles.titleBar} ${platform ? styles[platform] : ''}`}>
       <div className={styles.titleBarContent}>
-        {/* 应用图标和标题 */}
+        {/* 左侧：应用图标 + 标题 */}
         <div className={styles.titleSection}>
           <div className={styles.appIcon}>📝</div>
           <span className={styles.appTitle}>{title}</span>
         </div>
 
-        {/* 拖拽区域 */}
+        {/* 中间：居中拖拽区 */}
         <div className={styles.dragRegion} />
 
-        {/* 工具栏 */}
-        <div className={styles.helpSection}>
-          {onToggleFocusMode && (
+        {/* 居中：专注模式按钮 */}
+        {onToggleFocusMode && (
+          <div className={styles.centerTools}>
             <button
-              className={`${styles.focusModeButton} ${focusMode ? styles.focusModeActive : ''}`}
+              className={`${styles.toolButton} ${focusMode ? styles.focusModeActive : ''}`}
               onClick={onToggleFocusMode}
               title={focusMode ? '退出专注模式 (F11)' : '进入专注模式 (F11)'}
             >
-              {focusMode ? '退出专注' : '专注模式'}
+              {focusMode ? '退出专注' : '专注'}
+            </button>
+          </div>
+        )}
+
+        {/* 右侧工具区：快捷键提示 + 窗口控制 */}
+        <div className={styles.toolSection}>
+          {onShowShortcuts && (
+            <button className={styles.toolButton} onClick={onShowShortcuts} title="键盘快捷键">
+              ⌨
             </button>
           )}
-          <ShortcutsHelp />
         </div>
 
         {/* 窗口控制按钮 */}
@@ -114,7 +118,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
               title="最小化"
               aria-label="最小化窗口"
             >
-              <VscChromeMinimize className={styles.minimizeIcon} />
+              <VscChromeMinimize className={styles.controlIcon} />
             </button>
             <button
               className={`${styles.controlButton} ${styles.maximizeButton}`}
@@ -123,9 +127,9 @@ const TitleBar: React.FC<TitleBarProps> = ({
               aria-label={isMaximized ? '还原窗口' : '最大化窗口'}
             >
               {isMaximized ? (
-                <VscChromeRestore className={styles.maximizeIcon} />
+                <VscChromeRestore className={styles.controlIcon} />
               ) : (
-                <VscChromeMaximize className={styles.maximizeIcon} />
+                <VscChromeMaximize className={styles.controlIcon} />
               )}
             </button>
             <button
@@ -134,7 +138,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
               title="关闭"
               aria-label="关闭窗口"
             >
-              <VscChromeClose className={styles.closeIcon} />
+              <VscChromeClose className={styles.controlIcon} />
             </button>
           </div>
         )}

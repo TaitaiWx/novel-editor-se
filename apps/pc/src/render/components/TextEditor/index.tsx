@@ -15,6 +15,7 @@ import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/sea
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
+import { writingDecorations } from './writing-decorations';
 import styles from './styles.module.scss';
 
 /** Threshold: files larger than this show a performance warning */
@@ -32,9 +33,11 @@ interface ScrollToLineRequest {
 
 interface TextEditorProps {
   filePath: string | null;
+  reloadToken?: number;
   wordWrap?: boolean;
   readOnly?: boolean;
   encoding?: string;
+  characterNames?: string[];
   scrollToLine?: ScrollToLineRequest | null;
   onContentChange?: (content: string) => void;
   onCursorChange?: (pos: CursorPosition) => void;
@@ -325,9 +328,11 @@ const chinesePhrases = EditorState.phrases.of({
 
 const TextEditor: React.FC<TextEditorProps> = ({
   filePath,
+  reloadToken,
   wordWrap = false,
   readOnly = false,
   encoding = 'UTF-8',
+  characterNames = [],
   scrollToLine,
   onContentChange,
   onCursorChange,
@@ -350,6 +355,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const readOnlyCompartment = useRef(new Compartment());
   const wordWrapCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
+  const writingDecoCompartment = useRef(new Compartment());
 
   const currentFilePathRef = useRef<string | null>(null);
   const currentContentRef = useRef<string>('');
@@ -435,6 +441,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
           readOnlyCompartment.current.of(EditorView.editable.of(!readOnly)),
           wordWrapCompartment.current.of(wordWrap ? EditorView.lineWrapping : []),
           languageCompartment.current.of([]),
+          writingDecoCompartment.current.of(writingDecorations(characterNames)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               const doc = update.state.doc.toString();
@@ -508,6 +515,15 @@ const TextEditor: React.FC<TextEditorProps> = ({
       effects: languageCompartment.current.reconfigure(langExt),
     });
   }, [filePath, isUntitled]);
+
+  // Update writing decorations when character names change
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: writingDecoCompartment.current.reconfigure(writingDecorations(characterNames)),
+    });
+  }, [characterNames]);
 
   // Save on unmount
   useEffect(() => {
@@ -636,7 +652,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
     };
 
     loadContent();
-  }, [filePath, encoding]);
+  }, [filePath, encoding, reloadToken]);
 
   // Scroll to line
   useEffect(() => {

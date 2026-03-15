@@ -47,8 +47,11 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           external: [
             'electron',
+            'crypto',
+            'fs',
             'path',
             'url',
+            'os',
             'fs/promises',
             'directory-tree',
             'fs-extra',

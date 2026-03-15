@@ -60,8 +60,6 @@ jobs:
         working-directory: apps/pc
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_OWNER: ${{ github.repository_owner }}
-          GH_REPO: ${{ github.event.repository.name }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v5

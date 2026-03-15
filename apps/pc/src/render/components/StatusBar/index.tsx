@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { VscHistory } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
 import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
@@ -13,6 +14,8 @@ interface StatusBarProps {
   filePath: string | null;
   encoding: string;
   onEncodingChange: (encoding: string) => void;
+  folderPath: string | null;
+  onToggleVersionHistory?: () => void;
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({
@@ -22,6 +25,8 @@ const StatusBar: React.FC<StatusBarProps> = ({
   filePath,
   encoding,
   onEncodingChange,
+  folderPath,
+  onToggleVersionHistory,
 }) => {
   const [showEncodingMenu, setShowEncodingMenu] = useState(false);
   const [appVersion, setAppVersion] = useState('');
@@ -79,6 +84,19 @@ const StatusBar: React.FC<StatusBarProps> = ({
   return (
     <div className={styles.statusBar}>
       <div className={styles.left}>
+        {folderPath && onToggleVersionHistory && (
+          <>
+            <span
+              className={`${styles.item} ${styles.clickable} ${styles.versionHistoryBtn}`}
+              onClick={onToggleVersionHistory}
+              title="版本历史"
+            >
+              <VscHistory className={styles.versionIcon} />
+              <span>版本历史</span>
+            </span>
+            {filePath && <span className={styles.separator}>|</span>}
+          </>
+        )}
         {filePath && (
           <>
             <span className={styles.item}>

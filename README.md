@@ -6,6 +6,7 @@
 
 - 📁 文件夹浏览器
 - 📝 文本编辑器
+- 🕘 SQLite 原生版本快照
 - 🎨 代码高亮
 - ⌨️ 键盘快捷键
 - 🔧 开发者工具
@@ -84,6 +85,7 @@ src/
 
 - **前端**: React + TypeScript + Vite
 - **后端**: Electron
+- **存储**: SQLite (`better-sqlite3`)
 - **样式**: SCSS Modules
 - **构建**: Vite + Electron Builder
 

@@ -1,4 +1,10 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
+import {
+  extractOutline,
+  extractActs,
+  type OutlineNode,
+  type ActNode,
+} from '@novel-editor/basic-algorithm';
 import styles from './styles.module.scss';
 
 type TabType = 'outline' | 'characters' | 'acts';
@@ -71,40 +77,11 @@ const RightPanel: React.FC<RightPanelProps> = ({
 
 // ---------- Outline View ----------
 
-const HEADING_REGEX = /^(#{1,6})\s+(.+)/;
-const CHINESE_SECTION_REGEX = /^(第[一二三四五六七八九十百千\d]+[章幕节卷部回])\s*(.*)/;
-
-interface HeadingItem {
-  level: number;
-  text: string;
-  line: number;
-}
-
 const OutlineView: React.FC<{ content: string; onScrollToLine?: (line: number) => void }> =
   React.memo(({ content, onScrollToLine }) => {
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-    const headings = useMemo(() => {
-      const lines = content.split('\n');
-      const result: HeadingItem[] = [];
-      for (let index = 0; index < lines.length; index++) {
-        const line = lines[index];
-        const match = line.match(HEADING_REGEX);
-        if (match) {
-          result.push({ level: match[1].length, text: match[2].trim(), line: index + 1 });
-          continue;
-        }
-        const chMatch = line.match(CHINESE_SECTION_REGEX);
-        if (chMatch) {
-          result.push({
-            level: 1,
-            text: (chMatch[1] + ' ' + (chMatch[2] || '')).trim(),
-            line: index + 1,
-          });
-        }
-      }
-      return result;
-    }, [content]);
+    const headings: OutlineNode[] = useMemo(() => extractOutline(content), [content]);
 
     if (!content) {
       return <div className={styles.emptyHint}>打开文件后查看大纲</div>;
@@ -115,7 +92,7 @@ const OutlineView: React.FC<{ content: string; onScrollToLine?: (line: number) =
         <div className={styles.emptyHint}>
           未检测到标题结构
           <br />
-          <span className={styles.hintSub}>支持 Markdown 标题 (# ~ ######) 和中文章节标记</span>
+          <span className={styles.hintSub}>支持 Markdown 标题、中文章节标记、数字编号等格式</span>
         </div>
       );
     }
@@ -483,22 +460,6 @@ const CharactersView: React.FC = React.memo(() => {
 
 // ---------- Acts View ----------
 
-interface Scene {
-  title: string;
-  line: number;
-  preview: string;
-}
-
-interface Act {
-  title: string;
-  line: number;
-  scenes: Scene[];
-}
-
-const ACT_REGEX =
-  /^(第[一二三四五六七八九十百千\d]+幕|#{1,2}\s+ACT\s+\w+|#{1,2}\s+第[一二三四五六七八九十百千\d]+幕)\s*(.*)/i;
-const SCENE_REGEX =
-  /^(第[一二三四五六七八九十百千\d]+[场景]|#{2,3}\s+SCENE\s+\w+|#{2,3}\s+场景\s*\d*)\s*(.*)/i;
 const ACT_COLORS = ['#007acc', '#4ec9b0', '#c586c0', '#dcdcaa', '#9cdcfe', '#f14c4c'];
 
 const ActsView: React.FC<{ content: string; onScrollToLine?: (line: number) => void }> = React.memo(
@@ -506,42 +467,7 @@ const ActsView: React.FC<{ content: string; onScrollToLine?: (line: number) => v
     const [activeAct, setActiveAct] = useState<number | null>(null);
     const [activeScene, setActiveScene] = useState<string | null>(null);
 
-    const acts = useMemo(() => {
-      const lines = content.split('\n');
-      const result: Act[] = [];
-      let currentAct: Act | null = null;
-
-      for (let index = 0; index < lines.length; index++) {
-        const line = lines[index];
-        const actMatch = line.match(ACT_REGEX);
-        if (actMatch) {
-          currentAct = {
-            title: (actMatch[1] + ' ' + (actMatch[2] || '')).trim(),
-            line: index + 1,
-            scenes: [],
-          };
-          result.push(currentAct);
-          continue;
-        }
-        const sceneMatch = line.match(SCENE_REGEX);
-        if (sceneMatch && currentAct) {
-          let preview = '';
-          for (let j = index + 1; j < Math.min(index + 4, lines.length); j++) {
-            const trimmed = lines[j].trim();
-            if (trimmed && !trimmed.match(/^#{1,6}\s/) && !trimmed.match(/^第/)) {
-              preview = trimmed;
-              break;
-            }
-          }
-          currentAct.scenes.push({
-            title: (sceneMatch[1] + ' ' + (sceneMatch[2] || '')).trim(),
-            line: index + 1,
-            preview: preview.length > 40 ? preview.slice(0, 40) + '...' : preview,
-          });
-        }
-      }
-      return result;
-    }, [content]);
+    const acts: ActNode[] = useMemo(() => extractActs(content), [content]);
 
     const handleActClick = useCallback(
       (actIdx: number, line: number) => {

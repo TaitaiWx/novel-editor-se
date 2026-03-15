@@ -59,8 +59,7 @@ linux:
 
 publish:
   provider: github
-  owner: "${GH_OWNER}"
-  repo: "${GH_REPO}"
 
 # Auto-update configuration
 # electron-updater reads this to check for updates on GitHub Releases
+# owner/repo are auto-detected from GITHUB_REPOSITORY env var in CI

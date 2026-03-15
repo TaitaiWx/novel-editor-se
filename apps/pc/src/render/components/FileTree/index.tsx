@@ -21,6 +21,8 @@ interface FileTreeProps {
   createTargetPath?: string | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
+  /** 需要自动展开到的文件路径（搜索定位时使用） */
+  revealPath?: string | null;
 }
 
 // 获取文件图标
@@ -141,6 +143,7 @@ const FileTreeItem: React.FC<{
   creatingType?: 'file' | 'directory' | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
+  revealPath?: string | null;
 }> = React.memo(
   ({
     node,
@@ -153,6 +156,7 @@ const FileTreeItem: React.FC<{
     creatingType,
     onInlineCreate,
     onCancelCreate,
+    revealPath,
   }) => {
     const [isExpanded, setIsExpanded] = React.useState(false);
     const isSelected = selectedFile === node.path;
@@ -161,6 +165,17 @@ const FileTreeItem: React.FC<{
     // Auto-expand directory if it's the creation target
     const isCreateTarget =
       !!creatingType && node.type === 'directory' && node.path === createTargetPath;
+
+    // Auto-expand directory if revealPath is a descendant
+    const isRevealAncestor =
+      !!revealPath &&
+      node.type === 'directory' &&
+      (revealPath.startsWith(node.path + '/') || revealPath.startsWith(node.path + '\\'));
+
+    React.useEffect(() => {
+      if (isRevealAncestor) setIsExpanded(true);
+    }, [isRevealAncestor]);
+
     const effectiveExpanded = isExpanded || isCreateTarget;
 
     const handleClick = () => {
@@ -227,6 +242,7 @@ const FileTreeItem: React.FC<{
                 creatingType={creatingType}
                 onInlineCreate={onInlineCreate}
                 onCancelCreate={onCancelCreate}
+                revealPath={revealPath}
               />
             ))}
           </div>
@@ -255,6 +271,7 @@ const FileTree: React.FC<FileTreeProps> = ({
   createTargetPath,
   onInlineCreate,
   onCancelCreate,
+  revealPath,
 }) => {
   const sortedFiles = useMemo(() => sortNodes(files), [files]);
   const [fileInfoMap, setFileInfoMap] = useState<Map<string, FileInfo>>(new Map());
@@ -268,7 +285,7 @@ const FileTree: React.FC<FileTreeProps> = ({
       ? (sortedFiles.find((n) => n.path === selectedFile)?.path ?? null)
       : null;
 
-  // 批量获取所有文件信息（单次 IPC 调用代替 N 次）
+  // 增量获取文件信息（仅请求新增路径，已有路径直接复用）
   useEffect(() => {
     const paths = collectFilePaths(files);
     if (paths.length === 0) {
@@ -276,22 +293,51 @@ const FileTree: React.FC<FileTreeProps> = ({
       return;
     }
 
-    // 并行获取，但只发一轮 Promise.allSettled
+    let cancelled = false;
+
+    // 找出尚未获取的路径
+    const pathsToFetch = paths.filter((p) => !fileInfoMap.has(p));
+    if (pathsToFetch.length === 0) {
+      // 只需清理不存在的条目
+      const pathSet = new Set(paths);
+      setFileInfoMap((prev) => {
+        const next = new Map<string, FileInfo>();
+        for (const [k, v] of prev) {
+          if (pathSet.has(k)) next.set(k, v);
+        }
+        return next;
+      });
+      return;
+    }
+
     Promise.allSettled(
-      paths.map((p) =>
+      pathsToFetch.map((p) =>
         window.electron.ipcRenderer
           .invoke('get-file-info', p)
           .then((info: FileInfo) => ({ path: p, info }))
       )
     ).then((results) => {
-      const map = new Map<string, FileInfo>();
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          map.set(r.value.path, r.value.info);
+      if (cancelled) return;
+      const pathSet = new Set(paths);
+      setFileInfoMap((prev) => {
+        const next = new Map<string, FileInfo>();
+        // 保留仍存在的旧条目
+        for (const [k, v] of prev) {
+          if (pathSet.has(k)) next.set(k, v);
         }
-      }
-      setFileInfoMap(map);
+        // 合入新获取的条目
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            next.set(r.value.path, r.value.info);
+          }
+        }
+        return next;
+      });
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [files]);
 
   return (
@@ -316,6 +362,7 @@ const FileTree: React.FC<FileTreeProps> = ({
             creatingType={creatingType}
             onInlineCreate={onInlineCreate}
             onCancelCreate={onCancelCreate}
+            revealPath={revealPath}
           />
           {/* Render input after the selected root-level item */}
           {selectedRootPath === file.path && creatingType && onInlineCreate && onCancelCreate && (

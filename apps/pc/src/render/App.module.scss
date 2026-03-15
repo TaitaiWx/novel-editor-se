@@ -69,13 +69,7 @@
 
 /* ========== Focus Mode ========== */
 .focusMode {
-  .appMain {
-    // In focus mode, editor takes full space
-  }
-
-  .centerPanel {
-    max-width: 100%;
-  }
+  /* 专注模式：编辑器全宽，仅隐藏 TitleBar / Sidebar / RightPanel / StatusBar */
 }
 
 .exitFocusBtn {

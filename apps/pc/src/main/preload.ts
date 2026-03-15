@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electron', {
       const validChannels = [
         'open-local-folder',
         'read-file',
+        'read-file-binary',
         'write-file',
         'get-file-info',
         'get-default-data-path',
@@ -50,6 +51,15 @@ contextBridge.exposeInMainWorld('electron', {
         'db-import',
         'db-export-to-file',
         'db-import-from-file',
+        // SQLite 版本快照
+        'db-version-create',
+        'db-version-start-create',
+        'db-version-job-status',
+        'db-version-list',
+        'db-version-delete',
+        'db-version-rename',
+        'db-version-get-file-content',
+        'db-version-restore-file',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);

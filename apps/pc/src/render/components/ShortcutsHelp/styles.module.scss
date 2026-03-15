@@ -1,27 +1,3 @@
-.helpButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: #d4d4d4;
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-    transform: scale(1.1);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-}
-
 .overlay {
   position: fixed;
   top: 0;
@@ -139,6 +115,25 @@
   flex: 1;
   margin-left: 16px;
   text-align: left;
+}
+
+.categoryGroup {
+  margin-bottom: 16px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.categoryTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 4px 8px;
+  border-bottom: 1px solid #333;
+  margin-bottom: 8px;
 }
 
 // 响应式调整

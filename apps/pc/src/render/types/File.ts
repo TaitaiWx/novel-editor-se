@@ -25,4 +25,5 @@ export interface FileInfo {
 export interface ShortcutInfo {
   accelerator: string;
   description: string;
+  category?: '文件' | '编辑' | '视图' | '应用';
 }

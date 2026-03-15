@@ -6,6 +6,9 @@ import ContentPanel from './components/ContentPanel';
 import RightPanel from './components/RightPanel';
 import StatusBar from './components/StatusBar';
 import ContextMenu from './components/ContextMenu';
+import ShortcutsHelp from './components/ShortcutsHelp';
+import VersionTimeline from './components/VersionTimeline';
+import DiffEditor from './components/DiffEditor';
 import { useToast } from './components/Toast';
 import { useDialog } from './components/Dialog';
 import type { ContextMenuEvent } from './components/FileTree';
@@ -55,6 +58,15 @@ const App: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [creatingType, setCreatingType] = useState<CreatingType>(null);
   const [scrollToLine, setScrollToLine] = useState<{ line: number; id: number } | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [editorReloadToken, setEditorReloadToken] = useState(0);
+  const [diffState, setDiffState] = useState<{
+    original: string;
+    modified: string;
+    originalLabel: string;
+    modifiedLabel: string;
+  } | null>(null);
 
   // Untitled tab counter
   const untitledCounterRef = useRef(0);
@@ -73,6 +85,25 @@ const App: React.FC = () => {
   sidebarCollapsedRef.current = sidebarCollapsed;
   const rightPanelCollapsedRef = useRef(rightPanelCollapsed);
   rightPanelCollapsedRef.current = rightPanelCollapsed;
+
+  const initializeProjectStore = useCallback(async (projectFolderPath: string) => {
+    if (!window.electron?.ipcRenderer) return;
+    const dbDir = `${projectFolderPath}/.novel-editor`;
+    await window.electron.ipcRenderer.invoke('db-init', dbDir);
+    const existing = await window.electron.ipcRenderer.invoke(
+      'db-novel-get-by-folder',
+      projectFolderPath
+    );
+    if (!existing) {
+      const projectName = projectFolderPath.split('/').pop() || projectFolderPath;
+      await window.electron.ipcRenderer.invoke(
+        'db-novel-create',
+        projectName,
+        projectFolderPath,
+        ''
+      );
+    }
+  }, []);
 
   // Tab helpers
   const openFileInTab = useCallback((filePath: string) => {
@@ -151,6 +182,7 @@ const App: React.FC = () => {
         return;
       }
       const defaultPath = await window.electron.ipcRenderer.invoke('get-default-data-path');
+      await initializeProjectStore(defaultPath);
       const result = await window.electron.ipcRenderer.invoke('refresh-folder', defaultPath);
       if (result) {
         setFolderPath(result.path);
@@ -161,7 +193,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [initializeProjectStore]);
 
   const handleOpenLocal = useCallback(async () => {
     setIsLoading(true);
@@ -172,6 +204,7 @@ const App: React.FC = () => {
       }
       const result = await window.electron.ipcRenderer.invoke('open-local-folder');
       if (result) {
+        await initializeProjectStore(result.path);
         setFolderPath(result.path);
         setFiles(result.files);
         setOpenTabs([]);
@@ -183,7 +216,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, initializeProjectStore]);
 
   const handleCreateFile = useCallback(() => {
     if (!folderPathRef.current) return;
@@ -325,25 +358,32 @@ const App: React.FC = () => {
     const onNewFile = () => handleCreateFile();
     const onOpenFolder = () => handleOpenLocal();
     const onKeyDown = (e: KeyboardEvent) => {
-      // Cmd+B: toggle sidebar
-      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+      const mod = e.ctrlKey || e.metaKey;
+      // Cmd+Q: 退出应用（渲染进程兜底，确保 Menu accelerator 失效时仍可退出）
+      if (mod && e.key === 'q') {
+        e.preventDefault();
+        window.electron?.ipcRenderer?.invoke('app-quit');
+        return;
+      }
+      // Cmd+B: 切换侧边栏
+      if (mod && e.key === 'b') {
         e.preventDefault();
         setSidebarCollapsed((prev) => !prev);
       }
-      // Cmd+Shift+F or F11: toggle focus mode
-      if (e.key === 'F11' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f')) {
+      // Cmd+Shift+F 或 F11: 切换专注模式
+      if (e.key === 'F11' || (mod && e.shiftKey && e.key === 'f')) {
         e.preventDefault();
         toggleFocusMode();
       }
-      // Cmd+W: close current tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+      // Cmd+W: 关闭当前标签
+      if (mod && e.key === 'w') {
         e.preventDefault();
         if (activeTabRef.current) {
           closeTab(activeTabRef.current);
         }
       }
-      // Cmd+N: new untitled tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+      // Cmd+N: 新建标签
+      if (mod && e.key === 'n') {
         e.preventDefault();
         handleNewTab();
       }
@@ -437,10 +477,36 @@ const App: React.FC = () => {
     setScrollToLine({ line, id: ++scrollIdRef.current });
   }, []);
 
+  const handleDiffRequest = useCallback(
+    (original: string, modified: string, originalLabel: string, modifiedLabel: string) => {
+      setDiffState({ original, modified, originalLabel, modifiedLabel });
+    },
+    []
+  );
+
+  const handleCloseDiff = useCallback(() => {
+    setDiffState(null);
+  }, []);
+
+  const handleVersionRestore = useCallback(
+    async (restoredFilePath: string) => {
+      await refreshCurrentFolder();
+      if (activeTabRef.current === restoredFilePath) {
+        setEditorReloadToken((prev) => prev + 1);
+      }
+    },
+    [refreshCurrentFolder]
+  );
+
   return (
     <div className={`${styles.app} ${focusMode ? styles.focusMode : ''}`}>
       {!focusMode && (
-        <TitleBar title="小说编辑器" focusMode={focusMode} onToggleFocusMode={toggleFocusMode} />
+        <TitleBar
+          title="小说编辑器"
+          focusMode={focusMode}
+          onToggleFocusMode={toggleFocusMode}
+          onShowShortcuts={() => setShowShortcuts(true)}
+        />
       )}
 
       <div className={styles.appMain}>
@@ -481,17 +547,28 @@ const App: React.FC = () => {
 
         {/* 中间内容面板 */}
         <div className={styles.centerPanel}>
-          <ContentPanel
-            openTabs={openTabs}
-            activeTab={activeTab}
-            encoding={encoding}
-            scrollToLine={scrollToLine}
-            onTabSelect={setActiveTab}
-            onTabClose={closeTab}
-            onContentChange={handleContentChange}
-            onCursorChange={handleCursorChange}
-            onSaveUntitled={handleSaveUntitled}
-          />
+          {diffState ? (
+            <DiffEditor
+              original={diffState.original}
+              modified={diffState.modified}
+              originalLabel={diffState.originalLabel}
+              modifiedLabel={diffState.modifiedLabel}
+              onClose={handleCloseDiff}
+            />
+          ) : (
+            <ContentPanel
+              openTabs={openTabs}
+              activeTab={activeTab}
+              reloadToken={editorReloadToken}
+              encoding={encoding}
+              scrollToLine={scrollToLine}
+              onTabSelect={setActiveTab}
+              onTabClose={closeTab}
+              onContentChange={handleContentChange}
+              onCursorChange={handleCursorChange}
+              onSaveUntitled={handleSaveUntitled}
+            />
+          )}
           {focusMode && (
             <button
               className={styles.exitFocusBtn}
@@ -514,6 +591,16 @@ const App: React.FC = () => {
         )}
       </div>
 
+      {/* 版本历史模态框 */}
+      <VersionTimeline
+        visible={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        folderPath={folderPath}
+        filePath={activeTab}
+        onDiffRequest={handleDiffRequest}
+        onRestoreFile={handleVersionRestore}
+      />
+
       {/* 状态栏 */}
       {!focusMode && (
         <StatusBar
@@ -523,6 +610,8 @@ const App: React.FC = () => {
           filePath={activeTab}
           encoding={encoding}
           onEncodingChange={setEncoding}
+          folderPath={folderPath}
+          onToggleVersionHistory={() => setShowVersionHistory((p) => !p)}
         />
       )}
 
@@ -535,6 +624,9 @@ const App: React.FC = () => {
           onClose={handleCloseContextMenu}
         />
       )}
+
+      {/* 快捷键帮助 */}
+      <ShortcutsHelp visible={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>
   );
 };

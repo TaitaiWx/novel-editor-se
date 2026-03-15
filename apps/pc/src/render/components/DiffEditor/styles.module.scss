@@ -1,0 +1,151 @@
+.diffEditor {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e1e;
+    overflow: hidden;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #252526;
+    border-bottom: 1px solid #2d2d2d;
+    flex-shrink: 0;
+}
+
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.label {
+    font-size: 13px;
+    color: #999;
+}
+
+.fileName {
+    font-size: 13px;
+    color: #d4d4d4;
+    font-family: 'Fira Code', 'Monaco', 'Menlo', monospace;
+}
+
+.headerRight {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.closeButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #666;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #d4d4d4;
+    }
+}
+
+.mergeContainer {
+    flex: 1;
+    overflow: auto;
+
+    :global(.cm-mergeView) {
+        height: 100%;
+    }
+
+    :global(.cm-mergeViewEditor) {
+        height: 100%;
+    }
+
+    :global(.cm-editor) {
+        height: 100%;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 14px;
+    }
+
+    :global(.cm-content) {
+        padding: 12px 0;
+        line-height: 1.6;
+        caret-color: #d4d4d4;
+    }
+
+    :global(.cm-cursor) {
+        border-left-color: #d4d4d4;
+    }
+
+    :global(.cm-gutters) {
+        background: #1e1e1e;
+        color: #555;
+        border: none;
+        border-right: 1px solid #2d2d2d;
+    }
+
+    :global(.cm-scroller) {
+        overflow: auto;
+    }
+
+    :global(.cm-focused) {
+        outline: none;
+    }
+
+    // Diff 高亮色
+    :global(.cm-changedLine) {
+        background: rgba(0, 122, 204, 0.08);
+    }
+
+    :global(.cm-changedText) {
+        background: rgba(0, 122, 204, 0.2);
+    }
+
+    :global(.cm-deletedChunk) {
+        background: rgba(241, 76, 76, 0.08);
+    }
+
+    :global(.cm-insertedLine) {
+        background: rgba(78, 201, 176, 0.08);
+    }
+
+    // Scrollbar
+    :global(.cm-scroller)::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    :global(.cm-scroller)::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    :global(.cm-scroller)::-webkit-scrollbar-thumb {
+        background: #424242;
+        border-radius: 4px;
+    }
+
+    :global(.cm-scroller)::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+}
+
+.emptyState {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #666;
+    font-size: 14px;
+}

@@ -1,7 +1,9 @@
 import Database from 'better-sqlite3';
+import { mkdirSync } from 'fs';
 import path from 'path';
 
 let db: Database.Database | null = null;
+let currentDbPath: string | null = null;
 
 /**
  * 初始化 SQLite 数据库连接
@@ -9,10 +11,18 @@ let db: Database.Database | null = null;
  * @param dbName 数据库文件名（默认 novel-editor.db）
  */
 export function initDatabase(dbDir: string, dbName = 'novel-editor.db'): Database.Database {
-  if (db) return db;
-
   const dbPath = path.join(dbDir, dbName);
+  mkdirSync(dbDir, { recursive: true });
+
+  if (db && currentDbPath === dbPath) return db;
+
+  if (db && currentDbPath !== dbPath) {
+    db.close();
+    db = null;
+  }
+
   db = new Database(dbPath);
+  currentDbPath = dbPath;
 
   // 启用 WAL 模式以获得更好的并发性能
   db.pragma('journal_mode = WAL');
@@ -33,6 +43,7 @@ export function closeDatabase(): void {
   if (db) {
     db.close();
     db = null;
+    currentDbPath = null;
   }
 }
 
@@ -129,6 +140,47 @@ function createTables(database: Database.Database): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    -- 版本快照（项目级）
+    CREATE TABLE IF NOT EXISTS version_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      novel_id INTEGER NOT NULL,
+      message TEXT NOT NULL,
+      total_files INTEGER DEFAULT 0,
+      total_bytes INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
+    );
+
+    -- 内容寻址的 Blob 存储，用于文本、图片、音频和其他二进制素材去重
+    CREATE TABLE IF NOT EXISTS version_blobs (
+      content_hash TEXT PRIMARY KEY,
+      content BLOB NOT NULL,
+      byte_size INTEGER NOT NULL,
+      is_binary INTEGER NOT NULL DEFAULT 0,
+      mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- 每个快照内的文件清单
+    CREATE TABLE IF NOT EXISTS version_entries (
+      snapshot_id INTEGER NOT NULL,
+      relative_path TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      byte_size INTEGER NOT NULL,
+      is_binary INTEGER NOT NULL DEFAULT 0,
+      mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+      PRIMARY KEY (snapshot_id, relative_path),
+      FOREIGN KEY (snapshot_id) REFERENCES version_snapshots(id) ON DELETE CASCADE,
+      FOREIGN KEY (content_hash) REFERENCES version_blobs(content_hash) ON DELETE RESTRICT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_version_snapshots_novel_id_created_at
+      ON version_snapshots (novel_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_version_entries_relative_path
+      ON version_entries (relative_path);
+    CREATE INDEX IF NOT EXISTS idx_version_entries_content_hash
+      ON version_entries (content_hash);
   `);
 }
 
@@ -298,6 +350,9 @@ export interface ExportData {
   world_settings: Record<string, unknown>[];
   writing_stats: Record<string, unknown>[];
   settings: Record<string, unknown>[];
+  version_snapshots: Record<string, unknown>[];
+  version_entries: Record<string, unknown>[];
+  version_blobs: Record<string, unknown>[];
 }
 
 /** 导出所有数据为 JSON（方便迁移） */
@@ -320,6 +375,18 @@ export function exportAllData(): ExportData {
       unknown
     >[],
     settings: database.prepare('SELECT * FROM settings').all() as Record<string, unknown>[],
+    version_snapshots: database.prepare('SELECT * FROM version_snapshots').all() as Record<
+      string,
+      unknown
+    >[],
+    version_entries: database.prepare('SELECT * FROM version_entries').all() as Record<
+      string,
+      unknown
+    >[],
+    version_blobs: database.prepare('SELECT * FROM version_blobs').all() as Record<
+      string,
+      unknown
+    >[],
   };
 }
 
@@ -327,6 +394,9 @@ export function exportAllData(): ExportData {
 export function importData(data: ExportData): void {
   const database = getDatabase();
   const tables = [
+    'version_entries',
+    'version_snapshots',
+    'version_blobs',
     'settings',
     'writing_stats',
     'world_settings',
@@ -364,5 +434,8 @@ export function importData(data: ExportData): void {
     insertRows('world_settings', data.world_settings);
     insertRows('writing_stats', data.writing_stats);
     insertRows('settings', data.settings);
+    insertRows('version_blobs', data.version_blobs || []);
+    insertRows('version_snapshots', data.version_snapshots || []);
+    insertRows('version_entries', data.version_entries || []);
   })();
 }

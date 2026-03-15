@@ -13,8 +13,80 @@ import {
   settingsOps,
   exportAllData,
   importData,
+  versionOps,
   type ExportData,
 } from '@novel-editor/store';
+
+interface SnapshotJobState {
+  id: string;
+  status: 'running' | 'completed' | 'failed';
+  stage: 'scanning' | 'persisting' | 'completed' | 'failed';
+  discoveredFiles: number;
+  processedFiles: number;
+  totalFiles: number;
+  processedBytes: number;
+  totalBytes: number;
+  snapshotId: number | null;
+  error: string | null;
+}
+
+const snapshotJobs = new Map<string, SnapshotJobState>();
+let snapshotJobCounter = 0;
+
+function createSnapshotJob(folderPath: string, message?: string): string {
+  const id = `snapshot-job-${Date.now()}-${++snapshotJobCounter}`;
+  snapshotJobs.set(id, {
+    id,
+    status: 'running',
+    stage: 'scanning',
+    discoveredFiles: 0,
+    processedFiles: 0,
+    totalFiles: 0,
+    processedBytes: 0,
+    totalBytes: 0,
+    snapshotId: null,
+    error: null,
+  });
+
+  void versionOps
+    .createSnapshot(folderPath, message, (progress) => {
+      const current = snapshotJobs.get(id);
+      if (!current) return;
+      snapshotJobs.set(id, {
+        ...current,
+        stage: progress.stage,
+        discoveredFiles: progress.discoveredFiles,
+        processedFiles: progress.processedFiles,
+        totalFiles: progress.totalFiles,
+        processedBytes: progress.processedBytes,
+        totalBytes: progress.totalBytes,
+      });
+    })
+    .then((snapshotId) => {
+      const current = snapshotJobs.get(id);
+      if (!current) return;
+      snapshotJobs.set(id, {
+        ...current,
+        status: 'completed',
+        stage: 'completed',
+        snapshotId,
+      });
+      setTimeout(() => snapshotJobs.delete(id), 60_000);
+    })
+    .catch((error) => {
+      const current = snapshotJobs.get(id);
+      if (!current) return;
+      snapshotJobs.set(id, {
+        ...current,
+        status: 'failed',
+        stage: 'failed',
+        error: error instanceof Error ? error.message : '未知错误',
+      });
+      setTimeout(() => snapshotJobs.delete(id), 60_000);
+    });
+
+  return id;
+}
 
 // 类型定义
 export interface FileNode {
@@ -34,6 +106,21 @@ function convertTreeFormat(node: dirTree.DirectoryTree): FileNode {
   };
 }
 
+function guessMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeByExt: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.pdf': 'application/pdf',
+  };
+
+  return mimeByExt[ext] || 'application/octet-stream';
+}
+
 // 设置IPC通信处理程序
 export function setupIPC() {
   // 打开本地文件夹
@@ -46,7 +133,7 @@ export function setupIPC() {
     if (!result.canceled && result.filePaths.length > 0) {
       const folderPath = result.filePaths[0];
       const tree = dirTree(folderPath, {
-        exclude: /node_modules|\.git|\.vscode|\.DS_Store|dist|build|out/,
+        exclude: /node_modules|\.git|\.novel-editor|\.vscode|\.DS_Store|dist|build|out/,
         attributes: ['type'],
       });
 
@@ -70,6 +157,20 @@ export function setupIPC() {
     } catch (error) {
       console.error('Error reading file:', error);
       throw new Error(`Failed to read file: ${filePath}`);
+    }
+  });
+
+  ipcMain.handle('read-file-binary', async (_event, filePath: string) => {
+    try {
+      const buffer = await readFile(filePath);
+      return {
+        base64Content: buffer.toString('base64'),
+        byteSize: buffer.byteLength,
+        mimeType: guessMimeType(filePath),
+      };
+    } catch (error) {
+      console.error('Error reading binary file:', error);
+      throw new Error(`Failed to read binary file: ${filePath}`);
     }
   });
 
@@ -194,7 +295,7 @@ export function setupIPC() {
   ipcMain.handle('refresh-folder', async (event, folderPath: string) => {
     try {
       const tree = dirTree(folderPath, {
-        exclude: /node_modules|\.git|\.vscode|\.DS_Store|dist|build|out/,
+        exclude: /node_modules|\.git|\.novel-editor|\.vscode|\.DS_Store|dist|build|out/,
         attributes: ['type'],
       });
 
@@ -426,4 +527,48 @@ export function setupIPC() {
     importData(data);
     return { success: true, filePath: result.filePaths[0] };
   });
+
+  // ========== SQLite 版本快照 IPC ==========
+
+  ipcMain.handle('db-version-create', async (_event, folderPath: string, message?: string) => {
+    return versionOps.createSnapshot(folderPath, message);
+  });
+
+  ipcMain.handle('db-version-start-create', (_event, folderPath: string, message?: string) => {
+    return createSnapshotJob(folderPath, message);
+  });
+
+  ipcMain.handle('db-version-job-status', (_event, jobId: string) => {
+    return snapshotJobs.get(jobId) || null;
+  });
+
+  ipcMain.handle(
+    'db-version-list',
+    (_event, folderPath: string, filePath?: string, limit?: number) =>
+      versionOps.listSnapshots(folderPath, filePath, limit)
+  );
+
+  ipcMain.handle('db-version-delete', async (_event, snapshotId: number) => {
+    versionOps.deleteSnapshot(snapshotId);
+    return { success: true };
+  });
+
+  ipcMain.handle('db-version-rename', async (_event, snapshotId: number, message: string) => {
+    versionOps.renameSnapshot(snapshotId, message);
+    return { success: true };
+  });
+
+  ipcMain.handle(
+    'db-version-get-file-content',
+    (_event, folderPath: string, snapshotId: number, filePath: string) =>
+      versionOps.getSnapshotFileContent(folderPath, snapshotId, filePath)
+  );
+
+  ipcMain.handle(
+    'db-version-restore-file',
+    async (_event, folderPath: string, snapshotId: number, filePath: string) => {
+      await versionOps.restoreFileFromSnapshot(folderPath, snapshotId, filePath);
+      return { success: true };
+    }
+  );
 }
