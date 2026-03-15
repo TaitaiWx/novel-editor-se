@@ -9,7 +9,9 @@ const __dirname = dirname(__filename);
 
 function resolveBrandingIconPath() {
   const candidatePaths = [
+    join(__dirname, '..', 'resources', 'icon.png'),
     join(__dirname, '..', 'resources', 'branding', 'app-badge.png'),
+    join(process.resourcesPath, 'icon.png'),
     join(process.resourcesPath, 'branding', 'app-badge.png'),
   ];
 

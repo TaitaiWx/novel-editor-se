@@ -68,6 +68,11 @@ jobs:
         run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never
         working-directory: apps/pc
         env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NOVEL_EDITOR_RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
 

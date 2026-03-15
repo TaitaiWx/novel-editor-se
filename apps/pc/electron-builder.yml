@@ -10,8 +10,11 @@ electronUpdaterCompatibility: '>=2.16'
 generateUpdatesFilesForAllChannels: true
 detectUpdateChannel: true
 afterAllArtifactBuild: ./scripts/prepare-update-metadata.mjs
+afterSign: ./scripts/notarize.mjs
 
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+asarUnpack:
+  - node_modules/better-sqlite3/**/*
 
 files:
   - dist/**/*
@@ -25,6 +28,7 @@ extraResources:
       - "**/*"
 
 mac:
+  icon: resources/icon.icns
   category: public.app-category.productivity
   target:
     - target: dmg
@@ -33,7 +37,11 @@ mac:
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
 
+dmg:
+  icon: resources/icon.icns
+
 win:
+  icon: resources/icon.ico
   target:
     - target: nsis
 
@@ -42,8 +50,12 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
 
 linux:
+  icon: resources/icon.png
   target:
     - target: AppImage
     - target: deb
