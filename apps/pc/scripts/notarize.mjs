@@ -16,13 +16,15 @@ export default async function notarizeApp(context) {
     throw new Error(`Cannot find built app for notarization at ${appPath}`);
   }
 
-  const keychainProfile = process.env.APPLE_KEYCHAIN_PROFILE;
-  const hasApiKeyAuth = Boolean(keychainProfile);
+  const appleApiKeyPath = process.env.APPLE_API_KEY_PATH;
+  const hasApiKeyAuth = Boolean(
+    process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER && appleApiKeyPath
+  );
 
   if (!hasApiKeyAuth) {
     if (isCi) {
       throw new Error(
-        'Missing App Store Connect API key credentials for macOS release build. Configure APPLE_KEYCHAIN_PROFILE in CI.'
+        'Missing App Store Connect API key credentials for macOS release build. Configure APPLE_API_KEY_PATH, APPLE_API_KEY_ID and APPLE_API_ISSUER in CI.'
       );
     }
 
@@ -35,7 +37,9 @@ export default async function notarizeApp(context) {
   await notarize({
     appBundleId,
     appPath,
-    keychainProfile,
+    appleApiKey: appleApiKeyPath,
+    appleApiKeyId: process.env.APPLE_API_KEY_ID,
+    appleApiIssuer: process.env.APPLE_API_ISSUER,
     tool: 'notarytool',
   });
   console.log('[notarize] App notarization completed with App Store Connect API key.');
