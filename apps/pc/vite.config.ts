@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
+import { builtinModules } from 'node:module';
 
 export default defineConfig(({ mode }) => {
   const isElectronMain = process.env.VITE_ELECTRON_MAIN === 'true';
@@ -45,25 +46,11 @@ export default defineConfig(({ mode }) => {
           fileName: () => 'main.mjs',
         },
         rollupOptions: {
-          external: [
-            'electron',
-            'crypto',
-            'fs',
-            'path',
-            'url',
-            'os',
-            'child_process',
-            'http',
-            'https',
-            'util',
-            'events',
-            'fs/promises',
-            'directory-tree',
-            'fs-extra',
-            'electron-updater',
-            'better-sqlite3',
-            /^node:/,
-          ],
+          external: (id: string) => {
+            if (id === 'electron' || id === 'better-sqlite3') return true;
+            if (id.startsWith('node:')) return true;
+            return builtinModules.includes(id.split('/')[0]);
+          },
           output: {
             format: 'es',
             entryFileNames: 'main.mjs',
