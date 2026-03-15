@@ -35,6 +35,9 @@
     "typescript": "^5.7.3"
   },
   "pnpm": {
+    "overrides": {
+      "@electron/node-gyp": "10.2.0-electron.2"
+    },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
       "better-sqlite3",
