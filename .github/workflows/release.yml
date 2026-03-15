@@ -56,9 +56,32 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           CI: true
+
+      - name: Install target native app deps
+        run: pnpm exec electron-builder install-app-deps ${{ matrix.electron-args }}
+        working-directory: apps/pc
+
+      - name: Prepare App Store Connect API credentials
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 177
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY" > "$key_path"
+          xcrun notarytool store-credentials novel-editor-notary \
+            --key "$key_path" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER"
+          rm -f "$key_path"
+          echo "APPLE_KEYCHAIN_PROFILE=novel-editor-notary" >> "$GITHUB_ENV"
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
       - name: Build application
         run: pnpm build
@@ -69,9 +92,7 @@ jobs:
         run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never
         working-directory: apps/pc
         env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_KEYCHAIN_PROFILE: ${{ env.APPLE_KEYCHAIN_PROFILE }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

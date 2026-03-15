@@ -12,9 +12,10 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.8.0",
     "rimraf": "^6.0.1"
   },
-  "dependencies": {
+  "peerDependencies": {
     "better-sqlite3": "^12.8.0"
   }
 }

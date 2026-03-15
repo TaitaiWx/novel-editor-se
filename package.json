@@ -9,13 +9,11 @@
   },
   "packageManager": "pnpm@10.12.4",
   "scripts": {
-    "postinstall": "pnpm run rebuild:native",
     "version": "node ./scripts/sync-app-versions.mjs && git add package.json apps/*/package.json",
     "dev": "pnpm --filter @novel-editor/pc dev",
     "build": "pnpm --filter @novel-editor/pc build",
     "start": "pnpm --filter @novel-editor/pc start",
     "package": "pnpm --filter @novel-editor/pc package",
-    "rebuild:native": "pnpm --filter @novel-editor/pc run rebuild:native",
     "lint": "eslint 'apps/*/src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}'",
     "lint:fix": "eslint 'apps/*/src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}' --fix",
     "format": "prettier --write 'apps/*/src/**/*.{ts,tsx,css,scss}' 'packages/*/src/**/*.{ts,tsx,css,scss}'",

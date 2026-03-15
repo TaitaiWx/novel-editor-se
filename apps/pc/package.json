@@ -11,12 +11,12 @@
   },
   "main": "./dist/main.mjs",
   "scripts": {
+    "postinstall": "electron-builder install-app-deps",
     "dev": "cross-env NODE_ENV=development concurrently --kill-others --success first \"pnpm build:main && pnpm build:preload && pnpm build:renderer --watch\" \"wait-on dist/main.mjs && nodemon --watch src/main --ext ts,mjs --exec electron .\"",
     "build:main": "cross-env VITE_ELECTRON_MAIN=true vite build",
     "build:preload": "cross-env VITE_PRELOAD=true vite build",
     "build:renderer": "vite build",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
-    "rebuild:native": "node ./scripts/rebuild-native.mjs",
     "start": "electron .",
     "build:prod": "cross-env NODE_ENV=production pnpm build",
     "package": "pnpm build:prod && electron-builder",
@@ -47,7 +47,6 @@
     "react-icons": "^5.5.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.1",
     "@electron/notarize": "^3.1.0",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.0.10",
@@ -60,7 +59,6 @@
     "electron": "^28.0.0",
     "electron-builder": "^24.0.0",
     "nodemon": "^3.1.0",
-    "prebuild-install": "^7.1.3",
     "rimraf": "^6.0.1",
     "sass": "^1.72.0",
     "vite": "^6.2.0",

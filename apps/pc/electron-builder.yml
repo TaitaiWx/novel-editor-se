@@ -11,6 +11,7 @@ generateUpdatesFilesForAllChannels: true
 detectUpdateChannel: true
 afterAllArtifactBuild: ./scripts/prepare-update-metadata.mjs
 afterSign: ./scripts/notarize.mjs
+npmRebuild: false
 
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 asarUnpack:
