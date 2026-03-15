@@ -21,21 +21,27 @@ jobs:
       matrix:
         include:
           - os: macos-latest
+            platform: darwin
             arch: x64
             electron-args: --x64
           - os: macos-latest
+            platform: darwin
             arch: arm64
             electron-args: --arm64
           - os: windows-latest
+            platform: win32
             arch: ia32
             electron-args: --ia32
           - os: windows-latest
+            platform: win32
             arch: x64
             electron-args: --x64
           - os: windows-latest
+            platform: win32
             arch: arm64
             electron-args: --arm64
           - os: ubuntu-latest
+            platform: linux
             arch: x64
             electron-args: --x64
 
@@ -61,7 +67,7 @@ jobs:
           CI: true
 
       - name: Install target native app deps
-        run: pnpm exec electron-builder install-app-deps ${{ matrix.electron-args }}
+        run: pnpm exec electron-builder install-app-deps --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
         working-directory: apps/pc
 
       - name: Prepare App Store Connect API credentials
