@@ -52,6 +52,11 @@ export default defineConfig(({ mode }) => {
             'path',
             'url',
             'os',
+            'child_process',
+            'http',
+            'https',
+            'util',
+            'events',
             'fs/promises',
             'directory-tree',
             'fs-extra',
@@ -96,26 +101,8 @@ export default defineConfig(({ mode }) => {
               return 'vendor-pdf';
             }
 
-            if (id.includes('@codemirror/merge')) {
-              return 'vendor-diff';
-            }
-
-            if (id.includes('@codemirror/lang-') || id.includes('@lezer/')) {
-              return 'vendor-editor-lang';
-            }
-
-            if (
-              id.includes('@codemirror/state') ||
-              id.includes('@codemirror/view') ||
-              id.includes('@codemirror/commands') ||
-              id.includes('@codemirror/search') ||
-              id.includes('@codemirror/language')
-            ) {
-              return 'vendor-editor-core';
-            }
-
-            if (id.includes('@codemirror')) {
-              return 'vendor-editor-extra';
+            if (id.includes('@codemirror') || id.includes('@lezer/')) {
+              return 'vendor-editor';
             }
 
             if (id.includes('react-icons')) {

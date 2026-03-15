@@ -4,6 +4,27 @@
 
 import type { FileInfo, OpenLocalResult, ShortcutInfo } from './File';
 
+export type UpdateChannel = 'stable' | 'beta' | 'canary';
+
+export interface UpdateStatus {
+  channel: UpdateChannel;
+  channelFile: string;
+  currentVersion: string;
+  checking: boolean;
+  updateReady: boolean;
+  availableVersion: string | null;
+  downloadedVersion: string | null;
+  downloadPercent: number | null;
+  channelVersion: string | null;
+  rolloutPercentage: number | null;
+  rolloutBucket: number;
+  rolloutEligible: boolean | null;
+  rollbackAvailable: boolean;
+  rollbackVersion: string | null;
+  pendingVersion: string | null;
+  lastError: string | null;
+}
+
 export interface ElectronAPI {
   ipcRenderer: {
     invoke(channel: 'open-local-folder'): Promise<OpenLocalResult | null>;
@@ -32,7 +53,11 @@ export interface ElectronAPI {
     invoke(channel: 'window-toggle-fullscreen'): Promise<void>;
     invoke(channel: 'get-shortcuts'): Promise<ShortcutInfo[]>;
     invoke(channel: 'get-app-version'): Promise<string>;
+    invoke(channel: 'update-check'): Promise<void>;
+    invoke(channel: 'update-status'): Promise<UpdateStatus>;
+    invoke(channel: 'update-set-channel', nextChannel: UpdateChannel): Promise<UpdateStatus>;
     invoke(channel: 'update-install'): Promise<void>;
+    invoke(channel: 'update-rollback'): Promise<{ version: string; installerPath: string }>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     on(channel: string, listener: (...args: any[]) => void): void;
     removeAllListeners(channel: string): void;

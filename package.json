@@ -21,6 +21,8 @@
     "format": "prettier --write 'apps/*/src/**/*.{ts,tsx,css,scss}' 'packages/*/src/**/*.{ts,tsx,css,scss}'",
     "clean": "pnpm -r clean && rm -rf node_modules dist",
     "typecheck": "pnpm -r typecheck",
+    "release:canary": "npm version prerelease --preid=alpha && git push origin main --follow-tags",
+    "release:canary:minor": "npm version preminor --preid=alpha && git push origin main --follow-tags",
     "release:beta": "npm version prerelease --preid=beta && git push origin main --follow-tags",
     "release:minor": "npm version preminor --preid=beta && git push origin main --follow-tags",
     "release:stable": "npm version minor && git push origin main --follow-tags"

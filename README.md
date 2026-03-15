@@ -58,6 +58,10 @@ pnpm dev
 pnpm build
 ```
 
+## 发布与自动更新
+
+发布与自动更新规范见 [docs/release-process.md](docs/release-process.md)。
+
 ## 项目结构
 
 ```

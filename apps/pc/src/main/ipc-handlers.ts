@@ -3,7 +3,14 @@ import dirTree from 'directory-tree';
 import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import path from 'path';
 import { getAllShortcuts } from './shortcuts/getAllShortcuts';
-import { downloadUpdate, installUpdate } from './auto-updater';
+import {
+  checkForUpdatesManually,
+  downloadUpdate,
+  getUpdateStatus,
+  installUpdate,
+  rollbackToPreviousVersion,
+  setUpdateChannel,
+} from './auto-updater';
 import {
   initDatabase,
   closeDatabase,
@@ -382,13 +389,19 @@ export function setupIPC() {
   });
 
   // 自动更新相关
-  ipcMain.handle('update-download', () => {
-    downloadUpdate();
-  });
+  ipcMain.handle('update-download', () => downloadUpdate());
 
-  ipcMain.handle('update-install', () => {
-    installUpdate();
-  });
+  ipcMain.handle('update-install', () => installUpdate());
+
+  ipcMain.handle('update-check', () => checkForUpdatesManually());
+
+  ipcMain.handle('update-status', () => getUpdateStatus());
+
+  ipcMain.handle('update-set-channel', (_event, channel: 'stable' | 'beta' | 'canary') =>
+    setUpdateChannel(channel)
+  );
+
+  ipcMain.handle('update-rollback', () => rollbackToPreviousVersion());
 
   // 删除文件
   ipcMain.handle('delete-file', async (event, filePath: string) => {

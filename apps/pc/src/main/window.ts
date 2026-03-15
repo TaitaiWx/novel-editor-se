@@ -1,4 +1,5 @@
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow, nativeImage } from 'electron';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -6,8 +7,18 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+function resolveBrandingIconPath() {
+  const candidatePaths = [
+    join(__dirname, '..', 'resources', 'branding', 'app-badge.png'),
+    join(process.resourcesPath, 'branding', 'app-badge.png'),
+  ];
+
+  return candidatePaths.find((candidatePath) => existsSync(candidatePath)) ?? null;
+}
+
 // 根据平台获取窗口配置
 function getWindowConfig() {
+  const iconPath = resolveBrandingIconPath();
   const baseConfig = {
     width: 1400,
     height: 900,
@@ -22,6 +33,7 @@ function getWindowConfig() {
     show: false, // 等待页面加载完成后再显示
     title: '小说编辑器',
     autoHideMenuBar: true, // 自动隐藏菜单栏（Windows/Linux）
+    icon: iconPath ?? undefined,
   };
 
   // 根据平台设置特定配置
@@ -49,6 +61,14 @@ function getWindowConfig() {
 export function createMainWindow(): BrowserWindow {
   const windowConfig = getWindowConfig();
   const mainWindow = new BrowserWindow(windowConfig);
+  const iconPath = resolveBrandingIconPath();
+
+  if (process.platform === 'darwin' && iconPath) {
+    const appIcon = nativeImage.createFromPath(iconPath);
+    if (!appIcon.isEmpty()) {
+      app.dock.setIcon(appIcon);
+    }
+  }
 
   // 加载应用页面
   mainWindow.loadFile(join(__dirname, 'index.html'));

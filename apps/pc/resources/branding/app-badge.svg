@@ -1,0 +1,21 @@
+<svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="badge-shell" x1="44" y1="36" x2="274" y2="284" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6EFE5" />
+      <stop offset="1" stop-color="#D9C5AB" />
+    </linearGradient>
+    <linearGradient id="badge-pen" x1="112" y1="92" x2="224" y2="228" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C87548" />
+      <stop offset="1" stop-color="#7E4025" />
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="284" height="284" rx="76" fill="#171310"/>
+  <rect x="36" y="36" width="248" height="248" rx="58" fill="url(#badge-shell)"/>
+  <circle cx="160" cy="160" r="88" fill="#FBF7F0"/>
+  <path d="M120 124H198" stroke="#A48C72" stroke-width="12" stroke-linecap="round"/>
+  <path d="M120 156H190" stroke="#B39A82" stroke-width="12" stroke-linecap="round"/>
+  <path d="M120 188H175" stroke="#C4AE96" stroke-width="12" stroke-linecap="round"/>
+  <path d="M127 212C132.2 193.4 142.4 167.6 157 142C171.2 117 186 98.6667 196 88" stroke="url(#badge-pen)" stroke-width="18" stroke-linecap="round"/>
+  <path d="M202.309 74.6974C205.89 71.116 211.697 71.116 215.279 74.6974L222.303 81.7218C225.884 85.3032 225.884 91.1099 222.303 94.6914L206.472 110.522L186.478 90.528L202.309 74.6974Z" fill="#8D4C2F"/>
+  <path d="M181.403 95.6032L201.397 115.597L169.285 124.362L181.403 95.6032Z" fill="#D98B56"/>
+</svg>

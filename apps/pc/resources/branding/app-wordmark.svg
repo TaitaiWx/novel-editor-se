@@ -1,0 +1,28 @@
+<svg width="720" height="180" viewBox="0 0 720 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="180" rx="28" fill="#171310"/>
+  <g transform="translate(22 22) scale(0.53)">
+    <defs>
+      <linearGradient id="wordmark-bg" x1="32" y1="24" x2="222" y2="232" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#F8EFE3" />
+        <stop offset="1" stop-color="#E3D3BC" />
+      </linearGradient>
+      <linearGradient id="wordmark-accent" x1="77" y1="64" x2="180" y2="192" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#B86A3F" />
+        <stop offset="1" stop-color="#7B3F25" />
+      </linearGradient>
+    </defs>
+    <rect x="18" y="18" width="220" height="220" rx="52" fill="#171310"/>
+    <rect x="30" y="30" width="196" height="196" rx="40" fill="url(#wordmark-bg)"/>
+    <path d="M77 70C77 60.6112 84.6112 53 94 53H164C173.389 53 181 60.6112 181 70V186C181 192.075 176.075 197 170 197H100C87.2975 197 77 186.703 77 174V70Z" fill="#FBF7F0"/>
+    <path d="M161 53L181 73V186C181 192.075 176.075 197 170 197H161V53Z" fill="#E8DCCA"/>
+    <path d="M96 89H151" stroke="#A0876E" stroke-width="10" stroke-linecap="round"/>
+    <path d="M96 116H146" stroke="#B39A82" stroke-width="10" stroke-linecap="round"/>
+    <path d="M96 143H153" stroke="#C1AA93" stroke-width="10" stroke-linecap="round"/>
+    <path d="M96 170H136" stroke="#CEB9A4" stroke-width="10" stroke-linecap="round"/>
+    <path d="M103 185C107.5 169.5 116.8 147.2 130 126C144.2 103.3 158.667 88.3333 168 80" stroke="url(#wordmark-accent)" stroke-width="14" stroke-linecap="round"/>
+    <path d="M171.651 68.74C174.439 65.9514 178.96 65.9514 181.749 68.74L187.259 74.25C190.047 77.0386 190.047 81.5601 187.259 84.3487L174.09 97.5176L158.482 81.9092L171.651 68.74Z" fill="#8C4B2E"/>
+    <path d="M154.519 85.8716L170.128 101.48L145.251 108.27L154.519 85.8716Z" fill="#D98D57"/>
+  </g>
+  <text x="180" y="82" fill="#F5EDE2" font-size="48" font-weight="700" font-family="'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', sans-serif">Novel Editor</text>
+  <text x="180" y="124" fill="#BFAE99" font-size="24" font-weight="500" font-family="'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', sans-serif">小说编辑器 · 结构化写作工作台</text>
+</svg>

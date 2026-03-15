@@ -6,11 +6,17 @@ directories:
   output: build
   buildResources: resources
 
+electronUpdaterCompatibility: '>=2.16'
+generateUpdatesFilesForAllChannels: true
+detectUpdateChannel: true
+afterAllArtifactBuild: ./scripts/prepare-update-metadata.mjs
+
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 files:
   - dist/**/*
   - package.json
+  - resources/branding/**/*
 
 extraResources:
   - from: ../../sample-data

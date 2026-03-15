@@ -5,6 +5,7 @@ import {
   VscChromeRestore,
   VscChromeClose,
 } from 'react-icons/vsc';
+import appMarkUrl from '../../../../resources/branding/app-mark.svg';
 import styles from './styles.module.scss';
 
 interface TitleBarProps {
@@ -80,7 +81,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
       <div className={styles.titleBarContent}>
         {/* 左侧：应用图标 + 标题 */}
         <div className={styles.titleSection}>
-          <div className={styles.appIcon}>📝</div>
+          <img className={styles.appIcon} src={appMarkUrl} alt="Novel Editor" />
           <span className={styles.appTitle}>{title}</span>
         </div>
 

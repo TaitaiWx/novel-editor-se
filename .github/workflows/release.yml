@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
 
+env:
+  NOVEL_EDITOR_STABLE_STAGING_PERCENTAGE: '100'
+  NOVEL_EDITOR_BETA_STAGING_PERCENTAGE: '25'
+  NOVEL_EDITOR_CANARY_STAGING_PERCENTAGE: '10'
+
 permissions:
   contents: write
 
@@ -14,14 +19,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS: 通过独立任务分别产出 x64 / arm64，避免单次打包同时触发双架构重建
           - os: macos-latest
             arch: x64
             electron-args: --x64
           - os: macos-latest
             arch: arm64
             electron-args: --arm64
-          # Windows: 单任务单架构，交给 CLI 参数控制目标架构
           - os: windows-latest
             arch: ia32
             electron-args: --ia32
@@ -31,7 +34,6 @@ jobs:
           - os: windows-latest
             arch: arm64
             electron-args: --arm64
-          # Linux runner 上 better-sqlite3 的跨架构重建不稳定，仅发布原生可稳定产出的 x64
           - os: ubuntu-latest
             arch: x64
             electron-args: --x64
@@ -41,11 +43,26 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Resolve release channel
+        id: release_channel
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME#v}"
+          if [[ "$TAG_NAME" == *-alpha.* ]]; then
+            echo "publish_channel=alpha" >> "$GITHUB_OUTPUT"
+            echo "release_type=prerelease" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG_NAME" == *-beta.* ]]; then
+            echo "publish_channel=beta" >> "$GITHUB_OUTPUT"
+            echo "release_type=prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish_channel=latest" >> "$GITHUB_OUTPUT"
+            echo "release_type=release" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -58,15 +75,16 @@ jobs:
         working-directory: apps/pc
 
       - name: Package Electron app
-        run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never
+        run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never -c.publish.channel=${{ steps.release_channel.outputs.publish_channel }}
         working-directory: apps/pc
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOVEL_EDITOR_RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
-          name: release-${{ runner.os }}-${{ matrix.arch }}
+          name: novel-editor-se-release-${{ runner.os }}-${{ matrix.arch }}
           path: |
             apps/pc/build/*.dmg
             apps/pc/build/*.zip
@@ -85,18 +103,46 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Resolve release channel
+        id: release_channel
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME#v}"
+          if [[ "$TAG_NAME" == *-alpha.* ]]; then
+            echo "publish_channel=alpha" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG_NAME" == *-beta.* ]]; then
+            echo "publish_channel=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish_channel=latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*
-          generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+      - name: Validate packaged artifacts
+        run: node scripts/validate-release-assets.mjs local
         env:
+          ARTIFACTS_DIR: artifacts
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
+
+      - name: Publish release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: artifacts/**/*
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          generateReleaseNotes: true
+          replacesArtifacts: true
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate published release assets
+        run: node scripts/validate-release-assets.mjs github
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
