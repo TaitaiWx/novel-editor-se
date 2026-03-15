@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15-intel
+          - os: macos-13
             platform: darwin
             arch: x64
             electron-args: --x64
@@ -46,7 +46,7 @@ jobs:
             electron-args: --x64
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v5
@@ -87,10 +87,10 @@ jobs:
           set -euo pipefail
           umask 177
           key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
-          printf '%s' "$APPLE_API_KEY" > "$key_path"
-          echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+          printf '%s' "$APPLE_API_KEY_CONTENT" > "$key_path"
+          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
         env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
 
       - name: Build application
@@ -102,7 +102,7 @@ jobs:
         run: pnpm exec electron-builder ${{ matrix.electron-args }} --publish never
         working-directory: apps/pc
         env:
-          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_API_KEY: ${{ env.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}

@@ -10,7 +10,6 @@ electronUpdaterCompatibility: '>=2.16'
 generateUpdatesFilesForAllChannels: true
 detectUpdateChannel: true
 afterAllArtifactBuild: ./scripts/prepare-update-metadata.mjs
-afterSign: ./scripts/notarize.mjs
 npmRebuild: false
 
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
@@ -31,7 +30,6 @@ extraResources:
 mac:
   icon: resources/icon.icns
   category: public.app-category.productivity
-  notarize: false
   target:
     - target: dmg
     - target: zip
