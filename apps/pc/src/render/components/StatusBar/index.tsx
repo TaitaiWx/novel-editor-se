@@ -321,7 +321,9 @@ const StatusBar: React.FC<StatusBarProps> = ({
                   !updateStatus.checking &&
                   typeof downloadPercent !== 'number' &&
                   !updateReady && (
-                    <div className={styles.panelFoundRow}>发现新版本 {updateStatus.availableVersion}</div>
+                    <div className={styles.panelFoundRow}>
+                      发现新版本 {updateStatus.availableVersion}
+                    </div>
                   )}
                 {/* Ready to install */}
                 {updateReady && updateStatus?.downloadedVersion && (
@@ -337,9 +339,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
                   </div>
                 )}
                 {/* Error */}
-                {lastError && (
-                  <div className={styles.panelError}>{lastError}</div>
-                )}
+                {lastError && <div className={styles.panelError}>{lastError}</div>}
               </div>
               {/* Check button */}
               <div className={styles.panelFooter}>
