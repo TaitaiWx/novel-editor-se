@@ -1,19 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { VscHistory, VscSync, VscError, VscCheck } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
-import type { UpdateStatus, UpdateChannel } from '@/render/types/electron-api';
+import type { UpdateStatus } from '@/render/types/electron-api';
 import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 
 const MAX_FILENAME_LEN = 20;
 
 const ENCODINGS = ['UTF-8', 'GBK', 'GB2312', 'Big5', 'Shift_JIS', 'EUC-KR', 'ISO-8859-1'];
-
-const CHANNELS: { id: UpdateChannel; label: string; desc: string }[] = [
-  { id: 'stable', label: '稳定版', desc: '正式发布，默认通道' },
-  { id: 'beta', label: 'Beta', desc: '提前验证新版本' },
-  { id: 'canary', label: 'Canary', desc: '金丝雀小流量版本' },
-];
 
 interface StatusBarProps {
   content: string;
@@ -140,18 +134,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
     }
   }, []);
 
-  const handleSetChannel = useCallback(async (ch: UpdateChannel) => {
-    try {
-      const status = await window.electron.ipcRenderer.invoke('update-set-channel', ch);
-      setUpdateStatus(status as UpdateStatus);
-    } catch (error) {
-      console.error('Failed to set update channel:', error);
-    }
-  }, []);
-
   const appVersion = updateStatus?.currentVersion ?? '';
-  const currentChannel = updateStatus?.channel ?? 'stable';
-  const channelFile = updateStatus?.channelFile ?? '';
   const updateReady = updateStatus?.updateReady ?? false;
   const lastError = updateStatus?.lastError ?? null;
   const downloadPercent = updateStatus?.downloadPercent ?? null;
@@ -179,8 +162,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
     return null;
   }, [updateStatus]);
-
-  const channelLabel = CHANNELS.find((c) => c.id === currentChannel)?.label ?? currentChannel;
 
   return (
     <div className={styles.statusBar}>
@@ -270,30 +251,12 @@ const StatusBar: React.FC<StatusBarProps> = ({
             onClick={() => setShowUpdatePanel((prev) => !prev)}
           >
             v{appVersion}
-            {channelLabel !== '稳定版' && ` · ${channelLabel}`}
           </span>
           {showUpdatePanel && (
             <div className={styles.updatePanel}>
-              {/* Channel selector */}
               <div className={styles.panelSection}>
-                <div className={styles.panelTitle}>更新通道</div>
-                {CHANNELS.map((ch) => (
-                  <div
-                    key={ch.id}
-                    className={`${styles.channelRow} ${ch.id === currentChannel ? styles.channelActive : ''}`}
-                    onClick={() => handleSetChannel(ch.id)}
-                  >
-                    <span className={styles.channelLabel}>{ch.label}</span>
-                    <span className={styles.channelDesc}>{ch.desc}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Update status */}
-              <div className={styles.panelSection}>
-                <div className={styles.panelTitle}>手动检查更新</div>
-                <div className={styles.panelInfo}>
-                  通道文件 {channelFile} · 版本 {appVersion}
-                </div>
+                <div className={styles.panelTitle}>检查更新</div>
+                <div className={styles.panelInfo}>当前版本 {appVersion}</div>
                 {/* Progress bar */}
                 {typeof downloadPercent === 'number' && updateStatus?.availableVersion && (
                   <div className={styles.progressSection}>
