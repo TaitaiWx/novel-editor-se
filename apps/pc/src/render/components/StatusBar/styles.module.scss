@@ -171,6 +171,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -180,12 +181,15 @@
   0% {
     opacity: 0;
   }
+
   10% {
     opacity: 1;
   }
+
   80% {
     opacity: 1;
   }
+
   100% {
     opacity: 0;
   }
@@ -200,5 +204,169 @@
 
   50% {
     opacity: 0.7;
+  }
+}
+
+/* ===== Update Panel ===== */
+.updatePanel {
+  position: absolute;
+  bottom: 24px;
+  right: 0;
+  width: 340px;
+  background-color: #252526;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  font-size: 12px;
+  color: #ccc;
+  overflow: hidden;
+}
+
+.panelSection {
+  padding: 10px 14px;
+  border-bottom: 1px solid #333;
+}
+
+.panelTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 8px;
+}
+
+.channelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.channelActive {
+  background-color: rgba(0, 122, 204, 0.15);
+  color: #569cd6;
+
+  .channelLabel {
+    color: #569cd6;
+    font-weight: 600;
+  }
+}
+
+.channelLabel {
+  color: #ddd;
+  font-size: 13px;
+}
+
+.channelDesc {
+  color: #888;
+  font-size: 11px;
+}
+
+.panelInfo {
+  color: #888;
+  font-size: 11px;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.panelCheckingRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #dcdcaa;
+  padding: 4px 0;
+}
+
+.panelFoundRow {
+  color: #4ec9b0;
+  font-weight: 500;
+  padding: 4px 0;
+}
+
+.panelReadyRow {
+  color: #4ec9b0;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  background-color: rgba(78, 201, 176, 0.1);
+
+  &:hover {
+    background-color: rgba(78, 201, 176, 0.2);
+  }
+}
+
+.panelUpToDate {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #4ec9b0;
+  padding: 4px 0;
+}
+
+.panelError {
+  color: #f48771;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 6px 0;
+  word-break: break-word;
+}
+
+.progressSection {
+  margin: 6px 0;
+}
+
+.progressText {
+  color: #dcdcaa;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.progressBar {
+  height: 4px;
+  background-color: #333;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #007acc, #4ec9b0);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.panelFooter {
+  padding: 8px 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.checkBtn {
+  background-color: #0e639c;
+  color: #fff;
+  border: none;
+  padding: 5px 20px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  width: 100%;
+
+  &:hover:not(:disabled) {
+    background-color: #1177bb;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }

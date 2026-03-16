@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('electron', {
         'update-status',
         'update-download',
         'update-install',
+        'update-set-channel',
         'update-rollback',
         'delete-file',
         'delete-directory',

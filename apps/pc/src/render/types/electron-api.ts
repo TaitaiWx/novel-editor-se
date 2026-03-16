@@ -4,7 +4,11 @@
 
 import type { FileInfo, OpenLocalResult, ShortcutInfo } from './File';
 
+export type UpdateChannel = 'stable' | 'beta' | 'canary';
+
 export interface UpdateStatus {
+  channel: UpdateChannel;
+  channelFile: string;
   currentVersion: string;
   checking: boolean;
   updateReady: boolean;
@@ -47,6 +51,7 @@ export interface ElectronAPI {
     invoke(channel: 'update-check'): Promise<void>;
     invoke(channel: 'update-status'): Promise<UpdateStatus>;
     invoke(channel: 'update-install'): Promise<void>;
+    invoke(channel: 'update-set-channel', channel: UpdateChannel): Promise<UpdateStatus>;
     invoke(channel: 'update-rollback'): Promise<{ version: string; installerPath: string }>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     on(channel: string, listener: (...args: any[]) => void): void;

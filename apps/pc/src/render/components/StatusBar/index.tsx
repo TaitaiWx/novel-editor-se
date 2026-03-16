@@ -1,13 +1,19 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { VscHistory, VscSync, VscError, VscCheck } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
-import type { UpdateStatus } from '@/render/types/electron-api';
+import type { UpdateStatus, UpdateChannel } from '@/render/types/electron-api';
 import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 
 const MAX_FILENAME_LEN = 20;
 
 const ENCODINGS = ['UTF-8', 'GBK', 'GB2312', 'Big5', 'Shift_JIS', 'EUC-KR', 'ISO-8859-1'];
+
+const CHANNELS: { id: UpdateChannel; label: string; desc: string }[] = [
+  { id: 'stable', label: '稳定版', desc: '正式发布，默认通道' },
+  { id: 'beta', label: 'Beta', desc: '提前验证新版本' },
+  { id: 'canary', label: 'Canary', desc: '金丝雀小流量版本' },
+];
 
 interface StatusBarProps {
   content: string;
@@ -31,10 +37,12 @@ const StatusBar: React.FC<StatusBarProps> = ({
   onToggleVersionHistory,
 }) => {
   const [showEncodingMenu, setShowEncodingMenu] = useState(false);
+  const [showUpdatePanel, setShowUpdatePanel] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [upToDate, setUpToDate] = useState(false);
   const prevCheckingRef = useRef(false);
   const encodingMenuRef = useRef<HTMLDivElement>(null);
+  const updatePanelRef = useRef<HTMLDivElement>(null);
 
   // O(n) single-pass line+char count — avoids split() and replace() allocations
   const { lineCount, charCount } = useMemo(() => {
@@ -90,7 +98,12 @@ const StatusBar: React.FC<StatusBarProps> = ({
     const wasChecking = prevCheckingRef.current;
     prevCheckingRef.current = updateStatus.checking;
 
-    if (wasChecking && !updateStatus.checking && !updateStatus.availableVersion && !updateStatus.lastError) {
+    if (
+      wasChecking &&
+      !updateStatus.checking &&
+      !updateStatus.availableVersion &&
+      !updateStatus.lastError
+    ) {
       setUpToDate(true);
       const timer = setTimeout(() => setUpToDate(false), 5000);
       return () => clearTimeout(timer);
@@ -98,15 +111,26 @@ const StatusBar: React.FC<StatusBarProps> = ({
   }, [updateStatus]);
 
   useEffect(() => {
-    if (!showEncodingMenu) return;
+    if (!showEncodingMenu && !showUpdatePanel) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (encodingMenuRef.current && !encodingMenuRef.current.contains(e.target as Node)) {
+      if (
+        showEncodingMenu &&
+        encodingMenuRef.current &&
+        !encodingMenuRef.current.contains(e.target as Node)
+      ) {
         setShowEncodingMenu(false);
+      }
+      if (
+        showUpdatePanel &&
+        updatePanelRef.current &&
+        !updatePanelRef.current.contains(e.target as Node)
+      ) {
+        setShowUpdatePanel(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showEncodingMenu]);
+  }, [showEncodingMenu, showUpdatePanel]);
 
   const handleCheckUpdates = useCallback(async () => {
     try {
@@ -116,9 +140,21 @@ const StatusBar: React.FC<StatusBarProps> = ({
     }
   }, []);
 
+  const handleSetChannel = useCallback(async (ch: UpdateChannel) => {
+    try {
+      const status = await window.electron.ipcRenderer.invoke('update-set-channel', ch);
+      setUpdateStatus(status as UpdateStatus);
+    } catch (error) {
+      console.error('Failed to set update channel:', error);
+    }
+  }, []);
+
   const appVersion = updateStatus?.currentVersion ?? '';
+  const currentChannel = updateStatus?.channel ?? 'stable';
+  const channelFile = updateStatus?.channelFile ?? '';
   const updateReady = updateStatus?.updateReady ?? false;
   const lastError = updateStatus?.lastError ?? null;
+  const downloadPercent = updateStatus?.downloadPercent ?? null;
   const updateSummary = useMemo(() => {
     if (!updateStatus) return null;
 
@@ -127,7 +163,10 @@ const StatusBar: React.FC<StatusBarProps> = ({
     }
 
     if (typeof updateStatus.downloadPercent === 'number' && updateStatus.availableVersion) {
-      return { text: `下载中 ${Math.round(updateStatus.downloadPercent)}%`, type: 'progress' as const };
+      return {
+        text: `下载中 ${Math.round(updateStatus.downloadPercent)}%`,
+        type: 'progress' as const,
+      };
     }
 
     if (updateStatus.checking) {
@@ -140,6 +179,8 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
     return null;
   }, [updateStatus]);
+
+  const channelLabel = CHANNELS.find((c) => c.id === currentChannel)?.label ?? currentChannel;
 
   return (
     <div className={styles.statusBar}>
@@ -170,8 +211,11 @@ const StatusBar: React.FC<StatusBarProps> = ({
         )}
       </div>
       <div className={styles.right}>
+        {/* Inline status hints in status bar */}
         {updateSummary && !updateReady && (
-          <span className={`${styles.item} ${styles.updateHint} ${updateSummary.type === 'checking' ? styles.updateChecking : ''}`}>
+          <span
+            className={`${styles.item} ${styles.updateHint} ${updateSummary.type === 'checking' ? styles.updateChecking : ''}`}
+          >
             {updateSummary.type === 'checking' && <VscSync className={styles.spinIcon} />}
             {updateSummary.text}
           </span>
@@ -219,16 +263,97 @@ const StatusBar: React.FC<StatusBarProps> = ({
             </div>
           )}
         </div>
-        {appVersion && (
-          <Tooltip content="点击检查更新" position="top">
-            <span
-              className={`${styles.version} ${styles.clickableVersion}`}
-              onClick={handleCheckUpdates}
-            >
-              v{appVersion}
-            </span>
-          </Tooltip>
-        )}
+        {/* Version + Update panel */}
+        <div className={styles.menuWrapper} ref={updatePanelRef}>
+          <span
+            className={`${styles.version} ${styles.clickableVersion}`}
+            onClick={() => setShowUpdatePanel((prev) => !prev)}
+          >
+            v{appVersion}
+            {channelLabel !== '稳定版' && ` · ${channelLabel}`}
+          </span>
+          {showUpdatePanel && (
+            <div className={styles.updatePanel}>
+              {/* Channel selector */}
+              <div className={styles.panelSection}>
+                <div className={styles.panelTitle}>更新通道</div>
+                {CHANNELS.map((ch) => (
+                  <div
+                    key={ch.id}
+                    className={`${styles.channelRow} ${ch.id === currentChannel ? styles.channelActive : ''}`}
+                    onClick={() => handleSetChannel(ch.id)}
+                  >
+                    <span className={styles.channelLabel}>{ch.label}</span>
+                    <span className={styles.channelDesc}>{ch.desc}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Update status */}
+              <div className={styles.panelSection}>
+                <div className={styles.panelTitle}>手动检查更新</div>
+                <div className={styles.panelInfo}>
+                  通道文件 {channelFile} · 版本 {appVersion}
+                </div>
+                {/* Progress bar */}
+                {typeof downloadPercent === 'number' && updateStatus?.availableVersion && (
+                  <div className={styles.progressSection}>
+                    <div className={styles.progressText}>
+                      下载 {updateStatus.availableVersion} — {Math.round(downloadPercent)}%
+                    </div>
+                    <div className={styles.progressBar}>
+                      <div
+                        className={styles.progressFill}
+                        style={{ width: `${Math.min(downloadPercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {/* Checking spinner */}
+                {updateStatus?.checking &&
+                  !(typeof downloadPercent === 'number' && updateStatus.availableVersion) && (
+                    <div className={styles.panelCheckingRow}>
+                      <VscSync className={styles.spinIcon} />
+                      检查更新中...
+                    </div>
+                  )}
+                {/* Found update (not yet downloading) */}
+                {updateStatus?.availableVersion &&
+                  !updateStatus.checking &&
+                  typeof downloadPercent !== 'number' &&
+                  !updateReady && (
+                    <div className={styles.panelFoundRow}>发现新版本 {updateStatus.availableVersion}</div>
+                  )}
+                {/* Ready to install */}
+                {updateReady && updateStatus?.downloadedVersion && (
+                  <div className={styles.panelReadyRow} onClick={handleRestartUpdate}>
+                    已下载 {updateStatus.downloadedVersion}，点击重启安装
+                  </div>
+                )}
+                {/* Up to date */}
+                {upToDate && !updateSummary && !updateReady && !lastError && (
+                  <div className={styles.panelUpToDate}>
+                    <VscCheck className={styles.checkIcon} />
+                    已是最新版本
+                  </div>
+                )}
+                {/* Error */}
+                {lastError && (
+                  <div className={styles.panelError}>{lastError}</div>
+                )}
+              </div>
+              {/* Check button */}
+              <div className={styles.panelFooter}>
+                <button
+                  className={styles.checkBtn}
+                  onClick={handleCheckUpdates}
+                  disabled={updateStatus?.checking}
+                >
+                  {updateStatus?.checking ? '检查中...' : '检查更新'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         {filePath &&
           (() => {
             const isUntitled = filePath.startsWith('__untitled__:');

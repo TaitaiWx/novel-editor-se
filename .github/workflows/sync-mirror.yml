@@ -99,6 +99,25 @@ jobs:
             "${TAG#v}" "${TAG}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${TAG}" \
             > "${BASE}/version.json"
 
+          # Create channel-specific yml copies for pre-release versions.
+          # electron-updater looks for "{channel}-mac.yml" based on autoUpdater.channel.
+          # electron-builder always generates "latest-*.yml", so we need to copy them
+          # to "beta-*.yml" / "alpha-*.yml" to match what the auto-updater expects.
+          VERSION="${TAG#v}"
+          CHANNEL=""
+          case "$VERSION" in
+            *-beta.*)  CHANNEL="beta" ;;
+            *-alpha.*|*-canary.*) CHANNEL="alpha" ;;
+          esac
+          if [ -n "$CHANNEL" ]; then
+            for yml in "${BASE}"/latest-*.yml "${BASE}/latest.yml"; do
+              [ -f "$yml" ] || continue
+              target="${yml/latest/$CHANNEL}"
+              cp "$yml" "$target"
+              echo "Created channel yml: $(basename "$target")"
+            done
+          fi
+
           echo "=== Mirror structure ==="
           find mirror-out -type f | sort
 
