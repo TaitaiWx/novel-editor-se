@@ -1,8 +1,9 @@
 name: Sync Release to Mirror
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ['Release']
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -21,17 +22,32 @@ jobs:
   sync-mirror:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v5
 
       - name: Resolve release tag
         id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -n "${{ github.event.inputs.tag }}" ]; then
+            # 手动触发：使用输入的 tag
             echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            # workflow_run 触发：从触发分支的 tag 获取
+            TAG="${{ github.event.workflow_run.head_branch }}"
+            if [ -z "$TAG" ]; then
+              echo "::error::Cannot resolve tag from workflow_run event"
+              exit 1
+            fi
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+            echo "::error::Unable to resolve release tag"
+            exit 1
           fi
 
       - name: Download release assets from GitHub
