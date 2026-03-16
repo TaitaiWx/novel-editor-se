@@ -112,7 +112,8 @@ jobs:
           if [ -n "$CHANNEL" ]; then
             for yml in "${BASE}"/latest-*.yml "${BASE}/latest.yml"; do
               [ -f "$yml" ] || continue
-              target="${yml/latest/$CHANNEL}"
+              ymlname=$(basename "$yml")
+              target="${BASE}/${ymlname/latest/$CHANNEL}"
               cp "$yml" "$target"
               echo "Created channel yml: $(basename "$target")"
             done
