@@ -1,7 +1,40 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron';
 import dirTree from 'directory-tree';
-import { readFile, writeFile, mkdir, access } from 'fs/promises';
+import { readFile, writeFile, mkdir, access, cp } from 'fs/promises';
+import { existsSync } from 'fs';
 import path from 'path';
+
+// ========== better-sqlite3 原生模块路径解析 ==========
+// 打包后的 Electron 应用无法通过 bindings 模块自动定位 .node 文件，
+// 通过显式指定 nativeBinding 路径绕过 bindings 解析。
+let _nativeBinding: string | undefined;
+let _nativeBindingResolved = false;
+
+function getNativeBinding(): string | undefined {
+  if (_nativeBindingResolved) return _nativeBinding;
+  _nativeBindingResolved = true;
+
+  if (!app.isPackaged) return undefined;
+
+  // asarUnpack 会将 better-sqlite3 解压到 app.asar.unpacked 目录
+  const unpackedPath = app.getAppPath() + '.unpacked';
+  const bindingPath = path.join(
+    unpackedPath,
+    'node_modules',
+    'better-sqlite3',
+    'build',
+    'Release',
+    'better_sqlite3.node'
+  );
+
+  if (existsSync(bindingPath)) {
+    _nativeBinding = bindingPath;
+  } else {
+    console.warn('better-sqlite3 native binding not found at:', bindingPath);
+  }
+
+  return _nativeBinding;
+}
 import { getAllShortcuts } from './shortcuts/getAllShortcuts';
 import {
   checkForUpdatesManually,
@@ -219,33 +252,40 @@ export function setupIPC() {
     }
   });
 
-  // 获取默认示例数据目录
+  // 获取默认示例数据目录（首次启动时复制到用户文档目录，确保可写）
   ipcMain.handle('get-default-data-path', async () => {
     try {
-      let sampleDataPath: string;
+      const userDataDir = path.join(app.getPath('documents'), 'Novel Editor');
+      const userSamplePath = path.join(userDataDir, 'sample-data');
 
-      if (app.isPackaged) {
-        // 打包后: resources 目录
-        sampleDataPath = path.join(
-          path.dirname(app.getPath('exe')),
-          '..',
-          'Resources',
-          'sample-data'
-        );
-      } else {
-        // 开发模式: app.getAppPath() 指向 apps/pc，向上两级到 monorepo root
-        const monorepoRoot = path.resolve(app.getAppPath(), '..', '..');
-        sampleDataPath = path.join(monorepoRoot, 'sample-data');
-      }
-
-      // 如果 sample-data 目录不存在，创建它
+      // 已复制到用户目录，直接返回
       try {
-        await access(sampleDataPath);
+        await access(userSamplePath);
+        return userSamplePath;
       } catch {
-        await mkdir(sampleDataPath, { recursive: true });
+        // 尚未复制，继续
       }
 
-      return sampleDataPath;
+      // 定位源 sample-data 目录
+      let sourcePath: string;
+      if (app.isPackaged) {
+        sourcePath = path.join(process.resourcesPath, 'sample-data');
+      } else {
+        const monorepoRoot = path.resolve(app.getAppPath(), '..', '..');
+        sourcePath = path.join(monorepoRoot, 'sample-data');
+      }
+
+      // 复制 sample-data 到用户目录
+      try {
+        await access(sourcePath);
+        await mkdir(userDataDir, { recursive: true });
+        await cp(sourcePath, userSamplePath, { recursive: true });
+      } catch {
+        // 源目录不存在时创建空目录
+        await mkdir(userSamplePath, { recursive: true });
+      }
+
+      return userSamplePath;
     } catch (error) {
       console.error('Error creating/getting sample-data path:', error);
       throw new Error('Failed to get default data path');
@@ -444,10 +484,22 @@ export function setupIPC() {
   // 初始化数据库
   ipcMain.handle('db-init', (_event, dbDir: string) => {
     try {
-      initDatabase(dbDir);
+      initDatabase(dbDir, 'novel-editor.db', getNativeBinding());
       return { success: true };
     } catch (error) {
       console.error('Error initializing database:', error);
+      throw error;
+    }
+  });
+
+  // 初始化默认数据库（开箱即用模式，无需打开目录）
+  ipcMain.handle('db-init-default', () => {
+    try {
+      const defaultDbDir = path.join(app.getPath('userData'), '.novel-editor');
+      initDatabase(defaultDbDir, 'novel-editor.db', getNativeBinding());
+      return { success: true, dbDir: defaultDbDir };
+    } catch (error) {
+      console.error('Error initializing default database:', error);
       throw error;
     }
   });

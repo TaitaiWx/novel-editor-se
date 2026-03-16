@@ -9,8 +9,13 @@ let currentDbPath: string | null = null;
  * 初始化 SQLite 数据库连接
  * @param dbDir 数据库文件所在目录
  * @param dbName 数据库文件名（默认 novel-editor.db）
+ * @param nativeBinding 原生模块 .node 文件的绝对路径（用于打包后的 Electron 应用绕过 bindings 解析）
  */
-export function initDatabase(dbDir: string, dbName = 'novel-editor.db'): Database.Database {
+export function initDatabase(
+  dbDir: string,
+  dbName = 'novel-editor.db',
+  nativeBinding?: string
+): Database.Database {
   const dbPath = path.join(dbDir, dbName);
   mkdirSync(dbDir, { recursive: true });
 
@@ -21,7 +26,7 @@ export function initDatabase(dbDir: string, dbName = 'novel-editor.db'): Databas
     db = null;
   }
 
-  db = new Database(dbPath);
+  db = new Database(dbPath, nativeBinding ? { nativeBinding } : undefined);
   currentDbPath = dbPath;
 
   // 启用 WAL 模式以获得更好的并发性能

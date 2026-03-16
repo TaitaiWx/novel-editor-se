@@ -182,6 +182,10 @@ const App: React.FC = () => {
         console.warn('Electron IPC not available, skipping default path load');
         return;
       }
+
+      // 开箱即用：先初始化默认 SQLite 数据库，确保无论是否打开目录都可用
+      await window.electron.ipcRenderer.invoke('db-init-default');
+
       const defaultPath = await window.electron.ipcRenderer.invoke('get-default-data-path');
       await initializeProjectStore(defaultPath);
       const result = await window.electron.ipcRenderer.invoke('refresh-folder', defaultPath);

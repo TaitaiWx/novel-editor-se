@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electron', {
         'rename-file',
         // SQLite 数据库
         'db-init',
+        'db-init-default',
         'db-close',
         'db-novel-create',
         'db-novel-list',

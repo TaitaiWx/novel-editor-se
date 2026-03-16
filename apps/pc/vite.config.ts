@@ -48,6 +48,8 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           external: (id: string) => {
             if (id === 'electron' || id === 'better-sqlite3') return true;
+            // bindings / file-uri-to-path 是 better-sqlite3 的运行时依赖，一并 external
+            if (id === 'bindings' || id === 'file-uri-to-path') return true;
             if (id.startsWith('node:')) return true;
             return builtinModules.includes(id.split('/')[0]);
           },
