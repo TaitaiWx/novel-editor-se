@@ -124,6 +124,71 @@
 .updateHint {
   color: #4ec9b0;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.updateChecking {
+  color: #dcdcaa;
+}
+
+.spinIcon {
+  font-size: 12px;
+  animation: spin 1s linear infinite;
+}
+
+.updateError {
+  color: #f48771;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+
+  &:hover {
+    color: #ff6e59;
+  }
+}
+
+.errorIcon {
+  font-size: 12px;
+}
+
+.updateUpToDate {
+  color: #4ec9b0;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  animation: fadeInOut 5s ease-in-out forwards;
+}
+
+.checkIcon {
+  font-size: 12px;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 @keyframes updatePulse {

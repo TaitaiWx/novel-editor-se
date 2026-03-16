@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { VscHistory } from 'react-icons/vsc';
+import { VscHistory, VscSync, VscError, VscCheck } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
 import type { UpdateStatus } from '@/render/types/electron-api';
 import Tooltip from '../Tooltip';
@@ -32,6 +32,8 @@ const StatusBar: React.FC<StatusBarProps> = ({
 }) => {
   const [showEncodingMenu, setShowEncodingMenu] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [upToDate, setUpToDate] = useState(false);
+  const prevCheckingRef = useRef(false);
   const encodingMenuRef = useRef<HTMLDivElement>(null);
 
   // O(n) single-pass line+char count — avoids split() and replace() allocations
@@ -82,6 +84,19 @@ const StatusBar: React.FC<StatusBarProps> = ({
     }
   }, []);
 
+  // Detect "checking finished with no update" transition → show brief "已是最新版"
+  useEffect(() => {
+    if (!updateStatus) return;
+    const wasChecking = prevCheckingRef.current;
+    prevCheckingRef.current = updateStatus.checking;
+
+    if (wasChecking && !updateStatus.checking && !updateStatus.availableVersion && !updateStatus.lastError) {
+      setUpToDate(true);
+      const timer = setTimeout(() => setUpToDate(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [updateStatus]);
+
   useEffect(() => {
     if (!showEncodingMenu) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -103,23 +118,24 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
   const appVersion = updateStatus?.currentVersion ?? '';
   const updateReady = updateStatus?.updateReady ?? false;
+  const lastError = updateStatus?.lastError ?? null;
   const updateSummary = useMemo(() => {
     if (!updateStatus) return null;
 
     if (updateStatus.updateReady && updateStatus.downloadedVersion) {
-      return `已下载 ${updateStatus.downloadedVersion}`;
+      return { text: `已下载 ${updateStatus.downloadedVersion}`, type: 'ready' as const };
     }
 
     if (typeof updateStatus.downloadPercent === 'number' && updateStatus.availableVersion) {
-      return `下载 ${Math.round(updateStatus.downloadPercent)}%`;
+      return { text: `下载中 ${Math.round(updateStatus.downloadPercent)}%`, type: 'progress' as const };
     }
 
     if (updateStatus.checking) {
-      return '检查更新中';
+      return { text: '检查更新中...', type: 'checking' as const };
     }
 
     if (updateStatus.availableVersion) {
-      return `发现 ${updateStatus.availableVersion}`;
+      return { text: `发现 ${updateStatus.availableVersion}`, type: 'available' as const };
     }
 
     return null;
@@ -155,7 +171,24 @@ const StatusBar: React.FC<StatusBarProps> = ({
       </div>
       <div className={styles.right}>
         {updateSummary && !updateReady && (
-          <span className={`${styles.item} ${styles.updateHint}`}>{updateSummary}</span>
+          <span className={`${styles.item} ${styles.updateHint} ${updateSummary.type === 'checking' ? styles.updateChecking : ''}`}>
+            {updateSummary.type === 'checking' && <VscSync className={styles.spinIcon} />}
+            {updateSummary.text}
+          </span>
+        )}
+        {lastError && !updateSummary && !updateReady && (
+          <Tooltip content={lastError} position="top">
+            <span className={`${styles.item} ${styles.updateError}`}>
+              <VscError className={styles.errorIcon} />
+              更新失败
+            </span>
+          </Tooltip>
+        )}
+        {upToDate && !updateSummary && !updateReady && !lastError && (
+          <span className={`${styles.item} ${styles.updateUpToDate}`}>
+            <VscCheck className={styles.checkIcon} />
+            已是最新版
+          </span>
         )}
         {updateReady && (
           <span className={`${styles.item} ${styles.updateReady}`} onClick={handleRestartUpdate}>
