@@ -79,18 +79,18 @@ jobs:
           for f in artifacts/*; do
             name=$(basename "$f")
             case "$name" in
-              *-mac-arm64.dmg)      cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-arm64.dmg" ;;
-              *-mac-arm64.zip)      cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-arm64.zip" ;;
-              *-mac-x64.dmg)        cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-x64.dmg" ;;
-              *-mac-x64.zip)        cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-x64.zip" ;;
-              *-win-x64.exe)        cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-x64.exe" ;;
-              *-win-ia32.exe)       cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-ia32.exe" ;;
-              *-win-arm64.exe)      cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-arm64.exe" ;;
-              *-linux-x64.AppImage) cp "$f" "${BASE}/"; cp "$f" "${BASE}/linux-x64.AppImage" ;;
-              *-linux-x64.deb)      cp "$f" "${BASE}/"; cp "$f" "${BASE}/linux-x64.deb" ;;
-              *.blockmap)           ;; # skip blockmaps
-              *.yml)                cp "$f" "${BASE}/" ;;
-              *)                    cp "$f" "${BASE}/" ;;
+              *-mac-arm64.dmg)         cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-arm64.dmg" ;;
+              *-mac-arm64.zip)         cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-arm64.zip" ;;
+              *-mac-x64.dmg)           cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-x64.dmg" ;;
+              *-mac-x64.zip)           cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-x64.zip" ;;
+              *-win-x64.exe)           cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-x64.exe" ;;
+              *-win-ia32.exe)          cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-ia32.exe" ;;
+              *-win-arm64.exe)         cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-arm64.exe" ;;
+              *-linux-x86_64.AppImage) cp "$f" "${BASE}/"; cp "$f" "${BASE}/linux-x64.AppImage" ;;
+              *-linux-amd64.deb)       cp "$f" "${BASE}/"; cp "$f" "${BASE}/linux-x64.deb" ;;
+              *.blockmap)              ;; # skip blockmaps
+              *.yml)                   cp "$f" "${BASE}/" ;;
+              *)                       cp "$f" "${BASE}/" ;;
             esac
           done
 
@@ -121,6 +121,25 @@ jobs:
 
           echo "=== Mirror structure ==="
           find mirror-out -type f | sort
+
+      - name: Cleanup old files on mirror
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.MIRROR_SSH_HOST }}
+          username: ${{ secrets.MIRROR_SSH_USER }}
+          key: ${{ secrets.MIRROR_SSH_KEY }}
+          script: |
+            DIR="${{ env.MIRROR_BASE }}/latest"
+            if [ -d "$DIR" ]; then
+              echo "=== Before cleanup ==="
+              du -sh "$DIR"
+              # Remove old versioned files (Novel-Editor-*), keep stable shortcuts and yml
+              find "$DIR" -name 'Novel-Editor-*' -type f -delete
+              # Remove old dot-files like Novel.Editor-* if any
+              find "$DIR" -name 'Novel.Editor-*' -type f -delete
+              echo "=== After cleanup ==="
+              du -sh "$DIR"
+            fi
 
       - name: Deploy to mirror server
         uses: appleboy/scp-action@v0.1.7
