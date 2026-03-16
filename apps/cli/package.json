@@ -1,6 +1,6 @@
 {
   "name": "@novel-editor/cli",
-  "version": "1.0.1-beta.26",
+  "version": "1.0.1-beta.27",
   "private": true,
   "description": "Novel Editor - CLI tool",
   "type": "module",
