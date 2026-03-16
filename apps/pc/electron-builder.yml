@@ -12,7 +12,7 @@ detectUpdateChannel: true
 afterAllArtifactBuild: ./scripts/prepare-update-metadata.mjs
 npmRebuild: false
 
-artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+artifactName: Novel-Editor-${version}-${os}-${arch}.${ext}
 asarUnpack:
   - node_modules/better-sqlite3/**/*
   - node_modules/bindings/**/*
