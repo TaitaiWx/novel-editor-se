@@ -72,23 +72,27 @@ jobs:
           set -euo pipefail
           BASE=mirror-out/latest
           TAG="${{ steps.resolve.outputs.tag }}"
+          VER="${TAG#v}"
 
           # Copy all original files and create predictable shortcut names
-          # Original files: "Novel Editor-{ver}-{os}-{arch}.{ext}"
-          # Shortcut names: "{os}-{arch}.{ext}" (e.g. mac-arm64.dmg, win-x64.exe)
+          # Original files: "Novel Editor-{ver}-{os}-{arch}.{ext}" (space in name)
+          # Versioned shortcuts: "Novel-Editor-{ver}-{os}-{arch}.{ext}" (hyphen, no space)
+          # Stable shortcuts:   "{os}-{arch}.{ext}" (fallback for unversioned URLs)
           for f in artifacts/*; do
             name=$(basename "$f")
             case "$name" in
-              *-mac-arm64.dmg)   mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-arm64.dmg" ;;
-              *-mac-arm64.zip)   mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-arm64.zip" ;;
-              *-mac-x64.dmg)     mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-x64.dmg" ;;
-              *-mac-x64.zip)     mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-x64.zip" ;;
-              *-win-x64.exe)     mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-x64.exe" ;;
-              *-win-ia32.exe)    mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-ia32.exe" ;;
-              *-win-arm64.exe)   mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-arm64.exe" ;;
-              *-linux-x64.AppImage) mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/linux-x64.AppImage" ;;
-              *-linux-x64.deb)   mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/linux-x64.deb" ;;
-              *.yml)             mkdir -p "${BASE}"; cp "$f" "${BASE}/" ;;
+              *-mac-arm64.dmg)      mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-mac-arm64.dmg"; cp "$f" "${BASE}/mac-arm64.dmg" ;;
+              *-mac-arm64.zip)      mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-mac-arm64.zip"; cp "$f" "${BASE}/mac-arm64.zip" ;;
+              *-mac-x64.dmg)        mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-mac-x64.dmg"; cp "$f" "${BASE}/mac-x64.dmg" ;;
+              *-mac-x64.zip)        mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-mac-x64.zip"; cp "$f" "${BASE}/mac-x64.zip" ;;
+              *-win-x64.exe)        mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-win-x64.exe"; cp "$f" "${BASE}/win-x64.exe" ;;
+              *-win-ia32.exe)       mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-win-ia32.exe"; cp "$f" "${BASE}/win-ia32.exe" ;;
+              *-win-arm64.exe)      mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-win-arm64.exe"; cp "$f" "${BASE}/win-arm64.exe" ;;
+              *-linux-x64.AppImage) mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-linux-x64.AppImage"; cp "$f" "${BASE}/linux-x64.AppImage" ;;
+              *-linux-x64.deb)      mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/Novel-Editor-${VER}-linux-x64.deb"; cp "$f" "${BASE}/linux-x64.deb" ;;
+              *.blockmap)           ;; # skip blockmaps
+              *.yml)                mkdir -p "${BASE}"; cp "$f" "${BASE}/" ;;
+              *)                    mkdir -p "${BASE}"; cp "$f" "${BASE}/" ;;
             esac
           done
 
