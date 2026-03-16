@@ -7,10 +7,23 @@ import type {
 } from 'electron-updater';
 import { app, BrowserWindow, shell } from 'electron';
 import log from 'electron-log/main';
-import { chmod, mkdir, readFile, writeFile } from 'fs/promises';
+import {
+  access,
+  chmod,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'fs/promises';
 import { createHash } from 'crypto';
 import { join } from 'path';
 import { spawn } from 'child_process';
+import { createReadStream, createWriteStream } from 'fs';
+import { pipeline } from 'stream/promises';
+import { Readable } from 'stream';
 
 const { autoUpdater } = pkg;
 
@@ -21,6 +34,16 @@ const UPDATE_REPO = {
 const HEALTHY_STARTUP_DELAY_MS = 15_000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const MAX_FAILED_UPDATED_LAUNCHES = 2;
+/** 回滚缓存最多保留的安装包数量 */
+const MAX_ROLLBACK_CACHE_ENTRIES = 2;
+/** 下载回滚安装包的超时（5 分钟，足够覆盖大文件慢网场景） */
+const ROLLBACK_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+/** 国内镜像地址（GitHub API 不可达时的备用源） */
+const MIRROR_BASE_URL = 'https://dl.wayintech.net/novel-editor/latest';
+/** 更新检查失败后的最大退避间隔（30 分钟） */
+const MAX_BACKOFF_MS = 30 * 60 * 1000;
+/** 更新检查随机抖动范围（0~30 分钟），避免所有客户端同时请求 */
+const CHECK_JITTER_MS = 30 * 60 * 1000;
 
 export type UpdateChannel = 'stable' | 'beta' | 'canary';
 
@@ -29,6 +52,10 @@ interface RollbackTarget {
   tag: string;
   assetName: string;
   assetUrl: string;
+  /** 本地已缓存的安装包路径（高可用核心：回滚不依赖网络） */
+  cachedInstallerPath: string | null;
+  /** 缓存安装包的 SHA256 摘要，用于完整性校验 */
+  cachedInstallerHash: string | null;
 }
 
 interface PersistedUpdaterState {
@@ -92,6 +119,7 @@ const updaterStatus: UpdateStatus = {
 let startupHealthTimer: NodeJS.Timeout | null = null;
 let scheduledUpdateTimer: NodeJS.Timeout | null = null;
 let listenersRegistered = false;
+let consecutiveCheckFailures = 0;
 
 function inferDefaultChannel(version: string): UpdateChannel {
   const lowerVersion = version.toLowerCase();
@@ -182,8 +210,12 @@ async function persistUpdaterState() {
     return;
   }
 
+  const statePath = getUpdaterStatePath();
+  const tmpPath = `${statePath}.tmp`;
   await mkdir(app.getPath('userData'), { recursive: true });
-  await writeFile(getUpdaterStatePath(), JSON.stringify(updaterState, null, 2), 'utf8');
+  // 原子写入：先写临时文件再 rename，防止崩溃导致 JSON 损坏
+  await writeFile(tmpPath, JSON.stringify(updaterState, null, 2), 'utf8');
+  await rename(tmpPath, statePath);
 }
 
 function broadcast(channel: string, payload?: unknown) {
@@ -266,57 +298,213 @@ function configureUpdaterLogger() {
 }
 
 async function resolveRollbackTarget(version: string) {
-  const response = await fetch(
-    `https://api.github.com/repos/${UPDATE_REPO.owner}/${UPDATE_REPO.repo}/releases/tags/v${version}`,
-    {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'Novel-Editor-Updater',
-      },
-      signal: AbortSignal.timeout(8000),
-    }
-  );
+  // 优先尝试 GitHub API
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${UPDATE_REPO.owner}/${UPDATE_REPO.repo}/releases/tags/v${version}`,
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'Novel-Editor-Updater',
+        },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
 
-  if (!response.ok) {
-    throw new Error(`无法解析回退版本 ${version} 的发布信息`);
+    if (response.ok) {
+      const release = (await response.json()) as GithubRelease;
+      const selectedAsset = release.assets
+        .filter((asset) => isPreferredAssetName(asset.name))
+        .sort((left, right) => scoreReleaseAsset(right.name) - scoreReleaseAsset(left.name))[0];
+
+      if (selectedAsset) {
+        return {
+          version,
+          tag: release.tag_name,
+          assetName: selectedAsset.name,
+          assetUrl: selectedAsset.browser_download_url,
+          cachedInstallerPath: null,
+          cachedInstallerHash: null,
+        } satisfies RollbackTarget;
+      }
+    }
+  } catch (error) {
+    log.warn(`GitHub API 不可达，尝试国内镜像: ${error}`);
   }
 
-  const release = (await response.json()) as GithubRelease;
-  const selectedAsset = release.assets
-    .filter((asset) => isPreferredAssetName(asset.name))
-    .sort((left, right) => scoreReleaseAsset(right.name) - scoreReleaseAsset(left.name))[0];
+  // Fallback: 国内镜像 version.json
+  return resolveRollbackTargetFromMirror(version);
+}
 
-  if (!selectedAsset) {
+async function resolveRollbackTargetFromMirror(version: string) {
+  const assetName = getMirrorShortcutName();
+  if (!assetName) {
     throw new Error(`未找到适用于当前平台的回退安装包: ${version}`);
+  }
+
+  const mirrorUrl = `${MIRROR_BASE_URL}/${assetName}`;
+  // 验证镜像资源是否存在
+  const headResp = await fetch(mirrorUrl, {
+    method: 'HEAD',
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (!headResp.ok) {
+    throw new Error(`镜像回退包不可用: ${mirrorUrl} (${headResp.status})`);
   }
 
   return {
     version,
-    tag: release.tag_name,
-    assetName: selectedAsset.name,
-    assetUrl: selectedAsset.browser_download_url,
+    tag: `v${version}`,
+    assetName,
+    assetUrl: mirrorUrl,
+    cachedInstallerPath: null,
+    cachedInstallerHash: null,
   } satisfies RollbackTarget;
 }
 
-async function downloadRollbackAsset(target: RollbackTarget) {
-  const rollbackDir = join(app.getPath('userData'), 'rollback-cache');
+/** 根据当前平台和架构返回镜像的快捷文件名 */
+function getMirrorShortcutName(): string | null {
+  const arch = process.arch;
+  if (process.platform === 'darwin') return `mac-${arch}.dmg`;
+  if (process.platform === 'win32') return `win-${arch}.exe`;
+  if (process.platform === 'linux') return `linux-${arch}.AppImage`;
+  return null;
+}
+
+function getRollbackCacheDir() {
+  return join(app.getPath('userData'), 'rollback-cache');
+}
+
+/** 计算文件的 SHA256 摘要 */
+async function computeFileHash(filePath: string): Promise<string> {
+  const hash = createHash('sha256');
+  const stream = createReadStream(filePath);
+  for await (const chunk of stream) {
+    hash.update(chunk);
+  }
+  return hash.digest('hex');
+}
+
+/** 检查本地缓存的安装包是否存在且完整 */
+async function isCachedInstallerValid(
+  cachedPath: string | null,
+  expectedHash?: string | null
+): Promise<boolean> {
+  if (!cachedPath) return false;
+  try {
+    const fileStat = await stat(cachedPath);
+    // 文件必须 > 1MB 才算有效安装包（排除损坏的空文件）
+    if (fileStat.size <= 1_048_576) return false;
+    // 如果有预期的 hash，校验完整性
+    if (expectedHash) {
+      const actualHash = await computeFileHash(cachedPath);
+      if (actualHash !== expectedHash) {
+        log.warn(`缓存安装包 hash 不匹配: expected=${expectedHash}, actual=${actualHash}`);
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 流式下载安装包到本地（内存安全，支持大文件） */
+async function downloadRollbackAsset(
+  target: RollbackTarget
+): Promise<{ path: string; hash: string }> {
+  const rollbackDir = getRollbackCacheDir();
   await mkdir(rollbackDir, { recursive: true });
 
   const filePath = join(rollbackDir, target.assetName);
+  const tmpPath = `${filePath}.download`;
+
   const response = await fetch(target.assetUrl, {
-    headers: {
-      'User-Agent': 'Novel-Editor-Updater',
-    },
-    signal: AbortSignal.timeout(60_000),
+    headers: { 'User-Agent': 'Novel-Editor-Updater' },
+    signal: AbortSignal.timeout(ROLLBACK_DOWNLOAD_TIMEOUT_MS),
   });
 
-  if (!response.ok) {
-    throw new Error(`下载回退包失败: ${target.assetName}`);
+  if (!response.ok || !response.body) {
+    throw new Error(`下载回退包失败: HTTP ${response.status} ${target.assetName}`);
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  await writeFile(filePath, Buffer.from(arrayBuffer));
-  return filePath;
+  // 流式写入临时文件 → rename（原子性保证不会留下半截文件）
+  const nodeStream = Readable.fromWeb(response.body as import('stream/web').ReadableStream);
+  await pipeline(nodeStream, createWriteStream(tmpPath));
+  await rename(tmpPath, filePath);
+
+  const fileHash = await computeFileHash(filePath);
+  log.info(`回退安装包已缓存: ${filePath} (sha256=${fileHash})`);
+  return { path: filePath, hash: fileHash };
+}
+
+/**
+ * 在新版本下载完成后，预缓存当前版本的安装包到本地。
+ * 这是高可用回滚的核心：确保回滚时不依赖网络。
+ */
+async function preCacheCurrentVersion(): Promise<RollbackTarget | null> {
+  const currentVersion = app.getVersion();
+  try {
+    const target = await resolveRollbackTarget(currentVersion);
+
+    // 检查是否已有有效缓存
+    const existingPath = join(getRollbackCacheDir(), target.assetName);
+    if (await isCachedInstallerValid(existingPath)) {
+      const hash = await computeFileHash(existingPath);
+      log.info(`当前版本 ${currentVersion} 安装包已在缓存中: ${existingPath}`);
+      return { ...target, cachedInstallerPath: existingPath, cachedInstallerHash: hash };
+    }
+
+    const { path: cachedPath, hash } = await downloadRollbackAsset(target);
+    return { ...target, cachedInstallerPath: cachedPath, cachedInstallerHash: hash };
+  } catch (error) {
+    log.error(`预缓存版本 ${currentVersion} 安装包失败:`, error);
+    // 降级：仍保存 URL 信息，回滚时尝试在线下载
+    try {
+      const target = await resolveRollbackTarget(currentVersion);
+      return { ...target, cachedInstallerPath: null, cachedInstallerHash: null };
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** 清理旧的回滚缓存，只保留最近 N 个版本 */
+async function pruneRollbackCache(keepAssetName?: string) {
+  const cacheDir = getRollbackCacheDir();
+  try {
+    await access(cacheDir);
+  } catch {
+    return;
+  }
+
+  const entries = await readdir(cacheDir, { withFileTypes: true });
+  const files = entries.filter(
+    (e) => e.isFile() && !e.name.endsWith('.download') && !e.name.endsWith('.tmp')
+  );
+
+  if (files.length <= MAX_ROLLBACK_CACHE_ENTRIES) return;
+
+  // 按修改时间排序，保留最新的
+  const fileStats = await Promise.all(
+    files.map(async (f) => {
+      const fullPath = join(cacheDir, f.name);
+      const s = await stat(fullPath);
+      return { name: f.name, path: fullPath, mtimeMs: s.mtimeMs };
+    })
+  );
+  fileStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  for (const file of fileStats.slice(MAX_ROLLBACK_CACHE_ENTRIES)) {
+    if (file.name === keepAssetName) continue;
+    try {
+      await unlink(file.path);
+      log.info(`已清理旧回滚缓存: ${file.name}`);
+    } catch (error) {
+      log.warn(`清理回滚缓存失败: ${file.name}`, error);
+    }
+  }
 }
 
 async function openRollbackInstaller(filePath: string) {
@@ -347,6 +535,12 @@ async function markVersionHealthy() {
   }
 
   await persistUpdaterState();
+
+  // 版本确认健康后清理旧缓存
+  void pruneRollbackCache(state.rollbackTarget?.assetName).catch((error) => {
+    log.warn('清理回滚缓存失败:', error);
+  });
+
   updaterStatus.rollbackAvailable = Boolean(state.rollbackTarget);
   updaterStatus.rollbackVersion = state.rollbackTarget?.version ?? null;
   updaterStatus.pendingVersion = null;
@@ -364,10 +558,19 @@ function armHealthyStartupTimer() {
       clearTimeout(startupHealthTimer);
     }
 
-    startupHealthTimer = setTimeout(() => {
-      void markVersionHealthy().catch((error) => {
-        console.error('标记健康启动失败:', error);
-      });
+    startupHealthTimer = setTimeout(async () => {
+      // 双重验证：main 进程存活 + renderer 未崩溃
+      const win = BrowserWindow.getAllWindows()[0];
+      if (!win || win.isDestroyed() || win.webContents.isCrashed()) {
+        log.warn('启动健康检测失败: 窗口不可用或渲染进程已崩溃');
+        return;
+      }
+
+      try {
+        await markVersionHealthy();
+      } catch (error) {
+        log.error('标记健康启动失败:', error);
+      }
     }, HEALTHY_STARTUP_DELAY_MS);
   };
 
@@ -424,10 +627,18 @@ function handleDownloadProgress(progress: ProgressInfo) {
 async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
   await syncStatusFromUpdateInfo(info, updaterStatus.channel);
   const state = await loadUpdaterState();
-  try {
-    state.rollbackTarget = await resolveRollbackTarget(app.getVersion());
-  } catch (error) {
-    log.error('准备回退版本失败:', error);
+
+  // 核心：在安装新版本前，先把当前版本的安装包缓存到本地
+  const rollbackTarget = await preCacheCurrentVersion();
+  if (rollbackTarget) {
+    state.rollbackTarget = rollbackTarget;
+    if (rollbackTarget.cachedInstallerPath) {
+      log.info(`回滚安装包已就绪: ${rollbackTarget.cachedInstallerPath}`);
+    } else {
+      log.warn('回滚安装包未能缓存到本地，回滚将依赖网络下载');
+    }
+  } else {
+    log.error('无法准备回滚信息，更新后将无法回滚');
   }
 
   state.pendingVersion = info.version;
@@ -523,12 +734,19 @@ export async function checkForUpdatesManually() {
   try {
     const result = await autoUpdater.checkForUpdates();
     await applyUpdateCheckResult(result, state.channel);
+    consecutiveCheckFailures = 0;
   } catch (error) {
+    consecutiveCheckFailures += 1;
     const message = error instanceof Error ? error.message : '未知错误';
     updaterStatus.checking = false;
     updaterStatus.lastError = `检查更新失败: ${message}`;
     emitStatus();
-    log.error('检查更新失败:', error);
+    log.error(`检查更新失败 (连续第 ${consecutiveCheckFailures} 次):`, error);
+
+    // 指数退避重试：1min → 2min → 4min → ... → 30min 封顶
+    const backoffMs = Math.min(60_000 * Math.pow(2, consecutiveCheckFailures - 1), MAX_BACKOFF_MS);
+    log.info(`将在 ${Math.round(backoffMs / 1000)}s 后重试检查更新`);
+    setTimeout(() => void checkForUpdatesManually(), backoffMs);
   }
 }
 
@@ -545,9 +763,12 @@ export async function setupAutoUpdater() {
   if (scheduledUpdateTimer) {
     clearInterval(scheduledUpdateTimer);
   }
+  const jitter = Math.floor(Math.random() * CHECK_JITTER_MS);
   scheduledUpdateTimer = setInterval(() => {
     void checkForUpdatesManually();
-  }, UPDATE_CHECK_INTERVAL_MS);
+  }, UPDATE_CHECK_INTERVAL_MS + jitter);
+  const intervalMin = Math.round((UPDATE_CHECK_INTERVAL_MS + jitter) / 60000);
+  log.info(`定时更新检查已启动，间隔: ${intervalMin}min`);
 
   void checkForUpdatesManually();
 }
@@ -573,7 +794,34 @@ export async function rollbackToPreviousVersion() {
     throw new Error('当前没有可用的回退版本');
   }
 
-  const installerPath = await downloadRollbackAsset(state.rollbackTarget);
+  let installerPath: string;
+
+  // 优先使用本地缓存（高可用：不依赖网络），校验 SHA256 完整性
+  if (
+    await isCachedInstallerValid(
+      state.rollbackTarget.cachedInstallerPath,
+      state.rollbackTarget.cachedInstallerHash
+    )
+  ) {
+    installerPath = state.rollbackTarget.cachedInstallerPath!;
+    log.info(`使用本地缓存进行回滚: ${installerPath}`);
+  } else {
+    // 降级：从网络重新下载
+    log.warn('本地回滚缓存不可用或校验失败，尝试从网络下载');
+    const { path, hash } = await downloadRollbackAsset(state.rollbackTarget);
+    installerPath = path;
+    // 更新缓存路径和 hash
+    state.rollbackTarget.cachedInstallerPath = installerPath;
+    state.rollbackTarget.cachedInstallerHash = hash;
+    await persistUpdaterState();
+  }
+
+  // 回滚后重置 pending 状态，避免老版本启动后被误判为异常
+  state.pendingVersion = null;
+  state.pendingFromVersion = null;
+  state.pendingLaunchAttempts = 0;
+  await persistUpdaterState();
+
   await openRollbackInstaller(installerPath);
   return {
     version: state.rollbackTarget.version,

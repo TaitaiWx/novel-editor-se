@@ -1,0 +1,109 @@
+name: Sync Release to Mirror
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to sync (e.g. v1.0.1-beta.27)'
+        required: false
+
+env:
+  MIRROR_HOST: ${{ secrets.MIRROR_SSH_HOST }}
+  MIRROR_USER: ${{ secrets.MIRROR_SSH_USER }}
+  MIRROR_BASE: /var/www/dl.wayintech.net/novel-editor
+
+permissions:
+  contents: read
+
+jobs:
+  sync-mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve release tag
+        id: resolve
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download release assets from GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.resolve.outputs.tag }}"
+          mkdir -p artifacts
+
+          echo "Downloading assets for release: ${TAG}"
+          gh release download "${TAG}" --dir artifacts || {
+            echo "::error::Failed to download release assets for ${TAG}"
+            exit 1
+          }
+
+          echo "=== Downloaded files ==="
+          ls -lh artifacts/
+
+      - name: Organize by platform and arch
+        run: |
+          set -euo pipefail
+          BASE=mirror-out/latest
+          TAG="${{ steps.resolve.outputs.tag }}"
+
+          # Copy all original files and create predictable shortcut names
+          # Original files: "Novel Editor-{ver}-{os}-{arch}.{ext}"
+          # Shortcut names: "{os}-{arch}.{ext}" (e.g. mac-arm64.dmg, win-x64.exe)
+          for f in artifacts/*; do
+            name=$(basename "$f")
+            case "$name" in
+              *-mac-arm64.dmg)   mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-arm64.dmg" ;;
+              *-mac-arm64.zip)   mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-arm64.zip" ;;
+              *-mac-x64.dmg)     mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-x64.dmg" ;;
+              *-mac-x64.zip)     mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/mac-x64.zip" ;;
+              *-win-x64.exe)     mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-x64.exe" ;;
+              *-win-ia32.exe)    mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-ia32.exe" ;;
+              *-win-arm64.exe)   mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/win-arm64.exe" ;;
+              *-linux-x64.AppImage) mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/linux-x64.AppImage" ;;
+              *-linux-x64.deb)   mkdir -p "${BASE}"; cp "$f" "${BASE}/"; cp "$f" "${BASE}/linux-x64.deb" ;;
+              *.yml)             mkdir -p "${BASE}"; cp "$f" "${BASE}/" ;;
+            esac
+          done
+
+          # Generate version metadata
+          printf '{\n  "version": "%s",\n  "tag": "%s",\n  "date": "%s",\n  "github": "https://github.com/TaitaiWx/novel-editor-se/releases/tag/%s"\n}\n' \
+            "${TAG#v}" "${TAG}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${TAG}" \
+            > "${BASE}/version.json"
+
+          echo "=== Mirror structure ==="
+          find mirror-out -type f | sort
+
+      - name: Deploy to mirror server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.MIRROR_SSH_HOST }}
+          username: ${{ secrets.MIRROR_SSH_USER }}
+          key: ${{ secrets.MIRROR_SSH_KEY }}
+          source: mirror-out/*
+          target: ${{ env.MIRROR_BASE }}
+          strip_components: 1
+          overwrite: true
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.MIRROR_SSH_HOST }}
+          username: ${{ secrets.MIRROR_SSH_USER }}
+          key: ${{ secrets.MIRROR_SSH_KEY }}
+          script: |
+            echo "=== Mirror contents ==="
+            find ${{ env.MIRROR_BASE }}/latest -type f | sort
+            echo ""
+            echo "=== Version info ==="
+            cat ${{ env.MIRROR_BASE }}/latest/version.json 2>/dev/null || echo "No version.json found"
