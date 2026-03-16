@@ -247,6 +247,8 @@ async function syncStatusFromUpdateInfo(updateInfo: UpdateInfo | null, channel: 
   updaterStatus.pendingVersion = state.pendingVersion;
 }
 
+const MIRROR_UPDATE_URL = 'https://dl.wayintech.net/novel-editor/latest';
+
 function configureAutoUpdater(channel: UpdateChannel) {
   const mappedChannel = mapUpdateChannel(channel);
   autoUpdater.autoDownload = true;
@@ -254,6 +256,12 @@ function configureAutoUpdater(channel: UpdateChannel) {
   autoUpdater.allowPrerelease = mappedChannel !== 'latest';
   autoUpdater.allowDowngrade = true;
   autoUpdater.channel = mappedChannel;
+
+  // Use mirror server for update checks — avoids private-repo 404 and works in China
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: MIRROR_UPDATE_URL,
+  });
 }
 
 function isPreferredAssetName(name: string) {

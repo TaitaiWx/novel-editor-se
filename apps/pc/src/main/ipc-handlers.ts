@@ -42,7 +42,6 @@ import {
   getUpdateStatus,
   installUpdate,
   rollbackToPreviousVersion,
-  setUpdateChannel,
 } from './auto-updater';
 import {
   initDatabase,
@@ -436,10 +435,6 @@ export function setupIPC() {
   ipcMain.handle('update-check', () => checkForUpdatesManually());
 
   ipcMain.handle('update-status', () => getUpdateStatus());
-
-  ipcMain.handle('update-set-channel', (_event, channel: 'stable' | 'beta' | 'canary') =>
-    setUpdateChannel(channel)
-  );
 
   ipcMain.handle('update-rollback', () => rollbackToPreviousVersion());
 

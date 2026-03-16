@@ -24,7 +24,6 @@ contextBridge.exposeInMainWorld('electron', {
         'get-app-version',
         'update-check',
         'update-status',
-        'update-set-channel',
         'update-download',
         'update-install',
         'update-rollback',

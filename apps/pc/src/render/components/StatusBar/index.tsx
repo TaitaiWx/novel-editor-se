@@ -1,21 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { VscHistory } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
-import type { UpdateChannel, UpdateStatus } from '@/render/types/electron-api';
+import type { UpdateStatus } from '@/render/types/electron-api';
 import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 
-const ENCODINGS = ['UTF-8', 'GBK', 'GB2312', 'Big5', 'Shift_JIS', 'ISO-8859-1', 'ASCII'];
 const MAX_FILENAME_LEN = 20;
-const UPDATE_CHANNELS: { value: UpdateChannel; label: string; description: string }[] = [
-  { value: 'stable', label: '稳定版', description: '正式发布，默认通道' },
-  { value: 'beta', label: 'Beta', description: '提前验证新版本' },
-  { value: 'canary', label: 'Canary', description: '金丝雀小流量版本' },
-];
 
-function getChannelLabel(channel: UpdateChannel) {
-  return UPDATE_CHANNELS.find((item) => item.value === channel)?.label ?? channel;
-}
+const ENCODINGS = ['UTF-8', 'GBK', 'GB2312', 'Big5', 'Shift_JIS', 'EUC-KR', 'ISO-8859-1'];
 
 interface StatusBarProps {
   content: string;
@@ -39,10 +31,8 @@ const StatusBar: React.FC<StatusBarProps> = ({
   onToggleVersionHistory,
 }) => {
   const [showEncodingMenu, setShowEncodingMenu] = useState(false);
-  const [showUpdateMenu, setShowUpdateMenu] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const encodingMenuRef = useRef<HTMLDivElement>(null);
-  const updateMenuRef = useRef<HTMLDivElement>(null);
 
   // O(n) single-pass line+char count — avoids split() and replace() allocations
   const { lineCount, charCount } = useMemo(() => {
@@ -93,47 +83,21 @@ const StatusBar: React.FC<StatusBarProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!showEncodingMenu && !showUpdateMenu) return;
+    if (!showEncodingMenu) return;
     const handleClickOutside = (e: MouseEvent) => {
       if (encodingMenuRef.current && !encodingMenuRef.current.contains(e.target as Node)) {
         setShowEncodingMenu(false);
       }
-
-      if (updateMenuRef.current && !updateMenuRef.current.contains(e.target as Node)) {
-        setShowUpdateMenu(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showEncodingMenu, showUpdateMenu]);
+  }, [showEncodingMenu]);
 
   const handleCheckUpdates = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('update-check');
     } catch (error) {
       console.error('Failed to check updates:', error);
-    }
-  }, []);
-
-  const handleChangeChannel = useCallback(async (channel: UpdateChannel) => {
-    try {
-      const nextStatus = (await window.electron.ipcRenderer.invoke(
-        'update-set-channel',
-        channel
-      )) as UpdateStatus;
-      setUpdateStatus(nextStatus);
-      setShowUpdateMenu(false);
-    } catch (error) {
-      console.error('Failed to change update channel:', error);
-    }
-  }, []);
-
-  const handleRollback = useCallback(async () => {
-    try {
-      await window.electron.ipcRenderer.invoke('update-rollback');
-      setShowUpdateMenu(false);
-    } catch (error) {
-      console.error('Failed to rollback:', error);
     }
   }, []);
 
@@ -190,7 +154,9 @@ const StatusBar: React.FC<StatusBarProps> = ({
         )}
       </div>
       <div className={styles.right}>
-        {updateSummary && <span className={styles.item}>{updateSummary}</span>}
+        {updateSummary && !updateReady && (
+          <span className={`${styles.item} ${styles.updateHint}`}>{updateSummary}</span>
+        )}
         {updateReady && (
           <span className={`${styles.item} ${styles.updateReady}`} onClick={handleRestartUpdate}>
             重启以更新
@@ -220,52 +186,15 @@ const StatusBar: React.FC<StatusBarProps> = ({
             </div>
           )}
         </div>
-        {appVersion && updateStatus && (
-          <div className={styles.menuWrapper} ref={updateMenuRef}>
+        {appVersion && (
+          <Tooltip content="点击检查更新" position="top">
             <span
               className={`${styles.version} ${styles.clickableVersion}`}
-              onClick={() => setShowUpdateMenu((prev) => !prev)}
-              title="更新通道与回退"
+              onClick={handleCheckUpdates}
             >
-              v{appVersion} · {getChannelLabel(updateStatus.channel)}
+              v{appVersion}
             </span>
-            {showUpdateMenu && (
-              <div className={`${styles.encodingMenu} ${styles.updateMenu}`}>
-                <div className={styles.menuSectionTitle}>更新通道</div>
-                {UPDATE_CHANNELS.map((channel) => (
-                  <button
-                    key={channel.value}
-                    className={`${styles.menuButton} ${
-                      updateStatus.channel === channel.value ? styles.active : ''
-                    }`}
-                    onClick={() => handleChangeChannel(channel.value)}
-                  >
-                    <span>{channel.label}</span>
-                    <span className={styles.menuMeta}>{channel.description}</span>
-                  </button>
-                ))}
-                <div className={styles.menuDivider}></div>
-                <button className={styles.menuButton} onClick={handleCheckUpdates}>
-                  手动检查更新
-                </button>
-                {updateStatus.rollbackAvailable && updateStatus.rollbackVersion && (
-                  <button className={styles.menuButton} onClick={handleRollback}>
-                    回退到 {updateStatus.rollbackVersion}
-                  </button>
-                )}
-                {updateStatus.channelVersion && (
-                  <div className={styles.menuHint}>
-                    通道文件 {updateStatus.channelFile} · 版本 {updateStatus.channelVersion}
-                    {typeof updateStatus.rolloutPercentage === 'number' &&
-                      ` · 灰度 ${updateStatus.rolloutPercentage}%`}
-                  </div>
-                )}
-                {updateStatus.lastError && (
-                  <div className={styles.menuError}>{updateStatus.lastError}</div>
-                )}
-              </div>
-            )}
-          </div>
+          </Tooltip>
         )}
         {filePath &&
           (() => {
