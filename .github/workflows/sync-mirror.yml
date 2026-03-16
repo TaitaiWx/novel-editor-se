@@ -122,35 +122,38 @@ jobs:
           echo "=== Mirror structure ==="
           find mirror-out -type f | sort
 
-      - name: Cleanup old files on mirror
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.MIRROR_SSH_HOST }}
-          username: ${{ secrets.MIRROR_SSH_USER }}
-          key: ${{ secrets.MIRROR_SSH_KEY }}
-          script: |
-            DIR="${{ env.MIRROR_BASE }}/latest"
-            if [ -d "$DIR" ]; then
-              echo "=== Before cleanup ==="
-              du -sh "$DIR"
-              # Remove old versioned files (Novel-Editor-*), keep stable shortcuts and yml
-              find "$DIR" -name 'Novel-Editor-*' -type f -delete
-              # Remove old dot-files like Novel.Editor-* if any
-              find "$DIR" -name 'Novel.Editor-*' -type f -delete
-              echo "=== After cleanup ==="
-              du -sh "$DIR"
-            fi
-
-      - name: Deploy to mirror server
+      - name: Deploy to staging directory
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.MIRROR_SSH_HOST }}
           username: ${{ secrets.MIRROR_SSH_USER }}
           key: ${{ secrets.MIRROR_SSH_KEY }}
           source: mirror-out/*
-          target: ${{ env.MIRROR_BASE }}
+          target: ${{ env.MIRROR_BASE }}/.staging
           strip_components: 1
           overwrite: true
+
+      - name: Atomic swap staging → live
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.MIRROR_SSH_HOST }}
+          username: ${{ secrets.MIRROR_SSH_USER }}
+          key: ${{ secrets.MIRROR_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            BASE="${{ env.MIRROR_BASE }}"
+
+            if [ ! -d "$BASE/.staging/latest" ]; then
+              echo "::error::Staging directory not found, aborting swap"
+              exit 1
+            fi
+
+            # Atomic swap: old → backup, staging → live, cleanup
+            rm -rf "$BASE/latest.old"
+            [ -d "$BASE/latest" ] && mv "$BASE/latest" "$BASE/latest.old"
+            mv "$BASE/.staging/latest" "$BASE/latest"
+            rm -rf "$BASE/latest.old" "$BASE/.staging"
+            echo "Atomic swap complete"
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
