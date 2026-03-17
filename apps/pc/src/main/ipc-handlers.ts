@@ -3,6 +3,7 @@ import dirTree from 'directory-tree';
 import { readFile, writeFile, mkdir, access, cp } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { addRecentFolder, getLastFolder, getRecentFolders } from './recent-folders';
 
 // ========== better-sqlite3 原生模块路径解析 ==========
 // 打包后的 Electron 应用无法通过 bindings 模块自动定位 .node 文件，
@@ -37,6 +38,7 @@ function getNativeBinding(): string | undefined {
 }
 import { getAllShortcuts } from './shortcuts/getAllShortcuts';
 import { importFile, SUPPORTED_IMPORT_EXTENSIONS } from './file-importer';
+import { getDeviceId } from './device-id';
 import {
   checkForUpdatesManually,
   downloadUpdate,
@@ -182,6 +184,7 @@ export function setupIPC() {
 
     if (!result.canceled && result.filePaths.length > 0) {
       const folderPath = result.filePaths[0];
+      addRecentFolder(folderPath);
       const tree = dirTree(folderPath, {
         exclude: /node_modules|\.git|\.novel-editor|\.vscode|\.DS_Store|dist|build|out/,
         attributes: ['type'],
@@ -273,8 +276,8 @@ export function setupIPC() {
       if (app.isPackaged) {
         sourcePath = path.join(process.resourcesPath, 'sample-data');
       } else {
-        const monorepoRoot = path.resolve(app.getAppPath(), '..', '..');
-        sourcePath = path.join(monorepoRoot, 'sample-data');
+        const appRoot = path.resolve(app.getAppPath(), '..');
+        sourcePath = path.join(appRoot, 'sample-data');
       }
 
       // 复制 sample-data 到用户目录
@@ -292,6 +295,41 @@ export function setupIPC() {
       console.error('Error creating/getting sample-data path:', error);
       throw new Error('Failed to get default data path');
     }
+  });
+
+  // 最近打开的文件夹
+  ipcMain.handle('get-recent-folders', () => getRecentFolders());
+  ipcMain.handle('get-last-folder', () => getLastFolder());
+  ipcMain.handle('add-recent-folder', (_event, folderPath: string) => {
+    addRecentFolder(folderPath);
+  });
+
+  // 打开示例项目（返回 sample-data 路径）
+  ipcMain.handle('open-sample-data', async () => {
+    const userDataDir = path.join(app.getPath('documents'), 'Novel Editor');
+    const userSamplePath = path.join(userDataDir, 'sample-data');
+
+    // 确保 sample-data 已复制到用户目录
+    try {
+      await access(userSamplePath);
+    } catch {
+      let sourcePath: string;
+      if (app.isPackaged) {
+        sourcePath = path.join(process.resourcesPath, 'sample-data');
+      } else {
+        const appRoot = path.resolve(app.getAppPath(), '..');
+        sourcePath = path.join(appRoot, 'sample-data');
+      }
+      try {
+        await access(sourcePath);
+        await mkdir(userDataDir, { recursive: true });
+        await cp(sourcePath, userSamplePath, { recursive: true });
+      } catch {
+        await mkdir(userSamplePath, { recursive: true });
+      }
+    }
+
+    return userSamplePath;
   });
 
   // 创建新文件
@@ -430,6 +468,11 @@ export function setupIPC() {
     return app.getVersion();
   });
 
+  // 获取设备唯一标识
+  ipcMain.handle('get-device-id', () => {
+    return getDeviceId();
+  });
+
   // 自动更新相关
   ipcMain.handle('update-download', () => downloadUpdate());
 
@@ -534,8 +577,14 @@ export function setupIPC() {
   // 角色 CRUD
   ipcMain.handle(
     'db-character-create',
-    (_event, novelId: number, name: string, role?: string, description?: string) =>
-      characterOps.create(novelId, name, role, description)
+    (
+      _event,
+      novelId: number,
+      name: string,
+      role?: string,
+      description?: string,
+      attributes?: string
+    ) => characterOps.create(novelId, name, role, description, attributes)
   );
   ipcMain.handle('db-character-list', (_event, novelId: number) =>
     characterOps.getByNovel(novelId)
@@ -649,7 +698,7 @@ export function setupIPC() {
 
   // ========== 文件导入（Word / Excel → Markdown） ==========
 
-  ipcMain.handle('import-file', async (_event, targetDir: string) => {
+  ipcMain.handle('import-file', async () => {
     const result = await dialog.showOpenDialog({
       title: '导入文件',
       filters: [
@@ -659,23 +708,13 @@ export function setupIPC() {
     });
     if (result.canceled || result.filePaths.length === 0) return null;
 
-    const imported: { filePath: string; fileName: string }[] = [];
+    const previews: { fileName: string; content: string; sourcePath: string }[] = [];
     const errors: { filePath: string; error: string }[] = [];
 
     for (const srcPath of result.filePaths) {
       try {
         const { fileName, content } = await importFile(srcPath);
-        // 避免覆盖：同名文件自动追加序号
-        let destPath = path.join(targetDir, fileName);
-        let counter = 1;
-        while (existsSync(destPath)) {
-          const ext = path.extname(fileName);
-          const base = path.basename(fileName, ext);
-          destPath = path.join(targetDir, `${base} (${counter})${ext}`);
-          counter++;
-        }
-        await writeFile(destPath, content, 'utf-8');
-        imported.push({ filePath: destPath, fileName: path.basename(destPath) });
+        previews.push({ fileName, content, sourcePath: srcPath });
       } catch (error) {
         errors.push({
           filePath: srcPath,
@@ -684,6 +723,6 @@ export function setupIPC() {
       }
     }
 
-    return { imported, errors };
+    return { previews, errors };
   });
 }

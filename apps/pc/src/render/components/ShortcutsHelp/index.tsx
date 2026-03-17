@@ -7,11 +7,12 @@ import { formatShortcutText } from './shortcuts/formatShortcutText';
 interface ShortcutsHelpProps {
   visible: boolean;
   onClose: () => void;
+  onOpenSampleData?: () => void;
 }
 
 const CATEGORY_ORDER = ['文件', '编辑', '视图', '应用'] as const;
 
-const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose }) => {
+const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose, onOpenSampleData }) => {
   const [shortcuts, setShortcuts] = useState<ShortcutInfo[]>([]);
 
   useEffect(() => {
@@ -70,6 +71,35 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose }) => {
             );
           })}
         </div>
+
+        {onOpenSampleData && (
+          <div className={styles.footer}>
+            <button
+              className={styles.sampleDataBtn}
+              onClick={() => {
+                onOpenSampleData();
+                onClose();
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path
+                  d="M1.5 2.5h5l1 1h6v9h-12v-10z"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+                <path
+                  d="M5 8h6M8 5.5v5"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                />
+              </svg>
+              打开示例项目
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

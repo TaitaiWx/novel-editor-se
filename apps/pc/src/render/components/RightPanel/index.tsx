@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   extractOutline,
   extractActs,
@@ -7,19 +7,21 @@ import {
 } from '@novel-editor/basic-algorithm';
 import styles from './styles.module.scss';
 
-type TabType = 'outline' | 'characters' | 'acts';
+type TabType = 'outline' | 'characters' | 'acts' | 'ai';
 
 interface RightPanelProps {
   content: string;
   collapsed: boolean;
   onToggle: () => void;
   onScrollToLine?: (line: number) => void;
+  folderPath: string | null;
 }
 
 const TAB_LABELS: Record<TabType, string> = {
   outline: '大纲',
   characters: '人物',
   acts: '幕剧',
+  ai: 'AI',
 };
 
 const TAB_KEYS = Object.keys(TAB_LABELS) as TabType[];
@@ -29,6 +31,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
   collapsed,
   onToggle,
   onScrollToLine,
+  folderPath,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('outline');
 
@@ -68,8 +71,9 @@ const RightPanel: React.FC<RightPanelProps> = ({
         {activeTab === 'outline' && (
           <OutlineView content={content} onScrollToLine={onScrollToLine} />
         )}
-        {activeTab === 'characters' && <CharactersView />}
+        {activeTab === 'characters' && <CharactersView folderPath={folderPath} />}
         {activeTab === 'acts' && <ActsView content={content} onScrollToLine={onScrollToLine} />}
+        {activeTab === 'ai' && <AIView />}
       </div>
     </div>
   );
@@ -131,6 +135,7 @@ const OutlineView: React.FC<{ content: string; onScrollToLine?: (line: number) =
 // ---------- Characters View ----------
 
 interface Character {
+  id: number;
   name: string;
   role: string;
   description: string;
@@ -243,8 +248,9 @@ const CharacterCard: React.FC<{
   }
 );
 
-const CharactersView: React.FC = React.memo(() => {
+const CharactersView: React.FC<{ folderPath: string | null }> = React.memo(({ folderPath }) => {
   const [characters, setCharacters] = useState<Character[]>([]);
+  const [novelId, setNovelId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('');
@@ -255,6 +261,54 @@ const CharactersView: React.FC = React.memo(() => {
   const dragCounter = useRef(0);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
+  // Load characters from DB when folderPath changes
+  useEffect(() => {
+    if (!folderPath || !window.electron?.ipcRenderer) {
+      setCharacters([]);
+      setNovelId(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const novel = (await window.electron.ipcRenderer.invoke(
+        'db-novel-get-by-folder',
+        folderPath
+      )) as { id: number } | null;
+      if (cancelled || !novel) return;
+      const nid = novel.id;
+      setNovelId(nid);
+      const rows = (await window.electron.ipcRenderer.invoke('db-character-list', nid)) as Array<{
+        id: number;
+        name: string;
+        role: string;
+        description: string;
+        attributes: string;
+      }>;
+      if (cancelled) return;
+      setCharacters(
+        rows.map((r) => {
+          let avatar: string | undefined;
+          try {
+            const attrs = JSON.parse(r.attributes || '{}');
+            avatar = attrs.avatar || undefined;
+          } catch {
+            /* ignore */
+          }
+          return {
+            id: r.id,
+            name: r.name,
+            role: r.role || '',
+            description: r.description || '',
+            avatar,
+          };
+        })
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [folderPath]);
+
   const handleAvatarSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -263,11 +317,24 @@ const CharactersView: React.FC = React.memo(() => {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleAdd = useCallback(() => {
-    if (!newName.trim()) return;
+  const handleAdd = useCallback(async () => {
+    if (!newName.trim() || novelId === null) return;
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const attrs = newAvatar ? JSON.stringify({ avatar: newAvatar }) : '{}';
+    const result = (await ipc.invoke(
+      'db-character-create',
+      novelId,
+      newName.trim(),
+      newRole.trim(),
+      newDesc.trim(),
+      attrs
+    )) as { lastInsertRowid: number | bigint };
+    const newId = Number(result.lastInsertRowid);
     setCharacters((prev) => [
       ...prev,
       {
+        id: newId,
         name: newName.trim(),
         role: newRole.trim(),
         description: newDesc.trim(),
@@ -279,11 +346,17 @@ const CharactersView: React.FC = React.memo(() => {
     setNewDesc('');
     setNewAvatar('');
     setAdding(false);
-  }, [newName, newRole, newDesc, newAvatar]);
+  }, [newName, newRole, newDesc, newAvatar, novelId]);
 
-  const handleDelete = useCallback((index: number) => {
-    setCharacters((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const handleDelete = useCallback(
+    async (index: number) => {
+      const char = characters[index];
+      if (!char) return;
+      await window.electron?.ipcRenderer?.invoke('db-character-delete', char.id);
+      setCharacters((prev) => prev.filter((_, i) => i !== index));
+    },
+    [characters]
+  );
 
   const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, index: number) => {
     setDragIndex(index);
@@ -331,7 +404,7 @@ const CharactersView: React.FC = React.memo(() => {
   }, []);
 
   const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
+    async (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
       e.preventDefault();
       dragCounter.current = 0;
       if (dragIndex === null || dragIndex === targetIndex) {
@@ -343,6 +416,9 @@ const CharactersView: React.FC = React.memo(() => {
         const updated = [...prev];
         const [moved] = updated.splice(dragIndex, 1);
         updated.splice(targetIndex, 0, moved);
+        // Persist new order
+        const ids = updated.map((c) => c.id);
+        window.electron?.ipcRenderer?.invoke('db-character-reorder', ids);
         return updated;
       });
       setDragIndex(null);
@@ -436,7 +512,7 @@ const CharactersView: React.FC = React.memo(() => {
       <div className={styles.cardsContainer}>
         {characters.map((c, i) => (
           <CharacterCard
-            key={`${c.name}-${i}`}
+            key={c.id}
             character={c}
             index={i}
             dragIndex={dragIndex}
@@ -564,5 +640,31 @@ const ActsView: React.FC<{ content: string; onScrollToLine?: (line: number) => v
     );
   }
 );
+
+// ---------- AI View ----------
+
+const AIView: React.FC = React.memo(() => {
+  return (
+    <div className={styles.aiView}>
+      <div className={styles.aiIcon}>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 2L13.09 8.26L18 6L14.74 10.91L21 12L14.74 13.09L18 18L13.09 15.74L12 22L10.91 15.74L6 18L9.26 13.09L3 12L9.26 10.91L6 6L10.91 8.26L12 2Z"
+            fill="#dcdcaa"
+            stroke="#dcdcaa"
+            strokeWidth="0.5"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+      <div className={styles.aiTitle}>AI 写作助手</div>
+      <div className={styles.emptyHint}>
+        AI 功能正在开发中，敬请期待
+        <br />
+        <span className={styles.hintSub}>后续将支持续写、润色、对话等能力</span>
+      </div>
+    </div>
+  );
+});
 
 export default RightPanel;

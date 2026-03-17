@@ -696,3 +696,26 @@
   font-size: 11px;
   color: #444;
 }
+
+// ---------- AI View ----------
+
+.aiView {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 16px 24px;
+  gap: 12px;
+}
+
+.aiIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.aiTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #cccccc;
+}

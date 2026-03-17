@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { createMainWindow, setupWindowEvents } from './window';
+import { createSplashWindow } from './static/splash/splash-window';
 import { setupIPC } from './ipc-handlers';
 import { registerAllShortcuts } from './shortcuts/registerAllShortcuts';
 import { unregisterAllShortcuts } from './shortcuts/unregisterAllShortcuts';
@@ -21,7 +22,10 @@ app.whenReady().then(() => {
   // 注册快捷键（通过 Menu accelerator，仅在应用聚焦时生效）
   registerAllShortcuts();
 
-  // 创建主窗口
+  // 创建 splash 窗口（即时显示加载画面）
+  createSplashWindow();
+
+  // 创建主窗口（ready-to-show 时自动关闭 splash）
   createMainWindow();
 
   // 生产环境下检查自动更新

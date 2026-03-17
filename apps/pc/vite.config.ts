@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import { builtinModules } from 'node:module';
+import { copyFileSync, mkdirSync } from 'node:fs';
 
 export default defineConfig(({ mode }) => {
   const isElectronMain = process.env.VITE_ELECTRON_MAIN === 'true';
@@ -37,6 +38,19 @@ export default defineConfig(({ mode }) => {
   if (isElectronMain) {
     // 主进程构建配置
     return {
+      plugins: [
+        {
+          name: 'copy-splash',
+          writeBundle() {
+            // 将 splash 窗口的静态文件复制到 dist/splash
+            const srcDir = resolve(__dirname, 'src/main/static/splash');
+            const outDir = resolve(__dirname, 'dist/splash');
+            mkdirSync(outDir, { recursive: true });
+            copyFileSync(resolve(srcDir, 'splash.html'), resolve(outDir, 'splash.html'));
+            copyFileSync(resolve(srcDir, 'splash.css'), resolve(outDir, 'splash.css'));
+          },
+        },
+      ],
       build: {
         outDir: './dist',
         emptyOutDir: false,

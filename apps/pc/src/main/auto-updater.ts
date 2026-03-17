@@ -24,6 +24,7 @@ import { spawn } from 'child_process';
 import { createReadStream, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
+import { getDeviceId } from './device-id';
 
 const { autoUpdater } = pkg;
 
@@ -261,6 +262,7 @@ function configureAutoUpdater(channel: UpdateChannel) {
   autoUpdater.setFeedURL({
     provider: 'generic',
     url: MIRROR_UPDATE_URL,
+    requestHeaders: { 'X-Device-Id': getDeviceId() },
   });
 }
 

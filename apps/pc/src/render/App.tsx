@@ -186,9 +186,14 @@ const App: React.FC = () => {
       // 开箱即用：先初始化默认 SQLite 数据库，确保无论是否打开目录都可用
       await window.electron.ipcRenderer.invoke('db-init-default');
 
-      const defaultPath = await window.electron.ipcRenderer.invoke('get-default-data-path');
-      await initializeProjectStore(defaultPath);
-      const result = await window.electron.ipcRenderer.invoke('refresh-folder', defaultPath);
+      // VS Code 风格：优先恢复上次打开的目录，首次安装打开 sample-data
+      const lastFolder = await window.electron.ipcRenderer.invoke('get-last-folder');
+      const targetPath =
+        lastFolder || (await window.electron.ipcRenderer.invoke('get-default-data-path'));
+
+      await initializeProjectStore(targetPath);
+      await window.electron.ipcRenderer.invoke('add-recent-folder', targetPath);
+      const result = await window.electron.ipcRenderer.invoke('refresh-folder', targetPath);
       if (result) {
         setFolderPath(result.path);
         setFiles(result.files);
@@ -210,6 +215,7 @@ const App: React.FC = () => {
       const result = await window.electron.ipcRenderer.invoke('open-local-folder');
       if (result) {
         await initializeProjectStore(result.path);
+        await window.electron.ipcRenderer.invoke('add-recent-folder', result.path);
         setFolderPath(result.path);
         setFiles(result.files);
         setOpenTabs([]);
@@ -222,6 +228,27 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   }, [toast, initializeProjectStore]);
+
+  const handleOpenSampleData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      if (!window.electron?.ipcRenderer) return;
+      const samplePath = await window.electron.ipcRenderer.invoke('open-sample-data');
+      await initializeProjectStore(samplePath);
+      await window.electron.ipcRenderer.invoke('add-recent-folder', samplePath);
+      const result = await window.electron.ipcRenderer.invoke('refresh-folder', samplePath);
+      if (result) {
+        setFolderPath(result.path);
+        setFiles(result.files);
+        setOpenTabs([]);
+        setActiveTab(null);
+      }
+    } catch (error) {
+      console.error('Error opening sample data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [initializeProjectStore]);
 
   const handleCreateFile = useCallback(() => {
     if (!folderPathRef.current) return;
@@ -280,27 +307,31 @@ const App: React.FC = () => {
   }, []);
 
   const handleImportFile = useCallback(async () => {
-    const currentFolder = folderPathRef.current;
-    if (!currentFolder || !window.electron?.ipcRenderer) {
-      toast.error('请先打开一个文件夹');
-      return;
-    }
+    if (!window.electron?.ipcRenderer) return;
     try {
-      const result = await window.electron.ipcRenderer.invoke('import-file', currentFolder);
+      const result = (await window.electron.ipcRenderer.invoke('import-file')) as {
+        previews: { fileName: string; content: string }[];
+        errors: { filePath: string; error: string }[];
+      } | null;
       if (!result) return; // 用户取消
-      await refreshCurrentFolder();
-      if (result.imported.length > 0) {
-        toast.success(`已导入 ${result.imported.length} 个文件`);
-        // 打开第一个导入的文件
-        openFileInTab(result.imported[0].filePath);
+      // Open each preview as an untitled tab (no disk write — user saves manually)
+      for (const preview of result.previews) {
+        ++untitledCounterRef.current;
+        const tabPath = `__untitled__:${preview.fileName}`;
+        setOpenTabs((prev) => [...prev, tabPath]);
+        setActiveTab(tabPath);
+        setEditorContent(preview.content);
+      }
+      if (result.previews.length > 0) {
+        toast.success('文件已转换，可自行编辑后保存');
       }
       if (result.errors.length > 0) {
-        toast.error(`${result.errors.length} 个文件导入失败`);
+        toast.error(`${result.errors.length} 个文件转换失败`);
       }
     } catch (error) {
       toast.error(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [toast, refreshCurrentFolder, openFileInTab]);
+  }, [toast]);
 
   const handleFileSelect = useCallback(
     (filePath: string) => {
@@ -618,6 +649,7 @@ const App: React.FC = () => {
             collapsed={rightPanelCollapsed}
             onToggle={handleToggleRightPanel}
             onScrollToLine={handleScrollToLine}
+            folderPath={folderPath}
           />
         )}
       </div>
@@ -667,7 +699,11 @@ const App: React.FC = () => {
       )}
 
       {/* 快捷键帮助 */}
-      <ShortcutsHelp visible={showShortcuts} onClose={() => setShowShortcuts(false)} />
+      <ShortcutsHelp
+        visible={showShortcuts}
+        onClose={() => setShowShortcuts(false)}
+        onOpenSampleData={handleOpenSampleData}
+      />
     </div>
   );
 };

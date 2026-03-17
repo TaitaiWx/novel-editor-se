@@ -136,6 +136,37 @@
   margin-bottom: 8px;
 }
 
+.footer {
+  padding: 12px 20px;
+  border-top: 1px solid #404040;
+  display: flex;
+  justify-content: center;
+}
+
+.sampleDataBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  background: #2d2d2d;
+  color: #d4d4d4;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #3c3c3c;
+    border-color: #569cd6;
+    color: #fff;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
 // 响应式调整
 @media (max-width: 768px) {
   .modal {
@@ -161,6 +192,7 @@
 
 // 无障碍支持
 @media (prefers-reduced-motion: reduce) {
+
   .helpButton,
   .closeButton,
   .shortcutItem {

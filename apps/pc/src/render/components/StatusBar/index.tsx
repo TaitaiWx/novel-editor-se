@@ -3,6 +3,7 @@ import { VscHistory, VscSync, VscError, VscCheck } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
 import type { UpdateStatus } from '@/render/types/electron-api';
 import Tooltip from '../Tooltip';
+import CopyTooltip from '../CopyTooltip';
 import styles from './styles.module.scss';
 
 const MAX_FILENAME_LEN = 20;
@@ -33,6 +34,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
   const [showEncodingMenu, setShowEncodingMenu] = useState(false);
   const [showUpdatePanel, setShowUpdatePanel] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [deviceId, setDeviceId] = useState('');
   const [upToDate, setUpToDate] = useState(false);
   const prevCheckingRef = useRef(false);
   const encodingMenuRef = useRef<HTMLDivElement>(null);
@@ -62,6 +64,10 @@ const StatusBar: React.FC<StatusBarProps> = ({
       .catch((error) => {
         console.error('Failed to get update status:', error);
       });
+    ipc
+      .invoke('get-device-id')
+      .then((id) => setDeviceId(id as string))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -78,11 +84,17 @@ const StatusBar: React.FC<StatusBarProps> = ({
     };
   }, []);
 
+  const [restarting, setRestarting] = useState(false);
+
   const handleRestartUpdate = useCallback(async () => {
+    setRestarting(true);
+    // Brief delay so the modal renders before the process quits
+    await new Promise((r) => setTimeout(r, 300));
     try {
       await window.electron.ipcRenderer.invoke('update-install');
     } catch (error) {
       console.error('Failed to install update:', error);
+      setRestarting(false);
     }
   }, []);
 
@@ -257,6 +269,16 @@ const StatusBar: React.FC<StatusBarProps> = ({
               <div className={styles.panelSection}>
                 <div className={styles.panelTitle}>检查更新</div>
                 <div className={styles.panelInfo}>当前版本 {appVersion}</div>
+                {deviceId && (
+                  <CopyTooltip text={deviceId} position="bottom">
+                    <div
+                      className={styles.panelInfo}
+                      style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}
+                    >
+                      设备 ID: {deviceId.slice(0, 8)}...
+                    </div>
+                  </CopyTooltip>
+                )}
                 {/* Progress bar */}
                 {typeof downloadPercent === 'number' && updateStatus?.availableVersion && (
                   <div className={styles.progressSection}>
@@ -344,6 +366,14 @@ const StatusBar: React.FC<StatusBarProps> = ({
             );
           })()}
       </div>
+      {restarting && (
+        <div className={styles.restartOverlay}>
+          <div className={styles.restartModal}>
+            <VscSync className={styles.restartSpinner} />
+            <div className={styles.restartText}>正在准备更新，即将重启...</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

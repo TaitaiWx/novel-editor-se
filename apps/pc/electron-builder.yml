@@ -24,7 +24,7 @@ files:
   - resources/branding/**/*
 
 extraResources:
-  - from: ../../sample-data
+  - from: sample-data
     to: sample-data
     filter:
       - "**/*"

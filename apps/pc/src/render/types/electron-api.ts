@@ -28,6 +28,10 @@ export interface ElectronAPI {
     invoke(channel: 'write-file', filePath: string, content: string): Promise<{ success: boolean }>;
     invoke(channel: 'get-file-info', filePath: string): Promise<FileInfo>;
     invoke(channel: 'get-default-data-path'): Promise<string>;
+    invoke(channel: 'get-recent-folders'): Promise<string[]>;
+    invoke(channel: 'get-last-folder'): Promise<string | null>;
+    invoke(channel: 'add-recent-folder', folderPath: string): Promise<void>;
+    invoke(channel: 'open-sample-data'): Promise<string>;
     invoke(
       channel: 'create-file',
       folderPath: string,
@@ -51,7 +55,7 @@ export interface ElectronAPI {
     invoke(channel: 'update-check'): Promise<void>;
     invoke(channel: 'update-status'): Promise<UpdateStatus>;
     invoke(channel: 'update-install'): Promise<void>;
-    invoke(channel: 'update-set-channel', channel: UpdateChannel): Promise<UpdateStatus>;
+    invoke(channel: 'update-set-channel', updateChannel: UpdateChannel): Promise<UpdateStatus>;
     invoke(channel: 'update-rollback'): Promise<{ version: string; installerPath: string }>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     on(channel: string, listener: (...args: any[]) => void): void;

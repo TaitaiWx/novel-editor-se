@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { closeSplashWindow } from './static/splash/splash-window';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -33,6 +34,7 @@ function getWindowConfig() {
       webSecurity: true,
     },
     show: false, // 等待页面加载完成后再显示
+    backgroundColor: '#1e1e1e', // 避免窗口创建时白色闪烁
     title: '小说编辑器',
     autoHideMenuBar: true, // 自动隐藏菜单栏（Windows/Linux）
     icon: iconPath ?? undefined,
@@ -75,9 +77,10 @@ export function createMainWindow(): BrowserWindow {
   // 加载应用页面
   mainWindow.loadFile(join(__dirname, 'index.html'));
 
-  // 窗口准备好后显示
+  // 窗口准备好后显示，并关闭 splash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    closeSplashWindow();
 
     // 只在开发模式下打开开发者工具
     if (process.env.NODE_ENV === 'development') {
