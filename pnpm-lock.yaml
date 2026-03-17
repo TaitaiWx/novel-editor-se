@@ -100,6 +100,9 @@ importers:
       fs-extra:
         specifier: ^11.3.0
         version: 11.3.0
+      marked:
+        specifier: ^17.0.4
+        version: 17.0.4
       pdfjs-dist:
         specifier: ^5.5.207
         version: 5.5.207
@@ -2247,6 +2250,11 @@ packages:
   mammoth@1.12.0:
     resolution: {integrity: sha512-cwnK1RIcRdDMi2HRx2EXGYlxqIEh0Oo3bLhorgnsVJi2UkbX1+jKxuBNR9PC5+JaX7EkmJxFPmo6mjLpqShI2w==}
     engines: {node: '>=12.0.0'}
+    hasBin: true
+
+  marked@17.0.4:
+    resolution: {integrity: sha512-NOmVMM+KAokHMvjWmC5N/ZOvgmSWuqJB8FoYI019j4ogb/PeRMKoKIjReZ2w3376kkA8dSJIP8uD993Kxc0iRQ==}
+    engines: {node: '>= 20'}
     hasBin: true
 
   matcher@3.0.0:
@@ -5451,6 +5459,8 @@ snapshots:
       path-is-absolute: 1.0.1
       underscore: 1.13.8
       xmlbuilder: 10.1.1
+
+  marked@17.0.4: {}
 
   matcher@3.0.0:
     dependencies:

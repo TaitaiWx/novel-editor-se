@@ -3,6 +3,7 @@ import { AiOutlineEye } from 'react-icons/ai';
 import { VscCode } from 'react-icons/vsc';
 import TabBar from '../TabBar';
 import TextEditor from '../TextEditor';
+import ChangelogViewer from '../ChangelogViewer';
 import SettingsButton from '../SettingsButton';
 import ResourceViewer, {
   BinaryContentViewer,
@@ -49,6 +50,10 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   const [wordWrap, setWordWrap] = useState(false);
   const [viewMode, setViewMode] = useState<'preview' | 'content'>('content');
 
+  const isChangelog = useMemo(
+    () => activeTab !== null && activeTab.startsWith('__changelog__:'),
+    [activeTab]
+  );
   const isPreviewableResource = useMemo(() => isPreviewableResourcePath(activeTab), [activeTab]);
   const isTextBackedPreviewResource = useMemo(
     () => isTextBackedPreviewResourcePath(activeTab),
@@ -97,7 +102,9 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
         onTabClose={onTabClose}
       />
       <div className={styles.contentPanelContent}>
-        {isPreviewableResource && viewMode === 'preview' ? (
+        {isChangelog ? (
+          <ChangelogViewer />
+        ) : isPreviewableResource && viewMode === 'preview' ? (
           <ResourceViewer filePath={activeTab} settingsComponent={settingsComponent} />
         ) : isPreviewableResource && !isTextBackedPreviewResource ? (
           <BinaryContentViewer filePath={activeTab} settingsComponent={settingsComponent} />
