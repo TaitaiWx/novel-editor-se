@@ -36,6 +36,7 @@ function getNativeBinding(): string | undefined {
   return _nativeBinding;
 }
 import { getAllShortcuts } from './shortcuts/getAllShortcuts';
+import { importFile, SUPPORTED_IMPORT_EXTENSIONS } from './file-importer';
 import {
   checkForUpdatesManually,
   downloadUpdate,
@@ -645,4 +646,44 @@ export function setupIPC() {
       return { success: true };
     }
   );
+
+  // ========== 文件导入（Word / Excel → Markdown） ==========
+
+  ipcMain.handle('import-file', async (_event, targetDir: string) => {
+    const result = await dialog.showOpenDialog({
+      title: '导入文件',
+      filters: [
+        { name: 'Word / Excel', extensions: SUPPORTED_IMPORT_EXTENSIONS.map((e) => e.slice(1)) },
+      ],
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+
+    const imported: { filePath: string; fileName: string }[] = [];
+    const errors: { filePath: string; error: string }[] = [];
+
+    for (const srcPath of result.filePaths) {
+      try {
+        const { fileName, content } = await importFile(srcPath);
+        // 避免覆盖：同名文件自动追加序号
+        let destPath = path.join(targetDir, fileName);
+        let counter = 1;
+        while (existsSync(destPath)) {
+          const ext = path.extname(fileName);
+          const base = path.basename(fileName, ext);
+          destPath = path.join(targetDir, `${base} (${counter})${ext}`);
+          counter++;
+        }
+        await writeFile(destPath, content, 'utf-8');
+        imported.push({ filePath: destPath, fileName: path.basename(destPath) });
+      } catch (error) {
+        errors.push({
+          filePath: srcPath,
+          error: error instanceof Error ? error.message : '未知错误',
+        });
+      }
+    }
+
+    return { imported, errors };
+  });
 }

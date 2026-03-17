@@ -5,6 +5,7 @@ import {
   AiOutlineReload,
   AiOutlineFolderOpen,
   AiOutlineSearch,
+  AiOutlineImport,
 } from 'react-icons/ai';
 import LoadingSpinner from '../LoadingSpinner';
 import EmptyState from '../EmptyState';
@@ -23,6 +24,7 @@ interface FilePanelProps {
   onCreateDirectory: () => void;
   onRefresh: () => void;
   onOpenFolder: () => void;
+  onImportFile?: () => void;
   onCollapse?: () => void;
   onContextMenu?: (event: ContextMenuEvent) => void;
   creatingType?: 'file' | 'directory' | null;
@@ -64,6 +66,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onCreateDirectory,
     onRefresh,
     onOpenFolder,
+    onImportFile,
     onCollapse,
     onContextMenu,
     creatingType,
@@ -206,6 +209,16 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                     >
                       <AiOutlineFolderAdd />
                     </button>
+                    {onImportFile && (
+                      <button
+                        className={styles.workspaceAction}
+                        onClick={onImportFile}
+                        title="导入 Word / Excel"
+                        disabled={isLoading}
+                      >
+                        <AiOutlineImport />
+                      </button>
+                    )}
                     <button
                       className={styles.workspaceAction}
                       onClick={onRefresh}

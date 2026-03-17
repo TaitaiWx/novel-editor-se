@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('electron', {
         'db-version-rename',
         'db-version-get-file-content',
         'db-version-restore-file',
+        // 文件导入
+        'import-file',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);

@@ -279,6 +279,29 @@ const App: React.FC = () => {
     setCreatingType(null);
   }, []);
 
+  const handleImportFile = useCallback(async () => {
+    const currentFolder = folderPathRef.current;
+    if (!currentFolder || !window.electron?.ipcRenderer) {
+      toast.error('请先打开一个文件夹');
+      return;
+    }
+    try {
+      const result = await window.electron.ipcRenderer.invoke('import-file', currentFolder);
+      if (!result) return; // 用户取消
+      await refreshCurrentFolder();
+      if (result.imported.length > 0) {
+        toast.success(`已导入 ${result.imported.length} 个文件`);
+        // 打开第一个导入的文件
+        openFileInTab(result.imported[0].filePath);
+      }
+      if (result.errors.length > 0) {
+        toast.error(`${result.errors.length} 个文件导入失败`);
+      }
+    } catch (error) {
+      toast.error(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [toast, refreshCurrentFolder, openFileInTab]);
+
   const handleFileSelect = useCallback(
     (filePath: string) => {
       openFileInTab(filePath);
@@ -539,6 +562,7 @@ const App: React.FC = () => {
                 onCreateDirectory={handleCreateDirectory}
                 onRefresh={refreshCurrentFolder}
                 onOpenFolder={handleOpenLocal}
+                onImportFile={handleImportFile}
                 onCollapse={() => setSidebarCollapsed(true)}
                 onContextMenu={handleFileContextMenu}
                 creatingType={creatingType}
