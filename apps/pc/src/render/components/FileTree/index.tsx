@@ -17,6 +17,8 @@ interface FileTreeProps {
   onFileSelect: (path: string) => void;
   selectedFile?: string | null;
   onContextMenu?: (event: ContextMenuEvent) => void;
+  /** 点击文件树空白处时触发（文件节点已 stopPropagation，因此只有空白区域会冒泡到此） */
+  onBackgroundContextMenu?: (pos: { x: number; y: number }) => void;
   creatingType?: 'file' | 'directory' | null;
   createTargetPath?: string | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
@@ -272,6 +274,7 @@ const FileTree: React.FC<FileTreeProps> = ({
   onInlineCreate,
   onCancelCreate,
   revealPath,
+  onBackgroundContextMenu,
 }) => {
   const sortedFiles = useMemo(() => sortNodes(files), [files]);
   const [fileInfoMap, setFileInfoMap] = useState<Map<string, FileInfo>>(new Map());
@@ -341,7 +344,15 @@ const FileTree: React.FC<FileTreeProps> = ({
   }, [files]);
 
   return (
-    <div className={styles.fileTree}>
+    <div
+      className={styles.fileTree}
+      onContextMenu={(e) => {
+        // FileTreeItem 会调用 stopPropagation，因此此处只在空白区域触发
+        e.preventDefault();
+        e.stopPropagation();
+        onBackgroundContextMenu?.({ x: e.clientX, y: e.clientY });
+      }}
+    >
       {/* Show at top only if no root-level item is selected */}
       {showCreateAtRoot && !selectedRootPath && onInlineCreate && onCancelCreate && (
         <InlineCreateInput

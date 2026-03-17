@@ -27,8 +27,11 @@ interface FilePanelProps {
   onImportFile?: () => void;
   onCollapse?: () => void;
   onContextMenu?: (event: ContextMenuEvent) => void;
+  onBackgroundContextMenu?: (pos: { x: number; y: number }) => void;
   onCopyFile?: (path: string) => void;
   onPasteFiles?: (targetDir: string) => void;
+  /** 外部文件拖放到面板时触发（VS Code 风格拖放导入） */
+  onDropFiles?: (filePaths: string[]) => void;
   hasClipboard?: boolean;
   creatingType?: 'file' | 'directory' | null;
   createTargetPath?: string | null;
@@ -84,8 +87,10 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onImportFile,
     onCollapse,
     onContextMenu,
+    onBackgroundContextMenu,
     onCopyFile,
     onPasteFiles,
+    onDropFiles,
     hasClipboard,
     creatingType,
     createTargetPath,
@@ -96,6 +101,42 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     const [showSearch, setShowSearch] = useState(false);
     const [revealPath, setRevealPath] = useState<string | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // ─── 拖放导入（VS Code 风格: Finder/Explorer → 文件面板） ─────────────
+    const [isDragOver, setIsDragOver] = useState(false);
+    const dragCounterRef = useRef(0);
+
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }, []);
+
+    const handleDragEnter = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current++;
+      if (dragCounterRef.current === 1) setIsDragOver(true);
+    }, []);
+
+    const handleDragLeave = useCallback(() => {
+      dragCounterRef.current--;
+      if (dragCounterRef.current === 0) setIsDragOver(false);
+    }, []);
+
+    const handleDrop = useCallback(
+      (e: React.DragEvent) => {
+        e.preventDefault();
+        dragCounterRef.current = 0;
+        setIsDragOver(false);
+        const droppedFiles = e.dataTransfer.files;
+        if (droppedFiles.length === 0) return;
+        // Electron File 对象包含 path 属性
+        const filePaths = Array.from(droppedFiles)
+          .map((f) => (f as File & { path: string }).path)
+          .filter(Boolean);
+        if (filePaths.length > 0) onDropFiles?.(filePaths);
+      },
+      [onDropFiles]
+    );
 
     const folderName = useMemo(
       () =>
@@ -202,7 +243,17 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
           </div>
         </div>
 
-        <div className={styles.filePanelContent}>
+        <div
+          className={`${styles.filePanelContent}${isDragOver ? ` ${styles.dropTarget}` : ''}`}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onBackgroundContextMenu?.({ x: e.clientX, y: e.clientY });
+          }}
+        >
           {isLoading ? (
             <LoadingSpinner message="正在加载..." />
           ) : folderPath ? (
@@ -275,6 +326,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   onFileSelect={handleFileSelectFromSearch}
                   selectedFile={selectedFile}
                   onContextMenu={onContextMenu}
+                  onBackgroundContextMenu={onBackgroundContextMenu}
                   creatingType={creatingType}
                   createTargetPath={createTargetPath}
                   onInlineCreate={onInlineCreate}

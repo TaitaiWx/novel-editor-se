@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('electron', {
         'delete-directory',
         'rename-file',
         'paste-files',
+        'read-clipboard-file-paths',
         // SQLite 数据库
         'db-init',
         'db-init-default',
@@ -75,6 +76,10 @@ contextBridge.exposeInMainWorld('electron', {
         'db-version-restore-file',
         // 文件导入
         'import-file',
+        // 文档导出
+        'export-to-word',
+        'export-project-to-word',
+        'export-to-pptx',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -87,6 +92,9 @@ contextBridge.exposeInMainWorld('electron', {
         'shortcut-open-folder',
         'shortcut-save-file',
         'shortcut-save-as-file',
+        'menu-export-word',
+        'menu-export-pptx',
+        'menu-export-project-word',
         'update-available',
         'update-not-available',
         'update-download-progress',
@@ -106,6 +114,9 @@ contextBridge.exposeInMainWorld('electron', {
         'shortcut-open-folder',
         'shortcut-save-file',
         'shortcut-save-as-file',
+        'menu-export-word',
+        'menu-export-pptx',
+        'menu-export-project-word',
         'update-available',
         'update-not-available',
         'update-download-progress',
@@ -125,6 +136,9 @@ contextBridge.exposeInMainWorld('electron', {
         'shortcut-open-folder',
         'shortcut-save-file',
         'shortcut-save-as-file',
+        'menu-export-word',
+        'menu-export-pptx',
+        'menu-export-project-word',
         'update-available',
         'update-not-available',
         'update-download-progress',

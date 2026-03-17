@@ -66,8 +66,25 @@ export interface ElectronAPI {
       sourcePaths: string[],
       targetDir: string
     ): Promise<{ success: boolean; results: { source: string; dest: string }[] }>;
+    invoke(channel: 'read-clipboard-file-paths'): Promise<string[]>;
+    invoke(
+      channel: 'export-to-word',
+      content: string,
+      options?: { title?: string; author?: string }
+    ): Promise<{ success: boolean; filePath?: string; error?: string }>;
+    invoke(
+      channel: 'export-project-to-word',
+      folderPath: string,
+      options?: { title?: string; author?: string }
+    ): Promise<{ success: boolean; filePath?: string; error?: string }>;
+    invoke(
+      channel: 'export-to-pptx',
+      content: string,
+      options?: { title?: string; author?: string }
+    ): Promise<{ success: boolean; filePath?: string; error?: string }>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     on(channel: string, listener: (...args: any[]) => void): void;
+    removeListener(channel: string, listener: (...args: any[]) => void): void;
     removeAllListeners(channel: string): void;
   };
 }

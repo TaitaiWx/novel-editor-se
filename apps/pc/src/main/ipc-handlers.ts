@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron';
+import { ipcMain, dialog, BrowserWindow, app, clipboard as electronClipboard } from 'electron';
 import dirTree from 'directory-tree';
 import { readFile, writeFile, mkdir, access, cp } from 'fs/promises';
 import { existsSync } from 'fs';
@@ -38,6 +38,7 @@ function getNativeBinding(): string | undefined {
 }
 import { getAllShortcuts } from './shortcuts/getAllShortcuts';
 import { importFile, SUPPORTED_IMPORT_EXTENSIONS } from './file-importer';
+import { exportToWord, exportProjectToWord, exportToPptx } from './document-exporter';
 import { getDeviceId } from './device-id';
 import {
   checkForUpdatesManually,
@@ -297,7 +298,7 @@ export function setupIPC() {
     }
   });
 
-  // 更新日志
+  // 更新日志（只返回当前版本的段落）
   ipcMain.handle('get-changelog', async () => {
     let changelogPath: string;
     if (app.isPackaged) {
@@ -306,7 +307,10 @@ export function setupIPC() {
       changelogPath = path.join(app.getAppPath(), '..', 'CHANGELOG.md');
     }
     try {
-      return await readFile(changelogPath, 'utf-8');
+      const full = await readFile(changelogPath, 'utf-8');
+      // 提取第一个 ## 版本段落（到下一个 ## 或文件末尾）
+      const versionMatch = full.match(/(## v[\s\S]*?)(?=\n## v|$)/);
+      return versionMatch ? versionMatch[1].trim() : full;
     } catch {
       return '# 更新日志\n\n暂无更新记录。';
     }
@@ -314,7 +318,7 @@ export function setupIPC() {
 
   // 检测是否刚完成更新（对比 lastSeenVersion 与当前版本）
   ipcMain.handle('check-just-updated', async () => {
-    const versionFilePath = path.join(app.getPath('userData'), 'last-seen-version');
+    const versionFilePath = path.join(app.getPath('userData'), 'changelog-last-seen-version');
     const currentVersion = app.getVersion();
     let previousVersion: string | null = null;
     try {
@@ -324,7 +328,8 @@ export function setupIPC() {
     }
     // 原子写入当前版本
     await writeFile(versionFilePath, currentVersion, 'utf-8');
-    if (previousVersion && previousVersion !== currentVersion) {
+    // 首次安装（无记录）或版本升级后，均展示更新日志
+    if (!previousVersion || previousVersion !== currentVersion) {
       return { updated: true, fromVersion: previousVersion, toVersion: currentVersion };
     }
     return { updated: false, fromVersion: null, toVersion: currentVersion };
@@ -335,6 +340,47 @@ export function setupIPC() {
   ipcMain.handle('get-last-folder', () => getLastFolder());
   ipcMain.handle('add-recent-folder', (_event, folderPath: string) => {
     addRecentFolder(folderPath);
+  });
+
+  // 读取系统剪贴板中的文件路径（支持从 Finder/Explorer 复制的文件）
+  ipcMain.handle('read-clipboard-file-paths', (): string[] => {
+    try {
+      if (process.platform === 'darwin') {
+        // macOS: Finder 复制多文件时使用 NSFilenamesPboardType（XML plist）
+        const plistStr = electronClipboard.read('NSFilenamesPboardType');
+        if (plistStr) {
+          const paths: string[] = [];
+          const regex = /<string>([^<]+)<\/string>/g;
+          let match;
+          while ((match = regex.exec(plistStr)) !== null) {
+            if (match[1] && match[1].startsWith('/')) paths.push(match[1]);
+          }
+          if (paths.length > 0) return paths;
+        }
+        // 单文件回退：public.file-url
+        const formats = electronClipboard.availableFormats();
+        if (formats.some((f) => f.includes('file-url'))) {
+          const fileUrl = electronClipboard.read('public.file-url');
+          if (fileUrl?.startsWith('file://')) {
+            const filePath = decodeURIComponent(new URL(fileUrl).pathname);
+            return [filePath];
+          }
+        }
+      }
+      if (process.platform === 'win32') {
+        const text = electronClipboard.readText();
+        if (text) {
+          const lines = text
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0 && (l.startsWith('/') || /^[A-Za-z]:\\/.test(l)));
+          if (lines.length > 0) return lines;
+        }
+      }
+    } catch {
+      // 读取剪贴板失败时静默降级
+    }
+    return [];
   });
 
   // 打开示例项目（返回 sample-data 路径）
@@ -800,4 +846,41 @@ export function setupIPC() {
 
     return { previews, errors };
   });
+
+  // ─── 文档导出 ─────────────────────────────────────────────────────────
+  ipcMain.handle(
+    'export-to-word',
+    async (_event, content: string, options?: { title?: string; author?: string }) => {
+      try {
+        const filePath = await exportToWord(content, options);
+        return { success: !!filePath, filePath };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : '未知错误' };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'export-project-to-word',
+    async (_event, folderPath: string, options?: { title?: string; author?: string }) => {
+      try {
+        const filePath = await exportProjectToWord(folderPath, options);
+        return { success: !!filePath, filePath };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : '未知错误' };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'export-to-pptx',
+    async (_event, content: string, options?: { title?: string; author?: string }) => {
+      try {
+        const filePath = await exportToPptx(content, options);
+        return { success: !!filePath, filePath };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : '未知错误' };
+      }
+    }
+  );
 }

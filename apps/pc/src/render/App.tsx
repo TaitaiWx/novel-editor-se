@@ -38,7 +38,8 @@ interface CursorPosition {
 interface ContextMenuState {
   x: number;
   y: number;
-  node: FileNode;
+  /** null 表示点击了空白区域（背景右键菜单） */
+  node: FileNode | null;
 }
 
 const App: React.FC = () => {
@@ -83,6 +84,14 @@ const App: React.FC = () => {
   folderPathRef.current = folderPath;
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const editorContentRef = useRef(editorContent);
+  editorContentRef.current = editorContent;
+
+  // 侧边栏焦点跟踪（VS Code 风格：mousedown 判断是否在侧边栏区域内）
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const sidebarFocusedRef = useRef(false);
   const sidebarCollapsedRef = useRef(sidebarCollapsed);
   sidebarCollapsedRef.current = sidebarCollapsed;
   const rightPanelCollapsedRef = useRef(rightPanelCollapsed);
@@ -424,9 +433,15 @@ const App: React.FC = () => {
 
   const handlePasteFiles = useCallback(
     async (targetDir: string) => {
-      if (clipboard.length === 0 || !window.electron?.ipcRenderer) return;
+      if (!window.electron?.ipcRenderer) return;
       try {
-        await window.electron.ipcRenderer.invoke('paste-files', clipboard, targetDir);
+        // 优先使用应用内剪贴板；若为空，尝试读取系统剪贴板中的文件路径（macOS Finder 场景）
+        let pathsToPaste = clipboard;
+        if (pathsToPaste.length === 0) {
+          pathsToPaste = await window.electron.ipcRenderer.invoke('read-clipboard-file-paths');
+        }
+        if (pathsToPaste.length === 0) return;
+        await window.electron.ipcRenderer.invoke('paste-files', pathsToPaste, targetDir);
         await refreshCurrentFolder();
         toast.success('已粘贴');
       } catch (error) {
@@ -434,6 +449,26 @@ const App: React.FC = () => {
       }
     },
     [clipboard, toast, refreshCurrentFolder]
+  );
+
+  // 拖放导入：从 Finder/Explorer 拖入文件到目录面板（复用 paste-files IPC）
+  const handleDropFiles = useCallback(
+    async (filePaths: string[]) => {
+      if (!window.electron?.ipcRenderer || filePaths.length === 0) return;
+      const targetDir = folderPathRef.current;
+      if (!targetDir) {
+        toast.error('请先打开一个文件夹');
+        return;
+      }
+      try {
+        await window.electron.ipcRenderer.invoke('paste-files', filePaths, targetDir);
+        await refreshCurrentFolder();
+        toast.success(`已导入 ${filePaths.length} 个文件`);
+      } catch (error) {
+        toast.error(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [toast, refreshCurrentFolder]
   );
 
   // Keyboard shortcuts
@@ -481,22 +516,181 @@ const App: React.FC = () => {
     window.addEventListener('app:open-folder', onOpenFolder);
     window.addEventListener('keydown', onKeyDown);
 
+    // 侧边栏焦点跟踪：鼠标按下时记录是否在侧边栏范围内（VS Code 同款方案）
+    const onMouseDown = (e: MouseEvent) => {
+      sidebarFocusedRef.current = !!sidebarRef.current?.contains(e.target as Node);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+
     return () => {
       clearTimeout(timer);
       cleanupKeyboardShortcuts();
       window.removeEventListener('app:new-file', onNewFile);
       window.removeEventListener('app:open-folder', onOpenFolder);
       window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onMouseDown);
     };
   }, [loadDefaultPath, handleOpenLocal, handleCreateFile, toggleFocusMode, closeTab, handleNewTab]);
+
+  // 文档导出：监听 Electron 菜单事件
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const getExportTitle = () => {
+      const tab = activeTabRef.current;
+      if (!tab) return '文档';
+      if (tab.startsWith('__untitled__:')) return tab.replace('__untitled__:', '');
+      const parts = tab.replace(/\\/g, '/').split('/');
+      const filename = parts[parts.length - 1] || '文档';
+      return filename.replace(/\.[^.]+$/, '');
+    };
+
+    const onExportWord = async () => {
+      const content = editorContentRef.current;
+      if (!content.trim()) {
+        toast.error('当前文件内容为空，无法导出');
+        return;
+      }
+      try {
+        const result = await ipc.invoke('export-to-word', content, { title: getExportTitle() });
+        if (result.success && result.filePath) {
+          toast.success(`已导出为 Word: ${result.filePath}`);
+        } else if (result.error) {
+          toast.error(`导出失败: ${result.error}`);
+        }
+      } catch (error) {
+        toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    };
+
+    const onExportPptx = async () => {
+      const content = editorContentRef.current;
+      if (!content.trim()) {
+        toast.error('当前文件内容为空，无法导出');
+        return;
+      }
+      try {
+        const result = await ipc.invoke('export-to-pptx', content, { title: getExportTitle() });
+        if (result.success && result.filePath) {
+          toast.success(`已导出为 PPT: ${result.filePath}`);
+        } else if (result.error) {
+          toast.error(`导出失败: ${result.error}`);
+        }
+      } catch (error) {
+        toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    };
+
+    const onExportProjectWord = async () => {
+      const folder = folderPathRef.current;
+      if (!folder) {
+        toast.error('请先打开一个项目文件夹');
+        return;
+      }
+      try {
+        const folderName = folder.split('/').pop() || folder.split('\\').pop() || '项目';
+        const result = await ipc.invoke('export-project-to-word', folder, { title: folderName });
+        if (result.success && result.filePath) {
+          toast.success(`已导出项目为 Word: ${result.filePath}`);
+        } else if (result.error) {
+          toast.error(`导出失败: ${result.error}`);
+        }
+      } catch (error) {
+        toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    };
+
+    ipc.on('menu-export-word', onExportWord);
+    ipc.on('menu-export-pptx', onExportPptx);
+    ipc.on('menu-export-project-word', onExportProjectWord);
+
+    return () => {
+      ipc.removeListener('menu-export-word', onExportWord);
+      ipc.removeListener('menu-export-pptx', onExportPptx);
+      ipc.removeListener('menu-export-project-word', onExportProjectWord);
+    };
+  }, [toast]);
+
+  // 侧边栏 Cmd+C/V 快捷键（独立 effect，确保 clipboard 最新值始终可用）
+  React.useEffect(() => {
+    /** 判断当前焦点是否在文本编辑区（输入框 / CodeMirror / contenteditable） */
+    const isEditingText = () => {
+      const el = document.activeElement;
+      if (!el) return false;
+      const tag = el.tagName.toUpperCase();
+      return (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        el.getAttribute('contenteditable') === 'true' ||
+        !!el.closest('.cm-editor')
+      );
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!sidebarFocusedRef.current) return;
+      if (isEditingText()) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+
+      if (e.key === 'c') {
+        // 复制：仅对真实文件路径（排除 __untitled__、__changelog__ 等虚拟路径）
+        const tab = activeTabRef.current;
+        if (tab && !tab.startsWith('__')) {
+          e.preventDefault();
+          setClipboard([tab]);
+        }
+      } else if (e.key === 'v' && clipboard.length > 0) {
+        // 粘贴：粘贴到当前选中文件所在目录，或工作区根目录
+        e.preventDefault();
+        const tab = activeTabRef.current;
+        let targetDir = folderPathRef.current;
+        if (tab && !tab.startsWith('__') && tab.includes('/')) {
+          const node = findNodeInTree(filesRef.current, tab);
+          if (node?.type === 'directory') {
+            targetDir = tab;
+          } else {
+            targetDir = tab.substring(0, tab.lastIndexOf('/'));
+          }
+        }
+        if (targetDir) handlePasteFiles(targetDir);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [clipboard, handlePasteFiles]);
 
   const handleFileContextMenu = useCallback((event: ContextMenuEvent) => {
     setContextMenu({ x: event.x, y: event.y, node: event.node });
   }, []);
 
+  const handleBackgroundContextMenu = useCallback((pos: { x: number; y: number }) => {
+    setContextMenu({ x: pos.x, y: pos.y, node: null });
+  }, []);
+
   const contextMenuItems = useMemo(() => {
     if (!contextMenu) return [];
     const { node } = contextMenu;
+
+    // ─── 空白处右键（背景菜单） ───────────────────────────────────────────
+    if (!node) {
+      const bgPasteDir = folderPath;
+      return [
+        { label: '新建文件', onClick: handleCreateFile },
+        { label: '新建文件夹', onClick: handleCreateDirectory },
+        { label: '', onClick: () => {}, separator: true },
+        {
+          label: '粘贴',
+          onClick: () => bgPasteDir && handlePasteFiles(bgPasteDir),
+          disabled: clipboard.length === 0 || !folderPath,
+        },
+        { label: '', onClick: () => {}, separator: true },
+        { label: '刷新', onClick: refreshCurrentFolder },
+      ];
+    }
+
+    // ─── 文件/目录右键 ────────────────────────────────────────────────────
     const pasteTargetDir =
       node.type === 'directory' ? node.path : node.path.substring(0, node.path.lastIndexOf('/'));
     const items: {
@@ -532,12 +726,16 @@ const App: React.FC = () => {
     return items;
   }, [
     contextMenu,
+    folderPath,
     clipboard,
+    handleCreateFile,
+    handleCreateDirectory,
     handleCopyFile,
     handlePasteFiles,
     handleRename,
     handleDeleteFile,
     handleDeleteDirectory,
+    refreshCurrentFolder,
   ]);
 
   // Save untitled file: prompt for name, write to disk, replace tab
@@ -624,6 +822,7 @@ const App: React.FC = () => {
         {/* 左侧文件面板 */}
         {!focusMode && (
           <div
+            ref={sidebarRef}
             className={`${styles.leftPanel} ${sidebarCollapsed ? styles.leftPanelCollapsed : ''}`}
           >
             {sidebarCollapsed ? (
@@ -648,8 +847,10 @@ const App: React.FC = () => {
                 onImportFile={handleImportFile}
                 onCollapse={() => setSidebarCollapsed(true)}
                 onContextMenu={handleFileContextMenu}
+                onBackgroundContextMenu={handleBackgroundContextMenu}
                 onCopyFile={handleCopyFile}
                 onPasteFiles={handlePasteFiles}
+                onDropFiles={handleDropFiles}
                 hasClipboard={clipboard.length > 0}
                 creatingType={creatingType}
                 createTargetPath={createTargetPath}

@@ -59,6 +59,13 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    transition: outline-color 0.15s, background-color 0.15s;
+
+    &.dropTarget {
+      outline: 2px dashed #007acc;
+      outline-offset: -2px;
+      background-color: rgba(0, 122, 204, 0.06);
+    }
   }
 
   .searchBar {

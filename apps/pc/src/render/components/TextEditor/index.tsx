@@ -12,9 +12,11 @@ import { markdown } from '@codemirror/lang-markdown';
 import { json } from '@codemirror/lang-json';
 import { javascript } from '@codemirror/lang-javascript';
 import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search';
+import { VscSave } from 'react-icons/vsc';
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
+import { useToast } from '../Toast';
 import { writingDecorations } from './writing-decorations';
 import styles from './styles.module.scss';
 
@@ -344,6 +346,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
 }) => {
   const isUntitled = isUntitledPath(filePath);
   const isChangelog = isChangelogPath(filePath);
+  const toast = useToast();
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
@@ -373,6 +376,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const readOnlyRef = useRef(readOnly);
   const filePathRef = useRef(filePath);
   const isUntitledRef = useRef(isUntitled);
+  const handleManualSaveRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     onContentChangeRef.current = onContentChange;
@@ -425,6 +429,42 @@ const TextEditor: React.FC<TextEditorProps> = ({
     }
   }, [autoSaveFile]);
 
+  const handleManualSave = useCallback(async () => {
+    const targetPath = currentFilePathRef.current;
+    if (!targetPath || readOnlyRef.current) return;
+
+    if (isUntitledPath(targetPath) && onSaveUntitledRef.current) {
+      onSaveUntitledRef.current(targetPath, currentContentRef.current);
+      return;
+    }
+    if (isChangelogPath(targetPath)) return;
+
+    if (currentContentRef.current === currentOriginalContentRef.current) {
+      toast.success('文件已是最新状态');
+      return;
+    }
+
+    setAutoSaving(true);
+    try {
+      await window.electron.ipcRenderer.invoke('write-file', targetPath, currentContentRef.current);
+      if (targetPath === filePathRef.current) {
+        currentOriginalContentRef.current = currentContentRef.current;
+        setHasChanges(false);
+        setLastSaved(new Date());
+      }
+      toast.success('保存成功');
+    } catch (err) {
+      console.error('Manual save failed:', err);
+      toast.error('保存失败');
+    } finally {
+      setAutoSaving(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    handleManualSaveRef.current = handleManualSave;
+  }, [handleManualSave]);
+
   // Create / destroy EditorView
   useEffect(() => {
     if (!editorContainerRef.current) return;
@@ -469,11 +509,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
             {
               key: 'Mod-s',
               run: () => {
-                if (isUntitledRef.current && filePathRef.current && onSaveUntitledRef.current) {
-                  onSaveUntitledRef.current(filePathRef.current, currentContentRef.current);
-                } else {
-                  autoSaveFile();
-                }
+                handleManualSaveRef.current();
                 return true;
               },
             },
@@ -748,7 +784,19 @@ const TextEditor: React.FC<TextEditorProps> = ({
               </span>
             )}
           </div>
-          <div className={styles.fileActions}>{settingsComponent}</div>
+          <div className={styles.fileActions}>
+            {!readOnly && !isChangelog && (
+              <button
+                className={styles.saveButton}
+                onClick={handleManualSave}
+                disabled={autoSaving}
+                title="保存 (⌘S)"
+              >
+                <VscSave />
+              </button>
+            )}
+            {settingsComponent}
+          </div>
         </div>
       )}
 

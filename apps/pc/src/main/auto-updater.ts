@@ -795,7 +795,9 @@ export async function downloadUpdate() {
 }
 
 export function installUpdate() {
-  autoUpdater.quitAndInstall();
+  // isSilent=true: 静默安装，不弹出 NSIS 安装向导
+  // isForceRunAfter=true: 安装完成后自动启动应用
+  autoUpdater.quitAndInstall(true, true);
 }
 
 export async function rollbackToPreviousVersion() {

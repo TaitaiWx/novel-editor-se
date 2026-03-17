@@ -1,4 +1,4 @@
-import { Menu, app } from 'electron';
+import { Menu, app, BrowserWindow } from 'electron';
 import { shortcutConfigs } from './config';
 
 /**
@@ -47,6 +47,33 @@ export const registerAllShortcuts = () => {
   template.push({
     label: '快捷键',
     submenu: menuItems,
+  });
+
+  // 文件菜单（导出）
+  template.push({
+    label: '文件',
+    submenu: [
+      {
+        label: '导出当前文件为 Word (.docx)',
+        accelerator: 'CommandOrControl+Shift+W',
+        click: () => {
+          BrowserWindow.getFocusedWindow()?.webContents.send('menu-export-word');
+        },
+      },
+      {
+        label: '导出整个项目为 Word (.docx)',
+        click: () => {
+          BrowserWindow.getFocusedWindow()?.webContents.send('menu-export-project-word');
+        },
+      },
+      {
+        label: '导出当前文件为 PPT (.pptx)',
+        accelerator: 'CommandOrControl+Shift+P',
+        click: () => {
+          BrowserWindow.getFocusedWindow()?.webContents.send('menu-export-pptx');
+        },
+      },
+    ],
   });
 
   // 编辑菜单（Cmd+C / V / X / A 等）

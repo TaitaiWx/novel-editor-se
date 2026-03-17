@@ -50,10 +50,14 @@ win:
     - target: nsis
 
 nsis:
+  guid: novel-editor-se
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
-  createDesktopShortcut: true
+  createDesktopShortcut: always
   createStartMenuShortcut: true
+  shortcutName: Novel Editor
+  deleteAppDataOnUninstall: false
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico
   installerHeaderIcon: resources/icon.ico
