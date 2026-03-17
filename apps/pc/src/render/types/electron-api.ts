@@ -32,6 +32,10 @@ export interface ElectronAPI {
     invoke(channel: 'get-last-folder'): Promise<string | null>;
     invoke(channel: 'add-recent-folder', folderPath: string): Promise<void>;
     invoke(channel: 'open-sample-data'): Promise<string>;
+    invoke(channel: 'get-changelog'): Promise<string>;
+    invoke(
+      channel: 'check-just-updated'
+    ): Promise<{ updated: boolean; fromVersion: string | null; toVersion: string }>;
     invoke(
       channel: 'create-file',
       folderPath: string,
@@ -57,6 +61,11 @@ export interface ElectronAPI {
     invoke(channel: 'update-install'): Promise<void>;
     invoke(channel: 'update-set-channel', updateChannel: UpdateChannel): Promise<UpdateStatus>;
     invoke(channel: 'update-rollback'): Promise<{ version: string; installerPath: string }>;
+    invoke(
+      channel: 'paste-files',
+      sourcePaths: string[],
+      targetDir: string
+    ): Promise<{ success: boolean; results: { source: string; dest: string }[] }>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     on(channel: string, listener: (...args: any[]) => void): void;
     removeAllListeners(channel: string): void;

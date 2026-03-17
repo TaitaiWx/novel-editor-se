@@ -28,6 +28,8 @@ extraResources:
     to: sample-data
     filter:
       - "**/*"
+  - from: CHANGELOG.md
+    to: CHANGELOG.md
 
 mac:
   icon: resources/icon.icns

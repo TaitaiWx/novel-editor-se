@@ -12,6 +12,9 @@ function getFileName(filePath: string): string {
   if (filePath.startsWith('__untitled__:')) {
     return filePath.replace('__untitled__:', '');
   }
+  if (filePath.startsWith('__changelog__:')) {
+    return filePath.replace('__changelog__:', '');
+  }
   const parts = filePath.replace(/\\/g, '/').split('/');
   return parts[parts.length - 1] || filePath;
 }

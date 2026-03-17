@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('electron', {
         'get-last-folder',
         'add-recent-folder',
         'open-sample-data',
+        'get-changelog',
+        'check-just-updated',
         'create-file',
         'create-directory',
         'refresh-folder',
@@ -36,6 +38,7 @@ contextBridge.exposeInMainWorld('electron', {
         'delete-file',
         'delete-directory',
         'rename-file',
+        'paste-files',
         // SQLite 数据库
         'db-init',
         'db-init-default',

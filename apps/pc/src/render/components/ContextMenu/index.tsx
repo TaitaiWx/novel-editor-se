@@ -5,6 +5,7 @@ interface MenuItem {
   label: string;
   onClick: () => void;
   danger?: boolean;
+  disabled?: boolean;
   separator?: boolean;
 }
 
@@ -55,8 +56,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }) => {
         ) : (
           <button
             key={i}
-            className={`${styles.menuItem} ${item.danger ? styles.danger : ''}`}
-            onClick={() => handleItemClick(item.onClick)}
+            className={`${styles.menuItem} ${item.danger ? styles.danger : ''} ${item.disabled ? styles.disabled : ''}`}
+            onClick={() => !item.disabled && handleItemClick(item.onClick)}
           >
             {item.label}
           </button>

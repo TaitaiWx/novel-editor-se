@@ -297,6 +297,39 @@ export function setupIPC() {
     }
   });
 
+  // 更新日志
+  ipcMain.handle('get-changelog', async () => {
+    let changelogPath: string;
+    if (app.isPackaged) {
+      changelogPath = path.join(process.resourcesPath, 'CHANGELOG.md');
+    } else {
+      changelogPath = path.join(app.getAppPath(), '..', 'CHANGELOG.md');
+    }
+    try {
+      return await readFile(changelogPath, 'utf-8');
+    } catch {
+      return '# 更新日志\n\n暂无更新记录。';
+    }
+  });
+
+  // 检测是否刚完成更新（对比 lastSeenVersion 与当前版本）
+  ipcMain.handle('check-just-updated', async () => {
+    const versionFilePath = path.join(app.getPath('userData'), 'last-seen-version');
+    const currentVersion = app.getVersion();
+    let previousVersion: string | null = null;
+    try {
+      previousVersion = (await readFile(versionFilePath, 'utf-8')).trim();
+    } catch {
+      // 首次启动，无记录
+    }
+    // 原子写入当前版本
+    await writeFile(versionFilePath, currentVersion, 'utf-8');
+    if (previousVersion && previousVersion !== currentVersion) {
+      return { updated: true, fromVersion: previousVersion, toVersion: currentVersion };
+    }
+    return { updated: false, fromVersion: null, toVersion: currentVersion };
+  });
+
   // 最近打开的文件夹
   ipcMain.handle('get-recent-folders', () => getRecentFolders());
   ipcMain.handle('get-last-folder', () => getLastFolder());
@@ -522,6 +555,48 @@ export function setupIPC() {
       console.error('Error renaming:', error);
       throw new Error(`Failed to rename: ${oldPath}`);
     }
+  });
+
+  // 粘贴文件/目录（VS Code 风格名称冲突解决）
+  ipcMain.handle('paste-files', async (_event, sourcePaths: string[], targetDir: string) => {
+    const { stat } = await import('fs/promises');
+    const results: { source: string; dest: string }[] = [];
+
+    for (const sourcePath of sourcePaths) {
+      const baseName = path.basename(sourcePath);
+      let destPath = path.join(targetDir, baseName);
+
+      // 名称冲突解决：file.txt → file copy.txt → file copy 2.txt → ...
+      if (existsSync(destPath) && path.resolve(sourcePath) !== path.resolve(destPath)) {
+        const ext = path.extname(baseName);
+        const nameWithoutExt = ext ? baseName.slice(0, -ext.length) : baseName;
+        const srcStat = await stat(sourcePath);
+        const isDir = srcStat.isDirectory();
+
+        destPath = path.join(
+          targetDir,
+          isDir ? `${baseName} copy` : `${nameWithoutExt} copy${ext}`
+        );
+        let counter = 2;
+        while (existsSync(destPath)) {
+          destPath = path.join(
+            targetDir,
+            isDir ? `${baseName} copy ${counter}` : `${nameWithoutExt} copy ${counter}${ext}`
+          );
+          counter++;
+        }
+      }
+
+      try {
+        await cp(sourcePath, destPath, { recursive: true });
+        results.push({ source: sourcePath, dest: destPath });
+      } catch (error) {
+        console.error(`Error pasting ${sourcePath}:`, error);
+        throw new Error(`Failed to paste: ${path.basename(sourcePath)}`);
+      }
+    }
+
+    return { success: true, results };
   });
 
   // ========== SQLite 数据库 IPC ==========

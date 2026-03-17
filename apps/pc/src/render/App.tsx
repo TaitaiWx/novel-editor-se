@@ -58,6 +58,7 @@ const App: React.FC = () => {
   const [encoding, setEncoding] = useState('UTF-8');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [creatingType, setCreatingType] = useState<CreatingType>(null);
+  const [clipboard, setClipboard] = useState<string[]>([]);
   const [scrollToLine, setScrollToLine] = useState<{ line: number; id: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -197,6 +198,16 @@ const App: React.FC = () => {
       if (result) {
         setFolderPath(result.path);
         setFiles(result.files);
+      }
+
+      // 更新后首次启动：自动打开更新日志
+      try {
+        const updateResult = await window.electron.ipcRenderer.invoke('check-just-updated');
+        if (updateResult.updated) {
+          openFileInTab('__changelog__:更新日志');
+        }
+      } catch {
+        // 忽略检查失败
       }
     } catch (error) {
       console.error('Error loading default path:', error);
@@ -407,6 +418,24 @@ const App: React.FC = () => {
     [toast, dialog, refreshCurrentFolder]
   );
 
+  const handleCopyFile = useCallback((filePath: string) => {
+    setClipboard([filePath]);
+  }, []);
+
+  const handlePasteFiles = useCallback(
+    async (targetDir: string) => {
+      if (clipboard.length === 0 || !window.electron?.ipcRenderer) return;
+      try {
+        await window.electron.ipcRenderer.invoke('paste-files', clipboard, targetDir);
+        await refreshCurrentFolder();
+        toast.success('已粘贴');
+      } catch (error) {
+        toast.error(`粘贴失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [clipboard, toast, refreshCurrentFolder]
+  );
+
   // Keyboard shortcuts
   React.useEffect(() => {
     initKeyboardShortcuts();
@@ -468,7 +497,22 @@ const App: React.FC = () => {
   const contextMenuItems = useMemo(() => {
     if (!contextMenu) return [];
     const { node } = contextMenu;
-    const items: { label: string; onClick: () => void; danger?: boolean; separator?: boolean }[] = [
+    const pasteTargetDir =
+      node.type === 'directory' ? node.path : node.path.substring(0, node.path.lastIndexOf('/'));
+    const items: {
+      label: string;
+      onClick: () => void;
+      danger?: boolean;
+      disabled?: boolean;
+      separator?: boolean;
+    }[] = [
+      { label: '复制', onClick: () => handleCopyFile(node.path) },
+      {
+        label: '粘贴',
+        onClick: () => handlePasteFiles(pasteTargetDir),
+        disabled: clipboard.length === 0,
+      },
+      { label: '', onClick: () => {}, separator: true },
       { label: '重命名', onClick: () => handleRename(node.path) },
       { label: '', onClick: () => {}, separator: true },
     ];
@@ -486,7 +530,15 @@ const App: React.FC = () => {
       });
     }
     return items;
-  }, [contextMenu, handleRename, handleDeleteFile, handleDeleteDirectory]);
+  }, [
+    contextMenu,
+    clipboard,
+    handleCopyFile,
+    handlePasteFiles,
+    handleRename,
+    handleDeleteFile,
+    handleDeleteDirectory,
+  ]);
 
   // Save untitled file: prompt for name, write to disk, replace tab
   const handleSaveUntitled = useCallback(
@@ -596,6 +648,9 @@ const App: React.FC = () => {
                 onImportFile={handleImportFile}
                 onCollapse={() => setSidebarCollapsed(true)}
                 onContextMenu={handleFileContextMenu}
+                onCopyFile={handleCopyFile}
+                onPasteFiles={handlePasteFiles}
+                hasClipboard={clipboard.length > 0}
                 creatingType={creatingType}
                 createTargetPath={createTargetPath}
                 onInlineCreate={handleInlineCreate}

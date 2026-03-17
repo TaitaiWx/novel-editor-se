@@ -27,10 +27,25 @@ interface FilePanelProps {
   onImportFile?: () => void;
   onCollapse?: () => void;
   onContextMenu?: (event: ContextMenuEvent) => void;
+  onCopyFile?: (path: string) => void;
+  onPasteFiles?: (targetDir: string) => void;
+  hasClipboard?: boolean;
   creatingType?: 'file' | 'directory' | null;
   createTargetPath?: string | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
+}
+
+/** 根据路径在树中查找节点 */
+function findNodeByPath(nodes: FileNode[], targetPath: string): FileNode | null {
+  for (const node of nodes) {
+    if (node.path === targetPath) return node;
+    if (node.children) {
+      const found = findNodeByPath(node.children, targetPath);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 /** 递归过滤文件树，保留匹配节点及其父目录路径 */
@@ -69,6 +84,9 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onImportFile,
     onCollapse,
     onContextMenu,
+    onCopyFile,
+    onPasteFiles,
+    hasClipboard,
     creatingType,
     createTargetPath,
     onInlineCreate,
@@ -131,8 +149,31 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       return () => window.removeEventListener('keydown', onKeyDown);
     }, []);
 
+    const handlePanelKeyDown = useCallback(
+      (e: React.KeyboardEvent) => {
+        const mod = e.ctrlKey || e.metaKey;
+        if (!mod || !selectedFile) return;
+        if (e.key === 'c') {
+          e.preventDefault();
+          e.stopPropagation();
+          onCopyFile?.(selectedFile);
+        } else if (e.key === 'v' && hasClipboard) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Paste into parent dir for files, into dir itself for directories
+          const node = findNodeByPath(files, selectedFile);
+          const targetDir =
+            node?.type === 'directory'
+              ? selectedFile
+              : selectedFile.substring(0, selectedFile.lastIndexOf('/'));
+          if (targetDir) onPasteFiles?.(targetDir);
+        }
+      },
+      [selectedFile, files, onCopyFile, onPasteFiles, hasClipboard]
+    );
+
     return (
-      <div className={styles.filePanel}>
+      <div className={styles.filePanel} tabIndex={-1} onKeyDown={handlePanelKeyDown}>
         <div className={styles.explorerHeader}>
           <span className={styles.explorerTitle}>资源管理器</span>
           <div className={styles.headerActions}>

@@ -48,6 +48,9 @@ interface TextEditorProps {
 const isUntitledPath = (path: string | null): boolean =>
   path !== null && path.startsWith('__untitled__:');
 
+const isChangelogPath = (path: string | null): boolean =>
+  path !== null && path.startsWith('__changelog__:');
+
 const getLanguageFromPath = (path: string): string => {
   const ext = path.split('.').pop()?.toLowerCase();
   const languageMap: Record<string, string> = {
@@ -340,6 +343,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   settingsComponent,
 }) => {
   const isUntitled = isUntitledPath(filePath);
+  const isChangelog = isChangelogPath(filePath);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
@@ -393,7 +397,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
     if (!targetPath || readOnlyRef.current || targetContent === currentOriginalContentRef.current)
       return;
-    if (isUntitledPath(targetPath)) return;
+    if (isUntitledPath(targetPath) || isChangelogPath(targetPath)) return;
 
     setAutoSaving(true);
     try {
@@ -534,6 +538,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
       if (
         currentFilePathRef.current &&
         !isUntitledPath(currentFilePathRef.current) &&
+        !isChangelogPath(currentFilePathRef.current) &&
         currentContentRef.current !== currentOriginalContentRef.current &&
         !readOnlyRef.current
       ) {
@@ -556,6 +561,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
         currentFilePathRef.current &&
         filePath !== currentFilePathRef.current &&
         !isUntitledPath(currentFilePathRef.current) &&
+        !isChangelogPath(currentFilePathRef.current) &&
         currentContentRef.current !== currentOriginalContentRef.current &&
         !readOnlyRef.current
       ) {
@@ -603,6 +609,35 @@ const TextEditor: React.FC<TextEditorProps> = ({
         }
         onContentChange?.('');
         onCursorChange?.({ line: 1, column: 1 });
+        return;
+      }
+
+      if (isChangelogPath(filePath)) {
+        setLoading(true);
+        try {
+          const content = await window.electron.ipcRenderer.invoke('get-changelog');
+          currentFilePathRef.current = filePath;
+          currentContentRef.current = content;
+          currentOriginalContentRef.current = content;
+          setError(null);
+          setIsLargeFile(false);
+          setHasChanges(false);
+          if (view) {
+            const langExt = getLanguageExtension('markdown');
+            view.dispatch({
+              changes: { from: 0, to: view.state.doc.length, insert: content },
+              effects: [
+                languageCompartment.current.reconfigure(langExt),
+                readOnlyCompartment.current.reconfigure(EditorView.editable.of(false)),
+                wordWrapCompartment.current.reconfigure(EditorView.lineWrapping),
+              ],
+            });
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : '加载更新日志失败');
+        } finally {
+          setLoading(false);
+        }
         return;
       }
 
@@ -669,11 +704,18 @@ const TextEditor: React.FC<TextEditorProps> = ({
     view.focus();
   }, [scrollToLine]);
 
-  const language = filePath && !isUntitled ? getLanguageFromPath(filePath) : 'text';
+  const language =
+    filePath && !isUntitled && !isChangelog
+      ? getLanguageFromPath(filePath)
+      : isChangelog
+        ? 'markdown'
+        : 'text';
   const fileName = filePath
     ? isUntitled
       ? filePath.replace('__untitled__:', '')
-      : filePath.split('/').pop() || filePath.split('\\').pop() || ''
+      : isChangelog
+        ? filePath.replace('__changelog__:', '')
+        : filePath.split('/').pop() || filePath.split('\\').pop() || ''
     : '';
 
   // Determine which overlay to show (if any)

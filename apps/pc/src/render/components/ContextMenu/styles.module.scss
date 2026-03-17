@@ -35,6 +35,15 @@
       color: #f85149;
     }
   }
+
+  &.disabled {
+    color: #666;
+    cursor: default;
+
+    &:hover {
+      background-color: transparent;
+    }
+  }
 }
 
 .separator {
