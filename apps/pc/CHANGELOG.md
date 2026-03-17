@@ -46,6 +46,7 @@
 | Windows 自动更新后软件被删除         | NSIS 添加稳定 GUID，更新时原地升级而非重新安装                               |
 | 更新后桌面快捷方式和开始菜单条目丢失 | 配置 `createDesktopShortcut: always` + 固定 `shortcutName`，升级保留快捷方式 |
 | 用户选择更新后静默安装               | `quitAndInstall(true, true)` 静默安装 + 自动重启，无 NSIS 弹窗               |
+| 更新面板设备 ID 提示被截断           | 移除更新面板 `overflow: hidden`，Tooltip 完整展示不再被裁切                  |
 
 ## v1.1.0-beta.1
 
