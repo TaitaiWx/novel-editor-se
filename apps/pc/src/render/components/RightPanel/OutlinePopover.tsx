@@ -1,12 +1,8 @@
-import React, { useCallback, useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './styles.module.scss';
 import type { OutlineEntry, OutlinePopoverAnchor } from './types';
-import {
-  OUTLINE_POPOVER_WIDTH,
-  OUTLINE_POPOVER_ESTIMATED_HEIGHT,
-  OUTLINE_POPOVER_HIDE_DELAY,
-} from './constants';
+import { OUTLINE_POPOVER_WIDTH, OUTLINE_POPOVER_ESTIMATED_HEIGHT } from './constants';
 
 const POPOVER_SHOW_DELAY = 150;
 

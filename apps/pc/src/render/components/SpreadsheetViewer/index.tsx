@@ -169,7 +169,7 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ filePath, setting
     );
   }
 
-  if (error) {
+  if (error || !data || !currentSheet) {
     return (
       <div className={styles.container}>
         <ErrorState message="无法读取文件数据" />

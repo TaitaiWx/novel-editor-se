@@ -302,7 +302,7 @@ export function extractLineSummary(lines: string[], startLine: number, endLine: 
     .map((item) => item.trim())
     .filter(Boolean)
     .join(' ')
-    .replace(/[#*`>\-]+/g, ' ')
+    .replace(/[#*`>-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (!body) return '暂无内容摘要';
@@ -337,9 +337,9 @@ export function isGenericOutlineTitle(text: string): boolean {
 export function isChapterHeading(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
-  if (/^第[一二三四五六七八九十百千万零〇\d]+[章幕节卷部回篇集](?:[：:：\-\s].+)?$/.test(trimmed))
+  if (/^第[一二三四五六七八九十百千万零〇\d]+[章幕节卷部回篇集](?:[：:：\s-].+)?$/.test(trimmed))
     return true;
-  if (/^(chapter|part|act)\s*\d+(?:\s*[:：\-]\s*.+)?$/i.test(trimmed)) return true;
+  if (/^(chapter|part|act)\s*\d+(?:\s*[:：-]\s*.+)?$/i.test(trimmed)) return true;
   return false;
 }
 

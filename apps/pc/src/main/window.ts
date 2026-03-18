@@ -70,7 +70,7 @@ export function createMainWindow(): BrowserWindow {
   if (process.platform === 'darwin' && iconPath) {
     const appIcon = nativeImage.createFromPath(iconPath);
     if (!appIcon.isEmpty()) {
-      app.dock.setIcon(appIcon);
+      app.dock?.setIcon(appIcon);
     }
   }
 

@@ -59,7 +59,9 @@ const TitleBar: React.FC<TitleBarProps> = ({
         try {
           const maximized = await window.electron.ipcRenderer.invoke('window-is-maximized');
           setIsMaximized(maximized);
-        } catch {}
+        } catch {
+          /* window IPC may be unavailable */
+        }
       }
     };
     checkMaximized();
@@ -68,20 +70,26 @@ const TitleBar: React.FC<TitleBarProps> = ({
   const handleMinimize = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-minimize');
-    } catch {}
+    } catch {
+      /* ignored */
+    }
   }, []);
 
   const handleMaximize = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-maximize');
       setIsMaximized((prev) => !prev);
-    } catch {}
+    } catch {
+      /* ignored */
+    }
   }, []);
 
   const handleClose = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-close');
-    } catch {}
+    } catch {
+      /* ignored */
+    }
   }, []);
 
   useEffect(() => {

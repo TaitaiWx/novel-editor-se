@@ -95,7 +95,7 @@ function generateActsFromChapters(text: string): ActNode[] {
     const end = Math.min(start + CHAPTERS_PER_ACT, headings.length);
     const chapterSlice = headings.slice(start, end);
 
-    const scenes: SceneNode[] = chapterSlice.map((heading, j) => {
+    const scenes: SceneNode[] = chapterSlice.map((heading, _j) => {
       // Extract preview: first non-empty line after the heading
       let preview = '';
       for (let li = heading.line; li < textLines.length && li < heading.line + 5; li++) {
@@ -112,8 +112,6 @@ function generateActsFromChapters(text: string): ActNode[] {
       };
     });
 
-    const firstTitle = chapterSlice[0].text;
-    const lastTitle = chapterSlice[chapterSlice.length - 1].text;
     const actTitle = totalActs === 1 ? '全篇' : `第${actIdx + 1}幕`;
 
     acts.push({

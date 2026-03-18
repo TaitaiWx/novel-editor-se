@@ -358,7 +358,7 @@ export function setupIPC() {
         return decoder.decode(buffer);
       }
       return await readFile(filePath, 'utf-8');
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to read file: ${filePath}`);
     }
   });
@@ -371,7 +371,7 @@ export function setupIPC() {
         byteSize: buffer.byteLength,
         mimeType: guessMimeType(filePath),
       };
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to read binary file: ${filePath}`);
     }
   });
@@ -548,12 +548,12 @@ export function setupIPC() {
       // pptxgenjs 已依赖 jszip，复用同一版本避免冲突
       const jszip = await import('jszip');
       // Vite 打包后 default export 可能被包裹一层
-      const JSZipCtor: typeof import('jszip').default =
+      const JSZipCtor: any =
         typeof jszip === 'function'
           ? jszip
           : (jszip as Record<string, unknown>).default
-            ? ((jszip as Record<string, unknown>).default as typeof import('jszip').default)
-            : (jszip as typeof import('jszip').default);
+            ? (jszip as Record<string, unknown>).default
+            : jszip;
 
       if (typeof JSZipCtor.loadAsync !== 'function') {
         throw new Error('JSZip 模块加载异常，loadAsync 不可用');
@@ -671,7 +671,7 @@ export function setupIPC() {
     try {
       await writeFile(filePath, content, 'utf-8');
       return { success: true };
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to write file: ${filePath}`);
     }
   });
@@ -689,7 +689,7 @@ export function setupIPC() {
         isDirectory: stats.isDirectory(),
         isFile: stats.isFile(),
       };
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to get file info: ${filePath}`);
     }
   });
@@ -728,7 +728,7 @@ export function setupIPC() {
       }
 
       return userSamplePath;
-    } catch (error) {
+    } catch (_error) {
       throw new Error('Failed to get default data path');
     }
   });
@@ -923,7 +923,7 @@ export function setupIPC() {
         path: folderPath,
         files: tree?.children ? tree?.children?.map(convertTreeFormat) : [],
       };
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to refresh folder: ${folderPath}`);
     }
   });
@@ -1018,7 +1018,7 @@ export function setupIPC() {
       const { unlink } = await import('fs/promises');
       await unlink(filePath);
       return { success: true };
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to delete file: ${filePath}`);
     }
   });
@@ -1029,7 +1029,7 @@ export function setupIPC() {
       const { rm } = await import('fs/promises');
       await rm(dirPath, { recursive: true });
       return { success: true };
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to delete directory: ${dirPath}`);
     }
   });
@@ -1040,7 +1040,7 @@ export function setupIPC() {
       const { rename } = await import('fs/promises');
       await rename(oldPath, newPath);
       return { success: true, newPath };
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to rename: ${oldPath}`);
     }
   });
@@ -1119,23 +1119,15 @@ export function setupIPC() {
 
   // 初始化数据库
   ipcMain.handle('db-init', (_event, dbDir: string) => {
-    try {
-      initDatabase(dbDir, 'novel-editor.db', getNativeBinding());
-      return { success: true };
-    } catch (error) {
-      throw error;
-    }
+    initDatabase(dbDir, 'novel-editor.db', getNativeBinding());
+    return { success: true };
   });
 
   // 初始化默认数据库（开箱即用模式，无需打开目录）
   ipcMain.handle('db-init-default', () => {
-    try {
-      const defaultDbDir = path.join(app.getPath('userData'), '.novel-editor');
-      initDatabase(defaultDbDir, 'novel-editor.db', getNativeBinding());
-      return { success: true, dbDir: defaultDbDir };
-    } catch (error) {
-      throw error;
-    }
+    const defaultDbDir = path.join(app.getPath('userData'), '.novel-editor');
+    initDatabase(defaultDbDir, 'novel-editor.db', getNativeBinding());
+    return { success: true, dbDir: defaultDbDir };
   });
 
   // 关闭数据库

@@ -1114,12 +1114,12 @@ export async function beautifyPptx(
   const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 
   const jszip = await import('jszip');
-  const JSZipCtor: typeof import('jszip').default =
+  const JSZipCtor: any =
     typeof jszip === 'function'
       ? jszip
       : (jszip as Record<string, unknown>).default
-        ? ((jszip as Record<string, unknown>).default as typeof import('jszip').default)
-        : (jszip as typeof import('jszip').default);
+        ? (jszip as Record<string, unknown>).default
+        : jszip;
 
   const zip = await JSZipCtor.loadAsync(new Uint8Array(arrayBuffer));
 

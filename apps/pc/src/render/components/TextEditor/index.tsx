@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, Range } from '@codemirror/state';
 import {
   Decoration,
   EditorView,
@@ -77,7 +77,7 @@ const focusLineDecorations = (enabled: boolean) => {
       }
 
       build(view: EditorView) {
-        const ranges = [] as ReturnType<typeof Decoration.line>['range'][];
+        const ranges: Range<Decoration>[] = [];
         const mainLine = view.state.doc.lineAt(view.state.selection.main.head).number;
         const minLine = Math.max(1, mainLine - FOCUS_VISIBLE_RADIUS);
         const maxLine = Math.min(view.state.doc.lines, mainLine + FOCUS_VISIBLE_RADIUS);

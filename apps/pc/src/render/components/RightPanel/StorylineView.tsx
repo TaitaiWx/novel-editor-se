@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import styles from './styles.module.scss';
 import type { StorylineViewMode } from './types';
 import { OutlineView } from './OutlineView';
@@ -13,10 +13,6 @@ export const StorylineView: React.FC<{
   dbReady: boolean;
 }> = React.memo(({ content, onScrollToLine, onReplaceLineText, folderPath, dbReady }) => {
   const [viewMode, setViewMode] = useState<StorylineViewMode>('outline');
-
-  const toggleMode = useCallback(() => {
-    setViewMode((prev) => (prev === 'outline' ? 'acts' : 'outline'));
-  }, []);
 
   return (
     <AiCacheProvider dbReady={dbReady}>
