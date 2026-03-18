@@ -66,6 +66,8 @@ export default defineConfig(({ mode }) => {
             if (id === 'bindings' || id === 'file-uri-to-path') return true;
             // mammoth 必须 external：Vite 默认打包浏览器入口，其内部 JSZip 不兼容 Node Buffer
             if (id === 'mammoth') return true;
+            // jszip 通过 pptxgenjs 传递依赖提供，动态 import 需要 external
+            if (id === 'jszip') return true;
             if (id.startsWith('node:')) return true;
             return builtinModules.includes(id.split('/')[0]);
           },
