@@ -129,10 +129,8 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
         setIsDragOver(false);
         const droppedFiles = e.dataTransfer.files;
         if (droppedFiles.length === 0) return;
-        // Electron File 对象包含 path 属性
-        const filePaths = Array.from(droppedFiles)
-          .map((f) => (f as File & { path: string }).path)
-          .filter(Boolean);
+        // preload 在 capture 阶段已提取 File.path，直接取回
+        const filePaths = window.electron?.getLastDroppedPaths() || [];
         if (filePaths.length > 0) onDropFiles?.(filePaths);
       },
       [onDropFiles]
@@ -198,7 +196,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
           e.preventDefault();
           e.stopPropagation();
           onCopyFile?.(selectedFile);
-        } else if (e.key === 'v' && hasClipboard) {
+        } else if (e.key === 'v') {
           e.preventDefault();
           e.stopPropagation();
           // Paste into parent dir for files, into dir itself for directories

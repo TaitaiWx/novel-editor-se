@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
 import {
+  Decoration,
   EditorView,
+  ViewPlugin,
+  ViewUpdate,
   keymap,
   lineNumbers,
   highlightActiveLine,
@@ -33,19 +36,74 @@ interface ScrollToLineRequest {
   id: number;
 }
 
+interface ReplaceLineRequest {
+  line: number;
+  text: string;
+  id: number;
+}
+
 interface TextEditorProps {
   filePath: string | null;
   reloadToken?: number;
+  focusMode?: boolean;
   wordWrap?: boolean;
   readOnly?: boolean;
   encoding?: string;
   characterNames?: string[];
   scrollToLine?: ScrollToLineRequest | null;
+  replaceLineRequest?: ReplaceLineRequest | null;
   onContentChange?: (content: string) => void;
   onCursorChange?: (pos: CursorPosition) => void;
   onSaveUntitled?: (untitledPath: string, content: string) => void;
   settingsComponent?: React.ReactNode;
 }
+
+const FOCUS_VISIBLE_RADIUS = 0;
+
+const focusLineDecorations = (enabled: boolean) => {
+  if (!enabled) return [];
+  return ViewPlugin.fromClass(
+    class {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = this.build(view);
+      }
+
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.selectionSet || update.viewportChanged) {
+          this.decorations = this.build(update.view);
+        }
+      }
+
+      build(view: EditorView) {
+        const ranges = [] as ReturnType<typeof Decoration.line>['range'][];
+        const mainLine = view.state.doc.lineAt(view.state.selection.main.head).number;
+        const minLine = Math.max(1, mainLine - FOCUS_VISIBLE_RADIUS);
+        const maxLine = Math.min(view.state.doc.lines, mainLine + FOCUS_VISIBLE_RADIUS);
+
+        for (const vp of view.visibleRanges) {
+          let from = vp.from;
+          while (from <= vp.to) {
+            const line = view.state.doc.lineAt(from);
+            if (line.number < minLine || line.number > maxLine) {
+              ranges.push(Decoration.line({ class: 'cm-focus-fade' }).range(line.from));
+            } else if (line.number === mainLine) {
+              ranges.push(Decoration.line({ class: 'cm-focus-main' }).range(line.from));
+            }
+            if (line.to >= vp.to) break;
+            from = line.to + 1;
+          }
+        }
+
+        return Decoration.set(ranges, true);
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+    }
+  );
+};
 
 const isUntitledPath = (path: string | null): boolean =>
   path !== null && path.startsWith('__untitled__:');
@@ -109,6 +167,17 @@ const darkTheme = EditorView.theme(
     '.cm-activeLineGutter': {
       backgroundColor: 'rgba(140, 100, 220, 0.06)',
       color: '#c8b8e8',
+    },
+    '.cm-line': {
+      transition: 'filter 0.16s ease, opacity 0.16s ease',
+    },
+    '.cm-line.cm-focus-fade': {
+      filter: 'blur(1.8px)',
+      opacity: '0.28',
+    },
+    '.cm-line.cm-focus-main': {
+      filter: 'none',
+      opacity: '1',
     },
     '.cm-gutters': {
       backgroundColor: '#1e1e1e',
@@ -334,11 +403,13 @@ const chinesePhrases = EditorState.phrases.of({
 const TextEditor: React.FC<TextEditorProps> = ({
   filePath,
   reloadToken,
+  focusMode = false,
   wordWrap = false,
   readOnly = false,
   encoding = 'UTF-8',
   characterNames = [],
   scrollToLine,
+  replaceLineRequest,
   onContentChange,
   onCursorChange,
   onSaveUntitled,
@@ -363,6 +434,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const wordWrapCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
   const writingDecoCompartment = useRef(new Compartment());
+  const focusModeCompartment = useRef(new Compartment());
+  const lineNumberCompartment = useRef(new Compartment());
 
   const currentFilePathRef = useRef<string | null>(null);
   const currentContentRef = useRef<string>('');
@@ -473,7 +546,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
       state: EditorState.create({
         doc: '',
         extensions: [
-          lineNumbers(),
+          lineNumberCompartment.current.of(focusMode ? [] : lineNumbers()),
           highlightActiveLine(),
           highlightSelectionMatches(),
           history(),
@@ -483,9 +556,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
           chinesePhrases,
           placeholder('开始输入您的内容...'),
           readOnlyCompartment.current.of(EditorView.editable.of(!readOnly)),
-          wordWrapCompartment.current.of(wordWrap ? EditorView.lineWrapping : []),
+          wordWrapCompartment.current.of(wordWrap || focusMode ? EditorView.lineWrapping : []),
           languageCompartment.current.of([]),
           writingDecoCompartment.current.of(writingDecorations(characterNames)),
+          focusModeCompartment.current.of(focusLineDecorations(focusMode)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               const doc = update.state.doc.toString();
@@ -541,9 +615,11 @@ const TextEditor: React.FC<TextEditorProps> = ({
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({
-      effects: wordWrapCompartment.current.reconfigure(wordWrap ? EditorView.lineWrapping : []),
+      effects: wordWrapCompartment.current.reconfigure(
+        wordWrap || focusMode ? EditorView.lineWrapping : []
+      ),
     });
-  }, [wordWrap]);
+  }, [wordWrap, focusMode]);
 
   // Update language extension when filePath changes
   useEffect(() => {
@@ -564,6 +640,18 @@ const TextEditor: React.FC<TextEditorProps> = ({
       effects: writingDecoCompartment.current.reconfigure(writingDecorations(characterNames)),
     });
   }, [characterNames]);
+
+  // Update focus mode line-fading extension
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: [
+        focusModeCompartment.current.reconfigure(focusLineDecorations(focusMode)),
+        lineNumberCompartment.current.reconfigure(focusMode ? [] : lineNumbers()),
+      ],
+    });
+  }, [focusMode]);
 
   // Save on unmount
   useEffect(() => {
@@ -740,6 +828,23 @@ const TextEditor: React.FC<TextEditorProps> = ({
     view.focus();
   }, [scrollToLine]);
 
+  // Replace line text (append AI title etc.)
+  const lastReplaceIdRef = useRef(0);
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!replaceLineRequest || !view) return;
+    if (replaceLineRequest.id <= lastReplaceIdRef.current) return;
+    lastReplaceIdRef.current = replaceLineRequest.id;
+
+    const lineNum = Math.min(replaceLineRequest.line, view.state.doc.lines);
+    const lineInfo = view.state.doc.line(lineNum);
+    view.dispatch({
+      changes: { from: lineInfo.to, insert: ` ${replaceLineRequest.text}` },
+      scrollIntoView: true,
+    });
+    view.focus();
+  }, [replaceLineRequest]);
+
   const language =
     filePath && !isUntitled && !isChangelog
       ? getLanguageFromPath(filePath)
@@ -761,9 +866,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const showEditor = !!filePath && !loading && !error;
 
   return (
-    <div className={styles.textEditor}>
+    <div className={`${styles.textEditor} ${focusMode ? styles.focusModeEditor : ''}`}>
       {/* File header — only visible when a file is active */}
-      {showEditor && (
+      {showEditor && !focusMode && (
         <div className={styles.fileHeader}>
           <div className={styles.fileInfo}>
             <span className={styles.fileName}>

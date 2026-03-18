@@ -6,6 +6,7 @@ export {
   characterOps,
   statsOps,
   settingsOps,
+  aiCacheOps,
   exportAllData,
   importData,
 } from './database';

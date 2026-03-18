@@ -186,6 +186,18 @@ function createTables(database: Database.Database): void {
       ON version_entries (relative_path);
     CREATE INDEX IF NOT EXISTS idx_version_entries_content_hash
       ON version_entries (content_hash);
+
+    -- AI 缓存（标题补全 / 摘要等）
+    CREATE TABLE IF NOT EXISTS ai_cache (
+      cache_key TEXT NOT NULL,
+      type TEXT NOT NULL,
+      value TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (cache_key, type)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ai_cache_type
+      ON ai_cache (type);
   `);
 }
 
@@ -334,11 +346,88 @@ export const settingsOps = {
       .run(key, value, value);
   },
 
+  delete(key: string) {
+    return getDatabase().prepare('DELETE FROM settings WHERE key = ?').run(key);
+  },
+
+  deleteByPrefixes(prefixes: string[]) {
+    let removed = 0;
+    for (const prefix of prefixes) {
+      const result = getDatabase()
+        .prepare('DELETE FROM settings WHERE key LIKE ?')
+        .run(`${prefix}%`);
+      removed += result.changes;
+    }
+    return removed;
+  },
+
+  deleteAll() {
+    return getDatabase().prepare('DELETE FROM settings').run();
+  },
+
   getAll() {
     return getDatabase().prepare('SELECT * FROM settings').all() as {
       key: string;
       value: string;
     }[];
+  },
+};
+
+/** AI 缓存 */
+export const aiCacheOps = {
+  get(cacheKey: string, type: string): string | undefined {
+    const row = getDatabase()
+      .prepare('SELECT value FROM ai_cache WHERE cache_key = ? AND type = ?')
+      .get(cacheKey, type) as { value: string } | undefined;
+    return row?.value;
+  },
+
+  set(cacheKey: string, type: string, value: string) {
+    return getDatabase()
+      .prepare(
+        `INSERT INTO ai_cache (cache_key, type, value) VALUES (?, ?, ?)
+         ON CONFLICT(cache_key, type) DO UPDATE SET value = ?, created_at = datetime('now')`
+      )
+      .run(cacheKey, type, value, value);
+  },
+
+  delete(cacheKey: string, type: string) {
+    return getDatabase()
+      .prepare('DELETE FROM ai_cache WHERE cache_key = ? AND type = ?')
+      .run(cacheKey, type);
+  },
+
+  getByType(type: string): { cache_key: string; value: string }[] {
+    return getDatabase()
+      .prepare('SELECT cache_key, value FROM ai_cache WHERE type = ?')
+      .all(type) as { cache_key: string; value: string }[];
+  },
+
+  clearByType(type: string) {
+    return getDatabase().prepare('DELETE FROM ai_cache WHERE type = ?').run(type);
+  },
+
+  /** Delete cache entries older than `maxAgeDays` days (TTL-based GC). */
+  cleanup(maxAgeDays: number): number {
+    const result = getDatabase()
+      .prepare("DELETE FROM ai_cache WHERE created_at < datetime('now', ?)")
+      .run(`-${maxAgeDays} days`);
+    return result.changes;
+  },
+
+  /** Refresh `created_at` for actively used keys so TTL is extended. */
+  touchKeys(keys: Array<{ cacheKey: string; type: string }>) {
+    if (keys.length === 0) return;
+    const db = getDatabase();
+    const stmt = db.prepare(
+      "UPDATE ai_cache SET created_at = datetime('now') WHERE cache_key = ? AND type = ?"
+    );
+    const run = db.transaction((items: Array<{ cacheKey: string; type: string }>) => {
+      for (const item of items) {
+        stmt.run(item.cacheKey, item.type);
+      }
+    });
+    run(keys);
   },
 };
 

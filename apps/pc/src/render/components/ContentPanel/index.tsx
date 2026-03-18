@@ -10,6 +10,9 @@ import ResourceViewer, {
   isPreviewableResourcePath,
   isTextBackedPreviewResourcePath,
 } from '../ResourceViewer';
+import SpreadsheetViewer, { isSpreadsheetPath } from '../SpreadsheetViewer';
+import PresentationViewer, { isPresentationPath } from '../PresentationViewer';
+import DocumentViewer, { isDocumentPath } from '../DocumentViewer';
 import styles from './styles.module.scss';
 
 interface CursorPosition {
@@ -22,14 +25,25 @@ interface ScrollToLineRequest {
   id: number;
 }
 
+interface ReplaceLineRequest {
+  line: number;
+  text: string;
+  id: number;
+}
+
 interface ContentPanelProps {
   openTabs: string[];
   activeTab: string | null;
+  focusMode?: boolean;
   reloadToken?: number;
   encoding?: string;
   scrollToLine?: ScrollToLineRequest | null;
+  replaceLineRequest?: ReplaceLineRequest | null;
   onTabSelect: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
+  onCloseOtherTabs?: (filePath: string) => void;
+  onCloseAllTabs?: () => void;
+  onCloseAllAndSave?: () => void;
   onContentChange?: (content: string) => void;
   onCursorChange?: (pos: CursorPosition) => void;
   onSaveUntitled?: (untitledPath: string, content: string) => void;
@@ -38,11 +52,16 @@ interface ContentPanelProps {
 const ContentPanel: React.FC<ContentPanelProps> = ({
   openTabs,
   activeTab,
+  focusMode = false,
   reloadToken,
   encoding,
   scrollToLine,
+  replaceLineRequest,
   onTabSelect,
   onTabClose,
+  onCloseOtherTabs,
+  onCloseAllTabs,
+  onCloseAllAndSave,
   onContentChange,
   onCursorChange,
   onSaveUntitled,
@@ -55,6 +74,9 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
     [activeTab]
   );
   const isPreviewableResource = useMemo(() => isPreviewableResourcePath(activeTab), [activeTab]);
+  const isSpreadsheet = useMemo(() => isSpreadsheetPath(activeTab), [activeTab]);
+  const isPresentation = useMemo(() => isPresentationPath(activeTab), [activeTab]);
+  const isDocument = useMemo(() => isDocumentPath(activeTab), [activeTab]);
   const isTextBackedPreviewResource = useMemo(
     () => isTextBackedPreviewResourcePath(activeTab),
     [activeTab]
@@ -67,10 +89,26 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   }, [activeTab, isPreviewableResource]);
 
   useEffect(() => {
-    if (!activeTab || (isPreviewableResource && viewMode === 'preview')) {
+    if (
+      !activeTab ||
+      (isPreviewableResource && viewMode === 'preview') ||
+      isSpreadsheet ||
+      isPresentation ||
+      isDocument ||
+      isChangelog
+    ) {
       onContentChange?.('');
     }
-  }, [activeTab, isPreviewableResource, onContentChange, viewMode]);
+  }, [
+    activeTab,
+    isPreviewableResource,
+    isSpreadsheet,
+    isPresentation,
+    isDocument,
+    isChangelog,
+    onContentChange,
+    viewMode,
+  ]);
 
   const settingsComponent = (
     <SettingsButton
@@ -95,15 +133,27 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
 
   return (
     <div className={styles.contentPanel}>
-      <TabBar
-        tabs={openTabs}
-        activeTab={activeTab}
-        onTabSelect={onTabSelect}
-        onTabClose={onTabClose}
-      />
+      {!focusMode && (
+        <TabBar
+          tabs={openTabs}
+          activeTab={activeTab}
+          focusMode={focusMode}
+          onTabSelect={onTabSelect}
+          onTabClose={onTabClose}
+          onCloseOtherTabs={onCloseOtherTabs}
+          onCloseAllTabs={onCloseAllTabs}
+          onCloseAllAndSave={onCloseAllAndSave}
+        />
+      )}
       <div className={styles.contentPanelContent}>
         {isChangelog ? (
           <ChangelogViewer />
+        ) : isSpreadsheet ? (
+          <SpreadsheetViewer filePath={activeTab} settingsComponent={settingsComponent} />
+        ) : isPresentation ? (
+          <PresentationViewer filePath={activeTab} settingsComponent={settingsComponent} />
+        ) : isDocument ? (
+          <DocumentViewer filePath={activeTab} settingsComponent={settingsComponent} />
         ) : isPreviewableResource && viewMode === 'preview' ? (
           <ResourceViewer filePath={activeTab} settingsComponent={settingsComponent} />
         ) : isPreviewableResource && !isTextBackedPreviewResource ? (
@@ -112,9 +162,11 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
           <TextEditor
             filePath={activeTab}
             reloadToken={reloadToken}
+            focusMode={focusMode}
             wordWrap={wordWrap}
             encoding={encoding}
             scrollToLine={scrollToLine}
+            replaceLineRequest={replaceLineRequest}
             onContentChange={onContentChange}
             onCursorChange={onCursorChange}
             onSaveUntitled={onSaveUntitled}

@@ -64,6 +64,8 @@ export default defineConfig(({ mode }) => {
             if (id === 'electron' || id === 'better-sqlite3') return true;
             // bindings / file-uri-to-path 是 better-sqlite3 的运行时依赖，一并 external
             if (id === 'bindings' || id === 'file-uri-to-path') return true;
+            // mammoth 必须 external：Vite 默认打包浏览器入口，其内部 JSZip 不兼容 Node Buffer
+            if (id === 'mammoth') return true;
             if (id.startsWith('node:')) return true;
             return builtinModules.includes(id.split('/')[0]);
           },

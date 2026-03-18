@@ -78,9 +78,9 @@ const StatusBar: React.FC<StatusBarProps> = ({
       setUpdateStatus(nextStatus);
     };
 
-    ipc.on('update-state-changed', handleStateChanged);
+    const dispose = ipc.on('update-state-changed', handleStateChanged);
     return () => {
-      ipc.removeAllListeners('update-state-changed');
+      dispose?.();
     };
   }, []);
 
@@ -232,6 +232,39 @@ const StatusBar: React.FC<StatusBarProps> = ({
             重启以更新
           </span>
         )}
+        {filePath &&
+          (() => {
+            const isUntitled = filePath.startsWith('__untitled__:');
+            const isChangelog = filePath.startsWith('__changelog__:');
+            const name = isUntitled
+              ? filePath.replace('__untitled__:', '')
+              : isChangelog
+                ? filePath.replace('__changelog__:', '')
+                : filePath.split('/').pop() || filePath.split('\\').pop() || '';
+            const dotIdx = name.lastIndexOf('.');
+            const ext = isChangelog
+              ? 'MD'
+              : dotIdx > 0
+                ? name.slice(dotIdx + 1).toUpperCase()
+                : 'TXT';
+            const truncated =
+              name.length > MAX_FILENAME_LEN ? name.slice(0, MAX_FILENAME_LEN) + '...' : name;
+            const needsTooltip = name.length > MAX_FILENAME_LEN;
+            return (
+              <>
+                {needsTooltip ? (
+                  <Tooltip content={name} position="top">
+                    <span className={styles.item}>{truncated}</span>
+                  </Tooltip>
+                ) : (
+                  <span className={styles.item}>{name}</span>
+                )}
+                <span className={styles.separator}>|</span>
+                <span className={styles.item}>{ext}</span>
+              </>
+            );
+          })()}
+        <span className={styles.separator}>|</span>
         <div className={styles.menuWrapper} ref={encodingMenuRef}>
           <span
             className={`${styles.item} ${styles.clickable}`}
@@ -339,32 +372,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
             </div>
           )}
         </div>
-        {filePath &&
-          (() => {
-            const isUntitled = filePath.startsWith('__untitled__:');
-            const name = isUntitled
-              ? filePath.replace('__untitled__:', '')
-              : filePath.split('/').pop() || filePath.split('\\').pop() || '';
-            const dotIdx = name.lastIndexOf('.');
-            const ext = dotIdx > 0 ? name.slice(dotIdx + 1).toUpperCase() : 'TXT';
-            const truncated =
-              name.length > MAX_FILENAME_LEN ? name.slice(0, MAX_FILENAME_LEN) + '...' : name;
-            const needsTooltip = name.length > MAX_FILENAME_LEN;
-            return (
-              <>
-                <span className={styles.separator}>|</span>
-                {needsTooltip ? (
-                  <Tooltip content={name} position="top">
-                    <span className={styles.item}>{truncated}</span>
-                  </Tooltip>
-                ) : (
-                  <span className={styles.item}>{name}</span>
-                )}
-                <span className={styles.separator}>|</span>
-                <span className={styles.item}>{ext}</span>
-              </>
-            );
-          })()}
       </div>
       {restarting && (
         <div className={styles.restartOverlay}>

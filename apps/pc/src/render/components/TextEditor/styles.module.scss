@@ -134,3 +134,47 @@
   justify-content: center;
   flex: 1;
 }
+
+.focusModeEditor {
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.02) 0%, transparent 62%),
+    #111315;
+
+  .editorContainer {
+    padding: 0 24px;
+  }
+
+  .cmHost {
+    :global(.cm-editor) {
+      background: transparent;
+    }
+
+    :global(.cm-scroller) {
+      padding-top: 34vh;
+      padding-bottom: 38vh;
+    }
+
+    :global(.cm-content) {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 8px;
+      font-size: 17px;
+      line-height: 1.95;
+      letter-spacing: 0.2px;
+    }
+
+    :global(.cm-line.cm-focus-fade) {
+      filter: blur(2.6px);
+      opacity: 0.14;
+    }
+
+    :global(.cm-line.cm-focus-main) {
+      filter: none;
+      opacity: 1;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.12);
+    }
+
+    :global(.cm-gutters) {
+      display: none;
+    }
+  }
+}

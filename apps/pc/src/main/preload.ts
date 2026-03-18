@@ -1,18 +1,41 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Electron 28 + contextIsolation: File.path 在 preload 特权上下文中仍可用，
+// 但在隔离的渲染进程中为空。在 capture 阶段拦截 drop 事件提取路径。
+let lastDroppedPaths: string[] = [];
+document.addEventListener(
+  'drop',
+  (e) => {
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      lastDroppedPaths = Array.from(files)
+        .map((f) => (f as File & { path: string }).path)
+        .filter(Boolean);
+    }
+  },
+  { capture: true }
+);
+
 contextBridge.exposeInMainWorld('electron', {
+  getLastDroppedPaths: (): string[] => {
+    const paths = lastDroppedPaths;
+    lastDroppedPaths = [];
+    return paths;
+  },
   ipcRenderer: {
     invoke: (channel: string, ...args: any[]) => {
       const validChannels = [
         'open-local-folder',
         'read-file',
         'read-file-binary',
+        'read-xlsx-data',
         'write-file',
         'get-file-info',
         'get-default-data-path',
         'get-recent-folders',
         'get-last-folder',
         'add-recent-folder',
+        'app-cache-clear',
         'open-sample-data',
         'get-changelog',
         'check-just-updated',
@@ -61,6 +84,15 @@ contextBridge.exposeInMainWorld('electron', {
         'db-settings-get',
         'db-settings-set',
         'db-settings-all',
+        // AI 缓存
+        'ai-cache-get',
+        'ai-cache-set',
+        'ai-cache-delete',
+        'ai-cache-get-by-type',
+        'ai-cache-clear-by-type',
+        'ai-cache-cleanup',
+        'ai-cache-touch-keys',
+        'ai-request',
         'db-export',
         'db-import',
         'db-export-to-file',
@@ -80,6 +112,16 @@ contextBridge.exposeInMainWorld('electron', {
         'export-to-word',
         'export-project-to-word',
         'export-to-pptx',
+        // 外部编辑 & 文件监视
+        'open-in-system-app',
+        'watch-file',
+        'unwatch-file',
+        // PPT 预览
+        'read-pptx-data',
+        // Word 预览
+        'read-docx-data',
+        // PPT 美化
+        'beautify-pptx',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -101,9 +143,14 @@ contextBridge.exposeInMainWorld('electron', {
         'update-downloaded',
         'update-state-changed',
         'update-rollback-available',
+        'file-changed',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.on(channel, listener);
+        // 返回 disposer，避免 contextBridge 代理导致 removeListener 无法匹配引用
+        return () => {
+          ipcRenderer.removeListener(channel, listener);
+        };
       } else {
         throw new Error(`Unauthorized IPC channel: ${channel}`);
       }
@@ -123,6 +170,7 @@ contextBridge.exposeInMainWorld('electron', {
         'update-downloaded',
         'update-state-changed',
         'update-rollback-available',
+        'file-changed',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.removeListener(channel, listener);

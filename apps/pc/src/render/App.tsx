@@ -4,9 +4,12 @@ import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
 import RightPanel from './components/RightPanel';
+import { AIAssistantDialog } from './components/RightPanel/AIAssistantDialog';
 import StatusBar from './components/StatusBar';
 import ContextMenu from './components/ContextMenu';
 import ShortcutsHelp from './components/ShortcutsHelp';
+import AppSettingsCenter from './components/AppSettingsCenter';
+import type { SettingsTab, SettingsDraft } from './components/AppSettingsCenter';
 import { useToast } from './components/Toast';
 import { useDialog } from './components/Dialog';
 import type { ContextMenuEvent } from './components/FileTree';
@@ -61,7 +64,16 @@ const App: React.FC = () => {
   const [creatingType, setCreatingType] = useState<CreatingType>(null);
   const [clipboard, setClipboard] = useState<string[]>([]);
   const [scrollToLine, setScrollToLine] = useState<{ line: number; id: number } | null>(null);
+  const [replaceLineRequest, setReplaceLineRequest] = useState<{
+    line: number;
+    text: string;
+    id: number;
+  } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showSettingsCenter, setShowSettingsCenter] = useState(false);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [settingsCenterTab, setSettingsCenterTab] = useState<SettingsTab>('general');
+  const [userInitials, setUserInitials] = useState('U');
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [editorReloadToken, setEditorReloadToken] = useState(0);
   const [diffState, setDiffState] = useState<{
@@ -70,6 +82,7 @@ const App: React.FC = () => {
     originalLabel: string;
     modifiedLabel: string;
   } | null>(null);
+  const [dbReady, setDbReady] = useState(false);
 
   // Untitled tab counter
   const untitledCounterRef = useRef(0);
@@ -84,10 +97,32 @@ const App: React.FC = () => {
   folderPathRef.current = folderPath;
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
+  const openTabsRef = useRef(openTabs);
+  openTabsRef.current = openTabs;
   const filesRef = useRef(files);
   filesRef.current = files;
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
+
+  React.useEffect(() => {
+    const loadUserSettings = async () => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) return;
+      try {
+        const raw = await ipc.invoke('db-settings-get', 'novel-editor:settings-center');
+        if (!raw || typeof raw !== 'string') return;
+        const parsed = JSON.parse(raw) as { account?: { displayName?: string } };
+        const name = parsed.account?.displayName?.trim();
+        if (!name) return;
+        const initials = name.slice(0, 2);
+        setUserInitials(initials);
+      } catch {
+        // ignore
+      }
+    };
+
+    loadUserSettings();
+  }, []);
 
   // 侧边栏焦点跟踪（VS Code 风格：mousedown 判断是否在侧边栏区域内）
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -150,6 +185,13 @@ const App: React.FC = () => {
   const toggleFocusMode = useCallback(() => {
     setFocusMode((prev) => {
       if (!prev) {
+        // 进入专注模式：如果没有打开的 tab，自动新建一个
+        if (openTabsRef.current.length === 0) {
+          const num = ++untitledCounterRef.current;
+          const untitledPath = `__untitled__:Untitled-${num}`;
+          setOpenTabs([untitledPath]);
+          setActiveTab(untitledPath);
+        }
         preFocusStateRef.current = {
           sidebarCollapsed: sidebarCollapsedRef.current,
           rightPanelCollapsed: rightPanelCollapsedRef.current,
@@ -195,6 +237,7 @@ const App: React.FC = () => {
 
       // 开箱即用：先初始化默认 SQLite 数据库，确保无论是否打开目录都可用
       await window.electron.ipcRenderer.invoke('db-init-default');
+      setDbReady(true);
 
       // VS Code 风格：优先恢复上次打开的目录，首次安装打开 sample-data
       const lastFolder = await window.electron.ipcRenderer.invoke('get-last-folder');
@@ -489,7 +532,7 @@ const App: React.FC = () => {
         return;
       }
       // Cmd+B: 切换侧边栏
-      if (mod && e.key === 'b') {
+      if (mod && !e.shiftKey && e.key === 'b') {
         e.preventDefault();
         setSidebarCollapsed((prev) => !prev);
       }
@@ -498,15 +541,15 @@ const App: React.FC = () => {
         e.preventDefault();
         toggleFocusMode();
       }
-      // Cmd+W: 关闭当前标签
-      if (mod && e.key === 'w') {
+      // Cmd+W: 关闭当前标签（排除 Cmd+Shift+W 导出 Word）
+      if (mod && !e.shiftKey && e.key === 'w') {
         e.preventDefault();
         if (activeTabRef.current) {
           closeTab(activeTabRef.current);
         }
       }
       // Cmd+N: 新建标签
-      if (mod && e.key === 'n') {
+      if (mod && !e.shiftKey && e.key === 'n') {
         e.preventDefault();
         handleNewTab();
       }
@@ -522,6 +565,11 @@ const App: React.FC = () => {
     };
     document.addEventListener('mousedown', onMouseDown);
 
+    // 阻止 Electron 默认的文件拖放行为（拖入文件时浏览器会导航到该文件）
+    const preventDefaultDrag = (e: DragEvent) => e.preventDefault();
+    document.addEventListener('dragover', preventDefaultDrag);
+    document.addEventListener('drop', preventDefaultDrag);
+
     return () => {
       clearTimeout(timer);
       cleanupKeyboardShortcuts();
@@ -529,8 +577,10 @@ const App: React.FC = () => {
       window.removeEventListener('app:open-folder', onOpenFolder);
       window.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('dragover', preventDefaultDrag);
+      document.removeEventListener('drop', preventDefaultDrag);
     };
-  }, [loadDefaultPath, handleOpenLocal, handleCreateFile, toggleFocusMode, closeTab, handleNewTab]);
+  }, []);
 
   // 文档导出：监听 Electron 菜单事件
   React.useEffect(() => {
@@ -601,14 +651,14 @@ const App: React.FC = () => {
       }
     };
 
-    ipc.on('menu-export-word', onExportWord);
-    ipc.on('menu-export-pptx', onExportPptx);
-    ipc.on('menu-export-project-word', onExportProjectWord);
+    const disposeWord = ipc.on('menu-export-word', onExportWord);
+    const disposePptx = ipc.on('menu-export-pptx', onExportPptx);
+    const disposeProjectWord = ipc.on('menu-export-project-word', onExportProjectWord);
 
     return () => {
-      ipc.removeListener('menu-export-word', onExportWord);
-      ipc.removeListener('menu-export-pptx', onExportPptx);
-      ipc.removeListener('menu-export-project-word', onExportProjectWord);
+      disposeWord?.();
+      disposePptx?.();
+      disposeProjectWord?.();
     };
   }, [toast]);
 
@@ -640,8 +690,8 @@ const App: React.FC = () => {
           e.preventDefault();
           setClipboard([tab]);
         }
-      } else if (e.key === 'v' && clipboard.length > 0) {
-        // 粘贴：粘贴到当前选中文件所在目录，或工作区根目录
+      } else if (e.key === 'v') {
+        // 粘贴：优先应用内剪贴板，其次系统剪贴板（Finder 复制的文件）
         e.preventDefault();
         const tab = activeTabRef.current;
         let targetDir = folderPathRef.current;
@@ -683,7 +733,7 @@ const App: React.FC = () => {
         {
           label: '粘贴',
           onClick: () => bgPasteDir && handlePasteFiles(bgPasteDir),
-          disabled: clipboard.length === 0 || !folderPath,
+          disabled: !folderPath,
         },
         { label: '', onClick: () => {}, separator: true },
         { label: '刷新', onClick: refreshCurrentFolder },
@@ -704,7 +754,6 @@ const App: React.FC = () => {
       {
         label: '粘贴',
         onClick: () => handlePasteFiles(pasteTargetDir),
-        disabled: clipboard.length === 0,
       },
       { label: '', onClick: () => {}, separator: true },
       { label: '重命名', onClick: () => handleRename(node.path) },
@@ -786,6 +835,11 @@ const App: React.FC = () => {
     setScrollToLine({ line, id: ++scrollIdRef.current });
   }, []);
 
+  const replaceIdRef = useRef(0);
+  const handleReplaceLineText = useCallback((line: number, text: string) => {
+    setReplaceLineRequest({ line, text, id: ++replaceIdRef.current });
+  }, []);
+
   const handleDiffRequest = useCallback(
     (original: string, modified: string, originalLabel: string, modifiedLabel: string) => {
       setDiffState({ original, modified, originalLabel, modifiedLabel });
@@ -807,14 +861,115 @@ const App: React.FC = () => {
     [refreshCurrentFolder]
   );
 
+  // ─── Tab 右键菜单操作 ─────────────────────────────────────────────
+  const handleCloseOtherTabs = useCallback((filePath: string) => {
+    setOpenTabs([filePath]);
+    setActiveTab(filePath);
+  }, []);
+
+  const handleCloseAllTabs = useCallback(() => {
+    setOpenTabs([]);
+    setActiveTab(null);
+  }, []);
+
+  const handleCloseAllAndSave = useCallback(() => {
+    // 先触发保存当前文件
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true })
+    );
+    // 短延迟后关闭所有标签，确保保存完成
+    setTimeout(() => {
+      setOpenTabs([]);
+      setActiveTab(null);
+    }, 200);
+  }, []);
+
+  // ─── 工具栏操作 ─────────────────────────────────────────────────────
+  const handleToolbarSave = useCallback(() => {
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true })
+    );
+  }, []);
+
+  const handleToolbarExportWord = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const content = editorContentRef.current;
+    if (!content.trim()) {
+      toast.error('当前文件内容为空，无法导出');
+      return;
+    }
+    const tab = activeTabRef.current;
+    const title = tab
+      ? tab.startsWith('__untitled__:')
+        ? tab.replace('__untitled__:', '')
+        : (tab.replace(/\\/g, '/').split('/').pop() || '文档').replace(/\.[^.]+$/, '')
+      : '文档';
+    try {
+      const result = (await ipc.invoke('export-to-word', content, { title })) as {
+        success: boolean;
+        filePath?: string;
+        error?: string;
+      };
+      if (result.success && result.filePath) {
+        toast.success(`已导出为 Word: ${result.filePath}`);
+      } else if (result.error) {
+        toast.error(`导出失败: ${result.error}`);
+      }
+    } catch (error) {
+      toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [toast]);
+
+  const handleToolbarExportPptx = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const content = editorContentRef.current;
+    if (!content.trim()) {
+      toast.error('当前文件内容为空，无法导出');
+      return;
+    }
+    const tab = activeTabRef.current;
+    const title = tab
+      ? tab.startsWith('__untitled__:')
+        ? tab.replace('__untitled__:', '')
+        : (tab.replace(/\\/g, '/').split('/').pop() || '文档').replace(/\.[^.]+$/, '')
+      : '文档';
+    try {
+      const result = (await ipc.invoke('export-to-pptx', content, { title })) as {
+        success: boolean;
+        filePath?: string;
+        error?: string;
+      };
+      if (result.success && result.filePath) {
+        toast.success(`已导出为 PPT: ${result.filePath}`);
+      } else if (result.error) {
+        toast.error(`导出失败: ${result.error}`);
+      }
+    } catch (error) {
+      toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [toast]);
+
   return (
     <div className={`${styles.app} ${focusMode ? styles.focusMode : ''}`}>
       {!focusMode && (
         <TitleBar
           title="小说编辑器"
           focusMode={focusMode}
+          userInitials={userInitials}
           onToggleFocusMode={toggleFocusMode}
+          onOpenSettings={() => {
+            setSettingsCenterTab('general');
+            setShowSettingsCenter(true);
+          }}
+          onOpenAccountSettings={() => {
+            setSettingsCenterTab('account');
+            setShowSettingsCenter(true);
+          }}
           onShowShortcuts={() => setShowShortcuts(true)}
+          onOpenSampleData={handleOpenSampleData}
+          onOpenAIAssistant={() => setShowAIAssistant(true)}
         />
       )}
 
@@ -877,11 +1032,16 @@ const App: React.FC = () => {
             <ContentPanel
               openTabs={openTabs}
               activeTab={activeTab}
+              focusMode={focusMode}
               reloadToken={editorReloadToken}
               encoding={encoding}
               scrollToLine={scrollToLine}
+              replaceLineRequest={replaceLineRequest}
               onTabSelect={setActiveTab}
               onTabClose={closeTab}
+              onCloseOtherTabs={handleCloseOtherTabs}
+              onCloseAllTabs={handleCloseAllTabs}
+              onCloseAllAndSave={handleCloseAllAndSave}
               onContentChange={handleContentChange}
               onCursorChange={handleCursorChange}
               onSaveUntitled={handleSaveUntitled}
@@ -905,7 +1065,9 @@ const App: React.FC = () => {
             collapsed={rightPanelCollapsed}
             onToggle={handleToggleRightPanel}
             onScrollToLine={handleScrollToLine}
+            onReplaceLineText={handleReplaceLineText}
             folderPath={folderPath}
+            dbReady={dbReady}
           />
         )}
       </div>
@@ -959,6 +1121,24 @@ const App: React.FC = () => {
         visible={showShortcuts}
         onClose={() => setShowShortcuts(false)}
         onOpenSampleData={handleOpenSampleData}
+      />
+
+      <AppSettingsCenter
+        visible={showSettingsCenter}
+        onClose={() => setShowSettingsCenter(false)}
+        initialTab={settingsCenterTab}
+        onSettingsChange={(next: SettingsDraft) => {
+          const name = next.account.displayName.trim();
+          setUserInitials(name ? name.slice(0, 2) : 'U');
+        }}
+        onOpenShortcuts={() => setShowShortcuts(true)}
+      />
+
+      <AIAssistantDialog
+        visible={showAIAssistant}
+        onClose={() => setShowAIAssistant(false)}
+        folderPath={folderPath}
+        content={editorContent}
       />
     </div>
   );

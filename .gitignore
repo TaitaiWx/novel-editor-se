@@ -37,4 +37,6 @@ design.md
 .claude/
 
 large-novel.txt
-*.xlsx
+
+*.db-shm
+*.db-wal

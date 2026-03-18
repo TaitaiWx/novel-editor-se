@@ -35,6 +35,8 @@ export const getAllShortcuts = (): ShortcutDisplay[] => {
     { accelerator: `${mod}+S`, description: '保存文件', category: '文件' },
     { accelerator: `${mod}+Shift+S`, description: '另存为', category: '文件' },
     { accelerator: `${mod}+W`, description: '关闭当前标签', category: '文件' },
+    { accelerator: `${mod}+Shift+W`, description: '导出为 Word', category: '文件' },
+    { accelerator: `${mod}+Shift+P`, description: '导出为 PPT', category: '文件' },
     // 编辑
     { accelerator: `${mod}+Z`, description: '撤销', category: '编辑' },
     { accelerator: `${mod}+Shift+Z`, description: '重做', category: '编辑' },

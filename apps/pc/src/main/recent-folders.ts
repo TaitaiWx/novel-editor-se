@@ -51,3 +51,8 @@ export function getLastFolder(): string | null {
 export function getRecentFolders(): string[] {
   return read().folders;
 }
+
+/** Clear recent folder history and last opened folder marker. */
+export function clearRecentFolders(): void {
+  write({ lastFolder: null, folders: [] });
+}

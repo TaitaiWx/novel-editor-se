@@ -2,7 +2,7 @@
   position: fixed;
   z-index: 1000;
   background-color: #2d2d2d;
-  border: 1px solid #404040;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 6px;
   padding: 4px 0;
   min-width: 160px;
@@ -16,7 +16,7 @@
   text-align: left;
   background: none;
   border: none;
-  color: #d4d4d4;
+  color: var(--ui-fg-primary);
   cursor: pointer;
   font-size: 12px;
   padding: 6px 16px;
@@ -24,20 +24,20 @@
   transition: background-color 0.1s;
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: var(--ui-interaction-hover-bg);
   }
 
   &.danger {
-    color: #d4d4d4;
+    color: var(--ui-fg-primary);
 
     &:hover {
-      background-color: rgba(248, 81, 73, 0.12);
+      background-color: var(--ui-interaction-danger-hover-bg);
       color: #f85149;
     }
   }
 
   &.disabled {
-    color: #666;
+    color: var(--ui-fg-disabled);
     cursor: default;
 
     &:hover {
@@ -48,6 +48,6 @@
 
 .separator {
   height: 1px;
-  background-color: #333;
+  background-color: var(--ui-border-subtle);
   margin: 4px 8px;
 }

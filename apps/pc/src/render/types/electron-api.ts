@@ -21,6 +21,7 @@ export interface UpdateStatus {
 }
 
 export interface ElectronAPI {
+  getLastDroppedPaths(): string[];
   ipcRenderer: {
     invoke(channel: 'open-local-folder'): Promise<OpenLocalResult | null>;
     invoke(channel: 'read-file', filePath: string): Promise<string>;
@@ -83,7 +84,7 @@ export interface ElectronAPI {
       options?: { title?: string; author?: string }
     ): Promise<{ success: boolean; filePath?: string; error?: string }>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
-    on(channel: string, listener: (...args: any[]) => void): void;
+    on(channel: string, listener: (...args: any[]) => void): (() => void) | void;
     removeListener(channel: string, listener: (...args: any[]) => void): void;
     removeAllListeners(channel: string): void;
   };

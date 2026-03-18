@@ -1,0 +1,526 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.56);
+    backdrop-filter: blur(4px);
+}
+
+.modal {
+    width: min(920px, 92vw);
+    height: min(620px, 84vh);
+    border-radius: 8px;
+    border: 1px solid var(--ui-border-strong);
+    background: var(--ui-bg-elevated);
+    box-shadow:
+        0 24px 52px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.header {
+    height: 48px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--ui-border-strong);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #2d2d2d;
+
+    h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ui-fg-primary);
+    }
+}
+
+.closeButton {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ui-fg-muted);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+
+    &:hover {
+        background: var(--ui-interaction-hover-bg);
+        color: var(--ui-fg-primary);
+    }
+}
+
+.body {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    min-height: 0;
+    flex: 1;
+}
+
+.sidebar {
+    border-right: 1px solid var(--ui-border-subtle);
+    background: #232324;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tabButton {
+    position: relative;
+    border: none;
+    background: transparent;
+    min-height: 36px;
+    padding: 0 12px;
+    text-align: left;
+    color: var(--ui-fg-muted);
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 6px;
+
+    &:hover {
+        color: var(--ui-fg-primary);
+        background: var(--ui-interaction-hover-bg);
+    }
+}
+
+.active {
+    color: var(--ui-fg-primary);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.content {
+    padding: 20px;
+    overflow: auto;
+}
+
+.panel {
+    max-width: 620px;
+
+    h4 {
+        margin: 0 0 8px;
+        color: var(--ui-fg-primary);
+        font-size: 15px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        svg {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+    }
+
+    p {
+        margin: 0;
+        color: #b3b3b3;
+        line-height: 1.7;
+        font-size: 13px;
+    }
+}
+
+.formSection {
+    margin-top: 18px;
+    border: 1px solid var(--ui-border-subtle);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.formRow,
+.formRowTopAligned {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 16px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.formRow:last-child,
+.formRowTopAligned:last-child {
+    border-bottom: none;
+}
+
+.formRow {
+    align-items: center;
+}
+
+.formRowTopAligned {
+    align-items: start;
+}
+
+.formMeta {
+    min-width: 0;
+}
+
+.formLabel {
+    color: var(--ui-fg-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.formDesc {
+    margin-top: 4px;
+    color: #9ca3af;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.input,
+.select {
+    width: 100%;
+    height: 34px;
+    border: 1px solid var(--ui-border-strong);
+    background: #1f1f21;
+    color: var(--ui-fg-primary);
+    padding: 0 10px;
+    font-size: 12px;
+    outline: none;
+
+    &:focus {
+        border-color: var(--ui-interaction-accent);
+        box-shadow: 0 0 0 1px rgba(0, 122, 204, 0.18);
+    }
+}
+
+.dualInputGroup {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.aiSaveRow {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.aiSaveStatus {
+    font-size: 12px;
+    color: #9fd8ba;
+}
+
+.switchButton {
+    justify-self: end;
+    width: 42px;
+    height: 24px;
+    border: 1px solid var(--ui-border-strong);
+    background: #1b1b1d;
+    border-radius: 999px;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.enabled {
+    background: rgba(0, 122, 204, 0.22);
+    border-color: rgba(0, 122, 204, 0.45);
+}
+
+.switchThumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #d6d6d6;
+    transition: transform 0.15s ease;
+}
+
+.enabled .switchThumb {
+    transform: translateX(18px);
+    background: #ffffff;
+}
+
+.segmentedControl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.segmentButton {
+    min-height: 34px;
+    border: 1px solid var(--ui-border-strong);
+    background: #1f1f21;
+    color: var(--ui-fg-muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 10px;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+
+    &:hover {
+        color: var(--ui-fg-primary);
+        background: var(--ui-interaction-hover-bg);
+    }
+}
+
+.segmentActive {
+    color: var(--ui-fg-primary);
+    border-color: rgba(0, 122, 204, 0.35);
+    background: var(--ui-interaction-accent-soft);
+}
+
+.statusCard,
+.specCard {
+    margin-top: 18px;
+    border: 1px solid var(--ui-border-subtle);
+    background: rgba(255, 255, 255, 0.02);
+    padding: 14px 16px;
+}
+
+.statusCard {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.statusTitle {
+    color: var(--ui-fg-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.statusSubtext {
+    margin-top: 4px;
+    color: #9ca3af;
+    font-size: 12px;
+}
+
+.statusBadge {
+    flex-shrink: 0;
+    min-width: 72px;
+    padding: 4px 8px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid var(--ui-border-strong);
+}
+
+.signed-in {
+    color: #8ce0b9;
+    background: rgba(78, 201, 176, 0.1);
+}
+
+.signed-out {
+    color: #d4d4d4;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.expired {
+    color: #f1c27d;
+    background: rgba(241, 194, 125, 0.1);
+}
+
+.specRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.specRow:last-child {
+    border-bottom: none;
+}
+
+.specLabel {
+    color: var(--ui-fg-muted);
+    font-size: 12px;
+}
+
+.specValue {
+    color: var(--ui-fg-primary);
+    font-size: 12px;
+    text-align: right;
+}
+
+.comingSoon {
+    margin-top: 14px;
+    border: 1px dashed var(--ui-border-strong);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: #9ca3af;
+    background: rgba(255, 255, 255, 0.02);
+    font-size: 12px;
+}
+
+.primaryButton {
+    margin-top: 14px;
+    border: 1px solid var(--ui-border-strong);
+    background: #2f2f31;
+    color: var(--ui-fg-primary);
+    border-radius: 4px;
+    height: 32px;
+    padding: 0 12px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+
+    &:hover {
+        background: #38383b;
+        border-color: #4b4b50;
+    }
+}
+
+.dataGrid {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.dataCard {
+    border: 1px solid var(--ui-border-subtle);
+    background: rgba(255, 255, 255, 0.02);
+    padding: 14px 16px;
+}
+
+.dataCardDanger {
+    border-color: rgba(220, 60, 60, 0.28);
+    background:
+        linear-gradient(180deg, rgba(220, 60, 60, 0.05) 0%, rgba(220, 60, 60, 0.015) 100%),
+        rgba(255, 255, 255, 0.02);
+}
+
+.dataCardHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.dataCardTitle {
+    color: var(--ui-fg-primary);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.dataCardDesc {
+    margin-top: 6px;
+    color: #9ca3af;
+    font-size: 12px;
+    line-height: 1.7;
+    max-width: 470px;
+}
+
+.dataClearButton,
+.dataClearDangerButton,
+.dataCancelButton,
+.dataDangerConfirmButton {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    word-break: keep-all;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+
+    &:hover {
+        transform: translateY(-1px);
+    }
+
+    &:active {
+        transform: translateY(0);
+    }
+
+    &:focus-visible {
+        outline: none;
+    }
+}
+
+.dataClearButton,
+.dataCancelButton {
+    border: 1px solid var(--ui-border-strong);
+    background: #2f2f31;
+    color: var(--ui-fg-primary);
+
+    &:hover {
+        background: #38383b;
+        border-color: #4b4b50;
+    }
+}
+
+.dataClearDangerButton,
+.dataDangerConfirmButton {
+    border: 1px solid rgba(220, 60, 60, 0.58);
+    background: rgba(220, 60, 60, 0.12);
+    color: #ef9a9a;
+
+    &:hover {
+        border-color: rgba(220, 60, 60, 0.8);
+        background: rgba(220, 60, 60, 0.2);
+    }
+}
+
+.dataConfirmBox {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(220, 60, 60, 0.18);
+    background: rgba(220, 60, 60, 0.06);
+}
+
+.dataConfirmText {
+    color: #e3b4b4;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.dataConfirmActions {
+    margin-top: 10px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 880px) {
+    .body {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--ui-border-subtle);
+    }
+
+    .formRow,
+    .formRowTopAligned {
+        grid-template-columns: 1fr;
+    }
+
+    .switchButton {
+        justify-self: start;
+    }
+
+    .specRow,
+    .statusCard {
+        align-items: start;
+        flex-direction: column;
+    }
+
+    .dataCardHeader {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dataClearButton,
+    .dataClearDangerButton {
+        width: 100%;
+    }
+}

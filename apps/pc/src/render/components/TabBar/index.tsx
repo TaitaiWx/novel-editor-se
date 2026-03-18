@@ -1,11 +1,16 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import ContextMenu from '../ContextMenu';
 import styles from './styles.module.scss';
 
 export interface TabBarProps {
   tabs: string[];
   activeTab: string | null;
+  focusMode?: boolean;
   onTabSelect: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
+  onCloseOtherTabs?: (filePath: string) => void;
+  onCloseAllTabs?: () => void;
+  onCloseAllAndSave?: () => void;
 }
 
 function getFileName(filePath: string): string {
@@ -24,7 +29,8 @@ const TabItem: React.FC<{
   isActive: boolean;
   onSelect: (filePath: string) => void;
   onClose: (filePath: string) => void;
-}> = React.memo(({ filePath, isActive, onSelect, onClose }) => {
+  onContextMenu: (filePath: string, x: number, y: number) => void;
+}> = React.memo(({ filePath, isActive, onSelect, onClose, onContextMenu }) => {
   const fileName = useMemo(() => getFileName(filePath), [filePath]);
   const tabClassName = isActive ? `${styles.tab} ${styles.active}` : styles.tab;
 
@@ -50,11 +56,21 @@ const TabItem: React.FC<{
     [filePath, onClose]
   );
 
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onContextMenu(filePath, e.clientX, e.clientY);
+    },
+    [filePath, onContextMenu]
+  );
+
   return (
     <div
       className={tabClassName}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
+      onContextMenu={handleContextMenu}
       title={filePath}
     >
       <span className={styles.tabName}>{fileName}</span>
@@ -65,13 +81,60 @@ const TabItem: React.FC<{
   );
 });
 
-const TabBar: React.FC<TabBarProps> = ({ tabs, activeTab, onTabSelect, onTabClose }) => {
+const TabBar: React.FC<TabBarProps> = ({
+  tabs,
+  activeTab,
+  focusMode = false,
+  onTabSelect,
+  onTabClose,
+  onCloseOtherTabs,
+  onCloseAllTabs,
+  onCloseAllAndSave,
+}) => {
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; filePath: string } | null>(null);
+
+  const handleTabContextMenu = useCallback((filePath: string, x: number, y: number) => {
+    setCtxMenu({ x, y, filePath });
+  }, []);
+
+  const handleCloseCtxMenu = useCallback(() => {
+    setCtxMenu(null);
+  }, []);
+
+  const handleBarContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    // 右键在空白区域时 filePath 为空
+    setCtxMenu({ x: e.clientX, y: e.clientY, filePath: '' });
+  }, []);
+
   if (tabs.length === 0) {
     return null;
   }
 
+  const hasTarget = ctxMenu && ctxMenu.filePath !== '';
+  const ctxMenuItems = ctxMenu
+    ? [
+        ...(hasTarget
+          ? [
+              { label: '关闭', onClick: () => onTabClose(ctxMenu.filePath) },
+              {
+                label: '关闭其他',
+                onClick: () => onCloseOtherTabs?.(ctxMenu.filePath),
+                disabled: tabs.length <= 1,
+              },
+              { label: '', onClick: () => {}, separator: true },
+            ]
+          : []),
+        { label: '关闭所有', onClick: () => onCloseAllTabs?.() },
+        { label: '保存所有并关闭', onClick: () => onCloseAllAndSave?.() },
+      ]
+    : [];
+
   return (
-    <div className={styles.tabBar}>
+    <div
+      className={`${styles.tabBar} ${focusMode ? styles.focusMode : ''}`}
+      onContextMenu={handleBarContextMenu}
+    >
       {tabs.map((filePath) => (
         <TabItem
           key={filePath}
@@ -79,8 +142,17 @@ const TabBar: React.FC<TabBarProps> = ({ tabs, activeTab, onTabSelect, onTabClos
           isActive={filePath === activeTab}
           onSelect={onTabSelect}
           onClose={onTabClose}
+          onContextMenu={handleTabContextMenu}
         />
       ))}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={ctxMenuItems}
+          onClose={handleCloseCtxMenu}
+        />
+      )}
     </div>
   );
 };

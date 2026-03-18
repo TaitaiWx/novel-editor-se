@@ -734,6 +734,14 @@ export async function setUpdateChannel(channel: UpdateChannel) {
 }
 
 export async function checkForUpdatesManually() {
+  // Dev 模式下直接返回，不执行实际检查
+  if (!app.isPackaged) {
+    updaterStatus.checking = false;
+    updaterStatus.lastError = '开发模式下不支持检查更新';
+    emitStatus();
+    return;
+  }
+
   const state = await loadUpdaterState();
   configureAutoUpdater(state.channel);
 
@@ -762,6 +770,16 @@ export async function checkForUpdatesManually() {
 
 export async function setupAutoUpdater() {
   configureUpdaterLogger();
+
+  // Dev 模式下 electron-updater 无法正常工作（无 app-update.yml），跳过实际更新逻辑
+  if (!app.isPackaged) {
+    log.info('开发模式：跳过自动更新初始化');
+    updaterStatus.currentVersion = app.getVersion();
+    updaterStatus.checking = false;
+    emitStatus();
+    return;
+  }
+
   registerUpdaterListeners();
   const state = await loadUpdaterState();
 

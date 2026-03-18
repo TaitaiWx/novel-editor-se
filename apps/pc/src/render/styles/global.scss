@@ -4,6 +4,24 @@
   box-sizing: border-box;
 }
 
+:root {
+  --ui-fg-primary: #d4d4d4;
+  --ui-fg-muted: #8b8b8b;
+  --ui-fg-disabled: #666;
+
+  --ui-bg-surface: #1e1e1e;
+  --ui-bg-elevated: #252526;
+  --ui-border-subtle: #333;
+  --ui-border-strong: #404040;
+
+  --ui-interaction-hover-bg: rgba(255, 255, 255, 0.06);
+  --ui-interaction-active-bg: rgba(255, 255, 255, 0.1);
+  --ui-interaction-focus-ring: rgba(0, 122, 204, 0.5);
+  --ui-interaction-accent: #007acc;
+  --ui-interaction-accent-soft: rgba(0, 122, 204, 0.14);
+  --ui-interaction-danger-hover-bg: rgba(248, 81, 73, 0.12);
+}
+
 html,
 body,
 #root {
@@ -19,8 +37,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  background-color: var(--ui-bg-surface);
+  color: var(--ui-fg-primary);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -56,7 +74,7 @@ body {
 
 // Keyboard focus indicator
 :focus-visible {
-  outline: 1px solid rgba(0, 122, 204, 0.5);
+  outline: 1px solid var(--ui-interaction-focus-ring);
   outline-offset: -1px;
 }
 

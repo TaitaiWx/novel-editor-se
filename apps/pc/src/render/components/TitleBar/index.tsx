@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   VscChromeMinimize,
   VscChromeMaximize,
   VscChromeRestore,
   VscChromeClose,
+  VscSettingsGear,
+  VscSettings,
+  VscFolderOpened,
 } from 'react-icons/vsc';
+import { AiOutlineClose, AiOutlineEye, AiOutlineKey, AiOutlineRobot } from 'react-icons/ai';
 import appMarkUrl from '../../../../resources/branding/app-mark.svg';
 import styles from './styles.module.scss';
 
@@ -12,19 +16,31 @@ interface TitleBarProps {
   title?: string;
   showControls?: boolean;
   focusMode?: boolean;
+  userInitials?: string;
   onToggleFocusMode?: () => void;
   onShowShortcuts?: () => void;
+  onOpenSettings?: () => void;
+  onOpenAccountSettings?: () => void;
+  onOpenSampleData?: () => void;
+  onOpenAIAssistant?: () => void;
 }
 
 const TitleBar: React.FC<TitleBarProps> = ({
   title = '小说编辑器',
   showControls = true,
   focusMode = false,
+  userInitials = 'U',
   onToggleFocusMode,
   onShowShortcuts,
+  onOpenSettings,
+  onOpenAccountSettings,
+  onOpenSampleData,
+  onOpenAIAssistant,
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [platform, setPlatform] = useState<string>('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const getPlatform = () => {
@@ -43,9 +59,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
         try {
           const maximized = await window.electron.ipcRenderer.invoke('window-is-maximized');
           setIsMaximized(maximized);
-        } catch (error) {
-          console.error('检查窗口状态失败:', error);
-        }
+        } catch {}
       }
     };
     checkMaximized();
@@ -54,27 +68,32 @@ const TitleBar: React.FC<TitleBarProps> = ({
   const handleMinimize = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-minimize');
-    } catch (error) {
-      console.error('最小化失败:', error);
-    }
+    } catch {}
   }, []);
 
   const handleMaximize = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-maximize');
       setIsMaximized((prev) => !prev);
-    } catch (error) {
-      console.error('最大化失败:', error);
-    }
+    } catch {}
   }, []);
 
   const handleClose = useCallback(async () => {
     try {
       await window.electron.ipcRenderer.invoke('window-close');
-    } catch (error) {
-      console.error('关闭失败:', error);
-    }
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsOpen]);
 
   return (
     <div className={`${styles.titleBar} ${platform ? styles[platform] : ''}`}>
@@ -96,18 +115,81 @@ const TitleBar: React.FC<TitleBarProps> = ({
               onClick={onToggleFocusMode}
               title={focusMode ? '退出专注模式 (F11)' : '进入专注模式 (F11)'}
             >
-              {focusMode ? '退出专注' : '专注'}
+              <span className={styles.toolButtonIcon}>
+                {focusMode ? <AiOutlineClose /> : <AiOutlineEye />}
+              </span>
+              <span>{focusMode ? '退出专注' : '专注写作'}</span>
             </button>
           </div>
         )}
 
-        {/* 右侧工具区：快捷键提示 + 窗口控制 */}
+        {/* 右侧工具区：设置 + 窗口控制 */}
         <div className={styles.toolSection}>
-          {onShowShortcuts && (
-            <button className={styles.toolButton} onClick={onShowShortcuts} title="键盘快捷键">
-              ⌨
+          <button
+            className={styles.userButton}
+            onClick={onOpenAccountSettings}
+            title="用户设置"
+            aria-label="打开用户设置"
+          >
+            <span className={styles.userAvatar}>{userInitials.slice(0, 2).toUpperCase()}</span>
+          </button>
+          <button
+            className={styles.toolIconButton}
+            onClick={onOpenAIAssistant}
+            title="AI 助手"
+            aria-label="打开 AI 助手"
+          >
+            <AiOutlineRobot />
+          </button>
+          <div className={styles.settingsWrap} ref={settingsRef}>
+            <button
+              className={styles.toolIconButton}
+              onClick={() => setSettingsOpen((prev) => !prev)}
+              title="设置"
+              aria-label="打开设置"
+            >
+              <VscSettingsGear />
             </button>
-          )}
+            {settingsOpen && (
+              <div className={styles.settingsMenu}>
+                <div className={styles.settingsTitle}>软件设置</div>
+                {onOpenSettings && (
+                  <button
+                    className={styles.settingsItem}
+                    onClick={() => {
+                      setSettingsOpen(false);
+                      onOpenSettings();
+                    }}
+                  >
+                    <VscSettings />
+                    <span>设置中心</span>
+                  </button>
+                )}
+                <button
+                  className={styles.settingsItem}
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    onShowShortcuts?.();
+                  }}
+                >
+                  <AiOutlineKey />
+                  <span>键盘快捷键</span>
+                </button>
+                {onOpenSampleData && (
+                  <button
+                    className={styles.settingsItem}
+                    onClick={() => {
+                      setSettingsOpen(false);
+                      onOpenSampleData();
+                    }}
+                  >
+                    <VscFolderOpened />
+                    <span>打开示例项目</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 窗口控制按钮 */}

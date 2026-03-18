@@ -1101,3 +1101,54 @@ export async function exportToPptx(
   await writeFile(result.filePath, buffer);
   return result.filePath;
 }
+
+/**
+ * 美化导出：读取现有 PPT 中的文本，使用统一主题重新生成
+ */
+export async function beautifyPptx(
+  sourcePath: string,
+  options: PptxExportOptions = {}
+): Promise<string | null> {
+  const { readFile: readFileFn } = await import('fs/promises');
+  const buf = await readFileFn(sourcePath);
+  const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+
+  const jszip = await import('jszip');
+  const JSZipCtor: typeof import('jszip').default =
+    typeof jszip === 'function'
+      ? jszip
+      : (jszip as Record<string, unknown>).default
+        ? ((jszip as Record<string, unknown>).default as typeof import('jszip').default)
+        : (jszip as typeof import('jszip').default);
+
+  const zip = await JSZipCtor.loadAsync(new Uint8Array(arrayBuffer));
+
+  // 提取所有幻灯片文本
+  const slideFiles = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const numA = parseInt(a.match(/slide(\d+)/)?.[1] || '0');
+      const numB = parseInt(b.match(/slide(\d+)/)?.[1] || '0');
+      return numA - numB;
+    });
+
+  const slideTexts: string[] = [];
+  for (const slideFile of slideFiles) {
+    const xml = await zip.files[slideFile].async('text');
+    const texts: string[] = [];
+    const textMatches = xml.matchAll(/<a:t>([^<]*)<\/a:t>/g);
+    for (const m of textMatches) {
+      const text = m[1].trim();
+      if (text) texts.push(text);
+    }
+    if (texts.length > 0) {
+      // 第一行视为标题，其余为正文
+      slideTexts.push(`## ${texts[0]}\n\n${texts.slice(1).join('\n\n')}`);
+    }
+  }
+
+  // 组装为 Markdown 再用美化主题导出
+  const markdown = slideTexts.join('\n\n---\n\n');
+  const title = options.title || path.basename(sourcePath, path.extname(sourcePath));
+  return exportToPptx(markdown, { ...options, title });
+}
