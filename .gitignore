@@ -38,5 +38,6 @@ design.md
 
 large-novel.txt
 
+*.db
 *.db-shm
 *.db-wal
