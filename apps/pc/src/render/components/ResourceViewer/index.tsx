@@ -209,8 +209,24 @@ const PdfDocumentView: React.FC<PdfDocumentViewProps> = ({ dataUrl }) => {
         const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
         pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
 
-        const response = await fetch(dataUrl);
-        const buffer = await response.arrayBuffer();
+        // 直接从 base64 data URL 解码为 ArrayBuffer，避免 fetch data URL
+        // 在 Electron 渲染进程中可能被 CSP 拦截或因体积过大失败
+        const base64Prefix = 'base64,';
+        const base64Index = dataUrl.indexOf(base64Prefix);
+        let buffer: ArrayBuffer;
+        if (base64Index !== -1) {
+          const base64Data = dataUrl.slice(base64Index + base64Prefix.length);
+          const binaryStr = atob(base64Data);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          buffer = bytes.buffer;
+        } else {
+          const response = await fetch(dataUrl);
+          buffer = await response.arrayBuffer();
+        }
+
         loadingTask = pdfjs.getDocument({ data: buffer });
         const pdfDocument = await loadingTask.promise;
 

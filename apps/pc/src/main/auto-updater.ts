@@ -253,6 +253,7 @@ const MIRROR_UPDATE_URL = 'https://dl.wayintech.net/novel-editor/latest';
 function configureAutoUpdater(channel: UpdateChannel) {
   const mappedChannel = mapUpdateChannel(channel);
   autoUpdater.autoDownload = true;
+  // oneClick: true NSIS 不运行卸载程序，直接覆盖文件，静默安装安全可靠。
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = mappedChannel !== 'latest';
   autoUpdater.allowDowngrade = true;
@@ -813,8 +814,8 @@ export async function downloadUpdate() {
 }
 
 export function installUpdate() {
-  // isSilent=true: 静默安装，不弹出 NSIS 安装向导
-  // isForceRunAfter=true: 安装完成后自动启动应用
+  // oneClick: true NSIS 直接覆盖安装，不运行卸载程序，
+  // 静默模式 (/S) 安全可靠，不会出现"应用被删除"问题。
   autoUpdater.quitAndInstall(true, true);
 }
 

@@ -3,6 +3,7 @@ import type { OutlineEntry, OutlineSummaryAiState } from './types';
 import { OUTLINE_SUMMARY_MAX_CONCURRENCY } from './constants';
 import { buildOutlineEntryCacheKey, sanitizeAiSummary, extractChapterContent } from './utils';
 import { useAiCache } from './AiCacheContext';
+import { useAiConfig } from './useAiConfig';
 
 /** Interval between scheduling next summary batch (ms) */
 const SUMMARY_SCHEDULE_INTERVAL = 600;
@@ -12,6 +13,7 @@ export function useAiSummaries(
   outlineEntries: OutlineEntry[],
   visibleLines: Set<number>
 ) {
+  const { ready: aiReady } = useAiConfig();
   const { summaryCache, cacheReady } = useAiCache();
 
   const [aiSummaryTexts, setAiSummaryTexts] = useState<Record<number, string>>({});
@@ -28,8 +30,11 @@ export function useAiSummaries(
   const aiSummaryStatesRef = useRef(aiSummaryStates);
   aiSummaryStatesRef.current = aiSummaryStates;
   const scheduleTimerRef = useRef<number | null>(null);
+  const aiReadyRef = useRef(aiReady);
+  aiReadyRef.current = aiReady;
 
   const processSummaryQueue = useCallback(() => {
+    if (!aiReadyRef.current) return;
     const ipc = window.electron?.ipcRenderer;
     if (!ipc) return;
     const generation = summaryGenerationRef.current;
@@ -203,7 +208,7 @@ export function useAiSummaries(
 
   // Auto-generate summaries for visible entries that have no cache (first-time only, throttled)
   useEffect(() => {
-    if (!cacheReady || visibleLines.size === 0 || !content.trim()) return;
+    if (!aiReady || !cacheReady || visibleLines.size === 0 || !content.trim()) return;
 
     if (scheduleTimerRef.current !== null) {
       window.clearTimeout(scheduleTimerRef.current);
@@ -227,7 +232,7 @@ export function useAiSummaries(
         window.clearTimeout(scheduleTimerRef.current);
       }
     };
-  }, [cacheReady, visibleLines, outlineEntries, content, requestAiSummary]);
+  }, [aiReady, cacheReady, visibleLines, outlineEntries, content, requestAiSummary]);
 
   return {
     aiSummaryTexts,

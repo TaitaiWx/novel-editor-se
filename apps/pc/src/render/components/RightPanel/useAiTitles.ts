@@ -8,6 +8,7 @@ import {
 } from './constants';
 import { buildOutlineEntryCacheKey, parseOutlineTitleCompletions } from './utils';
 import { useAiCache } from './AiCacheContext';
+import { useAiConfig } from './useAiConfig';
 
 export function useAiTitles(
   content: string,
@@ -15,6 +16,7 @@ export function useAiTitles(
   activeLine: number | null,
   visibleLines: Set<number>
 ) {
+  const { ready: aiReady } = useAiConfig();
   const { titleCache, cacheReady } = useAiCache();
 
   const [aiTitles, setAiTitles] = useState<Record<number, string>>({});
@@ -29,6 +31,8 @@ export function useAiTitles(
   contentRef.current = content;
   const outlineEntriesRef = useRef(outlineEntries);
   outlineEntriesRef.current = outlineEntries;
+  const aiReadyRef = useRef(aiReady);
+  aiReadyRef.current = aiReady;
 
   const pendingAiEntries = (() => {
     const candidates = outlineEntries.filter((entry) => {
@@ -50,6 +54,7 @@ export function useAiTitles(
   );
 
   const processQueue = useCallback(() => {
+    if (!aiReadyRef.current) return;
     if (!contentRef.current.trim()) return;
     const ipc = window.electron?.ipcRenderer;
     if (!ipc) return;
@@ -287,7 +292,7 @@ export function useAiTitles(
 
   // Debounced AI title prefetch for visible entries
   useEffect(() => {
-    if (!cacheReady || !content.trim() || pendingAiEntries.length === 0) return;
+    if (!aiReady || !cacheReady || !content.trim() || pendingAiEntries.length === 0) return;
     if (debounceTimerRef.current !== null) {
       window.clearTimeout(debounceTimerRef.current);
     }
@@ -299,7 +304,7 @@ export function useAiTitles(
         window.clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [cacheReady, content, pendingAiEntries, requestAiTitles]);
+  }, [aiReady, cacheReady, content, pendingAiEntries, requestAiTitles]);
 
   return {
     aiTitles,

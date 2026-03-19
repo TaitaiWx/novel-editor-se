@@ -227,8 +227,14 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
   useEffect(() => {
     if (!visible) {
       setClearConfirmScope(null);
+      return;
     }
-  }, [visible]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [visible, onClose]);
 
   useEffect(() => {
     if (!visible) return;

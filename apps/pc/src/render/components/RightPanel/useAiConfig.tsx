@@ -1,0 +1,92 @@
+import React, { useState, useEffect, useCallback, useContext, createContext } from 'react';
+import type { ReactNode } from 'react';
+import { SETTINGS_STORAGE_KEY } from './constants';
+
+export interface AiConfigStatus {
+  /** 是否已从 DB 完成加载 */
+  loaded: boolean;
+  /** AI 功能总开关是否启用 */
+  enabled: boolean;
+  /** API Key 是否已填写 */
+  hasApiKey: boolean;
+  /** Base URL 是否已填写 */
+  hasBaseUrl: boolean;
+  /** 模型名是否已填写 */
+  hasModel: boolean;
+  /** AI 是否可用（enabled + apiKey + baseUrl + model 全部就绪） */
+  ready: boolean;
+}
+
+const EMPTY_STATUS: AiConfigStatus = {
+  loaded: false,
+  enabled: false,
+  hasApiKey: false,
+  hasBaseUrl: false,
+  hasModel: false,
+  ready: false,
+};
+
+const AiConfigContext = createContext<AiConfigStatus>(EMPTY_STATUS);
+
+/**
+ * 全局 AI 配置 Provider。
+ * 在应用根节点挂载，所有子组件通过 useAiConfig() 获取同一份状态，
+ * 避免多处重复查询 DB 和状态不同步。
+ */
+export function AiConfigProvider({ children }: { children: ReactNode }) {
+  const [status, setStatus] = useState<AiConfigStatus>(EMPTY_STATUS);
+
+  const loadConfig = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) {
+      setStatus({ ...EMPTY_STATUS, loaded: true });
+      return;
+    }
+    try {
+      const raw = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as string | null;
+      if (!raw) {
+        setStatus({ ...EMPTY_STATUS, loaded: true });
+        return;
+      }
+      const parsed = JSON.parse(raw) as {
+        ai?: { enabled?: boolean; apiKey?: string; baseUrl?: string; model?: string };
+      };
+      const ai = parsed.ai || {};
+      const enabled = !!ai.enabled;
+      const hasApiKey = !!ai.apiKey?.trim();
+      const hasBaseUrl = !!ai.baseUrl?.trim();
+      const hasModel = !!ai.model?.trim();
+      setStatus({
+        loaded: true,
+        enabled,
+        hasApiKey,
+        hasBaseUrl,
+        hasModel,
+        ready: enabled && hasApiKey && hasBaseUrl && hasModel,
+      });
+    } catch {
+      setStatus({ ...EMPTY_STATUS, loaded: true });
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadConfig();
+
+    // 每次窗口获得焦点时重新读取配置（覆盖用户在设置中心修改后返回的场景）
+    const handleFocus = () => void loadConfig();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [loadConfig]);
+
+  return <AiConfigContext.Provider value={status}>{children}</AiConfigContext.Provider>;
+}
+
+/**
+ * 从全局 AiConfigContext 读取 AI 配置状态。
+ * 必须在 <AiConfigProvider> 内使用。
+ */
+export function useAiConfig(): AiConfigStatus {
+  return useContext(AiConfigContext);
+}

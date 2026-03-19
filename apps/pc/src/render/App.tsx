@@ -5,6 +5,7 @@ import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
 import RightPanel from './components/RightPanel';
 import { AIAssistantDialog } from './components/RightPanel/AIAssistantDialog';
+import { AiConfigProvider } from './components/RightPanel/useAiConfig';
 import StatusBar from './components/StatusBar';
 import ContextMenu from './components/ContextMenu';
 import ShortcutsHelp from './components/ShortcutsHelp';
@@ -884,196 +885,214 @@ const App: React.FC = () => {
     }, 200);
   }, []);
 
-  return (
-    <div className={`${styles.app} ${focusMode ? styles.focusMode : ''}`}>
-      {!focusMode && (
-        <TitleBar
-          title="小说编辑器"
-          focusMode={focusMode}
-          userInitials={userInitials}
-          onToggleFocusMode={toggleFocusMode}
-          onOpenSettings={() => {
-            setSettingsCenterTab('general');
-            setShowSettingsCenter(true);
-          }}
-          onOpenAccountSettings={() => {
-            setSettingsCenterTab('account');
-            setShowSettingsCenter(true);
-          }}
-          onShowShortcuts={() => setShowShortcuts(true)}
-          onOpenSampleData={handleOpenSampleData}
-          onOpenAIAssistant={() => setShowAIAssistant(true)}
-        />
-      )}
+  // 监听子组件通过自定义事件打开设置中心指定标签页
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent).detail as SettingsTab;
+      setSettingsCenterTab(tab);
+      setShowSettingsCenter(true);
+    };
+    window.addEventListener('open-settings-tab', handler);
+    return () => window.removeEventListener('open-settings-tab', handler);
+  }, []);
 
-      <div className={styles.appMain}>
-        {/* 左侧文件面板 */}
+  return (
+    <AiConfigProvider>
+      <div className={`${styles.app} ${focusMode ? styles.focusMode : ''}`}>
         {!focusMode && (
-          <div
-            ref={sidebarRef}
-            className={`${styles.leftPanel} ${sidebarCollapsed ? styles.leftPanelCollapsed : ''}`}
-          >
-            {sidebarCollapsed ? (
-              <button
-                className={styles.sidebarToggle}
-                onClick={() => setSidebarCollapsed(false)}
-                title="展开侧边栏"
-              >
-                ▶
-              </button>
-            ) : (
-              <FilePanel
-                files={files}
-                selectedFile={activeTab}
-                folderPath={folderPath}
-                isLoading={isLoading}
-                onFileSelect={handleFileSelect}
-                onCreateFile={handleCreateFile}
-                onCreateDirectory={handleCreateDirectory}
-                onRefresh={refreshCurrentFolder}
-                onOpenFolder={handleOpenLocal}
-                onImportFile={handleImportFile}
-                onCollapse={() => setSidebarCollapsed(true)}
-                onContextMenu={handleFileContextMenu}
-                onBackgroundContextMenu={handleBackgroundContextMenu}
-                onCopyFile={handleCopyFile}
-                onPasteFiles={handlePasteFiles}
-                onDropFiles={handleDropFiles}
-                hasClipboard={clipboard.length > 0}
-                creatingType={creatingType}
-                createTargetPath={createTargetPath}
-                onInlineCreate={handleInlineCreate}
-                onCancelCreate={handleCancelCreate}
-              />
-            )}
-          </div>
+          <TitleBar
+            title="小说编辑器"
+            focusMode={focusMode}
+            userInitials={userInitials}
+            onToggleFocusMode={toggleFocusMode}
+            onOpenSettings={() => {
+              setSettingsCenterTab('general');
+              setShowSettingsCenter(true);
+            }}
+            onOpenAccountSettings={() => {
+              setSettingsCenterTab('account');
+              setShowSettingsCenter(true);
+            }}
+            onShowShortcuts={() => setShowShortcuts(true)}
+            onOpenSampleData={handleOpenSampleData}
+            onOpenAIAssistant={() => setShowAIAssistant(true)}
+          />
         )}
 
-        {/* 中间内容面板 */}
-        <div className={styles.centerPanel}>
-          {diffState ? (
-            <Suspense fallback={<div className={styles.lazyFallback}>正在加载差异编辑器...</div>}>
-              <DiffEditor
-                original={diffState.original}
-                modified={diffState.modified}
-                originalLabel={diffState.originalLabel}
-                modifiedLabel={diffState.modifiedLabel}
-                onClose={handleCloseDiff}
-              />
-            </Suspense>
-          ) : (
-            <ContentPanel
-              openTabs={openTabs}
-              activeTab={activeTab}
-              focusMode={focusMode}
-              reloadToken={editorReloadToken}
-              encoding={encoding}
-              scrollToLine={scrollToLine}
-              replaceLineRequest={replaceLineRequest}
-              onTabSelect={setActiveTab}
-              onTabClose={closeTab}
-              onCloseOtherTabs={handleCloseOtherTabs}
-              onCloseAllTabs={handleCloseAllTabs}
-              onCloseAllAndSave={handleCloseAllAndSave}
-              onContentChange={handleContentChange}
-              onCursorChange={handleCursorChange}
-              onSaveUntitled={handleSaveUntitled}
-            />
-          )}
-          {focusMode && (
-            <button
-              className={styles.exitFocusBtn}
-              onClick={toggleFocusMode}
-              title="退出聚焦模式 (F11)"
+        <div className={styles.appMain}>
+          {/* 左侧文件面板 */}
+          {!focusMode && (
+            <div
+              ref={sidebarRef}
+              className={`${styles.leftPanel} ${sidebarCollapsed ? styles.leftPanelCollapsed : ''}`}
             >
-              退出聚焦
-            </button>
+              {sidebarCollapsed ? (
+                <button
+                  className={styles.sidebarToggle}
+                  onClick={() => setSidebarCollapsed(false)}
+                  title="展开侧边栏"
+                >
+                  ▶
+                </button>
+              ) : (
+                <FilePanel
+                  files={files}
+                  selectedFile={activeTab}
+                  folderPath={folderPath}
+                  isLoading={isLoading}
+                  onFileSelect={handleFileSelect}
+                  onCreateFile={handleCreateFile}
+                  onCreateDirectory={handleCreateDirectory}
+                  onRefresh={refreshCurrentFolder}
+                  onOpenFolder={handleOpenLocal}
+                  onImportFile={handleImportFile}
+                  onCollapse={() => setSidebarCollapsed(true)}
+                  onContextMenu={handleFileContextMenu}
+                  onBackgroundContextMenu={handleBackgroundContextMenu}
+                  onCopyFile={handleCopyFile}
+                  onPasteFiles={handlePasteFiles}
+                  onDropFiles={handleDropFiles}
+                  hasClipboard={clipboard.length > 0}
+                  creatingType={creatingType}
+                  createTargetPath={createTargetPath}
+                  onInlineCreate={handleInlineCreate}
+                  onCancelCreate={handleCancelCreate}
+                />
+              )}
+            </div>
+          )}
+
+          {/* 中间内容面板 */}
+          <div className={styles.centerPanel}>
+            {diffState ? (
+              <Suspense fallback={<div className={styles.lazyFallback}>正在加载差异编辑器...</div>}>
+                <DiffEditor
+                  original={diffState.original}
+                  modified={diffState.modified}
+                  originalLabel={diffState.originalLabel}
+                  modifiedLabel={diffState.modifiedLabel}
+                  onClose={handleCloseDiff}
+                />
+              </Suspense>
+            ) : (
+              <ContentPanel
+                openTabs={openTabs}
+                activeTab={activeTab}
+                focusMode={focusMode}
+                reloadToken={editorReloadToken}
+                encoding={encoding}
+                scrollToLine={scrollToLine}
+                replaceLineRequest={replaceLineRequest}
+                onTabSelect={setActiveTab}
+                onTabClose={closeTab}
+                onCloseOtherTabs={handleCloseOtherTabs}
+                onCloseAllTabs={handleCloseAllTabs}
+                onCloseAllAndSave={handleCloseAllAndSave}
+                onContentChange={handleContentChange}
+                onCursorChange={handleCursorChange}
+                onSaveUntitled={handleSaveUntitled}
+              />
+            )}
+            {focusMode && (
+              <button
+                className={styles.exitFocusBtn}
+                onClick={toggleFocusMode}
+                title="退出聚焦模式 (F11)"
+              >
+                退出聚焦
+              </button>
+            )}
+          </div>
+
+          {/* 右侧信息面板 */}
+          {!focusMode && (
+            <RightPanel
+              content={editorContent}
+              collapsed={rightPanelCollapsed}
+              onToggle={handleToggleRightPanel}
+              onScrollToLine={handleScrollToLine}
+              onReplaceLineText={handleReplaceLineText}
+              folderPath={folderPath}
+              dbReady={dbReady}
+            />
           )}
         </div>
 
-        {/* 右侧信息面板 */}
+        {/* 版本历史模态框 */}
+        {showVersionHistory && (
+          <Suspense
+            fallback={
+              <div className={styles.lazyOverlay}>
+                <div className={styles.lazyModal}>正在加载版本历史...</div>
+              </div>
+            }
+          >
+            <VersionTimeline
+              visible={showVersionHistory}
+              onClose={() => setShowVersionHistory(false)}
+              folderPath={folderPath}
+              filePath={activeTab}
+              onDiffRequest={handleDiffRequest}
+              onRestoreFile={handleVersionRestore}
+            />
+          </Suspense>
+        )}
+
+        {/* 状态栏 */}
         {!focusMode && (
-          <RightPanel
+          <StatusBar
             content={editorContent}
-            collapsed={rightPanelCollapsed}
-            onToggle={handleToggleRightPanel}
-            onScrollToLine={handleScrollToLine}
-            onReplaceLineText={handleReplaceLineText}
+            currentLine={cursorPosition.line}
+            currentColumn={cursorPosition.column}
+            filePath={activeTab}
+            encoding={encoding}
+            onEncodingChange={setEncoding}
             folderPath={folderPath}
-            dbReady={dbReady}
+            onToggleVersionHistory={() => setShowVersionHistory((p) => !p)}
           />
         )}
-      </div>
 
-      {/* 版本历史模态框 */}
-      {showVersionHistory && (
-        <Suspense
-          fallback={
-            <div className={styles.lazyOverlay}>
-              <div className={styles.lazyModal}>正在加载版本历史...</div>
-            </div>
-          }
-        >
-          <VersionTimeline
-            visible={showVersionHistory}
-            onClose={() => setShowVersionHistory(false)}
-            folderPath={folderPath}
-            filePath={activeTab}
-            onDiffRequest={handleDiffRequest}
-            onRestoreFile={handleVersionRestore}
+        {/* 右键菜单 */}
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={contextMenuItems}
+            onClose={handleCloseContextMenu}
           />
-        </Suspense>
-      )}
+        )}
 
-      {/* 状态栏 */}
-      {!focusMode && (
-        <StatusBar
-          content={editorContent}
-          currentLine={cursorPosition.line}
-          currentColumn={cursorPosition.column}
-          filePath={activeTab}
-          encoding={encoding}
-          onEncodingChange={setEncoding}
+        {/* 快捷键帮助 */}
+        <ShortcutsHelp
+          visible={showShortcuts}
+          onClose={() => setShowShortcuts(false)}
+          onOpenSampleData={handleOpenSampleData}
+        />
+
+        <AppSettingsCenter
+          visible={showSettingsCenter}
+          onClose={() => setShowSettingsCenter(false)}
+          initialTab={settingsCenterTab}
+          onSettingsChange={(next: SettingsDraft) => {
+            const name = next.account.displayName.trim();
+            setUserInitials(name ? name.slice(0, 2) : 'U');
+          }}
+          onOpenShortcuts={() => setShowShortcuts(true)}
+        />
+
+        <AIAssistantDialog
+          visible={showAIAssistant}
+          onClose={() => setShowAIAssistant(false)}
           folderPath={folderPath}
-          onToggleVersionHistory={() => setShowVersionHistory((p) => !p)}
+          content={editorContent}
+          onOpenSettings={() => {
+            setShowAIAssistant(false);
+            setSettingsCenterTab('ai');
+            setShowSettingsCenter(true);
+          }}
         />
-      )}
-
-      {/* 右键菜单 */}
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={contextMenuItems}
-          onClose={handleCloseContextMenu}
-        />
-      )}
-
-      {/* 快捷键帮助 */}
-      <ShortcutsHelp
-        visible={showShortcuts}
-        onClose={() => setShowShortcuts(false)}
-        onOpenSampleData={handleOpenSampleData}
-      />
-
-      <AppSettingsCenter
-        visible={showSettingsCenter}
-        onClose={() => setShowSettingsCenter(false)}
-        initialTab={settingsCenterTab}
-        onSettingsChange={(next: SettingsDraft) => {
-          const name = next.account.displayName.trim();
-          setUserInitials(name ? name.slice(0, 2) : 'U');
-        }}
-        onOpenShortcuts={() => setShowShortcuts(true)}
-      />
-
-      <AIAssistantDialog
-        visible={showAIAssistant}
-        onClose={() => setShowAIAssistant(false)}
-        folderPath={folderPath}
-        content={editorContent}
-      />
-    </div>
+      </div>
+    </AiConfigProvider>
   );
 };
 

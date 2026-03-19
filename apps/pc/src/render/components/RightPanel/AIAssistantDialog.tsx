@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AIView } from './AIView';
 import styles from './styles.module.scss';
@@ -8,7 +8,17 @@ export const AIAssistantDialog: React.FC<{
   onClose: () => void;
   folderPath: string | null;
   content: string;
-}> = React.memo(({ visible, onClose, folderPath, content }) => {
+  onOpenSettings?: () => void;
+}> = React.memo(({ visible, onClose, folderPath, content, onOpenSettings }) => {
+  useEffect(() => {
+    if (!visible) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [visible, onClose]);
+
   if (!visible) return null;
 
   return createPortal(
@@ -22,7 +32,7 @@ export const AIAssistantDialog: React.FC<{
           </button>
         </div>
         <div className={styles.aiDialogBody}>
-          <AIView folderPath={folderPath} content={content} />
+          <AIView folderPath={folderPath} content={content} onOpenSettings={onOpenSettings} />
         </div>
       </div>
     </>,

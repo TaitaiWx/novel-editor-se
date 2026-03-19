@@ -8,12 +8,14 @@ import { useAiTitles } from './useAiTitles';
 import { useAiSummaries } from './useAiSummaries';
 import { OutlinePopover } from './OutlinePopover';
 import { OutlineEntryItem } from './OutlineEntryItem';
+import { useAiConfig } from './useAiConfig';
 
 export const OutlineView: React.FC<{
   content: string;
   onScrollToLine?: (line: number) => void;
   onReplaceLineText?: (line: number, text: string) => void;
 }> = React.memo(({ content, onScrollToLine, onReplaceLineText }) => {
+  const aiConfig = useAiConfig();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [hoverAnchor, setHoverAnchor] = useState<OutlinePopoverAnchor | null>(null);
   const [visibleVersion, setVisibleVersion] = useState(0);
@@ -35,7 +37,7 @@ export const OutlineView: React.FC<{
   );
   const visibleLines = useMemo(() => new Set(visibleLinesRef.current), [visibleVersion]);
 
-  // --- Extracted hooks ---
+  // --- Extracted hooks (hooks 内部从 AiConfigContext 读取 aiReady，无需外部传参) ---
   const { aiTitles, aiStates, aiErrors, failedAiEntries, retryAiEntry, retryFailedEntries } =
     useAiTitles(content, outlineEntries, activeLine, visibleLines);
 
@@ -146,6 +148,16 @@ export const OutlineView: React.FC<{
   ).length;
   const needsAiCount = outlineEntries.filter((e) => e.needsAiTitle).length;
 
+  // 纯数据驱动：根据 hook 返回的实际数据判断是否有 AI 活动
+  const aiActive =
+    completedCount > 0 ||
+    failedAiEntries.length > 0 ||
+    outlineEntries.some((e) => aiStates[e.line] === 'loading');
+
+  const handleOpenAiSettings = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('open-settings-tab', { detail: 'ai' }));
+  }, []);
+
   return (
     <div className={styles.outlineTree}>
       <div className={styles.outlineStatsBar}>
@@ -155,9 +167,18 @@ export const OutlineView: React.FC<{
             ? `${(totalWords / 10000).toFixed(1)} 万字`
             : `${totalWords.toLocaleString()} 字`}
         </span>
-        {needsAiCount > 0 && (
+        {needsAiCount > 0 && aiActive && (
           <span className={styles.outlineStatChip}>
             AI {completedCount}/{needsAiCount}
+          </span>
+        )}
+        {needsAiCount > 0 && !aiActive && aiConfig.loaded && !aiConfig.ready && (
+          <span
+            className={styles.outlineAiHintChip}
+            onClick={handleOpenAiSettings}
+            title="配置 AI 自动命名功能"
+          >
+            ✨ 开启 AI
           </span>
         )}
       </div>

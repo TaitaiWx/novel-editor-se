@@ -180,6 +180,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+.outlineAiHintChip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: rgba(78, 154, 6, 0.1);
+  border: 1px solid rgba(78, 154, 6, 0.18);
+  color: #8abf65;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(78, 154, 6, 0.2);
+  }
+}
+
 .outlineToolbar {
   display: flex;
   align-items: center;
@@ -1562,59 +1581,160 @@
   gap: 12px;
 }
 
-.aiTitle {
-  font-size: 15px;
-  font-weight: 700;
-  color: #e0ecf7;
-  letter-spacing: -0.01em;
-}
+// ─── AI Setup Guide ───
 
-.aiSubTitle {
-  color: #7f8f9f;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.aiActionGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.aiActionCard {
-  background: #1a1b20;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.aiActionTitle {
-  color: #e6e6e6;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.aiActionDesc {
-  margin-top: 6px;
-  color: #8c95a1;
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.aiAssistantPanel {
-  background: rgba(10, 14, 21, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 14px;
-  padding: 16px;
+.aiSetupGuide {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+  height: 100%;
+  gap: 4px;
 }
 
-.aiAssistantHeader {
-  color: #c8ddf0;
-  font-size: 12px;
+.aiSetupIcon {
+  font-size: 36px;
+  margin-bottom: 4px;
+}
+
+.aiSetupTitle {
+  font-size: 16px;
   font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.aiSetupDesc {
+  max-width: 300px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+.aiSetupSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 280px;
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.aiSetupStep {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.aiSetupStepNum {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(86, 156, 214, 0.15);
+  color: #6cb8ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.aiSetupStepTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.aiSetupStepDesc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.5;
+}
+
+.aiSetupButton {
+  appearance: none;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 28px;
+  background: rgba(86, 156, 214, 0.85);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(86, 156, 214, 1);
+  }
+}
+
+// ─── AI Workbench ───
+
+.aiWorkbench {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.aiContextBar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.aiContextChip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.aiWorkflowBar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.aiWorkflowChip {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.6);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    color 0.18s,
+    background 0.18s;
+
+  &:hover {
+    border-color: rgba(86, 156, 214, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+  }
+}
+
+.aiWorkflowChipActive {
+  border-color: rgba(86, 156, 214, 0.35);
+  background: rgba(86, 156, 214, 0.1);
+  color: #8fcaff;
+}
+
+.aiWorkflowHint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
   letter-spacing: 0.02em;
 }
 
@@ -2161,104 +2281,86 @@
   white-space: pre-wrap;
 }
 
-.aiActionCard {
-  appearance: none;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.22s ease, transform 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
-}
-
-.aiActionCard:hover {
-  border-color: rgba(86, 156, 214, 0.24);
-  background: rgba(86, 156, 214, 0.06);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(86, 156, 214, 0.06);
-}
-
-.aiActionCardActive {
-  border-color: rgba(86, 156, 214, 0.3);
-  background: rgba(86, 156, 214, 0.1);
-  box-shadow: 0 0 0 1px rgba(86, 156, 214, 0.12) inset, 0 4px 14px rgba(86, 156, 214, 0.06);
-}
-
-.aiWorkflowSummary {
-  padding: 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(86, 156, 214, 0.12);
-  background:
-    linear-gradient(135deg, rgba(86, 156, 214, 0.04), transparent 60%),
-    rgba(255, 255, 255, 0.02);
-}
-
-.aiWorkflowTitle {
-  color: #d8eafc;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.aiWorkflowText {
-  margin-top: 8px;
-  color: #8899ad;
-  font-size: 12px;
-  line-height: 1.8;
-}
-
 .aiPromptInput {
   width: 100%;
   resize: vertical;
-  min-height: 120px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(7, 10, 14, 0.82);
-  color: rgba(255, 255, 255, 0.88);
+  min-height: 80px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.85);
   font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  transition: border-color 0.2s;
 }
 
 .aiPromptInput:focus {
   outline: none;
-  border-color: rgba(86, 156, 214, 0.4);
-  box-shadow: 0 0 0 3px rgba(86, 156, 214, 0.14);
+  border-color: rgba(86, 156, 214, 0.35);
+  box-shadow: 0 0 0 2px rgba(86, 156, 214, 0.1);
 }
 
 .aiActionBar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-.submitButton {
+.aiRunButton {
   appearance: none;
-  border: 0;
-  border-radius: 12px;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, rgba(86, 156, 214, 0.92), rgba(67, 130, 224, 0.92));
-  color: white;
+  border: none;
+  border-radius: 7px;
+  padding: 7px 20px;
+  background: rgba(86, 156, 214, 0.88);
+  color: #fff;
   font: inherit;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(86, 156, 214, 1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 }
 
-.submitButton:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.aiStatus {
+.aiSettingsLink {
+  appearance: none;
+  border: none;
+  background: none;
+  color: rgba(86, 156, 214, 0.7);
+  font: inherit;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.54);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    color: rgba(86, 156, 214, 1);
+  }
 }
 
-.aiResultPanel {
-  min-height: 180px;
-  padding: 14px;
-  border-radius: 14px;
+.aiResultBox {
+  padding: 12px 14px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(7, 10, 14, 0.72);
-  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.78);
   white-space: pre-wrap;
-  line-height: 1.8;
+  line-height: 1.75;
   font-size: 12px;
+}
+
+.aiResultLoading {
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
 }
 
 @media (max-width: 1160px) {
@@ -2288,7 +2390,7 @@
   right: 16px;
   width: 420px;
   max-height: calc(100vh - 56px);
-  background: rgba(22, 25, 33, 0.98);
+  background: #1e1e1e;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);

@@ -24,6 +24,15 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose, onOpenS
     loadShortcuts();
   }, [visible]);
 
+  useEffect(() => {
+    if (!visible) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [visible, onClose]);
+
   // 按分类分组
   const grouped = useMemo(() => {
     const map = new Map<string, ShortcutInfo[]>();

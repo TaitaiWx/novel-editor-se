@@ -51,9 +51,8 @@ win:
 
 nsis:
   guid: novel-editor-se
-  oneClick: false
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
   shortcutName: Novel Editor
