@@ -583,85 +583,41 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // 文档导出：监听 Electron 菜单事件
+  // 导出项目：将整个项目目录复制到用户选择的位置
+  const handleExportProject = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const folder = folderPathRef.current;
+    if (!folder) {
+      toast.error('请先打开一个项目文件夹');
+      return;
+    }
+    try {
+      const result = (await ipc.invoke('export-project', folder)) as {
+        success: boolean;
+        destPath?: string;
+        error?: string;
+      } | null;
+      if (!result) return; // 用户取消
+      if (result.success) {
+        toast.success(`项目已导出到: ${result.destPath}`);
+      } else if (result.error) {
+        toast.error(`导出失败: ${result.error}`);
+      }
+    } catch (error) {
+      toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [toast]);
+
+  // 监听原生菜单的导出项目快捷键
   React.useEffect(() => {
     const ipc = window.electron?.ipcRenderer;
     if (!ipc) return;
-
-    const getExportTitle = () => {
-      const tab = activeTabRef.current;
-      if (!tab) return '文档';
-      if (tab.startsWith('__untitled__:')) return tab.replace('__untitled__:', '');
-      const parts = tab.replace(/\\/g, '/').split('/');
-      const filename = parts[parts.length - 1] || '文档';
-      return filename.replace(/\.[^.]+$/, '');
-    };
-
-    const onExportWord = async () => {
-      const content = editorContentRef.current;
-      if (!content.trim()) {
-        toast.error('当前文件内容为空，无法导出');
-        return;
-      }
-      try {
-        const result = await ipc.invoke('export-to-word', content, { title: getExportTitle() });
-        if (result.success && result.filePath) {
-          toast.success(`已导出为 Word: ${result.filePath}`);
-        } else if (result.error) {
-          toast.error(`导出失败: ${result.error}`);
-        }
-      } catch (error) {
-        toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
-      }
-    };
-
-    const onExportPptx = async () => {
-      const content = editorContentRef.current;
-      if (!content.trim()) {
-        toast.error('当前文件内容为空，无法导出');
-        return;
-      }
-      try {
-        const result = await ipc.invoke('export-to-pptx', content, { title: getExportTitle() });
-        if (result.success && result.filePath) {
-          toast.success(`已导出为 PPT: ${result.filePath}`);
-        } else if (result.error) {
-          toast.error(`导出失败: ${result.error}`);
-        }
-      } catch (error) {
-        toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
-      }
-    };
-
-    const onExportProjectWord = async () => {
-      const folder = folderPathRef.current;
-      if (!folder) {
-        toast.error('请先打开一个项目文件夹');
-        return;
-      }
-      try {
-        const folderName = folder.split('/').pop() || folder.split('\\').pop() || '项目';
-        const result = await ipc.invoke('export-project-to-word', folder, { title: folderName });
-        if (result.success && result.filePath) {
-          toast.success(`已导出项目为 Word: ${result.filePath}`);
-        } else if (result.error) {
-          toast.error(`导出失败: ${result.error}`);
-        }
-      } catch (error) {
-        toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
-      }
-    };
-
-    const disposeWord = ipc.on('menu-export-word', onExportWord);
-    const disposePptx = ipc.on('menu-export-pptx', onExportPptx);
-    const disposeProjectWord = ipc.on('menu-export-project-word', onExportProjectWord);
-
+    const dispose = ipc.on('menu-export-project', handleExportProject);
     return () => {
-      disposeWord?.();
-      disposePptx?.();
-      disposeProjectWord?.();
+      dispose?.();
     };
-  }, [toast]);
+  }, [handleExportProject]);
 
   // 侧边栏 Cmd+C/V 快捷键（独立 effect，确保 clipboard 最新值始终可用）
   React.useEffect(() => {
@@ -916,6 +872,7 @@ const App: React.FC = () => {
             onShowShortcuts={() => setShowShortcuts(true)}
             onOpenSampleData={handleOpenSampleData}
             onOpenAIAssistant={() => setShowAIAssistant(true)}
+            onExportProject={handleExportProject}
           />
         )}
 

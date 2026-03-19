@@ -54,23 +54,10 @@ export const registerAllShortcuts = () => {
     label: '文件',
     submenu: [
       {
-        label: '导出当前文件为 Word (.docx)',
-        accelerator: 'CommandOrControl+Shift+W',
+        label: '导出项目',
+        accelerator: 'CommandOrControl+Shift+E',
         click: () => {
-          BrowserWindow.getFocusedWindow()?.webContents.send('menu-export-word');
-        },
-      },
-      {
-        label: '导出整个项目为 Word (.docx)',
-        click: () => {
-          BrowserWindow.getFocusedWindow()?.webContents.send('menu-export-project-word');
-        },
-      },
-      {
-        label: '导出当前文件为 PPT (.pptx)',
-        accelerator: 'CommandOrControl+Shift+P',
-        click: () => {
-          BrowserWindow.getFocusedWindow()?.webContents.send('menu-export-pptx');
+          BrowserWindow.getFocusedWindow()?.webContents.send('menu-export-project');
         },
       },
     ],

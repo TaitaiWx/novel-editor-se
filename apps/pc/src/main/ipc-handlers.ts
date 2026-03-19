@@ -130,45 +130,57 @@ async function invokeConfiguredAI(payload: AIRequestPayload) {
   }
 
   const endpoint = `${ai.baseUrl.replace(/\/$/, '')}/chat/completions`;
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${ai.apiKey.trim()}`,
-    },
-    body: JSON.stringify({
-      model: ai.model.trim(),
-      temperature:
-        typeof payload.temperature === 'number'
-          ? payload.temperature
-          : typeof ai.temperature === 'number'
-            ? ai.temperature
-            : 1.3,
-      max_tokens:
-        typeof payload.maxTokens === 'number'
-          ? payload.maxTokens
-          : typeof ai.maxTokens === 'number'
-            ? ai.maxTokens
-            : 8192,
-      messages: [
-        ...(payload.systemPrompt ? [{ role: 'system', content: payload.systemPrompt }] : []),
-        {
-          role: 'user',
-          content: payload.context
-            ? `项目上下文:\n${payload.context}\n\n用户请求:\n${payload.prompt}`
-            : payload.prompt,
-        },
-      ],
-    }),
-  });
 
-  const json = (await response.json()) as {
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${ai.apiKey.trim()}`,
+      },
+      body: JSON.stringify({
+        model: ai.model.trim(),
+        temperature:
+          typeof payload.temperature === 'number'
+            ? payload.temperature
+            : typeof ai.temperature === 'number'
+              ? ai.temperature
+              : 1.3,
+        max_tokens:
+          typeof payload.maxTokens === 'number'
+            ? payload.maxTokens
+            : typeof ai.maxTokens === 'number'
+              ? ai.maxTokens
+              : 8192,
+        messages: [
+          ...(payload.systemPrompt ? [{ role: 'system', content: payload.systemPrompt }] : []),
+          {
+            role: 'user',
+            content: payload.context
+              ? `项目上下文:\n${payload.context}\n\n用户请求:\n${payload.prompt}`
+              : payload.prompt,
+          },
+        ],
+      }),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `无法连接 AI 服务 (${endpoint}): ${msg}` };
+  }
+
+  let json: {
     error?: { message?: string };
     choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
   };
+  try {
+    json = (await response.json()) as typeof json;
+  } catch {
+    return { ok: false, error: `AI 服务返回了无效的响应 (HTTP ${response.status})` };
+  }
 
   if (!response.ok) {
-    return { ok: false, error: json.error?.message || 'AI 请求失败' };
+    return { ok: false, error: json.error?.message || `AI 请求失败 (HTTP ${response.status})` };
   }
 
   const content = json.choices?.[0]?.message?.content;
@@ -1328,6 +1340,41 @@ export function setupIPC() {
     }
 
     return { previews, errors };
+  });
+
+  // ─── 导出项目目录 ─────────────────────────────────────────────────────
+  ipcMain.handle('export-project', async (_event, folderPath: string) => {
+    // 校验源目录存在
+    if (!existsSync(folderPath)) {
+      return { success: false, error: '项目目录不存在' };
+    }
+
+    const projectName = path.basename(folderPath);
+    const result = await dialog.showOpenDialog({
+      title: '选择导出位置',
+      buttonLabel: '导出到此处',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+
+    const destDir = path.join(result.filePaths[0], projectName);
+
+    // 如果目标已存在同名目录，自动重命名
+    let finalDest = destDir;
+    if (existsSync(finalDest)) {
+      let counter = 2;
+      while (existsSync(`${destDir} (${counter})`)) {
+        counter++;
+      }
+      finalDest = `${destDir} (${counter})`;
+    }
+
+    try {
+      await cp(folderPath, finalDest, { recursive: true });
+      return { success: true, destPath: finalDest };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' };
+    }
   });
 
   // ─── 文档导出 ─────────────────────────────────────────────────────────

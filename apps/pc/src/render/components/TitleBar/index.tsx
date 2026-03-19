@@ -7,6 +7,8 @@ import {
   VscSettingsGear,
   VscSettings,
   VscFolderOpened,
+  VscExport,
+  VscFolder,
 } from 'react-icons/vsc';
 import { AiOutlineClose, AiOutlineEye, AiOutlineKey, AiOutlineRobot } from 'react-icons/ai';
 import appMarkUrl from '../../../../resources/branding/app-mark.svg';
@@ -23,6 +25,7 @@ interface TitleBarProps {
   onOpenAccountSettings?: () => void;
   onOpenSampleData?: () => void;
   onOpenAIAssistant?: () => void;
+  onExportProject?: () => void;
 }
 
 const TitleBar: React.FC<TitleBarProps> = ({
@@ -36,6 +39,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
   onOpenAccountSettings,
   onOpenSampleData,
   onOpenAIAssistant,
+  onExportProject,
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [platform, setPlatform] = useState<string>('');
@@ -194,6 +198,21 @@ const TitleBar: React.FC<TitleBarProps> = ({
                     <VscFolderOpened />
                     <span>打开示例项目</span>
                   </button>
+                )}
+                {onExportProject && (
+                  <>
+                    <div className={styles.settingsTitle}>项目</div>
+                    <button
+                      className={styles.settingsItem}
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        onExportProject();
+                      }}
+                    >
+                      <VscExport />
+                      <span>导出项目</span>
+                    </button>
+                  </>
                 )}
               </div>
             )}
