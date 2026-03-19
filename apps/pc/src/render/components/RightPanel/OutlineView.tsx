@@ -128,6 +128,10 @@ export const OutlineView: React.FC<{
     return () => observer.disconnect();
   }, [outlineEntries]);
 
+  const handleOpenAiSettings = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('open-settings-tab', { detail: 'ai' }));
+  }, []);
+
   if (!content) {
     return <div className={styles.emptyHint}>打开文件后查看目录</div>;
   }
@@ -148,15 +152,11 @@ export const OutlineView: React.FC<{
   ).length;
   const needsAiCount = outlineEntries.filter((e) => e.needsAiTitle).length;
 
-  // 纯数据驱动：根据 hook 返回的实际数据判断是否有 AI 活动
-  const aiActive =
+  // 纯数据驱动: 有已完成/加载中/失败的 AI 条目即视为活跃
+  const hasAiData =
     completedCount > 0 ||
     failedAiEntries.length > 0 ||
     outlineEntries.some((e) => aiStates[e.line] === 'loading');
-
-  const handleOpenAiSettings = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('open-settings-tab', { detail: 'ai' }));
-  }, []);
 
   return (
     <div className={styles.outlineTree}>
@@ -167,18 +167,18 @@ export const OutlineView: React.FC<{
             ? `${(totalWords / 10000).toFixed(1)} 万字`
             : `${totalWords.toLocaleString()} 字`}
         </span>
-        {needsAiCount > 0 && aiActive && (
+        {needsAiCount > 0 && hasAiData && (
           <span className={styles.outlineStatChip}>
             AI {completedCount}/{needsAiCount}
           </span>
         )}
-        {needsAiCount > 0 && !aiActive && aiConfig.loaded && !aiConfig.ready && (
+        {aiConfig.loaded && !aiConfig.ready && (
           <span
             className={styles.outlineAiHintChip}
             onClick={handleOpenAiSettings}
-            title="配置 AI 自动命名功能"
+            title="配置 AI 功能"
           >
-            ✨ 开启 AI
+            开启 AI
           </span>
         )}
       </div>

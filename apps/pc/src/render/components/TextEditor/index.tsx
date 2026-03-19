@@ -914,7 +914,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
       {showEmpty && (
         <div className={styles.overlay}>
           <EmptyState
-            icon="📝"
             title="选择文件开始编辑"
             description="从左侧文件树中选择一个文件来开始编辑"
             variant="file"
@@ -929,7 +928,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
       {showError && (
         <div className={styles.overlay}>
           <ErrorState
-            icon="⚠️"
             title="文件加载失败"
             message={error!}
             size="medium"

@@ -170,9 +170,25 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ filePath, setting
   }
 
   if (error || !data || !currentSheet) {
+    const fileName = filePath?.replace(/\\/g, '/').split('/').pop() ?? '';
     return (
       <div className={styles.container}>
-        <ErrorState message="无法读取文件数据" />
+        <div className={styles.header}>
+          <div className={styles.headerLeft}>
+            <span className={styles.fileName}>{fileName}</span>
+            <span className={styles.badge}>XLSX</span>
+          </div>
+          <div className={styles.headerRight}>
+            <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+              <VscLinkExternal />
+              用默认应用打开
+            </button>
+            {settingsComponent}
+          </div>
+        </div>
+        <div className={styles.tableArea}>
+          <ErrorState message={error || '无法读取文件数据'} />
+        </div>
       </div>
     );
   }

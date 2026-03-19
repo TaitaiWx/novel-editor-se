@@ -102,7 +102,6 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
     return (
       <div className={`${styles.codeViewer} ${styles.empty}`}>
         <EmptyState
-          icon="📁"
           title="选择文件开始阅读"
           description="从左侧文件树中选择一个文件来查看其内容"
           variant="file"
@@ -123,7 +122,6 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
     return (
       <div className={`${styles.codeViewer} ${styles.error}`}>
         <ErrorState
-          icon="⚠️"
           title="文件加载失败"
           message={error}
           size="medium"

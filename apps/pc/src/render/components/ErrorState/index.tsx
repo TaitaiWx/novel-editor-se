@@ -10,7 +10,7 @@ interface ErrorStateProps {
 }
 
 const ErrorState: React.FC<ErrorStateProps> = ({
-  icon = '⚠️',
+  icon = '!',
   title = '出现错误',
   message,
   size = 'medium',

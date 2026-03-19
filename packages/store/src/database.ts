@@ -37,6 +37,11 @@ export function initDatabase(
   return db;
 }
 
+/** 数据库是否已初始化 */
+export function isDatabaseReady(): boolean {
+  return db !== null;
+}
+
 /** 获取当前数据库实例 */
 export function getDatabase(): Database.Database {
   if (!db) throw new Error('Database not initialized. Call initDatabase() first.');

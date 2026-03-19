@@ -64,6 +64,7 @@ import {
 import type { UpdateChannel } from './auto-updater';
 import {
   initDatabase,
+  isDatabaseReady,
   closeDatabase,
   novelOps,
   characterOps,
@@ -379,14 +380,10 @@ export function setupIPC() {
   // 读取 Excel 文件并返回结构化数据（用于 SpreadsheetViewer）
   ipcMain.handle('read-xlsx-data', async (_event, filePath: string) => {
     try {
-      const buffer = await readFile(filePath);
-      const arrayBuffer = buffer.buffer.slice(
-        buffer.byteOffset,
-        buffer.byteOffset + buffer.byteLength
-      );
       const ExcelJS = await import('exceljs');
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(arrayBuffer);
+      const ExcelMod = ExcelJS.default ?? ExcelJS;
+      const workbook = new ExcelMod.Workbook();
+      await workbook.xlsx.readFile(filePath);
 
       const sheets: {
         name: string;
@@ -1193,7 +1190,10 @@ export function setupIPC() {
   ipcMain.handle('db-stats-today', (_event, novelId: number) => statsOps.getToday(novelId));
 
   // 设置
-  ipcMain.handle('db-settings-get', (_event, key: string) => settingsOps.get(key));
+  ipcMain.handle('db-settings-get', (_event, key: string) => {
+    if (!isDatabaseReady()) return undefined;
+    return settingsOps.get(key);
+  });
   ipcMain.handle('db-settings-set', (_event, key: string, value: string) =>
     settingsOps.set(key, value)
   );

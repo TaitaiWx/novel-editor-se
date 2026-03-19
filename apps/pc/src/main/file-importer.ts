@@ -78,7 +78,8 @@ async function importDocx(filePath: string): Promise<ImportResult> {
  */
 async function importXlsx(filePath: string): Promise<ImportResult> {
   const ExcelJS = await import('exceljs');
-  const workbook = new ExcelJS.Workbook();
+  const ExcelMod = ExcelJS.default ?? ExcelJS;
+  const workbook = new ExcelMod.Workbook();
   await workbook.xlsx.readFile(filePath);
 
   const sections: string[] = [];

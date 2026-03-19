@@ -513,7 +513,6 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({ filePath, settingsCompo
     return (
       <div className={styles.resourceViewer}>
         <EmptyState
-          icon="🖼️"
           title="选择资源开始预览"
           description="图片、PDF、音频和视频文件会默认显示预览效果"
           variant="file"

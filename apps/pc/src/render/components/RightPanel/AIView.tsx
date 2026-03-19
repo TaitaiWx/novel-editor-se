@@ -132,7 +132,7 @@ export const AIView: React.FC<{
   if (!aiConfig.ready) {
     return (
       <div className={styles.aiSetupGuide}>
-        <div className={styles.aiSetupIcon}>🤖</div>
+        <div className={styles.aiSetupIcon}>AI</div>
         <div className={styles.aiSetupTitle}>开启 AI 写作助手</div>
         <div className={styles.aiSetupDesc}>
           配置 API Key 后，即可使用一致性诊断、设定补全、人物诊断、情节分析等 AI 辅助功能。

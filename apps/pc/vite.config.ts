@@ -68,6 +68,8 @@ export default defineConfig(({ mode }) => {
             if (id === 'mammoth') return true;
             // jszip 在主进程中直接使用，需要 external
             if (id === 'jszip') return true;
+            // exceljs 依赖 fs.constants 等 Node API，必须 external
+            if (id === 'exceljs') return true;
             if (id.startsWith('node:')) return true;
             return builtinModules.includes(id.split('/')[0]);
           },

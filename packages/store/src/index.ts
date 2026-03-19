@@ -1,5 +1,6 @@
 export {
   initDatabase,
+  isDatabaseReady,
   getDatabase,
   closeDatabase,
   novelOps,
