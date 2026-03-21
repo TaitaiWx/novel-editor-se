@@ -18,7 +18,6 @@ export const ActsView: React.FC<{
   const [activeScene, setActiveScene] = useState<string | null>(null);
   const [plotBoards, setPlotBoards] = useState<Record<string, PlotActBoard>>({});
   const [aiSuggesting, setAiSuggesting] = useState(false);
-  const [sceneDragKey, setSceneDragKey] = useState<string | null>(null);
   const [layoutMode, setLayoutMode] = useState<StorylineLayoutMode>('board');
 
   // ── Derived data (useMemo — single source of truth) ────────────────────────
@@ -97,15 +96,6 @@ export const ActsView: React.FC<{
   const handleActClick = useCallback(
     (actIdx: number, line: number) => {
       setActiveAct((prev) => (prev === actIdx ? null : actIdx));
-      onScrollToLine?.(line);
-    },
-    [onScrollToLine]
-  );
-
-  const handleSceneClick = useCallback(
-    (e: React.MouseEvent, sceneKey: string, line: number) => {
-      e.stopPropagation();
-      setActiveScene((prev) => (prev === sceneKey ? null : sceneKey));
       onScrollToLine?.(line);
     },
     [onScrollToLine]
@@ -195,16 +185,6 @@ export const ActsView: React.FC<{
     [updateSelectedBoard]
   );
 
-  const handleSceneDrop = useCallback(
-    (targetKey: string) => {
-      const sourceKey = sceneDragKey;
-      if (!sourceKey) return;
-      handleSceneDragReorder(sourceKey, targetKey);
-      setSceneDragKey(null);
-    },
-    [sceneDragKey, handleSceneDragReorder]
-  );
-
   const handleGenerateAI = useCallback(async () => {
     const act = selectedActRef.current;
     const board = selectedBoardRef.current;
@@ -270,8 +250,6 @@ export const ActsView: React.FC<{
     },
     [handleSceneUpdate]
   );
-
-  const handleSceneDragStart = useCallback((key: string) => setSceneDragKey(key), []);
 
   // ── Early returns (ALL hooks are above — React Rules of Hooks satisfied) ──
   if (!content) {

@@ -23,7 +23,7 @@ export const ActCardsBoard: React.FC<ActCardsBoardProps> = React.memo(
     plotBoards,
     activeAct,
     activeScene,
-    sceneDragKey,
+    sceneDragKey: _sceneDragKey,
     onActClick,
     onSceneClick,
     onSceneDragStart,

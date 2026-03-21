@@ -21,10 +21,9 @@ import {
 import { createHash } from 'crypto';
 import { join } from 'path';
 import { spawn } from 'child_process';
-import { createReadStream, createWriteStream } from 'fs';
-import { pipeline } from 'stream/promises';
-import { Readable } from 'stream';
+import { createReadStream } from 'fs';
 import { getDeviceId } from './device-id';
+import { download, cleanupStaleDownloads } from './resilient-downloader';
 
 const { autoUpdater } = pkg;
 
@@ -121,6 +120,9 @@ let startupHealthTimer: NodeJS.Timeout | null = null;
 let scheduledUpdateTimer: NodeJS.Timeout | null = null;
 let listenersRegistered = false;
 let consecutiveCheckFailures = 0;
+let consecutiveDownloadFailures = 0;
+/** 下载失败后自动重试的上限 */
+const MAX_DOWNLOAD_RETRIES = 3;
 
 function inferDefaultChannel(version: string): UpdateChannel {
   const lowerVersion = version.toLowerCase();
@@ -421,33 +423,20 @@ async function isCachedInstallerValid(
   }
 }
 
-/** 流式下载安装包到本地（内存安全，支持大文件） */
+/** 流式下载安装包到本地 — 支持断点续传 + 自动重试 + 弱网恢复 */
 async function downloadRollbackAsset(
   target: RollbackTarget
 ): Promise<{ path: string; hash: string }> {
-  const rollbackDir = getRollbackCacheDir();
-  await mkdir(rollbackDir, { recursive: true });
-
-  const filePath = join(rollbackDir, target.assetName);
-  const tmpPath = `${filePath}.download`;
-
-  const response = await fetch(target.assetUrl, {
-    headers: { 'User-Agent': 'Novel-Editor-Updater' },
-    signal: AbortSignal.timeout(ROLLBACK_DOWNLOAD_TIMEOUT_MS),
+  const filePath = join(getRollbackCacheDir(), target.assetName);
+  const result = await download({
+    url: target.assetUrl,
+    destPath: filePath,
+    timeoutMs: ROLLBACK_DOWNLOAD_TIMEOUT_MS,
+    maxRetries: 5,
   });
 
-  if (!response.ok || !response.body) {
-    throw new Error(`下载回退包失败: HTTP ${response.status} ${target.assetName}`);
-  }
-
-  // 流式写入临时文件 → rename（原子性保证不会留下半截文件）
-  const nodeStream = Readable.fromWeb(response.body as import('stream/web').ReadableStream);
-  await pipeline(nodeStream, createWriteStream(tmpPath));
-  await rename(tmpPath, filePath);
-
-  const fileHash = await computeFileHash(filePath);
-  log.info(`回退安装包已缓存: ${filePath} (sha256=${fileHash})`);
-  return { path: filePath, hash: fileHash };
+  log.info(`回退安装包已缓存: ${result.path} (sha256=${result.hash.slice(0, 16)}…)`);
+  return { path: result.path, hash: result.hash };
 }
 
 /**
@@ -492,7 +481,12 @@ async function pruneRollbackCache(keepAssetName?: string) {
 
   const entries = await readdir(cacheDir, { withFileTypes: true });
   const files = entries.filter(
-    (e) => e.isFile() && !e.name.endsWith('.download') && !e.name.endsWith('.tmp')
+    (e) =>
+      e.isFile() &&
+      !e.name.endsWith('.download') &&
+      !e.name.endsWith('.tmp') &&
+      !e.name.endsWith('.part') &&
+      !e.name.endsWith('.dl-meta')
   );
 
   if (files.length <= MAX_ROLLBACK_CACHE_ENTRIES) return;
@@ -611,6 +605,7 @@ async function trackPendingLaunchState() {
 }
 
 function handleUpdateAvailable(info: UpdateInfo) {
+  consecutiveDownloadFailures = 0;
   void syncStatusFromUpdateInfo(info, updaterStatus.channel).then(() => {
     updaterStatus.availableVersion = info.version;
     updaterStatus.lastError = null;
@@ -693,6 +688,26 @@ function registerUpdaterListeners() {
     updaterStatus.lastError = error.message;
     emitStatus();
     log.error('自动更新错误:', error);
+
+    // 如果有待下载的更新且尚未完成，按指数退避重试下载
+    if (updaterStatus.availableVersion && !updaterStatus.updateReady) {
+      consecutiveDownloadFailures++;
+      if (consecutiveDownloadFailures <= MAX_DOWNLOAD_RETRIES) {
+        const delay = Math.min(
+          MAX_BACKOFF_MS,
+          60_000 * Math.pow(2, consecutiveDownloadFailures - 1)
+        );
+        const jitter = 0.75 + Math.random() * 0.5;
+        const backoffMs = Math.floor(delay * jitter);
+        log.info(
+          `下载失败，${Math.round(backoffMs / 1000)}s 后重试 ` +
+            `(${consecutiveDownloadFailures}/${MAX_DOWNLOAD_RETRIES})`
+        );
+        setTimeout(() => void downloadUpdate(), backoffMs);
+      } else {
+        log.warn(`下载连续失败 ${consecutiveDownloadFailures} 次，等待下次定时检查`);
+      }
+    }
   });
 }
 
@@ -783,6 +798,11 @@ export async function setupAutoUpdater() {
 
   registerUpdaterListeners();
   const state = await loadUpdaterState();
+
+  // 启动时清理过期的下载残留文件 (.part / .dl-meta / .download)
+  void cleanupStaleDownloads(getRollbackCacheDir()).catch((e) => {
+    log.warn('清理过期下载文件失败:', e);
+  });
 
   configureAutoUpdater(state.channel);
   await trackPendingLaunchState();

@@ -65,7 +65,6 @@ export function splitChapters(text: string): Chapter[] {
   }
 
   // 4. 构建章节列表
-  let currentOffset = 0;
   for (let i = 0; i < chapterStarts.length; i++) {
     const startLine = chapterStarts[i];
     const endLine = i + 1 < chapterStarts.length ? chapterStarts[i + 1] : lines.length;

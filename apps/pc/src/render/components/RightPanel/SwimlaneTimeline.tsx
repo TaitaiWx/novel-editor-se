@@ -1,6 +1,6 @@
-import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useRef, useState } from 'react';
 import type { PlotSceneBoard, PlotActBoard } from './types';
-import { INTENSITY_COLORS, ACT_COLORS } from './constants';
+import { INTENSITY_COLORS } from './constants';
 import styles from './styles.module.scss';
 
 interface SwimlaneTimelineProps {
@@ -30,7 +30,14 @@ const POV_COLORS = [
 ];
 
 export const SwimlaneTimeline: React.FC<SwimlaneTimelineProps> = React.memo(
-  ({ board, actIndex, activeScene, onSceneClick, onSceneUpdate, onSceneDragReorder }) => {
+  ({
+    board,
+    actIndex: _actIndex,
+    activeScene,
+    onSceneClick,
+    onSceneUpdate: _onSceneUpdate,
+    onSceneDragReorder,
+  }) => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [dragSource, setDragSource] = useState<string | null>(null);
     const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useRef } from 'react';
 import type { PlotSceneBoard, PlotActBoard } from './types';
 import { INTENSITY_COLORS } from './constants';
 import styles from './styles.module.scss';
@@ -24,7 +24,7 @@ const GAP_Y = 40;
 const PADDING = 24;
 
 export const CausalChainView: React.FC<CausalChainViewProps> = React.memo(
-  ({ board, activeScene, onSceneClick, onSceneUpdate }) => {
+  ({ board, activeScene, onSceneClick, onSceneUpdate: _onSceneUpdate }) => {
     const canvasRef = useRef<HTMLDivElement>(null);
 
     // Layout nodes as a DAG (directed acyclic graph)

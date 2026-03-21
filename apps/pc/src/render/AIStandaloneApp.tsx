@@ -109,7 +109,7 @@ export const AIStandaloneApp: React.FC = () => {
     );
   }
 
-  const handleApplyFix = (newContent: string, targetPath?: string) => {
+  const handleApplyFix = (_newContent: string, _targetPath?: string) => {
     // 独立窗口：不在本地写盘，静默处理（实际修复通过 handleOpenFile 走 diff 流程）
     return;
   };

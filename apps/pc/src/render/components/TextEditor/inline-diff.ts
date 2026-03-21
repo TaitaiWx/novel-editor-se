@@ -143,7 +143,6 @@ export const inlineDiffField = StateField.define<DecorationSet>({
         const charDiffMap = buildCharDiffMap(diffLines);
 
         // 遍历 diffLines 中的 del 行，找到对应的编辑器行并标注 charDel
-        let delLineIndex = 0; // diffLines 中 del 行的序号
         let editorPos = from;
         for (let i = 0; i < diffLines.length; i++) {
           const dl = diffLines[i];
@@ -159,7 +158,6 @@ export const inlineDiffField = StateField.define<DecorationSet>({
             let charPos = editorLine.from;
             for (const seg of charSegs) {
               if (seg.type === 'add') continue; // 新增文本不在此行
-              const segLen = [...seg.text].length; // Unicode-safe
               const byteLen = seg.text.length;
               if (seg.type === 'del' && byteLen > 0) {
                 const segTo = Math.min(charPos + byteLen, doc.length);
@@ -181,7 +179,6 @@ export const inlineDiffField = StateField.define<DecorationSet>({
             }
           }
 
-          delLineIndex++;
           editorPos = editorLine.to + 1;
         }
 

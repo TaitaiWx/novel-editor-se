@@ -30,7 +30,6 @@ import { fnv1a32 } from './components/RightPanel/utils';
 import {
   buildAISessionStorageKey,
   parseAISessionSnapshot,
-  type PendingApplyItem,
   type AISessionSnapshot,
 } from './state/aiSessionSnapshot';
 import {
@@ -358,94 +357,86 @@ const App: React.FC = () => {
     handleCollapseSidebar();
   }, [handleCollapseSidebar, handleExpandSidebar]);
 
-  const handleLeftResizerMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = leftPanelWidthRef.current;
-      const onMouseMove = (ev: MouseEvent) => {
-        const next = startWidth + (ev.clientX - startX);
-        // Auto-collapse when dragged below threshold (VSCode behavior)
-        if (next < LEFT_COLLAPSE_THRESHOLD) {
-          setSidebarCollapsed(true);
-          return;
-        }
-        const containerWidth = appMainRef.current?.offsetWidth ?? 0;
-        const rightWidth = rightPanelCollapsedRef.current
-          ? RIGHT_COLLAPSED_WIDTH
-          : rightPanelWidthRef.current;
-        const maxAllowed = containerWidth - CENTER_MIN - rightWidth;
+  const handleLeftResizerMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = leftPanelWidthRef.current;
+    const onMouseMove = (ev: MouseEvent) => {
+      const next = startWidth + (ev.clientX - startX);
+      // Auto-collapse when dragged below threshold (VSCode behavior)
+      if (next < LEFT_COLLAPSE_THRESHOLD) {
+        setSidebarCollapsed(true);
+        return;
+      }
+      const containerWidth = appMainRef.current?.offsetWidth ?? 0;
+      const rightWidth = rightPanelCollapsedRef.current
+        ? RIGHT_COLLAPSED_WIDTH
+        : rightPanelWidthRef.current;
+      const maxAllowed = containerWidth - CENTER_MIN - rightWidth;
 
-        // Expanding left panel can force right panel to auto-collapse to preserve center minimum width.
-        if (next > maxAllowed && !rightPanelCollapsedRef.current) {
-          setRightPanelCollapsed(true);
-          const maxAfterCollapse = containerWidth - CENTER_MIN - RIGHT_COLLAPSED_WIDTH;
-          setLeftPanelWidth(Math.min(LEFT_MAX, maxAfterCollapse, next));
-          return;
-        }
+      // Expanding left panel can force right panel to auto-collapse to preserve center minimum width.
+      if (next > maxAllowed && !rightPanelCollapsedRef.current) {
+        setRightPanelCollapsed(true);
+        const maxAfterCollapse = containerWidth - CENTER_MIN - RIGHT_COLLAPSED_WIDTH;
+        setLeftPanelWidth(Math.min(LEFT_MAX, maxAfterCollapse, next));
+        return;
+      }
 
-        setLeftPanelWidth(Math.min(LEFT_MAX, maxAllowed, next));
-        if (sidebarCollapsedRef.current) setSidebarCollapsed(false);
-      };
-      const cleanup = () => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', cleanup);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', cleanup);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+      setLeftPanelWidth(Math.min(LEFT_MAX, maxAllowed, next));
+      if (sidebarCollapsedRef.current) setSidebarCollapsed(false);
+    };
+    const cleanup = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', cleanup);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', cleanup);
+  }, []);
 
-  const handleRightResizerMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = rightPanelWidthRef.current;
-      const onMouseMove = (ev: MouseEvent) => {
-        // Dragging the right resizer leftward enlarges the right panel
-        const next = startWidth - (ev.clientX - startX);
-        // Auto-collapse when dragged below threshold
-        if (next < RIGHT_COLLAPSE_THRESHOLD) {
-          setRightPanelCollapsed(true);
-          return;
-        }
-        const containerWidth = appMainRef.current?.offsetWidth ?? 0;
-        const leftWidth = sidebarCollapsedRef.current
-          ? LEFT_COLLAPSED_WIDTH
-          : leftPanelWidthRef.current;
-        const maxAllowed = containerWidth - CENTER_MIN - leftWidth;
+  const handleRightResizerMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightPanelWidthRef.current;
+    const onMouseMove = (ev: MouseEvent) => {
+      // Dragging the right resizer leftward enlarges the right panel
+      const next = startWidth - (ev.clientX - startX);
+      // Auto-collapse when dragged below threshold
+      if (next < RIGHT_COLLAPSE_THRESHOLD) {
+        setRightPanelCollapsed(true);
+        return;
+      }
+      const containerWidth = appMainRef.current?.offsetWidth ?? 0;
+      const leftWidth = sidebarCollapsedRef.current
+        ? LEFT_COLLAPSED_WIDTH
+        : leftPanelWidthRef.current;
+      const maxAllowed = containerWidth - CENTER_MIN - leftWidth;
 
-        // Expanding right panel can force left panel to auto-collapse to preserve center minimum width.
-        if (next > maxAllowed && !sidebarCollapsedRef.current) {
-          setSidebarCollapsed(true);
-          const maxAfterCollapse = containerWidth - CENTER_MIN - LEFT_COLLAPSED_WIDTH;
-          setRightPanelWidth(Math.min(RIGHT_MAX, maxAfterCollapse, next));
-          return;
-        }
+      // Expanding right panel can force left panel to auto-collapse to preserve center minimum width.
+      if (next > maxAllowed && !sidebarCollapsedRef.current) {
+        setSidebarCollapsed(true);
+        const maxAfterCollapse = containerWidth - CENTER_MIN - LEFT_COLLAPSED_WIDTH;
+        setRightPanelWidth(Math.min(RIGHT_MAX, maxAfterCollapse, next));
+        return;
+      }
 
-        setRightPanelWidth(Math.min(RIGHT_MAX, maxAllowed, next));
-        if (rightPanelCollapsedRef.current) setRightPanelCollapsed(false);
-      };
-      const cleanup = () => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', cleanup);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', cleanup);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+      setRightPanelWidth(Math.min(RIGHT_MAX, maxAllowed, next));
+      if (rightPanelCollapsedRef.current) setRightPanelCollapsed(false);
+    };
+    const cleanup = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', cleanup);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', cleanup);
+  }, []);
 
   React.useEffect(() => {
     const onResize = () => resolvePaneLayout();

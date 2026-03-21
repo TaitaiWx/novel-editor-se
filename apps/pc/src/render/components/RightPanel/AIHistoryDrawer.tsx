@@ -70,7 +70,9 @@ export const AIHistoryDrawer: React.FC<AIHistoryDrawerProps> = React.memo(
                 {summary}
               </div>
               <div className={styles.aiHistoryItemFooter} onClick={() => onRestore(record)}>
-                <span className={styles.aiHistoryItemTime}>{formatTimestamp(record.timestamp)}</span>
+                <span className={styles.aiHistoryItemTime}>
+                  {formatTimestamp(record.timestamp)}
+                </span>
               </div>
               <button
                 className={styles.aiHistoryItemDelete}

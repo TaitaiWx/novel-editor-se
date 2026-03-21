@@ -89,18 +89,21 @@ export const SceneBoardCard: React.FC<SceneBoardCardProps> = React.memo(
           <span className={styles.sceneCard2Index}>{index + 1}</span>
           <div className={styles.sceneCard2TitleZone} onClick={() => setExpanded(!expanded)}>
             <span className={styles.sceneCard2Title}>{sceneBoard.title}</span>
-            {!expanded && preview && (
-              <span className={styles.sceneCard2Preview}>{preview}</span>
-            )}
+            {!expanded && preview && <span className={styles.sceneCard2Preview}>{preview}</span>}
           </div>
           <div className={styles.sceneCard2Actions}>
             {/* Intensity: compact inline selector */}
-            <div className={styles.sceneIntensityBar} title={`张力: ${INTENSITY_LABELS[intensity - 1]}`}>
+            <div
+              className={styles.sceneIntensityBar}
+              title={`张力: ${INTENSITY_LABELS[intensity - 1]}`}
+            >
               {[1, 2, 3, 4, 5].map((level) => (
                 <button
                   key={level}
                   className={`${styles.intensityDot} ${level <= intensity ? styles.intensityDotActive : ''}`}
-                  style={level <= intensity ? { background: INTENSITY_COLORS[level - 1] } : undefined}
+                  style={
+                    level <= intensity ? { background: INTENSITY_COLORS[level - 1] } : undefined
+                  }
                   title={INTENSITY_LABELS[level - 1]}
                   onClick={() => onUpdate({ intensity: level })}
                 />
