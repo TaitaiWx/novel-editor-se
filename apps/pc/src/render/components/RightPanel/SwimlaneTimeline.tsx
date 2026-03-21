@@ -5,10 +5,8 @@ import styles from './styles.module.scss';
 
 interface SwimlaneTimelineProps {
   board: PlotActBoard;
-  actIndex: number;
   activeScene: string | null;
   onSceneClick: (sceneKey: string) => void;
-  onSceneUpdate: (sceneKey: string, partial: Partial<PlotSceneBoard>) => void;
   onSceneDragReorder: (sourceKey: string, targetKey: string) => void;
 }
 
@@ -19,25 +17,18 @@ interface SwimlaneRow {
 }
 
 const POV_COLORS = [
-  '#569cd6',
+  '#d7ba7d',
   '#4ec9b0',
   '#c586c0',
   '#dcdcaa',
-  '#9cdcfe',
-  '#f14c4c',
-  '#d7ba7d',
   '#b5cea8',
+  '#f14c4c',
+  '#d8b08e',
+  '#e2c08d',
 ];
 
 export const SwimlaneTimeline: React.FC<SwimlaneTimelineProps> = React.memo(
-  ({
-    board,
-    actIndex: _actIndex,
-    activeScene,
-    onSceneClick,
-    onSceneUpdate: _onSceneUpdate,
-    onSceneDragReorder,
-  }) => {
+  ({ board, activeScene, onSceneClick, onSceneDragReorder }) => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [dragSource, setDragSource] = useState<string | null>(null);
     const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);

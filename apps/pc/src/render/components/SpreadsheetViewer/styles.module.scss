@@ -1,263 +1,263 @@
 .container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: #1e1e1e;
-    overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  overflow: hidden;
 }
 
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    background: #252526;
-    border-bottom: 1px solid #333;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #252526;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
 }
 
 .headerLeft {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .headerRight {
-    display: flex;
-    align-items: center;
+  display: flex;
+  align-items: center;
 }
 
 .fileName {
-    font-size: 13px;
-    font-weight: 600;
-    color: #d4d4d4;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4d4d4;
 }
 
 .badge {
-    font-size: 10px;
-    font-weight: 700;
-    color: #1b8a2f;
-    background: rgba(27, 138, 47, 0.12);
-    border: 1px solid rgba(27, 138, 47, 0.25);
-    padding: 1px 6px;
-    border-radius: 3px;
-    letter-spacing: 0.5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1b8a2f;
+  background: rgba(27, 138, 47, 0.12);
+  border: 1px solid rgba(27, 138, 47, 0.25);
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
 }
 
 .meta {
-    font-size: 12px;
-    color: #888;
+  font-size: 12px;
+  color: #888;
 }
 
 .openExternalBtn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    border: 1px solid #555;
-    border-radius: 4px;
-    background: transparent;
-    color: #ccc;
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: transparent;
+  color: #ccc;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
 
-    svg {
-        font-size: 13px;
-    }
+  svg {
+    font-size: 13px;
+  }
 
-    &:hover {
-        background: rgba(255, 255, 255, 0.08);
-        border-color: #888;
-        color: #fff;
-    }
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: #888;
+    color: #fff;
+  }
 
-    &:active {
-        background: rgba(255, 255, 255, 0.12);
-    }
+  &:active {
+    background: rgba(255, 255, 255, 0.12);
+  }
 }
 
 // Sheet tabs
 .sheetTabs {
-    display: flex;
-    gap: 0;
-    padding: 0 12px;
-    background: #252526;
-    border-bottom: 1px solid #333;
-    flex-shrink: 0;
-    overflow-x: auto;
+  display: flex;
+  gap: 0;
+  padding: 0 12px;
+  background: #252526;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+  overflow-x: auto;
 
-    &::-webkit-scrollbar {
-        height: 3px;
-    }
+  &::-webkit-scrollbar {
+    height: 3px;
+  }
 
-    &::-webkit-scrollbar-thumb {
-        background: #555;
-        border-radius: 2px;
-    }
+  &::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 2px;
+  }
 }
 
 .sheetTab {
-    padding: 6px 16px;
-    border: none;
-    background: transparent;
-    color: #888;
-    font-size: 12px;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.15s;
-    white-space: nowrap;
-    flex-shrink: 0;
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 
-    &:hover {
-        color: #d4d4d4;
-        background: rgba(255, 255, 255, 0.04);
-    }
+  &:hover {
+    color: #d4d4d4;
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 .sheetTabActive {
-    color: #4ec9b0;
-    border-bottom-color: #4ec9b0;
+  color: #4ec9b0;
+  border-bottom-color: #4ec9b0;
 }
 
 .tooLargeHint {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    height: 100%;
-    color: #999;
-    font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+  color: #999;
+  font-size: 14px;
 
-    p {
-        margin: 0;
-    }
+  p {
+    margin: 0;
+  }
 }
 
 // Table area
 .tableArea {
-    flex: 1;
-    overflow: auto;
-    min-height: 0;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
 
-    &::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #1e1e1e;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #424242;
+    border-radius: 4px;
+
+    &:hover {
+      background: #555;
     }
+  }
 
-    &::-webkit-scrollbar-track {
-        background: #1e1e1e;
-    }
-
-    &::-webkit-scrollbar-thumb {
-        background: #424242;
-        border-radius: 4px;
-
-        &:hover {
-            background: #555;
-        }
-    }
-
-    &::-webkit-scrollbar-corner {
-        background: #1e1e1e;
-    }
+  &::-webkit-scrollbar-corner {
+    background: #1e1e1e;
+  }
 }
 
 .table {
-    border-collapse: collapse;
-    font-size: 13px;
-    font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
-    min-width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  min-width: 100%;
 }
 
 .rowNumberCol {
-    width: 50px;
+  width: 50px;
 }
 
 // Column headers (A, B, C...)
 .cornerCell {
-    position: sticky;
-    top: 0;
-    left: 0;
-    z-index: 3;
-    background: #2d2d2d;
-    border-right: 1px solid #404040;
-    border-bottom: 2px solid #404040;
-    min-width: 50px;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  background: #2d2d2d;
+  border-right: 1px solid #404040;
+  border-bottom: 2px solid #404040;
+  min-width: 50px;
 }
 
 .colHeader {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: #2d2d2d;
-    color: #888;
-    font-weight: 600;
-    font-size: 11px;
-    text-align: center;
-    padding: 5px 8px;
-    border-right: 1px solid #333;
-    border-bottom: 2px solid #404040;
-    white-space: nowrap;
-    min-width: 80px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #2d2d2d;
+  color: #888;
+  font-weight: 600;
+  font-size: 11px;
+  text-align: center;
+  padding: 5px 8px;
+  border-right: 1px solid #333;
+  border-bottom: 2px solid #404040;
+  white-space: nowrap;
+  min-width: 80px;
 }
 
 // Row numbers (1, 2, 3...)
 .rowNumber {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    background: #2d2d2d;
-    color: #888;
-    font-size: 11px;
-    font-weight: 500;
-    text-align: center;
-    padding: 4px 8px;
-    border-right: 1px solid #404040;
-    border-bottom: 1px solid #2a2a2a;
-    min-width: 50px;
-    user-select: none;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #2d2d2d;
+  color: #888;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+  padding: 4px 8px;
+  border-right: 1px solid #404040;
+  border-bottom: 1px solid #2a2a2a;
+  min-width: 50px;
+  user-select: none;
 }
 
 // Data cells
 .cell {
-    padding: 4px 8px;
-    border-right: 1px solid #2a2a2a;
-    border-bottom: 1px solid #2a2a2a;
-    color: #d4d4d4;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 300px;
-    min-height: 24px;
+  padding: 4px 8px;
+  border-right: 1px solid #2a2a2a;
+  border-bottom: 1px solid #2a2a2a;
+  color: #d4d4d4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  min-height: 24px;
 
-    &:hover {
-        background: rgba(255, 255, 255, 0.04);
-    }
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 // First data row (header row styling)
 .firstDataRow {
-    .cell {
-        background: rgba(74, 144, 217, 0.08);
-        font-weight: 600;
-        color: #e0e0e0;
-    }
+  .cell {
+    background: rgba(74, 144, 217, 0.08);
+    font-weight: 600;
+    color: #e0e0e0;
+  }
 
-    .rowNumber {
-        font-weight: 700;
-    }
+  .rowNumber {
+    font-weight: 700;
+  }
 }
 
 // Responsive
 @media (max-width: 768px) {
-    .header {
-        padding: 6px 10px;
-    }
+  .header {
+    padding: 6px 10px;
+  }
 
-    .cell {
-        max-width: 200px;
-    }
+  .cell {
+    max-width: 200px;
+  }
 }

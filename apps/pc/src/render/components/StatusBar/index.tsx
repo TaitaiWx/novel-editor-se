@@ -21,6 +21,100 @@ interface StatusBarProps {
   onToggleVersionHistory?: () => void;
 }
 
+type NetworkQuality = 'good' | 'weak' | 'offline';
+
+interface NetworkStatusState {
+  online: boolean;
+  quality: NetworkQuality;
+  effectiveType: string;
+  downlink: number | null;
+  rtt: number | null;
+  updatedAt: number;
+}
+
+function getConnectionInfo(): {
+  effectiveType: string;
+  downlink: number | null;
+  rtt: number | null;
+} {
+  const connection =
+    (
+      navigator as Navigator & {
+        connection?: { effectiveType?: string; downlink?: number; rtt?: number };
+        mozConnection?: { effectiveType?: string; downlink?: number; rtt?: number };
+        webkitConnection?: { effectiveType?: string; downlink?: number; rtt?: number };
+      }
+    ).connection ||
+    (
+      navigator as Navigator & {
+        mozConnection?: { effectiveType?: string; downlink?: number; rtt?: number };
+      }
+    ).mozConnection ||
+    (
+      navigator as Navigator & {
+        webkitConnection?: { effectiveType?: string; downlink?: number; rtt?: number };
+      }
+    ).webkitConnection;
+
+  return {
+    effectiveType: connection?.effectiveType || 'unknown',
+    downlink: typeof connection?.downlink === 'number' ? connection.downlink : null,
+    rtt: typeof connection?.rtt === 'number' ? connection.rtt : null,
+  };
+}
+
+function evaluateNetworkQuality(
+  online: boolean,
+  effectiveType: string,
+  downlink: number | null,
+  rtt: number | null
+): NetworkQuality {
+  if (!online) return 'offline';
+  if (
+    effectiveType === 'slow-2g' ||
+    effectiveType === '2g' ||
+    (typeof downlink === 'number' && downlink < 1.2) ||
+    (typeof rtt === 'number' && rtt > 500)
+  ) {
+    return 'weak';
+  }
+  return 'good';
+}
+
+function createNetworkStatusState(): NetworkStatusState {
+  const online = navigator.onLine;
+  const { effectiveType, downlink, rtt } = getConnectionInfo();
+  return {
+    online,
+    quality: evaluateNetworkQuality(online, effectiveType, downlink, rtt),
+    effectiveType,
+    downlink,
+    rtt,
+    updatedAt: Date.now(),
+  };
+}
+
+function formatNetworkTooltip(status: NetworkStatusState): string {
+  const updatedAt = new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(status.updatedAt);
+  const qualityLabel =
+    status.quality === 'offline' ? '离线' : status.quality === 'weak' ? '弱网' : '稳定';
+  const bandwidthLabel =
+    typeof status.downlink === 'number' ? `${status.downlink.toFixed(1)} Mbps` : '不可用';
+  const rttLabel = typeof status.rtt === 'number' ? `${Math.round(status.rtt)} ms` : '不可用';
+  return [
+    `网络: ${qualityLabel}`,
+    `在线状态: ${status.online ? '已连接' : '已断开'}`,
+    `链路类型: ${status.effectiveType}`,
+    `带宽: ${bandwidthLabel}`,
+    `时延: ${rttLabel}`,
+    `最近更新: ${updatedAt}`,
+  ].join('\n');
+}
+
 const StatusBar: React.FC<StatusBarProps> = ({
   content,
   currentLine,
@@ -34,6 +128,9 @@ const StatusBar: React.FC<StatusBarProps> = ({
   const [showEncodingMenu, setShowEncodingMenu] = useState(false);
   const [showUpdatePanel, setShowUpdatePanel] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatusState>(() =>
+    createNetworkStatusState()
+  );
   const [deviceId, setDeviceId] = useState('');
   const [upToDate, setUpToDate] = useState(false);
   const prevCheckingRef = useRef(false);
@@ -53,6 +150,33 @@ const StatusBar: React.FC<StatusBarProps> = ({
     }
     return { lineCount: lines, charCount: chars };
   }, [content]);
+
+  useEffect(() => {
+    const updateNetworkStatus = () => {
+      setNetworkStatus(createNetworkStatusState());
+    };
+
+    const connection =
+      (
+        navigator as Navigator & {
+          connection?: EventTarget;
+          mozConnection?: EventTarget;
+          webkitConnection?: EventTarget;
+        }
+      ).connection ||
+      (navigator as Navigator & { mozConnection?: EventTarget }).mozConnection ||
+      (navigator as Navigator & { webkitConnection?: EventTarget }).webkitConnection;
+
+    window.addEventListener('online', updateNetworkStatus);
+    window.addEventListener('offline', updateNetworkStatus);
+    connection?.addEventListener?.('change', updateNetworkStatus);
+
+    return () => {
+      window.removeEventListener('online', updateNetworkStatus);
+      window.removeEventListener('offline', updateNetworkStatus);
+      connection?.removeEventListener?.('change', updateNetworkStatus);
+    };
+  }, []);
 
   useEffect(() => {
     const ipc = window.electron?.ipcRenderer;
@@ -175,6 +299,8 @@ const StatusBar: React.FC<StatusBarProps> = ({
     return null;
   }, [updateStatus]);
 
+  const networkTooltip = useMemo(() => formatNetworkTooltip(networkStatus), [networkStatus]);
+
   return (
     <div className={styles.statusBar}>
       <div className={styles.left}>
@@ -202,6 +328,21 @@ const StatusBar: React.FC<StatusBarProps> = ({
             <span className={styles.item}>{formatNumber(charCount)} 字</span>
           </>
         )}
+        <span className={styles.separator}>|</span>
+        <Tooltip content={networkTooltip} position="top">
+          <span
+            className={`${styles.item} ${styles.networkStatus} ${styles[`network${networkStatus.quality[0].toUpperCase()}${networkStatus.quality.slice(1)}`]}`}
+          >
+            <span className={styles.networkDot} />
+            <span>
+              {networkStatus.quality === 'offline'
+                ? '离线'
+                : networkStatus.quality === 'weak'
+                  ? '弱网'
+                  : '网络正常'}
+            </span>
+          </span>
+        </Tooltip>
       </div>
       <div className={styles.right}>
         {/* Inline status hints in status bar */}

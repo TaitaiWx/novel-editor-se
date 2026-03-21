@@ -10,23 +10,12 @@ interface PlotBoardInspectorProps {
   selectedBoard: PlotActBoard | null;
   aiSuggesting: boolean;
   onUpdateBoard: (updater: (prev: PlotActBoard) => PlotActBoard) => void;
-  onToggleStructureNode: (node: string) => void;
-  onMoveScene: (sceneKey: string, direction: -1 | 1) => void;
   onGenerateAI: () => void;
   onSceneAiSuggest?: (sceneKey: string) => void;
 }
 
 export const PlotBoardInspector: React.FC<PlotBoardInspectorProps> = React.memo(
-  ({
-    selectedAct,
-    selectedBoard,
-    aiSuggesting,
-    onUpdateBoard,
-    onToggleStructureNode,
-    onMoveScene,
-    onGenerateAI,
-    onSceneAiSuggest,
-  }) => {
+  ({ selectedAct, selectedBoard, aiSuggesting, onUpdateBoard, onGenerateAI, onSceneAiSuggest }) => {
     const handleSceneUpdate = useCallback(
       (sceneKey: string, partial: Partial<PlotSceneBoard>) => {
         onUpdateBoard((prev) => ({
@@ -35,6 +24,33 @@ export const PlotBoardInspector: React.FC<PlotBoardInspectorProps> = React.memo(
             s.sceneKey === sceneKey ? { ...s, ...partial } : s
           ),
         }));
+      },
+      [onUpdateBoard]
+    );
+
+    const handleToggleStructureNode = useCallback(
+      (node: string) => {
+        onUpdateBoard((prev) => ({
+          ...prev,
+          structureNodes: prev.structureNodes.includes(node)
+            ? prev.structureNodes.filter((item) => item !== node)
+            : [...prev.structureNodes, node],
+        }));
+      },
+      [onUpdateBoard]
+    );
+
+    const handleMoveScene = useCallback(
+      (sceneKey: string, direction: -1 | 1) => {
+        onUpdateBoard((prev) => {
+          const index = prev.sceneBoards.findIndex((item) => item.sceneKey === sceneKey);
+          const target = index + direction;
+          if (index < 0 || target < 0 || target >= prev.sceneBoards.length) return prev;
+          const next = [...prev.sceneBoards];
+          const [moving] = next.splice(index, 1);
+          next.splice(target, 0, moving);
+          return { ...prev, sceneBoards: next };
+        });
       },
       [onUpdateBoard]
     );
@@ -125,7 +141,7 @@ export const PlotBoardInspector: React.FC<PlotBoardInspectorProps> = React.memo(
             <button
               key={node}
               className={`${styles.structureNodeChip} ${selectedBoard.structureNodes.includes(node) ? styles.structureNodeChipActive : ''}`}
-              onClick={() => onToggleStructureNode(node)}
+              onClick={() => handleToggleStructureNode(node)}
             >
               {node}
             </button>
@@ -154,7 +170,7 @@ export const PlotBoardInspector: React.FC<PlotBoardInspectorProps> = React.memo(
                 canMoveDown={index < selectedBoard.sceneBoards.length - 1}
                 allSceneKeys={selectedBoard.sceneBoards.map((s) => s.sceneKey)}
                 onUpdate={(partial) => handleSceneUpdate(sceneBoard.sceneKey, partial)}
-                onMove={(direction) => onMoveScene(sceneBoard.sceneKey, direction)}
+                onMove={(direction) => handleMoveScene(sceneBoard.sceneKey, direction)}
                 onAiSuggest={onSceneAiSuggest}
                 draggable
               />

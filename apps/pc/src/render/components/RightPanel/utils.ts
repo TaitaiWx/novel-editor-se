@@ -571,5 +571,5 @@ export function getRoleColor(role: string): string {
   for (const key of Object.keys(ROLE_COLORS)) {
     if (role.includes(key)) return ROLE_COLORS[key];
   }
-  return '#007acc';
+  return '#b5cea8';
 }

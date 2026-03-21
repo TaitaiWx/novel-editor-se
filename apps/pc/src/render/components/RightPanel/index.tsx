@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { VscMultipleWindows } from 'react-icons/vsc';
 import styles from './styles.module.scss';
 import type { TabType, RightPanelProps } from './types';
 import { TAB_KEYS, TAB_LABELS } from './constants';
@@ -10,6 +11,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
   content,
   collapsed,
   onToggle,
+  onPopOut,
   onScrollToLine,
   onReplaceLineText,
   folderPath,
@@ -45,9 +47,16 @@ const RightPanel: React.FC<RightPanelProps> = ({
             </button>
           ))}
         </div>
-        <button className={styles.collapseButton} onClick={onToggle} title="折叠面板">
-          ▶
-        </button>
+        <div className={styles.headerActions}>
+          {onPopOut && (
+            <button className={styles.popOutButton} onClick={onPopOut} title="在新窗口中打开">
+              <VscMultipleWindows />
+            </button>
+          )}
+          <button className={styles.collapseButton} onClick={onToggle} title="折叠面板">
+            ▶
+          </button>
+        </div>
       </div>
       <div className={styles.panelContent}>
         {activeTab === 'storyline' && (

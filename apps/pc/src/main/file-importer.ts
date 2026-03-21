@@ -10,7 +10,7 @@ export interface ImportResult {
   /** 转换后的 Markdown 内容 */
   content: string;
   /** 源文件类型 */
-  sourceType: 'docx' | 'xlsx';
+  sourceType: 'docx' | 'xlsx' | 'md' | 'txt' | 'json';
 }
 
 /** 将 mammoth 输出的 HTML 转为简易 Markdown */
@@ -137,9 +137,21 @@ async function importXlsx(filePath: string): Promise<ImportResult> {
   };
 }
 
+async function importTextFile(filePath: string, sourceType: 'md' | 'txt' | 'json') {
+  const content = await readFile(filePath, 'utf-8');
+  return {
+    fileName: path.basename(filePath),
+    content,
+    sourceType,
+  } satisfies ImportResult;
+}
+
 const IMPORTERS: Record<string, (filePath: string) => Promise<ImportResult>> = {
   '.docx': importDocx,
   '.xlsx': importXlsx,
+  '.md': (filePath: string) => importTextFile(filePath, 'md'),
+  '.txt': (filePath: string) => importTextFile(filePath, 'txt'),
+  '.json': (filePath: string) => importTextFile(filePath, 'json'),
 };
 
 /** 支持的导入格式列表 */

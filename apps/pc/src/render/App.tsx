@@ -78,6 +78,7 @@ const App: React.FC = () => {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [rightPanelPoppedOut, setRightPanelPoppedOut] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [editorContent, setEditorContent] = useState('');
   const [cursorPosition, setCursorPosition] = useState<CursorPosition>({ line: 1, column: 1 });
@@ -1104,6 +1105,26 @@ const App: React.FC = () => {
     };
   }, [openFileInTab, toast]);
 
+  // 监听右侧面板独立窗口关闭 → 恢复三栏布局
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const dispose = ipc.on('right-panel-window-closed', () => {
+      setRightPanelPoppedOut(false);
+      resolvePaneLayout({ nextRightPanelCollapsed: false, preferExpanding: 'right' });
+    });
+    return () => {
+      dispose?.();
+    };
+  }, [resolvePaneLayout]);
+
+  const handlePopOutRightPanel = useCallback(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !folderPath) return;
+    void ipc.invoke('open-right-panel-window', folderPath);
+    setRightPanelPoppedOut(true);
+  }, [folderPath]);
+
   // 侧边栏 Cmd+C/V 快捷键（独立 effect，确保 clipboard 最新值始终可用）
   React.useEffect(() => {
     /** 判断当前焦点是否在文本编辑区（输入框 / CodeMirror / contenteditable） */
@@ -1500,7 +1521,7 @@ const App: React.FC = () => {
           </div>
 
           {/* 右侧拖拽把手 + 右侧信息面板 */}
-          {!focusMode && (
+          {!focusMode && !rightPanelPoppedOut && (
             <>
               {!rightPanelCollapsed && <PanelResizer onMouseDown={handleRightResizerMouseDown} />}
               <div
@@ -1515,6 +1536,7 @@ const App: React.FC = () => {
                   content={editorContent}
                   collapsed={rightPanelCollapsed}
                   onToggle={handleToggleRightPanel}
+                  onPopOut={handlePopOutRightPanel}
                   onScrollToLine={handleScrollToLine}
                   onReplaceLineText={handleReplaceLineText}
                   folderPath={folderPath}

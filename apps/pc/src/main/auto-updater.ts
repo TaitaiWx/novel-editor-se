@@ -44,8 +44,13 @@ const MIRROR_BASE_URL = 'https://dl.wayintech.net/novel-editor/latest';
 const MAX_BACKOFF_MS = 30 * 60 * 1000;
 /** 更新检查随机抖动范围（0~30 分钟），避免所有客户端同时请求 */
 const CHECK_JITTER_MS = 30 * 60 * 1000;
+const NETWORK_PROBE_TIMEOUT_MS = 4_000;
+const NETWORK_RECOVERY_INTERVAL_MS = 15_000;
+const DOWNLOAD_STALL_TIMEOUT_MS = 30_000;
 
 export type UpdateChannel = 'stable' | 'beta' | 'canary';
+type RecoveryAction = 'check' | 'download';
+type UpdateNetworkPhase = 'online' | 'recovering' | 'offline';
 
 interface RollbackTarget {
   version: string;
@@ -84,7 +89,17 @@ export interface UpdateStatus {
   rollbackAvailable: boolean;
   rollbackVersion: string | null;
   pendingVersion: string | null;
+  networkPhase: UpdateNetworkPhase;
+  networkReachable: boolean | null;
+  networkCheckedAt: number | null;
   lastError: string | null;
+}
+
+interface UpdaterConnectivityState {
+  phase: UpdateNetworkPhase;
+  reachable: boolean | null;
+  lastCheckedAt: number | null;
+  lastRecoveredAt: number | null;
 }
 
 interface GithubReleaseAsset {
@@ -114,15 +129,30 @@ const updaterStatus: UpdateStatus = {
   rollbackAvailable: false,
   rollbackVersion: null,
   pendingVersion: null,
+  networkPhase: 'online',
+  networkReachable: null,
+  networkCheckedAt: null,
   lastError: null,
 };
 let startupHealthTimer: NodeJS.Timeout | null = null;
 let scheduledUpdateTimer: NodeJS.Timeout | null = null;
+let recoveryProbeTimer: NodeJS.Timeout | null = null;
+let downloadStallTimer: NodeJS.Timeout | null = null;
 let listenersRegistered = false;
 let consecutiveCheckFailures = 0;
 let consecutiveDownloadFailures = 0;
+let recoveryProbeInFlight = false;
+let pendingRecoveryAction: RecoveryAction | null = null;
+let checkInFlight = false;
+let downloadInFlight = false;
 /** 下载失败后自动重试的上限 */
 const MAX_DOWNLOAD_RETRIES = 3;
+const connectivityState: UpdaterConnectivityState = {
+  phase: 'online',
+  reachable: null,
+  lastCheckedAt: null,
+  lastRecoveredAt: null,
+};
 
 function inferDefaultChannel(version: string): UpdateChannel {
   const lowerVersion = version.toLowerCase();
@@ -228,10 +258,128 @@ function broadcast(channel: string, payload?: unknown) {
 }
 
 function emitStatus() {
+  updaterStatus.networkPhase = connectivityState.phase;
+  updaterStatus.networkReachable = connectivityState.reachable;
+  updaterStatus.networkCheckedAt = connectivityState.lastCheckedAt;
   broadcast('update-state-changed', updaterStatus);
   if (updaterStatus.rollbackAvailable) {
     broadcast('update-rollback-available', updaterStatus);
   }
+}
+
+function clearRecoveryProbeTimer() {
+  if (recoveryProbeTimer) {
+    clearTimeout(recoveryProbeTimer);
+    recoveryProbeTimer = null;
+  }
+}
+
+function clearDownloadStallTimer() {
+  if (downloadStallTimer) {
+    clearTimeout(downloadStallTimer);
+    downloadStallTimer = null;
+  }
+}
+
+function markConnectivity(phase: UpdateNetworkPhase, reachable: boolean | null) {
+  connectivityState.phase = phase;
+  connectivityState.reachable = reachable;
+  connectivityState.lastCheckedAt = Date.now();
+  if (phase === 'online' && reachable) {
+    connectivityState.lastRecoveredAt = connectivityState.lastCheckedAt;
+  }
+  emitStatus();
+}
+
+function isLikelyNetworkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /network|net::|socket|timed out|timeout|econn|enotfound|offline|dns|reset|failed to fetch/i.test(
+    message
+  );
+}
+
+async function probeUpdateNetwork(channel: UpdateChannel): Promise<boolean> {
+  const probeUrl = `${MIRROR_UPDATE_URL}/${getChannelMetadataFile(channel)}?probe=${Date.now()}`;
+  try {
+    const response = await fetch(probeUrl, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(NETWORK_PROBE_TIMEOUT_MS),
+      cache: 'no-store',
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function armDownloadStallWatch() {
+  clearDownloadStallTimer();
+  if (!updaterStatus.availableVersion || updaterStatus.updateReady) {
+    return;
+  }
+  downloadStallTimer = setTimeout(() => {
+    if (!updaterStatus.availableVersion || updaterStatus.updateReady) {
+      return;
+    }
+    updaterStatus.lastError = '更新下载长时间无进展，等待网络恢复后继续';
+    emitStatus();
+    queueRecovery('download', '下载链路停滞');
+  }, DOWNLOAD_STALL_TIMEOUT_MS);
+}
+
+async function runRecoveryProbe() {
+  if (recoveryProbeInFlight) {
+    return;
+  }
+  recoveryProbeInFlight = true;
+  try {
+    const reachable = await probeUpdateNetwork(updaterStatus.channel);
+    markConnectivity(reachable ? 'online' : 'offline', reachable);
+    if (!reachable) {
+      recoveryProbeTimer = setTimeout(() => {
+        recoveryProbeTimer = null;
+        void runRecoveryProbe();
+      }, NETWORK_RECOVERY_INTERVAL_MS);
+      return;
+    }
+
+    clearRecoveryProbeTimer();
+    const action = pendingRecoveryAction;
+    pendingRecoveryAction = null;
+    updaterStatus.lastError = null;
+    emitStatus();
+
+    if (action === 'download' && updaterStatus.availableVersion && !updaterStatus.updateReady) {
+      void downloadUpdate();
+    } else if (action === 'check') {
+      void checkForUpdatesManually();
+    }
+  } finally {
+    recoveryProbeInFlight = false;
+  }
+}
+
+function queueRecovery(action: RecoveryAction, reason: string) {
+  pendingRecoveryAction =
+    pendingRecoveryAction === 'download' || action === 'download' ? 'download' : action;
+  updaterStatus.checking = false;
+  updaterStatus.lastError = `${reason}，网络恢复后会自动继续`;
+  markConnectivity('recovering', connectivityState.reachable);
+  if (!recoveryProbeTimer) {
+    recoveryProbeTimer = setTimeout(() => {
+      recoveryProbeTimer = null;
+      void runRecoveryProbe();
+    }, 0);
+  }
+}
+
+async function shouldRecoverFromNetwork(error: unknown): Promise<boolean> {
+  if (isLikelyNetworkError(error)) {
+    return true;
+  }
+  const reachable = await probeUpdateNetwork(updaterStatus.channel);
+  markConnectivity(reachable ? 'online' : 'offline', reachable);
+  return !reachable;
 }
 
 async function syncStatusFromUpdateInfo(updateInfo: UpdateInfo | null, channel: UpdateChannel) {
@@ -606,6 +754,10 @@ async function trackPendingLaunchState() {
 
 function handleUpdateAvailable(info: UpdateInfo) {
   consecutiveDownloadFailures = 0;
+  clearDownloadStallTimer();
+  clearRecoveryProbeTimer();
+  pendingRecoveryAction = null;
+  markConnectivity('online', true);
   void syncStatusFromUpdateInfo(info, updaterStatus.channel).then(() => {
     updaterStatus.availableVersion = info.version;
     updaterStatus.lastError = null;
@@ -615,6 +767,7 @@ function handleUpdateAvailable(info: UpdateInfo) {
 }
 
 function handleUpdateNotAvailable(info: UpdateInfo) {
+  clearDownloadStallTimer();
   void syncStatusFromUpdateInfo(info, updaterStatus.channel).then(() => {
     updaterStatus.checking = false;
     updaterStatus.availableVersion = null;
@@ -626,6 +779,10 @@ function handleUpdateNotAvailable(info: UpdateInfo) {
 function handleDownloadProgress(progress: ProgressInfo) {
   updaterStatus.checking = false;
   updaterStatus.downloadPercent = progress.percent;
+  if (progress.percent > 0) {
+    markConnectivity('online', true);
+  }
+  armDownloadStallWatch();
   broadcast('update-download-progress', progress);
   emitStatus();
 }
@@ -659,9 +816,47 @@ async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
   updaterStatus.pendingVersion = info.version;
   updaterStatus.rollbackAvailable = Boolean(state.rollbackTarget);
   updaterStatus.rollbackVersion = state.rollbackTarget?.version ?? null;
+  clearDownloadStallTimer();
+  clearRecoveryProbeTimer();
+  pendingRecoveryAction = null;
+  markConnectivity('online', true);
 
   broadcast('update-downloaded', info);
   emitStatus();
+}
+
+async function handleUpdaterError(error: Error) {
+  updaterStatus.checking = false;
+  log.error('自动更新错误:', error);
+
+  const shouldRecover = await shouldRecoverFromNetwork(error);
+  if (shouldRecover) {
+    clearDownloadStallTimer();
+    queueRecovery(
+      updaterStatus.availableVersion && !updaterStatus.updateReady ? 'download' : 'check',
+      '更新网络暂不可用'
+    );
+    return;
+  }
+
+  updaterStatus.lastError = error.message;
+  emitStatus();
+
+  if (updaterStatus.availableVersion && !updaterStatus.updateReady) {
+    consecutiveDownloadFailures++;
+    if (consecutiveDownloadFailures <= MAX_DOWNLOAD_RETRIES) {
+      const delay = Math.min(MAX_BACKOFF_MS, 60_000 * Math.pow(2, consecutiveDownloadFailures - 1));
+      const jitter = 0.75 + Math.random() * 0.5;
+      const backoffMs = Math.floor(delay * jitter);
+      log.info(
+        `下载失败，${Math.round(backoffMs / 1000)}s 后重试 ` +
+          `(${consecutiveDownloadFailures}/${MAX_DOWNLOAD_RETRIES})`
+      );
+      setTimeout(() => void downloadUpdate(), backoffMs);
+    } else {
+      log.warn(`下载连续失败 ${consecutiveDownloadFailures} 次，等待下次定时检查`);
+    }
+  }
 }
 
 function registerUpdaterListeners() {
@@ -684,30 +879,7 @@ function registerUpdaterListeners() {
     });
   });
   autoUpdater.on('error', (error) => {
-    updaterStatus.checking = false;
-    updaterStatus.lastError = error.message;
-    emitStatus();
-    log.error('自动更新错误:', error);
-
-    // 如果有待下载的更新且尚未完成，按指数退避重试下载
-    if (updaterStatus.availableVersion && !updaterStatus.updateReady) {
-      consecutiveDownloadFailures++;
-      if (consecutiveDownloadFailures <= MAX_DOWNLOAD_RETRIES) {
-        const delay = Math.min(
-          MAX_BACKOFF_MS,
-          60_000 * Math.pow(2, consecutiveDownloadFailures - 1)
-        );
-        const jitter = 0.75 + Math.random() * 0.5;
-        const backoffMs = Math.floor(delay * jitter);
-        log.info(
-          `下载失败，${Math.round(backoffMs / 1000)}s 后重试 ` +
-            `(${consecutiveDownloadFailures}/${MAX_DOWNLOAD_RETRIES})`
-        );
-        setTimeout(() => void downloadUpdate(), backoffMs);
-      } else {
-        log.warn(`下载连续失败 ${consecutiveDownloadFailures} 次，等待下次定时检查`);
-      }
-    }
+    void handleUpdaterError(error);
   });
 }
 
@@ -750,6 +922,10 @@ export async function setUpdateChannel(channel: UpdateChannel) {
 }
 
 export async function checkForUpdatesManually() {
+  if (checkInFlight) {
+    return;
+  }
+
   // Dev 模式下直接返回，不执行实际检查
   if (!app.isPackaged) {
     updaterStatus.checking = false;
@@ -761,15 +937,27 @@ export async function checkForUpdatesManually() {
   const state = await loadUpdaterState();
   configureAutoUpdater(state.channel);
 
+  const reachable = await probeUpdateNetwork(state.channel);
+  markConnectivity(reachable ? 'online' : 'offline', reachable);
+  if (!reachable) {
+    queueRecovery('check', '更新源暂不可达');
+    return;
+  }
+
   updaterStatus.checking = true;
   updaterStatus.lastError = null;
   emitStatus();
 
+  checkInFlight = true;
   try {
     const result = await autoUpdater.checkForUpdates();
     await applyUpdateCheckResult(result, state.channel);
     consecutiveCheckFailures = 0;
   } catch (error) {
+    if (await shouldRecoverFromNetwork(error)) {
+      queueRecovery('check', '检查更新时网络异常');
+      return;
+    }
     consecutiveCheckFailures += 1;
     const message = error instanceof Error ? error.message : '未知错误';
     updaterStatus.checking = false;
@@ -781,6 +969,8 @@ export async function checkForUpdatesManually() {
     const backoffMs = Math.min(60_000 * Math.pow(2, consecutiveCheckFailures - 1), MAX_BACKOFF_MS);
     log.info(`将在 ${Math.round(backoffMs / 1000)}s 后重试检查更新`);
     setTimeout(() => void checkForUpdatesManually(), backoffMs);
+  } finally {
+    checkInFlight = false;
   }
 }
 
@@ -823,13 +1013,33 @@ export async function setupAutoUpdater() {
 }
 
 export async function downloadUpdate() {
+  if (downloadInFlight) {
+    return;
+  }
+
+  const reachable = await probeUpdateNetwork(updaterStatus.channel);
+  markConnectivity(reachable ? 'online' : 'offline', reachable);
+  if (!reachable) {
+    queueRecovery('download', '下载更新前网络不可达');
+    return;
+  }
+
+  downloadInFlight = true;
   try {
+    armDownloadStallWatch();
     await autoUpdater.downloadUpdate();
   } catch (error) {
+    clearDownloadStallTimer();
+    if (await shouldRecoverFromNetwork(error)) {
+      queueRecovery('download', '下载更新时网络异常');
+      return;
+    }
     const message = error instanceof Error ? error.message : '未知错误';
     updaterStatus.lastError = `下载更新失败: ${message}`;
     emitStatus();
     log.error('下载更新失败:', error);
+  } finally {
+    downloadInFlight = false;
   }
 }
 

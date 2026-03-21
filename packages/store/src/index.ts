@@ -5,6 +5,8 @@ export {
   closeDatabase,
   novelOps,
   characterOps,
+  outlineOps,
+  worldSettingOps,
   statsOps,
   settingsOps,
   aiCacheOps,

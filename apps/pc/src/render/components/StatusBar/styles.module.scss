@@ -32,6 +32,32 @@
   }
 }
 
+.networkStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.networkDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.networkGood {
+  color: #4ec9b0;
+}
+
+.networkWeak {
+  color: #d7ba7d;
+}
+
+.networkOffline {
+  color: #f48771;
+}
+
 .clickable {
   cursor: pointer;
 

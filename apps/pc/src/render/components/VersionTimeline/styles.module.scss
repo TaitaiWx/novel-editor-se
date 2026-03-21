@@ -1,878 +1,877 @@
 // 模态框遮罩
 .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-    backdrop-filter: blur(2px);
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(2px);
 }
 
 // 模态框主体
 .modal {
-    background: #1e1e1e;
-    border: 1px solid #404040;
-    border-radius: 8px;
-    width: 480px;
-    max-width: 90vw;
-    max-height: 70vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    animation: modalIn 0.15s ease-out;
+  background: #1e1e1e;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  animation: modalIn 0.15s ease-out;
 }
 
 .previewModal {
-    width: min(1100px, 94vw);
+  width: min(1100px, 94vw);
 }
 
 @keyframes modalIn {
-    from {
-        opacity: 0;
-        transform: scale(0.96) translateY(8px);
-    }
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
 
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 // 模态框头部
 .modalHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid #2d2d2d;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #2d2d2d;
+  flex-shrink: 0;
 }
 
 .modalTitle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #d4d4d4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4d4d4;
 }
 
 .fileTypeBadge,
 .commitTypeBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    line-height: 1;
-    border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid transparent;
 }
 
 .fileTypeimage {
-    color: #79c0ff;
-    background: rgba(121, 192, 255, 0.12);
-    border-color: rgba(121, 192, 255, 0.2);
+  color: #79c0ff;
+  background: rgba(121, 192, 255, 0.12);
+  border-color: rgba(121, 192, 255, 0.2);
 }
 
 .fileTypeaudio {
-    color: #4ec9b0;
-    background: rgba(78, 201, 176, 0.12);
-    border-color: rgba(78, 201, 176, 0.2);
+  color: #4ec9b0;
+  background: rgba(78, 201, 176, 0.12);
+  border-color: rgba(78, 201, 176, 0.2);
 }
 
 .fileTypevideo {
-    color: #7ec9ff;
-    background: rgba(126, 201, 255, 0.12);
-    border-color: rgba(126, 201, 255, 0.2);
+  color: #7ec9ff;
+  background: rgba(126, 201, 255, 0.12);
+  border-color: rgba(126, 201, 255, 0.2);
 }
 
 .fileTypepdf {
-    color: #ff9b8f;
-    background: rgba(255, 120, 117, 0.12);
-    border-color: rgba(255, 120, 117, 0.2);
+  color: #ff9b8f;
+  background: rgba(255, 120, 117, 0.12);
+  border-color: rgba(255, 120, 117, 0.2);
 }
 
 .fileTypetext {
-    color: #d7ba7d;
-    background: rgba(215, 186, 125, 0.12);
-    border-color: rgba(215, 186, 125, 0.2);
+  color: #d7ba7d;
+  background: rgba(215, 186, 125, 0.12);
+  border-color: rgba(215, 186, 125, 0.2);
 }
 
 .fileTypebinary {
-    color: #b4b4b4;
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.12);
+  color: #b4b4b4;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .fileName {
-    font-weight: 400;
-    color: #888;
-    font-size: 12px;
+  font-weight: 400;
+  color: #888;
+  font-size: 12px;
 
-    &::before {
-        content: '—';
-        margin-right: 8px;
-        color: #555;
-    }
+  &::before {
+    content: '—';
+    margin-right: 8px;
+    color: #555;
+  }
 }
 
 .modalActions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .actionButton {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: rgba(86, 156, 214, 0.1);
-    border: 1px solid rgba(86, 156, 214, 0.25);
-    color: #569cd6;
-    cursor: pointer;
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-family: inherit;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(86, 156, 214, 0.1);
+  border: 1px solid rgba(86, 156, 214, 0.25);
+  color: #569cd6;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: all 0.15s;
 
-    &:disabled {
-        opacity: 0.6;
-        cursor: wait;
-    }
+  &:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
 
-    &:hover {
-        background: rgba(86, 156, 214, 0.2);
-        border-color: rgba(86, 156, 214, 0.4);
-    }
+  &:hover {
+    background: rgba(86, 156, 214, 0.2);
+    border-color: rgba(86, 156, 214, 0.4);
+  }
 }
 
 .closeButton {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    color: #888;
-    cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
-    font-size: 16px;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: all 0.15s;
 
-    &:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: #d4d4d4;
-    }
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #d4d4d4;
+  }
 }
 
 // 模态框内容区
 .modalContent {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 120px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 120px;
 
-    &::-webkit-scrollbar {
-        width: 6px;
-    }
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
 
-    &::-webkit-scrollbar-track {
-        background: transparent;
-    }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-    &::-webkit-scrollbar-thumb {
-        background: #333;
-        border-radius: 3px;
-    }
+  &::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+  }
 }
 
 .filterBar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 12px;
-    align-items: center;
-    padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .filterSearchWrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    padding: 0 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .filterIcon {
-    color: #7c7c7c;
-    font-size: 14px;
+  color: #7c7c7c;
+  font-size: 14px;
 }
 
 .filterSearchInput {
-    width: 100%;
-    height: 34px;
-    border: none;
-    outline: none;
-    background: transparent;
-    color: #d8d8d8;
-    font-size: 12px;
+  width: 100%;
+  height: 34px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #d8d8d8;
+  font-size: 12px;
 }
 
 .filterActions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .filterLabel {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: #a2a2a2;
-    font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #a2a2a2;
+  font-size: 11px;
 }
 
 .filterChip {
-    height: 30px;
-    padding: 0 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
-    color: #c8c8c8;
-    cursor: pointer;
-    font-size: 11px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #c8c8c8;
+  cursor: pointer;
+  font-size: 11px;
 }
 
 .filterChipActive {
-    border-color: rgba(86, 156, 214, 0.45);
-    background: rgba(86, 156, 214, 0.14);
-    color: #9cdcfe;
+  border-color: rgba(86, 156, 214, 0.45);
+  background: rgba(86, 156, 214, 0.14);
+  color: #9cdcfe;
 }
 
 .filterSummary {
-    color: #888;
-    font-size: 11px;
-    text-align: right;
+  color: #888;
+  font-size: 11px;
+  text-align: right;
 }
 
 .progressPanel {
-    padding: 10px 16px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(255, 255, 255, 0.02);
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .progressHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: #cfcfcf;
-    font-size: 12px;
-    margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #cfcfcf;
+  font-size: 12px;
+  margin-bottom: 8px;
 }
 
 .progressBarTrack {
-    position: relative;
-    overflow: hidden;
-    height: 8px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .progressBarFill {
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #569cd6 0%, #4ec9b0 100%);
-    transition: width 0.2s ease;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #569cd6 0%, #4ec9b0 100%);
+  transition: width 0.2s ease;
 }
 
 .progressBarIndeterminate {
-    width: 35%;
-    animation: indeterminateSlide 1.2s ease-in-out infinite;
+  width: 35%;
+  animation: indeterminateSlide 1.2s ease-in-out infinite;
 }
 
 .progressMeta {
-    margin-top: 6px;
-    color: #7f7f7f;
-    font-size: 11px;
+  margin-top: 6px;
+  color: #7f7f7f;
+  font-size: 11px;
 }
 
 @keyframes indeterminateSlide {
-    from {
-        transform: translateX(-120%);
-    }
+  from {
+    transform: translateX(-120%);
+  }
 
-    to {
-        transform: translateX(320%);
-    }
+  to {
+    transform: translateX(320%);
+  }
 }
 
 .previewPanel {
-    margin: 16px;
-    margin-bottom: 0;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    overflow: hidden;
-    background: #151515;
+  margin: 16px;
+  margin-bottom: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #151515;
 }
 
 .previewHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    padding: 12px 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .previewTitle {
-    color: #e4e4e4;
-    font-size: 13px;
-    font-weight: 600;
+  color: #e4e4e4;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .previewMeta {
-    margin-top: 4px;
-    color: #8b8b8b;
-    font-size: 11px;
+  margin-top: 4px;
+  color: #8b8b8b;
+  font-size: 11px;
 }
 
 .previewActions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .previewActionButton,
 .previewCloseButton {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: #d4d4d4;
-    cursor: pointer;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    transition: all 0.15s;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d4d4d4;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  transition: all 0.15s;
 
-    &:hover {
-        background: rgba(255, 255, 255, 0.08);
-    }
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
 }
 
 .previewActionButton {
-    color: #4ec9b0;
-    border-color: rgba(78, 201, 176, 0.35);
+  color: #4ec9b0;
+  border-color: rgba(78, 201, 176, 0.35);
 }
 
 .previewBody {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 300px;
-    max-height: 55vh;
-    padding: 16px;
-    background: #101010;
-    overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  max-height: 55vh;
+  padding: 16px;
+  background: #101010;
+  overflow: hidden;
 }
 
 .previewImage {
-    max-width: 100%;
-    max-height: 50vh;
-    object-fit: contain;
-    border-radius: 4px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
+  max-height: 50vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .imageCompareLayout {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
 }
 
 .audioCompareLayout {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
 }
 
 .videoCompareLayout {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
 }
 
 .imageComparePane {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    min-height: 320px;
-    padding: 14px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 320px;
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .audioComparePane,
 .binaryInfoCard {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-height: 220px;
-    padding: 16px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 220px;
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .imageCompareLabel {
-    align-self: flex-start;
-    color: #dcdcdc;
-    font-size: 12px;
-    font-weight: 600;
+  align-self: flex-start;
+  color: #dcdcdc;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .audioCompareLabel,
 .binaryInfoTitle {
-    color: #dcdcdc;
-    font-size: 12px;
-    font-weight: 600;
+  color: #dcdcdc;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .imageCompareMeta {
-    align-self: flex-start;
-    color: #8d8d8d;
-    font-size: 11px;
+  align-self: flex-start;
+  color: #8d8d8d;
+  font-size: 11px;
 }
 
 .audioPlayer {
-    width: 100%;
-    filter: saturate(0.92);
+  width: 100%;
+  filter: saturate(0.92);
 }
 
 .waveformCanvas {
-    width: 100%;
-    height: 144px;
-    border-radius: 8px;
-    background: #11161c;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  width: 100%;
+  height: 144px;
+  border-radius: 8px;
+  background: #11161c;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .audioMetaGrid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .videoMetaGrid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .audioMetaItem {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .videoMetaItem {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .audioMetaLabel,
 .binaryInfoLabel {
-    color: #8d8d8d;
-    font-size: 11px;
+  color: #8d8d8d;
+  font-size: 11px;
 }
 
 .videoMetaLabel {
-    color: #8d8d8d;
-    font-size: 11px;
+  color: #8d8d8d;
+  font-size: 11px;
 }
 
 .audioMetaValue,
 .binaryInfoValue {
-    color: #f0f0f0;
-    font-size: 12px;
-    word-break: break-all;
+  color: #f0f0f0;
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .videoMetaValue {
-    color: #f0f0f0;
-    font-size: 12px;
-    word-break: break-all;
+  color: #f0f0f0;
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .videoPlayer {
-    width: 100%;
-    max-height: 320px;
-    border-radius: 8px;
-    background: #090b0f;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  background: #090b0f;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .binaryInfoLayout {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
 }
 
 .binaryInfoRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .binaryInfoHint {
-    margin-top: auto;
-    color: #8b8b8b;
-    font-size: 12px;
-    line-height: 1.6;
+  margin-top: auto;
+  color: #8b8b8b;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .previewPlaceholder {
-    color: #9a9a9a;
-    font-size: 12px;
+  color: #9a9a9a;
+  font-size: 12px;
 }
 
 .pdfPreviewLayout {
-    display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
-    gap: 16px;
-    width: 100%;
-    height: 100%;
-    min-height: 50vh;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  min-height: 50vh;
 }
 
 .pdfCompareLayout {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    width: 100%;
-    min-height: 50vh;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  min-height: 50vh;
 }
 
 .pdfComparePane {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-width: 0;
-    min-height: 0;
-    padding: 14px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .pdfSidebar {
-    overflow-y: auto;
-    padding-right: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .pdfThumbButton {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    width: 100%;
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
-    color: #d4d4d4;
-    cursor: pointer;
-    text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d4d4d4;
+  cursor: pointer;
+  text-align: left;
 }
 
 .pdfThumbButtonActive {
-    border-color: rgba(86, 156, 214, 0.55);
-    background: rgba(86, 156, 214, 0.12);
+  border-color: rgba(86, 156, 214, 0.55);
+  background: rgba(86, 156, 214, 0.12);
 }
 
 .pdfThumbNumber {
-    font-size: 11px;
-    color: #bdbdbd;
+  font-size: 11px;
+  color: #bdbdbd;
 }
 
 .pdfThumbImage {
-    width: 100%;
-    border-radius: 4px;
-    background: #fff;
+  width: 100%;
+  border-radius: 4px;
+  background: #fff;
 }
 
 .pdfThumbPlaceholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 120px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.04);
-    color: #8b8b8b;
-    font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #8b8b8b;
+  font-size: 11px;
 }
 
 .pdfMainStage {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .pdfToolbar {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .pdfPageButton {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: #d4d4d4;
-    cursor: pointer;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d4d4d4;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
 
-    &:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-    }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 }
 
 .pdfPageIndicator {
-    color: #cccccc;
-    font-size: 12px;
+  color: #cccccc;
+  font-size: 12px;
 }
 
 .pdfCanvasStage {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    padding: 8px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .pdfMainImage {
-    max-width: 100%;
-    border-radius: 4px;
-    background: #fff;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 @media (max-width: 900px) {
+  .filterBar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
 
-    .filterBar {
-        grid-template-columns: 1fr;
-        align-items: stretch;
-    }
+  .filterSummary {
+    text-align: left;
+  }
 
-    .filterSummary {
-        text-align: left;
-    }
+  .imageCompareLayout,
+  .pdfCompareLayout,
+  .pdfPreviewLayout,
+  .audioCompareLayout,
+  .videoCompareLayout,
+  .binaryInfoLayout {
+    grid-template-columns: 1fr;
+  }
 
-    .imageCompareLayout,
-    .pdfCompareLayout,
-    .pdfPreviewLayout,
-    .audioCompareLayout,
-    .videoCompareLayout,
-    .binaryInfoLayout {
-        grid-template-columns: 1fr;
-    }
+  .pdfSidebar {
+    max-height: 220px;
+  }
 
-    .pdfSidebar {
-        max-height: 220px;
-    }
-
-    .audioMetaGrid {
-        grid-template-columns: 1fr;
-    }
+  .audioMetaGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .emptyState {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    padding: 32px 16px;
-    color: #888;
-    font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  color: #888;
+  font-size: 13px;
 }
 
 .emptyHint {
-    font-size: 11px;
-    color: #666;
+  font-size: 11px;
+  color: #666;
 }
 
 .loadingState {
-    padding: 32px;
-    text-align: center;
-    color: #888;
-    font-size: 13px;
+  padding: 32px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
 }
 
 .initButton {
-    background: rgba(86, 156, 214, 0.12);
-    border: 1px solid rgba(86, 156, 214, 0.3);
-    color: #569cd6;
-    cursor: pointer;
-    font-size: 12px;
-    padding: 6px 16px;
-    border-radius: 4px;
-    font-family: inherit;
-    transition: all 0.15s;
+  background: rgba(86, 156, 214, 0.12);
+  border: 1px solid rgba(86, 156, 214, 0.3);
+  color: #569cd6;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 16px;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: all 0.15s;
 
-    &:hover {
-        background: rgba(86, 156, 214, 0.2);
-        border-color: rgba(86, 156, 214, 0.5);
-    }
+  &:hover {
+    background: rgba(86, 156, 214, 0.2);
+    border-color: rgba(86, 156, 214, 0.5);
+  }
 
-    &:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 // 时间线列表
 .timeline {
-    padding: 4px 0;
+  padding: 4px 0;
 }
 
 .commitItem {
-    display: flex;
-    align-items: flex-start;
-    padding: 8px 16px;
-    cursor: pointer;
-    transition: background-color 0.1s;
-    gap: 10px;
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+  gap: 10px;
 
-    &:hover {
-        background: rgba(255, 255, 255, 0.04);
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
 
-        .commitActions {
-            opacity: 1;
-        }
+    .commitActions {
+      opacity: 1;
     }
+  }
 }
 
 .timelineDot {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex-shrink: 0;
-    color: #569cd6;
-    font-size: 14px;
-    padding-top: 2px;
-    position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  color: #569cd6;
+  font-size: 14px;
+  padding-top: 2px;
+  position: relative;
 }
 
 .timelineLine {
-    width: 1px;
-    height: 100%;
-    min-height: 16px;
-    background: #333;
-    margin-top: 2px;
+  width: 1px;
+  height: 100%;
+  min-height: 16px;
+  background: #333;
+  margin-top: 2px;
 }
 
 .commitInfo {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .commitMessageRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .commitMessage {
-    font-size: 12px;
-    color: #ccc;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  font-size: 12px;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .commitMeta {
-    display: flex;
-    gap: 8px;
-    font-size: 11px;
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
 }
 
 .commitAuthor {
-    color: #666;
+  color: #666;
 }
 
 .commitDate {
-    color: #555;
-    flex-shrink: 0;
+  color: #555;
+  flex-shrink: 0;
 }
 
 .commitActions {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    opacity: 0;
-    transition: opacity 0.15s;
-    flex-shrink: 0;
-    padding-top: 1px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  padding-top: 1px;
 }
 
 .commitActionBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    color: #666;
-    cursor: pointer;
-    padding: 3px;
-    border-radius: 3px;
-    font-size: 13px;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 3px;
+  font-size: 13px;
+  transition: all 0.15s;
 
-    &:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: #d4d4d4;
-    }
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #d4d4d4;
+  }
 }
 
 .dangerBtn {
-    &:hover {
-        background: rgba(255, 59, 48, 0.15);
-        color: #ff3b30;
-    }
+  &:hover {
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff3b30;
+  }
 }

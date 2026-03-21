@@ -78,6 +78,15 @@ contextBridge.exposeInMainWorld('electron', {
         'db-character-update',
         'db-character-reorder',
         'db-character-delete',
+        'db-outline-list-by-folder',
+        'db-outline-replace-by-folder',
+        'db-outline-clear-by-folder',
+        'db-outline-reorder-by-folder',
+        'db-world-setting-list-by-folder',
+        'db-world-setting-create-by-folder',
+        'db-world-setting-bulk-create-by-folder',
+        'db-world-setting-update',
+        'db-world-setting-delete',
         'db-stats-record',
         'db-stats-range',
         'db-stats-today',
@@ -108,6 +117,7 @@ contextBridge.exposeInMainWorld('electron', {
         'db-version-restore-file',
         // 文件导入
         'import-file',
+        'import-structured-file',
         // 文档导出
         'export-to-word',
         'export-project-to-word',
@@ -127,6 +137,7 @@ contextBridge.exposeInMainWorld('electron', {
         // AI 助手
         'save-analysis-file',
         'open-ai-assistant-window',
+        'open-right-panel-window',
         'ai-window-request-open-file',
         'ai-window-request-open-settings',
         'ai-window-apply-fix',
@@ -155,6 +166,7 @@ contextBridge.exposeInMainWorld('electron', {
         'open-file-from-ai',
         'open-settings-from-ai',
         'ai-apply-fix-request',
+        'right-panel-window-closed',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.on(channel, listener);

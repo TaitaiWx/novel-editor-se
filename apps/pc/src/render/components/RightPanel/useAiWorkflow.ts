@@ -1,10 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { LoreEntry } from './types';
-import { createLoreStorageKey } from './utils';
 import type { HistoryRecord } from './useAiHistory';
 import { preciseReplaceWithReport, formatPreciseReplaceReport } from '../../utils/preciseReplace';
 import { isLargeText } from '../../utils/chapterSplitter';
 import { getOrBuildIndex, hybridRetrieve } from '../../utils/contentRetriever';
+import { loadLoreEntriesByFolder } from './lore-data';
 
 type WorkflowKey = 'consistency' | 'lore' | 'characters' | 'plot';
 
@@ -227,9 +226,7 @@ export function useAiWorkflow({
         setContextCounts({ lore: 0, characters: 0 });
         return;
       }
-      const loreKey = createLoreStorageKey(folderPath);
-      const loreRaw = loreKey ? await ipc.invoke('db-settings-get', loreKey) : null;
-      const loreEntries = loreRaw ? (JSON.parse(loreRaw as string) as LoreEntry[]) : [];
+      const loreEntries = await loadLoreEntriesByFolder(folderPath);
       const novel = (await ipc.invoke('db-novel-get-by-folder', folderPath)) as {
         id: number;
       } | null;
@@ -466,9 +463,7 @@ export function useAiWorkflow({
       try {
         const ipc = window.electron?.ipcRenderer;
         if (!ipc) return;
-        const loreKey = createLoreStorageKey(folderPath);
-        const loreRaw = loreKey ? await ipc.invoke('db-settings-get', loreKey) : null;
-        const loreEntries = loreRaw ? (JSON.parse(loreRaw as string) as LoreEntry[]) : [];
+        const loreEntries = await loadLoreEntriesByFolder(folderPath);
         let charactersContext = '';
         if (folderPath) {
           const novel = (await ipc.invoke('db-novel-get-by-folder', folderPath)) as {

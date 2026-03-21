@@ -19,6 +19,8 @@
     "format": "prettier --write 'apps/*/src/**/*.{ts,tsx,css,scss}' 'packages/*/src/**/*.{ts,tsx,css,scss}'",
     "clean": "pnpm -r clean && rm -rf node_modules dist",
     "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "release:canary": "npm version prerelease --preid=alpha && git push origin main --follow-tags",
     "release:canary:minor": "npm version preminor --preid=alpha && git push origin main --follow-tags",
     "release:beta": "npm version prerelease --preid=beta && git push origin main --follow-tags",
@@ -32,7 +34,8 @@
     "eslint-config-prettier": "^10.0.2",
     "eslint-plugin-prettier": "^5.2.3",
     "prettier": "^3.5.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.0"
   },
   "pnpm": {
     "overrides": {

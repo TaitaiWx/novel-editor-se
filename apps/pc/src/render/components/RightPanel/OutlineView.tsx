@@ -1,35 +1,43 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { extractOutline, type OutlineNode } from '@novel-editor/basic-algorithm';
 import styles from './styles.module.scss';
 import type { OutlineEntry, OutlinePopoverAnchor } from './types';
 import { OUTLINE_POPOVER_HIDE_DELAY } from './constants';
-import { buildOutlineEntries } from './utils';
 import { useAiTitles } from './useAiTitles';
 import { useAiSummaries } from './useAiSummaries';
 import { OutlinePopover } from './OutlinePopover';
 import { OutlineEntryItem } from './OutlineEntryItem';
 import { useAiConfig } from './useAiConfig';
+import { useOutlineEntries } from './useOutlineEntries';
 
 export const OutlineView: React.FC<{
   content: string;
+  folderPath: string | null;
+  dbReady: boolean;
   onScrollToLine?: (line: number, contentKey?: string) => void;
   onReplaceLineText?: (line: number, text: string) => void;
-}> = React.memo(({ content, onScrollToLine, onReplaceLineText }) => {
+}> = React.memo(({ content, folderPath, dbReady, onScrollToLine, onReplaceLineText }) => {
   const aiConfig = useAiConfig();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [hoverAnchor, setHoverAnchor] = useState<OutlinePopoverAnchor | null>(null);
   const [visibleVersion, setVisibleVersion] = useState(0);
   const [appliedLines, setAppliedLines] = useState<Set<number>>(new Set());
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const entryNodeRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const visibleLinesRef = useRef<Set<number>>(new Set());
   const hoverTimeoutRef = useRef<number | null>(null);
-
-  const headings: OutlineNode[] = useMemo(
-    () => extractOutline(content, { enableHeuristic: false }),
-    [content]
-  );
-  const outlineEntries = useMemo(() => buildOutlineEntries(content, headings), [content, headings]);
+  const dragIndexRef = useRef<number | null>(null);
+  const {
+    outlineEntries,
+    hasPersistedOutline,
+    loading,
+    importing,
+    statusMessage,
+    importOutline,
+    rebuildFromContent,
+    clearPersisted,
+    reorderEntries,
+  } = useOutlineEntries(folderPath, content, dbReady, aiConfig.ready);
 
   const activeLine = useMemo(
     () => (activeIndex !== null ? (outlineEntries[activeIndex]?.line ?? null) : null),
@@ -76,9 +84,16 @@ export const OutlineView: React.FC<{
   const handleSelect = useCallback(
     (index: number, line: number, text: string) => {
       setActiveIndex(index);
-      onScrollToLine?.(line, text);
+      const targetEntry = outlineEntries[index];
+      if (!targetEntry) {
+        return;
+      }
+      const targetLine = targetEntry.source === 'database' ? (targetEntry.lineHint ?? 0) : line;
+      if (targetLine > 0) {
+        onScrollToLine?.(targetLine, targetEntry.anchorText || text);
+      }
     },
-    [onScrollToLine]
+    [onScrollToLine, outlineEntries]
   );
 
   const handleApplyTitle = useCallback(
@@ -89,10 +104,30 @@ export const OutlineView: React.FC<{
     [onReplaceLineText]
   );
 
+  const handleDragStart = useCallback((index: number) => {
+    dragIndexRef.current = index;
+  }, []);
+
+  const handleDragOver = useCallback((index: number) => {
+    setDragOverIndex(index);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    const from = dragIndexRef.current;
+    const to = dragOverIndex;
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+    if (from !== null && to !== null && from !== to) {
+      void reorderEntries(from, to);
+    }
+  }, [dragOverIndex, reorderEntries]);
+
   const handleEntryMouseEnter = useCallback(
     (entry: OutlineEntry, rect: DOMRect) => {
       clearHoverTimeout();
-      requestAiSummary(entry);
+      if (entry.source !== 'database') {
+        requestAiSummary(entry);
+      }
       if (summaryHoverModeByLine[entry.line] !== 'card') {
         setHoverAnchor(null);
         return;
@@ -190,6 +225,9 @@ export const OutlineView: React.FC<{
             AI {completedCount}/{needsAiCount}
           </span>
         )}
+        {hasPersistedOutline && <span className={styles.outlineImportChip}>已入库</span>}
+        {loading && <span className={styles.outlineLoadingChip}>加载中...</span>}
+        {importing && <span className={styles.outlineLoadingChip}>处理中...</span>}
         {aiConfig.loaded && !aiConfig.ready && (
           <span
             className={styles.outlineAiHintChip}
@@ -207,9 +245,35 @@ export const OutlineView: React.FC<{
           </button>
         </div>
       )}
+      <div className={styles.outlineToolbar}>
+        <button
+          className={styles.outlineActionButton}
+          onClick={importOutline}
+          disabled={!folderPath || !dbReady || importing}
+        >
+          导入大纲
+        </button>
+        <button
+          className={styles.outlineActionButton}
+          onClick={rebuildFromContent}
+          disabled={!folderPath || !dbReady || importing || !content.trim()}
+        >
+          从正文重建
+        </button>
+        {hasPersistedOutline && (
+          <button
+            className={styles.outlineSecondaryButton}
+            onClick={clearPersisted}
+            disabled={importing}
+          >
+            清空入库
+          </button>
+        )}
+      </div>
+      {statusMessage && <div className={styles.outlineImportStatus}>{statusMessage}</div>}
       {outlineEntries.map((entry, i) => (
         <OutlineEntryItem
-          key={entry.line}
+          key={entry.cacheKey}
           entry={entry}
           index={i}
           isLast={i === outlineEntries.length - 1}
@@ -217,15 +281,24 @@ export const OutlineView: React.FC<{
           aiTitle={aiTitles[entry.line]?.trim() || ''}
           aiState={aiStates[entry.line] || 'idle'}
           aiError={aiErrors[entry.line]}
-          summaryState={aiSummaryStates[entry.line] || 'idle'}
+          summaryState={
+            entry.source === 'database' ? 'idle' : aiSummaryStates[entry.line] || 'idle'
+          }
           summaryText={
-            aiSummaryStates[entry.line] === 'error'
-              ? aiSummaryErrors[entry.line]?.trim() || ''
-              : aiSummaryTexts[entry.line]?.trim() || ''
+            entry.source === 'database'
+              ? entry.summary
+              : aiSummaryStates[entry.line] === 'error'
+                ? aiSummaryErrors[entry.line]?.trim() || ''
+                : aiSummaryTexts[entry.line]?.trim() || ''
           }
           summaryError={aiSummaryErrors[entry.line]?.trim() || ''}
           isApplied={appliedLines.has(entry.line)}
           canReplaceText={!!onReplaceLineText}
+          draggable={hasPersistedOutline}
+          isDragOver={dragOverIndex === i}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
           onSelect={handleSelect}
           onRetryTitle={retryAiEntry}
           onApplyTitle={handleApplyTitle}
@@ -245,16 +318,20 @@ export const OutlineView: React.FC<{
         aiTitle={hoveredEntry ? aiTitles[hoveredEntry.line]?.trim() || '' : ''}
         summaryText={
           hoveredEntry
-            ? (aiSummaryTexts[hoveredEntry.line]?.trim()
-                ? aiSummaryTexts[hoveredEntry.line]
-                : hoveredEntry.summary) || ''
+            ? hoveredEntry.source === 'database'
+              ? hoveredEntry.summary || ''
+              : (aiSummaryTexts[hoveredEntry.line]?.trim()
+                  ? aiSummaryTexts[hoveredEntry.line]
+                  : hoveredEntry.summary) || ''
             : ''
         }
         summaryState={
           hoveredEntry
-            ? aiSummaryTexts[hoveredEntry.line]?.trim()
-              ? 'success'
-              : aiSummaryStates[hoveredEntry.line] || 'idle'
+            ? hoveredEntry.source === 'database'
+              ? 'idle'
+              : aiSummaryTexts[hoveredEntry.line]?.trim()
+                ? 'success'
+                : aiSummaryStates[hoveredEntry.line] || 'idle'
             : 'idle'
         }
         summaryError={hoveredEntry ? aiSummaryErrors[hoveredEntry.line] : undefined}

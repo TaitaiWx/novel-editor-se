@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
+import { mkdirSync, unlinkSync } from 'fs';
 import path from 'path';
 
 let db: Database.Database | null = null;
@@ -33,7 +33,33 @@ export function initDatabase(
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
-  createTables(db);
+  try {
+    createTables(db);
+  } catch (err) {
+    // 数据库文件可能损坏——关闭、删除后重建
+    console.warn('createTables failed, recreating database:', err);
+    db.close();
+    try {
+      unlinkSync(dbPath);
+    } catch {
+      /* 忽略 */
+    }
+    try {
+      unlinkSync(dbPath + '-wal');
+    } catch {
+      /* 忽略 */
+    }
+    try {
+      unlinkSync(dbPath + '-shm');
+    } catch {
+      /* 忽略 */
+    }
+    db = new Database(dbPath, nativeBinding ? { nativeBinding } : undefined);
+    currentDbPath = dbPath;
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    createTables(db);
+  }
   return db;
 }
 
@@ -113,6 +139,8 @@ function createTables(database: Database.Database): void {
       novel_id INTEGER NOT NULL,
       title TEXT NOT NULL,
       content TEXT DEFAULT '',
+      anchor_text TEXT DEFAULT '',
+      line_hint INTEGER DEFAULT NULL,
       parent_id INTEGER DEFAULT NULL,
       sort_order INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
@@ -204,6 +232,22 @@ function createTables(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_ai_cache_type
       ON ai_cache (type);
   `);
+
+  migrateTables(database);
+}
+
+function hasColumn(database: Database.Database, tableName: string, columnName: string): boolean {
+  const rows = database.pragma(`table_info(${tableName})`) as Array<{ name: string }>;
+  return rows.some((row) => row.name === columnName);
+}
+
+function migrateTables(database: Database.Database): void {
+  if (!hasColumn(database, 'outlines', 'anchor_text')) {
+    database.exec(`ALTER TABLE outlines ADD COLUMN anchor_text TEXT DEFAULT '';`);
+  }
+  if (!hasColumn(database, 'outlines', 'line_hint')) {
+    database.exec(`ALTER TABLE outlines ADD COLUMN line_hint INTEGER DEFAULT NULL;`);
+  }
 }
 
 // ========== CRUD 操作 ==========
@@ -276,10 +320,11 @@ export const characterOps = {
     id: number,
     fields: { name?: string; role?: string; description?: string; attributes?: string }
   ) {
+    const ALLOWED_COLS = new Set(['name', 'role', 'description', 'attributes']);
     const updates: string[] = [];
     const values: (string | number)[] = [];
     for (const [key, val] of Object.entries(fields)) {
-      if (val !== undefined) {
+      if (val !== undefined && ALLOWED_COLS.has(key)) {
         updates.push(`${key} = ?`);
         values.push(val);
       }
@@ -301,6 +346,139 @@ export const characterOps = {
 
   delete(id: number) {
     return getDatabase().prepare('DELETE FROM characters WHERE id = ?').run(id);
+  },
+};
+
+/** 设定资料库 */
+export const worldSettingOps = {
+  create(novelId: number, category: string, title: string, content = '', tags = '[]') {
+    return getDatabase()
+      .prepare(
+        'INSERT INTO world_settings (novel_id, category, title, content, tags) VALUES (?, ?, ?, ?, ?)'
+      )
+      .run(novelId, category, title, content, tags);
+  },
+
+  getByNovel(novelId: number) {
+    return getDatabase()
+      .prepare(
+        'SELECT * FROM world_settings WHERE novel_id = ? ORDER BY datetime(updated_at) DESC, id DESC'
+      )
+      .all(novelId);
+  },
+
+  update(
+    id: number,
+    fields: { category?: string; title?: string; content?: string; tags?: string }
+  ) {
+    const ALLOWED_COLS = new Set(['category', 'title', 'content', 'tags']);
+    const updates: string[] = [];
+    const values: (string | number)[] = [];
+    for (const [key, val] of Object.entries(fields)) {
+      if (val !== undefined && ALLOWED_COLS.has(key)) {
+        updates.push(`${key} = ?`);
+        values.push(val);
+      }
+    }
+    updates.push("updated_at = datetime('now')");
+    values.push(id);
+    return getDatabase()
+      .prepare(`UPDATE world_settings SET ${updates.join(', ')} WHERE id = ?`)
+      .run(...values);
+  },
+
+  delete(id: number) {
+    return getDatabase().prepare('DELETE FROM world_settings WHERE id = ?').run(id);
+  },
+
+  bulkCreate(
+    novelId: number,
+    entries: Array<{ category: string; title: string; content?: string; tags?: string }>
+  ) {
+    if (entries.length === 0) {
+      return { changes: 0 };
+    }
+    const stmt = getDatabase().prepare(
+      'INSERT INTO world_settings (novel_id, category, title, content, tags) VALUES (?, ?, ?, ?, ?)'
+    );
+    const transaction = getDatabase().transaction(() => {
+      for (const entry of entries) {
+        stmt.run(novelId, entry.category, entry.title, entry.content || '', entry.tags || '[]');
+      }
+    });
+    transaction();
+    return { changes: entries.length };
+  },
+};
+
+type OutlineTreeNode = {
+  title: string;
+  content?: string;
+  anchorText?: string;
+  lineHint?: number | null;
+  sortOrder?: number;
+  children?: OutlineTreeNode[];
+};
+
+/** 大纲树 */
+export const outlineOps = {
+  getByNovel(novelId: number) {
+    return getDatabase()
+      .prepare(
+        `SELECT * FROM outlines
+         WHERE novel_id = ?
+         ORDER BY COALESCE(parent_id, id), sort_order, id`
+      )
+      .all(novelId);
+  },
+
+  clearByNovel(novelId: number) {
+    return getDatabase().prepare('DELETE FROM outlines WHERE novel_id = ?').run(novelId);
+  },
+
+  reorder(ids: number[]) {
+    const database = getDatabase();
+    const stmt = database.prepare('UPDATE outlines SET sort_order = ? WHERE id = ?');
+    const transaction = database.transaction(() => {
+      ids.forEach((id, index) => stmt.run(index, id));
+    });
+    transaction();
+  },
+
+  replaceTree(novelId: number, entries: OutlineTreeNode[]) {
+    const database = getDatabase();
+    const deleteStmt = database.prepare('DELETE FROM outlines WHERE novel_id = ?');
+    const insertStmt = database.prepare(
+      'INSERT INTO outlines (novel_id, title, content, anchor_text, line_hint, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+
+    const insertNodes = (nodes: OutlineTreeNode[], parentId: number | null) => {
+      nodes.forEach((node, index) => {
+        const result = insertStmt.run(
+          novelId,
+          node.title,
+          node.content || '',
+          node.anchorText || '',
+          node.lineHint ?? null,
+          parentId,
+          node.sortOrder ?? index
+        );
+        const insertedId = Number(result.lastInsertRowid);
+        if (Array.isArray(node.children) && node.children.length > 0) {
+          insertNodes(node.children, insertedId);
+        }
+      });
+    };
+
+    const transaction = database.transaction(() => {
+      deleteStmt.run(novelId);
+      if (entries.length > 0) {
+        insertNodes(entries, null);
+      }
+    });
+
+    transaction();
+    return { changes: entries.length };
   },
 };
 

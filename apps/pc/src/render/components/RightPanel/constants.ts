@@ -66,13 +66,13 @@ export const TAB_KEYS = Object.keys(TAB_LABELS) as TabType[];
 
 export const ROLE_COLORS: Record<string, string> = {
   主角: '#4ec9b0',
-  配角: '#9cdcfe',
+  配角: '#d7ba7d',
   反派: '#f14c4c',
   导师: '#dcdcaa',
   盟友: '#c586c0',
 };
 
-export const ACT_COLORS = ['#007acc', '#4ec9b0', '#c586c0', '#dcdcaa', '#9cdcfe', '#f14c4c'];
+export const ACT_COLORS = ['#4ec9b0', '#d7ba7d', '#c586c0', '#dcdcaa', '#b5cea8', '#f14c4c'];
 
 export const LAYOUT_MODE_LABELS: Record<StorylineLayoutMode, string> = {
   board: '故事板',

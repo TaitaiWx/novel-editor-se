@@ -59,7 +59,9 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    transition: outline-color 0.15s, background-color 0.15s;
+    transition:
+      outline-color 0.15s,
+      background-color 0.15s;
 
     &.dropTarget {
       outline: 2px dashed #007acc;

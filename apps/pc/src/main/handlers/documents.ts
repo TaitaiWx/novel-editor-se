@@ -281,6 +281,38 @@ export function registerDocumentHandlers(): void {
     return { previews, errors };
   });
 
+  // Structured file import (Word/Excel/Markdown/Text/JSON → preview)
+  ipcMain.handle('import-structured-file', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '导入设定或大纲资料',
+      filters: [
+        {
+          name: '结构化文档',
+          extensions: ['docx', 'xlsx', 'md', 'txt', 'json'],
+        },
+      ],
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+
+    const previews: { fileName: string; content: string; sourcePath: string }[] = [];
+    const errors: { filePath: string; error: string }[] = [];
+
+    for (const srcPath of result.filePaths) {
+      try {
+        const { fileName, content } = await importFile(srcPath);
+        previews.push({ fileName, content, sourcePath: srcPath });
+      } catch (error) {
+        errors.push({
+          filePath: srcPath,
+          error: error instanceof Error ? error.message : '未知错误',
+        });
+      }
+    }
+
+    return { previews, errors };
+  });
+
   // Document exports
   ipcMain.handle(
     'export-to-word',

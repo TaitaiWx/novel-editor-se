@@ -178,6 +178,68 @@ export function registerAIHandlers(): void {
     return { success: true, reused: false };
   });
 
+  // ── 右侧面板独立窗口 ──────────────────────────────────────
+  ipcMain.handle('open-right-panel-window', (_event, folderPath: string) => {
+    const existing = BrowserWindow.getAllWindows().find(
+      (w) => !w.isDestroyed() && w.webContents.getURL().includes('mode=right-panel')
+    );
+    if (existing) {
+      existing.focus();
+      return { success: true, reused: true };
+    }
+
+    const mainWin = BrowserWindow.getAllWindows()[0];
+    const bounds = mainWin?.getBounds();
+
+    const panelWindow = new BrowserWindow({
+      width: 520,
+      height: 720,
+      minWidth: 380,
+      minHeight: 500,
+      x: bounds ? bounds.x + bounds.width - 540 : undefined,
+      y: bounds ? bounds.y + 40 : undefined,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: path.join(__dist_dir, 'preload.js'),
+        webSecurity: true,
+      },
+      backgroundColor: '#1e1e1e',
+      title: '故事面板',
+      autoHideMenuBar: true,
+      frame: false,
+    });
+
+    const indexPath = path.join(__dist_dir, 'index.html');
+    void panelWindow.loadFile(indexPath, {
+      query: { mode: 'right-panel', folderPath: folderPath || '' },
+    });
+
+    panelWindow.once('ready-to-show', () => {
+      panelWindow.show();
+      if (process.env.NODE_ENV === 'development') {
+        panelWindow.webContents.openDevTools();
+      }
+    });
+
+    panelWindow.on('closed', () => {
+      // 通知主窗口恢复三栏布局
+      const mw = BrowserWindow.getAllWindows().find(
+        (w) =>
+          !w.isDestroyed() &&
+          !w.webContents.getURL().includes('mode=right-panel') &&
+          !w.webContents.getURL().includes('mode=ai-assistant')
+      );
+      if (mw) {
+        mw.webContents.send('right-panel-window-closed');
+      }
+    });
+
+    panelWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+    return { success: true, reused: false };
+  });
+
   // AI 独立窗口请求主窗口打开文件
   ipcMain.handle('ai-window-request-open-file', (_event, filePath: string) => {
     const mainWin = BrowserWindow.getAllWindows().find(

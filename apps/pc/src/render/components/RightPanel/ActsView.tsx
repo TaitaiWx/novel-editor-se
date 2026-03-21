@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { extractActs, type ActNode } from '@novel-editor/basic-algorithm';
 import styles from './styles.module.scss';
-import type { PlotActBoard, PlotSceneBoard, StorylineLayoutMode } from './types';
+import type { PlotActBoard, StorylineLayoutMode } from './types';
 import { createPlotStorageKey, createActBoardKey, mergeActBoard } from './utils';
 import { LAYOUT_MODE_LABELS, LAYOUT_MODE_KEYS, ACT_COLORS } from './constants';
 import { PlotBoardInspector } from './PlotBoardInspector';
@@ -20,48 +20,23 @@ export const ActsView: React.FC<{
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const [layoutMode, setLayoutMode] = useState<StorylineLayoutMode>('board');
 
-  // ── Derived data (useMemo — single source of truth) ────────────────────────
+  // ── Derived data (single useMemo — all four values share the same deps) ────
   const acts: ActNode[] = useMemo(() => extractActs(content), [content]);
 
-  const selectedActIndex = useMemo(
-    () => (activeAct !== null ? activeAct : acts.length > 0 ? 0 : null),
-    [activeAct, acts.length]
-  );
+  const { selectedActIndex, selectedAct, selectedBoard } = useMemo(() => {
+    const actIndex = activeAct !== null ? activeAct : acts.length > 0 ? 0 : null;
+    const act = actIndex !== null ? acts[actIndex] || null : null;
+    const boardKey = act && actIndex !== null ? createActBoardKey(act, actIndex) : null;
+    const board =
+      act && actIndex !== null
+        ? mergeActBoard(act, actIndex, boardKey ? plotBoards[boardKey] : undefined)
+        : null;
+    return { selectedActIndex: actIndex, selectedAct: act, selectedBoard: board };
+  }, [activeAct, acts, plotBoards]);
 
-  const selectedAct = useMemo(
-    () => (selectedActIndex !== null ? acts[selectedActIndex] || null : null),
-    [selectedActIndex, acts]
-  );
-
-  const selectedBoardKey = useMemo(
-    () =>
-      selectedAct && selectedActIndex !== null
-        ? createActBoardKey(selectedAct, selectedActIndex)
-        : null,
-    [selectedAct, selectedActIndex]
-  );
-
-  const selectedBoard = useMemo(
-    () =>
-      selectedAct && selectedActIndex !== null
-        ? mergeActBoard(
-            selectedAct,
-            selectedActIndex,
-            selectedBoardKey ? plotBoards[selectedBoardKey] : undefined
-          )
-        : null,
-    [selectedAct, selectedActIndex, selectedBoardKey, plotBoards]
-  );
-
-  // ── Refs (stable closure access for async callbacks) ───────────────────────
-  const selectedActRef = useRef(selectedAct);
-  selectedActRef.current = selectedAct;
-  const selectedActIndexRef = useRef(selectedActIndex);
-  selectedActIndexRef.current = selectedActIndex;
-  const plotBoardsRef = useRef(plotBoards);
-  plotBoardsRef.current = plotBoards;
-  const selectedBoardRef = useRef(selectedBoard);
-  selectedBoardRef.current = selectedBoard;
+  // ── Single ref for async callback access ───────────────────────────────────
+  const latestRef = useRef({ selectedAct, selectedActIndex, plotBoards, selectedBoard });
+  latestRef.current = { selectedAct, selectedActIndex, plotBoards, selectedBoard };
 
   // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -118,56 +93,20 @@ export const ActsView: React.FC<{
 
   const updateSelectedBoard = useCallback(
     async (updater: (prev: PlotActBoard) => PlotActBoard) => {
-      const act = selectedActRef.current;
-      const actIndex = selectedActIndexRef.current;
+      const {
+        selectedAct: act,
+        selectedActIndex: actIndex,
+        plotBoards: boards,
+      } = latestRef.current;
       if (!act || actIndex === null) return;
       const boardKey = createActBoardKey(act, actIndex);
-      const currentBoard = mergeActBoard(act, actIndex, plotBoardsRef.current[boardKey]);
+      const currentBoard = mergeActBoard(act, actIndex, boards[boardKey]);
       const nextBoard = updater(currentBoard);
-      const nextBoards = { ...plotBoardsRef.current, [boardKey]: nextBoard };
+      const nextBoards = { ...boards, [boardKey]: nextBoard };
       setPlotBoards(nextBoards);
       await persistPlotBoards(nextBoards);
     },
     [persistPlotBoards]
-  );
-
-  const handleSceneUpdate = useCallback(
-    (sceneKey: string, partial: Partial<PlotSceneBoard>) => {
-      void updateSelectedBoard((prev) => ({
-        ...prev,
-        sceneBoards: prev.sceneBoards.map((s) =>
-          s.sceneKey === sceneKey ? { ...s, ...partial } : s
-        ),
-      }));
-    },
-    [updateSelectedBoard]
-  );
-
-  const handleToggleStructureNode = useCallback(
-    (node: string) => {
-      void updateSelectedBoard((prev) => ({
-        ...prev,
-        structureNodes: prev.structureNodes.includes(node)
-          ? prev.structureNodes.filter((item) => item !== node)
-          : [...prev.structureNodes, node],
-      }));
-    },
-    [updateSelectedBoard]
-  );
-
-  const handleMoveScene = useCallback(
-    (sceneKey: string, direction: -1 | 1) => {
-      void updateSelectedBoard((prev) => {
-        const index = prev.sceneBoards.findIndex((item) => item.sceneKey === sceneKey);
-        const target = index + direction;
-        if (index < 0 || target < 0 || target >= prev.sceneBoards.length) return prev;
-        const next = [...prev.sceneBoards];
-        const [moving] = next.splice(index, 1);
-        next.splice(target, 0, moving);
-        return { ...prev, sceneBoards: next };
-      });
-    },
-    [updateSelectedBoard]
   );
 
   const handleSceneDragReorder = useCallback(
@@ -186,8 +125,7 @@ export const ActsView: React.FC<{
   );
 
   const handleGenerateAI = useCallback(async () => {
-    const act = selectedActRef.current;
-    const board = selectedBoardRef.current;
+    const { selectedAct: act, selectedBoard: board } = latestRef.current;
     if (!act || !board) return;
     const ipc = window.electron?.ipcRenderer;
     if (!ipc) return;
@@ -223,8 +161,7 @@ export const ActsView: React.FC<{
 
   const handleSceneAiSuggest = useCallback(
     async (sceneKey: string) => {
-      const act = selectedActRef.current;
-      const board = selectedBoardRef.current;
+      const { selectedAct: act, selectedBoard: board } = latestRef.current;
       if (!act || !board) return;
       const scene = board.sceneBoards.find((s) => s.sceneKey === sceneKey);
       if (!scene) return;
@@ -243,15 +180,20 @@ export const ActsView: React.FC<{
       })) as { ok: boolean; text?: string; error?: string };
 
       if (response.ok && response.text) {
-        handleSceneUpdate(sceneKey, {
-          outcome: scene.outcome || response.text.slice(0, 100),
-        });
+        void updateSelectedBoard((prev) => ({
+          ...prev,
+          sceneBoards: prev.sceneBoards.map((s) =>
+            s.sceneKey === sceneKey
+              ? { ...s, outcome: s.outcome || response.text!.slice(0, 100) }
+              : s
+          ),
+        }));
       }
     },
-    [handleSceneUpdate]
+    [updateSelectedBoard]
   );
 
-  // ── Early returns (ALL hooks are above — React Rules of Hooks satisfied) ──
+  // ── Early returns (ALL hooks above — React Rules of Hooks satisfied) ───────
   if (!content) {
     return <div className={styles.emptyHint}>打开文件后查看幕剧结构</div>;
   }
@@ -275,10 +217,8 @@ export const ActsView: React.FC<{
         return (
           <SwimlaneTimeline
             board={selectedBoard}
-            actIndex={selectedActIndex}
             activeScene={activeScene}
             onSceneClick={handleSceneClickByKey}
-            onSceneUpdate={handleSceneUpdate}
             onSceneDragReorder={handleSceneDragReorder}
           />
         );
@@ -288,7 +228,6 @@ export const ActsView: React.FC<{
             board={selectedBoard}
             activeScene={activeScene}
             onSceneClick={handleSceneClickByKey}
-            onSceneUpdate={handleSceneUpdate}
           />
         );
       case 'board':
@@ -299,8 +238,6 @@ export const ActsView: React.FC<{
             selectedBoard={selectedBoard}
             aiSuggesting={aiSuggesting}
             onUpdateBoard={updateSelectedBoard}
-            onToggleStructureNode={handleToggleStructureNode}
-            onMoveScene={handleMoveScene}
             onGenerateAI={handleGenerateAI}
             onSceneAiSuggest={handleSceneAiSuggest}
           />
@@ -318,9 +255,6 @@ export const ActsView: React.FC<{
             className={`${styles.layoutModeButton} ${layoutMode === mode ? styles.layoutModeActive : ''}`}
             onClick={() => setLayoutMode(mode)}
           >
-            {mode === 'board' && '▦'}
-            {mode === 'timeline' && '≡'}
-            {mode === 'causal' && '⟠'}
             <span>{LAYOUT_MODE_LABELS[mode]}</span>
           </button>
         ))}

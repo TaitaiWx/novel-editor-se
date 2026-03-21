@@ -5,13 +5,11 @@ import type {
   CharacterRelation,
   RelationTone,
   CharacterCamp,
-  LoreEntry,
   PersistedAISettings,
   CharacterGraphAIResult,
 } from './types';
 import { SETTINGS_STORAGE_KEY, RELATION_TONE_LABELS } from './constants';
 import {
-  createLoreStorageKey,
   createRelationStorageKey,
   createGraphLayoutStorageKey,
   normalizePersonName,
@@ -26,6 +24,7 @@ import {
   inferCharacterCamp,
   inferRelationStage,
 } from './utils';
+import { loadLoreEntriesByFolder } from './lore-data';
 import { CharacterCard } from './CharacterCard';
 import { CharacterGraphPanel } from './CharacterGraphPanel';
 import { VerticalSplit } from './VerticalSplit';
@@ -460,9 +459,7 @@ export const CharactersView: React.FC<{ folderPath: string | null; content: stri
         const contextTokens = settings.ai?.contextTokens || 128000;
         const approxChunkChars = Math.max(4000, Math.min(12000, Math.floor(contextTokens * 0.08)));
         const chunks = splitTextIntoChunks(content, approxChunkChars).slice(0, 12);
-        const loreKey = createLoreStorageKey(folderPath);
-        const loreRaw = loreKey ? await ipc.invoke('db-settings-get', loreKey) : null;
-        const loreEntries = loreRaw ? (JSON.parse(loreRaw as string) as LoreEntry[]) : [];
+        const loreEntries = await loadLoreEntriesByFolder(folderPath);
         const chunkResults: CharacterGraphAIResult[] = [];
 
         for (let index = 0; index < chunks.length; index += 1) {

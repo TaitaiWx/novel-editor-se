@@ -20,6 +20,28 @@ export interface UpdateStatus {
   lastError: string | null;
 }
 
+export interface PersistedOutlineRow {
+  id: number;
+  novel_id: number;
+  title: string;
+  content: string;
+  anchor_text: string;
+  line_hint: number | null;
+  parent_id: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersistedOutlineNodeInput {
+  title: string;
+  content?: string;
+  anchorText?: string;
+  lineHint?: number | null;
+  sortOrder?: number;
+  children?: PersistedOutlineNodeInput[];
+}
+
 export interface ElectronAPI {
   getLastDroppedPaths(): string[];
   ipcRenderer: {
@@ -62,6 +84,58 @@ export interface ElectronAPI {
     invoke(channel: 'update-install'): Promise<void>;
     invoke(channel: 'update-set-channel', updateChannel: UpdateChannel): Promise<UpdateStatus>;
     invoke(channel: 'update-rollback'): Promise<{ version: string; installerPath: string }>;
+    invoke(
+      channel: 'db-outline-list-by-folder',
+      folderPath: string
+    ): Promise<PersistedOutlineRow[]>;
+    invoke(
+      channel: 'db-outline-replace-by-folder',
+      folderPath: string,
+      entries: PersistedOutlineNodeInput[]
+    ): Promise<{ changes: number }>;
+    invoke(channel: 'db-outline-clear-by-folder', folderPath: string): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-outline-reorder-by-folder',
+      folderPath: string,
+      ids: number[]
+    ): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-world-setting-list-by-folder',
+      folderPath: string
+    ): Promise<
+      Array<{
+        id: number;
+        category: string;
+        title: string;
+        content: string;
+        tags: string;
+        created_at: string;
+        updated_at: string;
+      }>
+    >;
+    invoke(
+      channel: 'db-world-setting-create-by-folder',
+      folderPath: string,
+      category: string,
+      title: string,
+      content?: string,
+      tags?: string
+    ): Promise<unknown>;
+    invoke(
+      channel: 'db-world-setting-bulk-create-by-folder',
+      folderPath: string,
+      entries: Array<{ category: string; title: string; content?: string; tags?: string }>
+    ): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-world-setting-update',
+      id: number,
+      fields: { category?: string; title?: string; content?: string; tags?: string }
+    ): Promise<unknown>;
+    invoke(channel: 'db-world-setting-delete', id: number): Promise<unknown>;
+    invoke(channel: 'import-structured-file'): Promise<{
+      previews: Array<{ fileName: string; content: string; sourcePath: string }>;
+      errors: Array<{ filePath: string; error: string }>;
+    } | null>;
     invoke(
       channel: 'paste-files',
       sourcePaths: string[],

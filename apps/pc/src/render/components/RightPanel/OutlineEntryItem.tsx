@@ -16,6 +16,11 @@ interface OutlineEntryItemProps {
   summaryError?: string;
   isApplied: boolean;
   canReplaceText: boolean;
+  draggable?: boolean;
+  isDragOver?: boolean;
+  onDragStart?: (index: number) => void;
+  onDragOver?: (index: number) => void;
+  onDragEnd?: () => void;
   onSelect: (index: number, line: number, text: string) => void;
   onRetryTitle: (entry: OutlineEntry) => void;
   onApplyTitle: (line: number, title: string) => void;
@@ -39,6 +44,11 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
     summaryError,
     isApplied,
     canReplaceText,
+    draggable,
+    isDragOver,
+    onDragStart,
+    onDragOver,
+    onDragEnd,
     onSelect,
     onRetryTitle,
     onApplyTitle,
@@ -59,7 +69,27 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
 
     return (
       <div
-        className={`${styles.outlineNode} ${isActive ? styles.outlineNodeActive : ''}`}
+        className={`${styles.outlineNode} ${isActive ? styles.outlineNodeActive : ''} ${isDragOver ? styles.outlineNodeDragOver : ''}`}
+        draggable={draggable}
+        onDragStart={(e) => {
+          if (!draggable) return;
+          e.dataTransfer.effectAllowed = 'move';
+          onDragStart?.(index);
+        }}
+        onDragOver={(e) => {
+          if (!draggable) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          onDragOver?.(index);
+        }}
+        onDragEnd={() => {
+          if (!draggable) return;
+          onDragEnd?.();
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          onDragEnd?.();
+        }}
         onClick={() => onSelect(index, entry.line, entry.text)}
         onMouseEnter={(event) => {
           onMouseEnter(entry, event.currentTarget.getBoundingClientRect());

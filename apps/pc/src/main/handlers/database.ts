@@ -12,6 +12,8 @@ import {
   closeDatabase,
   novelOps,
   characterOps,
+  outlineOps,
+  worldSettingOps,
   statsOps,
   settingsOps,
   aiCacheOps,
@@ -20,6 +22,15 @@ import {
   type ExportData,
 } from '@novel-editor/store';
 import { getNativeBinding } from '../native-binding';
+
+type OutlineTreeInput = {
+  title: string;
+  content?: string;
+  anchorText?: string;
+  lineHint?: number | null;
+  sortOrder?: number;
+  children?: OutlineTreeInput[];
+};
 
 export function registerDatabaseHandlers(): void {
   // ─── Init / Close ──────────────────────────────────────────────────────────
@@ -85,6 +96,85 @@ export function registerDatabaseHandlers(): void {
   );
   ipcMain.handle('db-character-reorder', (_event, ids: number[]) => characterOps.reorder(ids));
   ipcMain.handle('db-character-delete', (_event, id: number) => characterOps.delete(id));
+
+  // ─── Outline CRUD ─────────────────────────────────────────────────────────
+
+  ipcMain.handle('db-outline-list-by-folder', (_event, folderPath: string) => {
+    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+    if (!novel) return [];
+    return outlineOps.getByNovel(novel.id);
+  });
+
+  ipcMain.handle(
+    'db-outline-replace-by-folder',
+    (_event, folderPath: string, entries: OutlineTreeInput[]) => {
+      const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+      if (!novel) {
+        throw new Error('项目不存在，无法写入大纲');
+      }
+      return outlineOps.replaceTree(novel.id, entries);
+    }
+  );
+
+  ipcMain.handle('db-outline-clear-by-folder', (_event, folderPath: string) => {
+    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+    if (!novel) return { changes: 0 };
+    return outlineOps.clearByNovel(novel.id);
+  });
+
+  ipcMain.handle('db-outline-reorder-by-folder', (_event, folderPath: string, ids: number[]) => {
+    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+    if (!novel) {
+      throw new Error('项目不存在，无法排序大纲');
+    }
+    outlineOps.reorder(ids);
+    return { changes: ids.length };
+  });
+
+  // ─── World Settings CRUD ──────────────────────────────────────────────────
+
+  ipcMain.handle('db-world-setting-list-by-folder', (_event, folderPath: string) => {
+    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+    if (!novel) return [];
+    return worldSettingOps.getByNovel(novel.id);
+  });
+
+  ipcMain.handle(
+    'db-world-setting-create-by-folder',
+    (_event, folderPath: string, category: string, title: string, content = '', tags = '[]') => {
+      const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+      if (!novel) {
+        throw new Error('项目不存在，无法创建设定条目');
+      }
+      return worldSettingOps.create(novel.id, category, title, content, tags);
+    }
+  );
+
+  ipcMain.handle(
+    'db-world-setting-bulk-create-by-folder',
+    (
+      _event,
+      folderPath: string,
+      entries: Array<{ category: string; title: string; content?: string; tags?: string }>
+    ) => {
+      const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+      if (!novel) {
+        throw new Error('项目不存在，无法导入设定条目');
+      }
+      return worldSettingOps.bulkCreate(novel.id, entries);
+    }
+  );
+
+  ipcMain.handle(
+    'db-world-setting-update',
+    (
+      _event,
+      id: number,
+      fields: { category?: string; title?: string; content?: string; tags?: string }
+    ) => worldSettingOps.update(id, fields)
+  );
+
+  ipcMain.handle('db-world-setting-delete', (_event, id: number) => worldSettingOps.delete(id));
 
   // ─── Writing Stats ────────────────────────────────────────────────────────
 

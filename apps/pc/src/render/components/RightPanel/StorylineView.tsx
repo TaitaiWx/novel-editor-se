@@ -34,6 +34,8 @@ export const StorylineView: React.FC<{
         {viewMode === 'outline' ? (
           <OutlineView
             content={content}
+            folderPath={folderPath}
+            dbReady={dbReady}
             onScrollToLine={onScrollToLine}
             onReplaceLineText={onReplaceLineText}
           />

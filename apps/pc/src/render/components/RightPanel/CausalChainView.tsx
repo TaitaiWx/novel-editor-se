@@ -7,7 +7,6 @@ interface CausalChainViewProps {
   board: PlotActBoard;
   activeScene: string | null;
   onSceneClick: (sceneKey: string) => void;
-  onSceneUpdate: (sceneKey: string, partial: Partial<PlotSceneBoard>) => void;
 }
 
 interface NodePosition {
@@ -24,7 +23,7 @@ const GAP_Y = 40;
 const PADDING = 24;
 
 export const CausalChainView: React.FC<CausalChainViewProps> = React.memo(
-  ({ board, activeScene, onSceneClick, onSceneUpdate: _onSceneUpdate }) => {
+  ({ board, activeScene, onSceneClick }) => {
     const canvasRef = useRef<HTMLDivElement>(null);
 
     // Layout nodes as a DAG (directed acyclic graph)

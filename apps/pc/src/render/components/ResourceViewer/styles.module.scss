@@ -1,310 +1,308 @@
 .resourceViewer {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: #1e1e1e;
-    color: #d4d4d4;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #d4d4d4;
 }
 
 .fileHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 10px 14px;
-    border-bottom: 1px solid #2d2d2d;
-    background: #202020;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #2d2d2d;
+  background: #202020;
 }
 
 .fileInfo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-    flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .fileName {
-    color: #e7e7e7;
-    font-size: 13px;
-    font-weight: 600;
+  color: #e7e7e7;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .languageBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid rgba(121, 192, 255, 0.22);
-    background: rgba(121, 192, 255, 0.12);
-    color: #79c0ff;
-    font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(121, 192, 255, 0.22);
+  background: rgba(121, 192, 255, 0.12);
+  color: #79c0ff;
+  font-size: 11px;
 }
 
 .fileMeta {
-    color: #8d8d8d;
-    font-size: 11px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  color: #8d8d8d;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fileActions {
-    flex-shrink: 0;
+  flex-shrink: 0;
 }
 
 .previewContainer {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    padding: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background:
-        radial-gradient(circle at top left, rgba(86, 156, 214, 0.08), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(78, 201, 176, 0.06), transparent 24%),
-        #161616;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top left, rgba(86, 156, 214, 0.08), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(78, 201, 176, 0.06), transparent 24%), #161616;
 }
 
 .previewImage {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    border-radius: 8px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-    background: #fff;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  background: #fff;
 }
 
 .previewVideo {
-    width: min(100%, 1100px);
-    max-height: min(72vh, 760px);
-    border-radius: 10px;
-    background: #0d0d0d;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.38);
+  width: min(100%, 1100px);
+  max-height: min(72vh, 760px);
+  border-radius: 10px;
+  background: #0d0d0d;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.38);
 }
 
 .mediaPanel {
-    width: min(100%, 1080px);
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  width: min(100%, 1080px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .audioPlayer {
-    width: 100%;
+  width: 100%;
 }
 
 .metaGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
 
 .metaItem {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 12px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .metaLabel {
-    color: #8d8d8d;
-    font-size: 11px;
+  color: #8d8d8d;
+  font-size: 11px;
 }
 
 .metaValue {
-    color: #f0f0f0;
-    font-size: 12px;
-    word-break: break-word;
+  color: #f0f0f0;
+  font-size: 12px;
+  word-break: break-word;
 }
 
 .previewPlaceholder {
-    color: #9a9a9a;
-    font-size: 12px;
+  color: #9a9a9a;
+  font-size: 12px;
 }
 
 .pdfPreviewLayout {
-    display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
-    gap: 16px;
-    width: min(100%, 1200px);
-    height: 100%;
-    min-height: 56vh;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+  width: min(100%, 1200px);
+  height: 100%;
+  min-height: 56vh;
 }
 
 .pdfSidebar {
-    overflow-y: auto;
-    padding-right: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .pdfThumbButton {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    width: 100%;
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
-    color: #d4d4d4;
-    cursor: pointer;
-    text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d4d4d4;
+  cursor: pointer;
+  text-align: left;
 }
 
 .pdfThumbButtonActive {
-    border-color: rgba(86, 156, 214, 0.55);
-    background: rgba(86, 156, 214, 0.12);
+  border-color: rgba(86, 156, 214, 0.55);
+  background: rgba(86, 156, 214, 0.12);
 }
 
 .pdfThumbNumber {
-    font-size: 11px;
-    color: #bdbdbd;
+  font-size: 11px;
+  color: #bdbdbd;
 }
 
 .pdfThumbImage {
-    width: 100%;
-    border-radius: 4px;
-    background: #fff;
+  width: 100%;
+  border-radius: 4px;
+  background: #fff;
 }
 
 .pdfThumbPlaceholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 120px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.04);
-    color: #8b8b8b;
-    font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #8b8b8b;
+  font-size: 11px;
 }
 
 .pdfMainStage {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .pdfToolbar {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .pdfPageButton {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: #d4d4d4;
-    cursor: pointer;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d4d4d4;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
 
-    &:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-    }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 }
 
 .pdfPageIndicator {
-    color: #cccccc;
-    font-size: 12px;
+  color: #cccccc;
+  font-size: 12px;
 }
 
 .pdfCanvasStage {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    padding: 8px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .pdfMainImage {
-    max-width: 100%;
-    border-radius: 4px;
-    background: #fff;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .binaryContentLayout {
-    flex: 1;
-    min-height: 0;
-    display: grid;
-    grid-template-columns: 280px minmax(0, 1fr);
-    gap: 16px;
-    padding: 16px;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
 }
 
 .binaryMetaPanel,
 .binaryTextPanel {
-    min-height: 0;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .binaryMetaPanel {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
 }
 
 .binaryHint {
-    margin-top: auto;
-    color: #8b8b8b;
-    font-size: 12px;
-    line-height: 1.65;
+  margin-top: auto;
+  color: #8b8b8b;
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .binaryTextPanel {
-    overflow: auto;
-    position: relative;
+  overflow: auto;
+  position: relative;
 }
 
 .binaryNotice {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding: 10px 14px;
-    background: rgba(86, 156, 214, 0.14);
-    border-bottom: 1px solid rgba(86, 156, 214, 0.24);
-    color: #8cc8f7;
-    font-size: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 14px;
+  background: rgba(86, 156, 214, 0.14);
+  border-bottom: 1px solid rgba(86, 156, 214, 0.24);
+  color: #8cc8f7;
+  font-size: 12px;
 }
 
 .binaryText {
-    margin: 0;
-    padding: 14px;
-    color: #d4d4d4;
-    font-size: 12px;
-    line-height: 1.7;
-    white-space: pre-wrap;
-    word-break: break-all;
-    font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  margin: 0;
+  padding: 14px;
+  color: #d4d4d4;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
 @media (max-width: 900px) {
+  .pdfPreviewLayout,
+  .binaryContentLayout {
+    grid-template-columns: 1fr;
+  }
 
-    .pdfPreviewLayout,
-    .binaryContentLayout {
-        grid-template-columns: 1fr;
-    }
-
-    .pdfSidebar {
-        max-height: 220px;
-    }
+  .pdfSidebar {
+    max-height: 220px;
+  }
 }

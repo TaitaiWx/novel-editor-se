@@ -128,10 +128,12 @@
 
   :global(.cm-line.cm-transient-highlight) {
     animation: cmTransientLineFlash 1.5s ease-out 1;
-    background: linear-gradient(90deg,
-        rgba(86, 156, 214, 0.38) 0%,
-        rgba(86, 156, 214, 0.22) 45%,
-        rgba(86, 156, 214, 0.08) 100%);
+    background: linear-gradient(
+      90deg,
+      rgba(86, 156, 214, 0.38) 0%,
+      rgba(86, 156, 214, 0.22) 45%,
+      rgba(86, 156, 214, 0.08) 100%
+    );
     border-radius: 3px;
   }
 
@@ -178,8 +180,8 @@
 }
 
 .focusModeEditor {
-  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.02) 0%, transparent 62%),
-    #111315;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.02) 0%, transparent 62%), #111315;
 
   .editorContainer {
     padding: 0 24px;
