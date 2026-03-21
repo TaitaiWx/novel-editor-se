@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       build: {
         outDir: './dist',
         emptyOutDir: false,
+        // Preload 不清空 dist，main 已经清过了
         lib: {
           entry: resolve(__dirname, 'src/main/preload.ts'),
           formats: ['cjs'],
@@ -98,6 +99,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: './dist',
       emptyOutDir: false,
+      // Renderer 不清空 dist（main 已经清过了），避免删除 main.mjs 和 preload.js
       sourcemap: mode === 'development',
       minify: mode === 'production',
       rollupOptions: {

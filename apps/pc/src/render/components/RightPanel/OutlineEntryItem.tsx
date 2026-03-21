@@ -1,4 +1,5 @@
 import React from 'react';
+import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 import type { OutlineEntry, OutlineAiState, OutlineSummaryAiState } from './types';
 
@@ -12,9 +13,10 @@ interface OutlineEntryItemProps {
   aiError: string | undefined;
   summaryState: OutlineSummaryAiState;
   summaryText: string;
+  summaryError?: string;
   isApplied: boolean;
   canReplaceText: boolean;
-  onSelect: (index: number, line: number) => void;
+  onSelect: (index: number, line: number, text: string) => void;
   onRetryTitle: (entry: OutlineEntry) => void;
   onApplyTitle: (line: number, title: string) => void;
   onRefreshSummary: (entry: OutlineEntry) => void;
@@ -34,6 +36,7 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
     aiError,
     summaryState,
     summaryText,
+    summaryError,
     isApplied,
     canReplaceText,
     onSelect,
@@ -50,19 +53,18 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
     const isAiCompleted = state === 'success';
     const isAiLoading = state === 'loading';
     const isAiFailed = state === 'error';
+    const inlineSummaryText =
+      summaryState === 'success' && summaryText ? summaryText : entry.summary;
+    const hasInlineSummary = !!inlineSummaryText?.trim();
 
     return (
       <div
         className={`${styles.outlineNode} ${isActive ? styles.outlineNodeActive : ''}`}
-        onClick={() => onSelect(index, entry.line)}
+        onClick={() => onSelect(index, entry.line, entry.text)}
         onMouseEnter={(event) => {
-          if (isAiFailed) return;
           onMouseEnter(entry, event.currentTarget.getBoundingClientRect());
         }}
-        onMouseLeave={() => {
-          if (isAiFailed) return;
-          onMouseLeave();
-        }}
+        onMouseLeave={onMouseLeave}
       >
         <div
           className={styles.outlineNodeContent}
@@ -83,9 +85,9 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
               {displayText}
             </span>
             {entry.needsAiTitle && state === 'error' && (
-              <span className={styles.outlineErrorMessage} title={aiError || ''}>
-                {aiError || '补全失败'}
-              </span>
+              <Tooltip content={aiError || 'AI 标题补全失败'} position="top">
+                <span className={styles.outlineErrorMessage}>标题失败</span>
+              </Tooltip>
             )}
           </div>
 
@@ -122,16 +124,24 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
           </span>
         </div>
 
-        {/* Inline AI summary */}
-        {summaryState === 'loading' && (
-          <div className={styles.outlineInlineSummary} style={{ paddingLeft: `${indent + 28}px` }}>
+        <div className={styles.outlineInlineSummary} style={{ paddingLeft: `${indent + 28}px` }}>
+          {summaryState === 'success' && summaryText ? (
+            <>
+              <span className={styles.outlinePopoverAiBadge}>AI 生成</span>
+              <span className={styles.outlineInlineSummaryText}>{summaryText}</span>
+            </>
+          ) : summaryState === 'loading' ? (
             <span className={styles.outlineInlineSummaryLoading}>摘要生成中...</span>
-          </div>
-        )}
-        {summaryState === 'success' && summaryText && (
-          <div className={styles.outlineInlineSummary} style={{ paddingLeft: `${indent + 28}px` }}>
-            <span className={styles.outlinePopoverAiBadge}>AI 生成</span>
-            <span className={styles.outlineInlineSummaryText}>{summaryText}</span>
+          ) : summaryState === 'error' ? (
+            <Tooltip content={summaryError || summaryText || '摘要生成失败'} position="top">
+              <span className={styles.outlineInlineSummaryError}>摘要失败</span>
+            </Tooltip>
+          ) : hasInlineSummary ? (
+            <span className={styles.outlineInlineSummaryText}>{inlineSummaryText}</span>
+          ) : (
+            <span className={styles.outlineInlineSummaryMuted}>暂无摘要</span>
+          )}
+          {(summaryState === 'success' || summaryState === 'error') && (
             <button
               className={styles.outlineInlineRefreshBtn}
               onClick={(event) => {
@@ -153,8 +163,8 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
                 <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
               </svg>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }

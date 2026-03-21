@@ -12,7 +12,7 @@ import { useAiConfig } from './useAiConfig';
 
 export const OutlineView: React.FC<{
   content: string;
-  onScrollToLine?: (line: number) => void;
+  onScrollToLine?: (line: number, contentKey?: string) => void;
   onReplaceLineText?: (line: number, text: string) => void;
 }> = React.memo(({ content, onScrollToLine, onReplaceLineText }) => {
   const aiConfig = useAiConfig();
@@ -41,11 +41,17 @@ export const OutlineView: React.FC<{
   const { aiTitles, aiStates, aiErrors, failedAiEntries, retryAiEntry, retryFailedEntries } =
     useAiTitles(content, outlineEntries, activeLine, visibleLines);
 
-  const { aiSummaryTexts, aiSummaryStates, aiSummaryErrors, refreshSummary } = useAiSummaries(
-    content,
-    outlineEntries,
-    visibleLines
-  );
+  const { aiSummaryTexts, aiSummaryStates, aiSummaryErrors, requestAiSummary, refreshSummary } =
+    useAiSummaries(content, outlineEntries, visibleLines);
+
+  const summaryHoverModeByLine = useMemo(() => {
+    const modeMap: Record<number, 'card' | 'tooltip-only'> = {};
+    outlineEntries.forEach((entry) => {
+      const summaryState = aiSummaryStates[entry.line] || 'idle';
+      modeMap[entry.line] = summaryState === 'error' ? 'tooltip-only' : 'card';
+    });
+    return modeMap;
+  }, [outlineEntries, aiSummaryStates]);
 
   const hoveredEntry = useMemo(
     () => outlineEntries.find((item) => item.line === hoverAnchor?.line) || null,
@@ -68,9 +74,9 @@ export const OutlineView: React.FC<{
   }, [clearHoverTimeout]);
 
   const handleSelect = useCallback(
-    (index: number, line: number) => {
+    (index: number, line: number, text: string) => {
       setActiveIndex(index);
-      onScrollToLine?.(line);
+      onScrollToLine?.(line, text);
     },
     [onScrollToLine]
   );
@@ -86,10 +92,22 @@ export const OutlineView: React.FC<{
   const handleEntryMouseEnter = useCallback(
     (entry: OutlineEntry, rect: DOMRect) => {
       clearHoverTimeout();
+      requestAiSummary(entry);
+      if (summaryHoverModeByLine[entry.line] !== 'card') {
+        setHoverAnchor(null);
+        return;
+      }
       setHoverAnchor({ line: entry.line, rect });
     },
-    [clearHoverTimeout]
+    [clearHoverTimeout, requestAiSummary, summaryHoverModeByLine]
   );
+
+  useEffect(() => {
+    if (!hoverAnchor) return;
+    if (summaryHoverModeByLine[hoverAnchor.line] !== 'card') {
+      setHoverAnchor(null);
+    }
+  }, [hoverAnchor, summaryHoverModeByLine]);
 
   // Reset hover anchor on content change
   useEffect(() => {
@@ -200,7 +218,12 @@ export const OutlineView: React.FC<{
           aiState={aiStates[entry.line] || 'idle'}
           aiError={aiErrors[entry.line]}
           summaryState={aiSummaryStates[entry.line] || 'idle'}
-          summaryText={aiSummaryTexts[entry.line]?.trim() || ''}
+          summaryText={
+            aiSummaryStates[entry.line] === 'error'
+              ? aiSummaryErrors[entry.line]?.trim() || ''
+              : aiSummaryTexts[entry.line]?.trim() || ''
+          }
+          summaryError={aiSummaryErrors[entry.line]?.trim() || ''}
           isApplied={appliedLines.has(entry.line)}
           canReplaceText={!!onReplaceLineText}
           onSelect={handleSelect}

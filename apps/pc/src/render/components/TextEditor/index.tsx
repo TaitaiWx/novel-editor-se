@@ -1,10 +1,20 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Compartment, EditorState, Range } from '@codemirror/state';
+import {
+  Compartment,
+  EditorState,
+  Range,
+  RangeSet,
+  StateEffect,
+  StateField,
+} from '@codemirror/state';
 import {
   Decoration,
+  DecorationSet,
   EditorView,
+  GutterMarker,
   ViewPlugin,
   ViewUpdate,
+  gutter,
   keymap,
   lineNumbers,
   highlightActiveLine,
@@ -14,13 +24,16 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { json } from '@codemirror/lang-json';
 import { javascript } from '@codemirror/lang-javascript';
-import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search';
+import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { VscSave } from 'react-icons/vsc';
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
 import { useToast } from '../Toast';
 import { writingDecorations } from './writing-decorations';
+import { inlineDiffField, inlineDiffTheme, setInlineDiffEffect } from './inline-diff';
+import type { InlineDiffRange } from './inline-diff';
+import { searchExtensions } from './search-panel';
 import styles from './styles.module.scss';
 
 /** Threshold: files larger than this show a performance warning */
@@ -33,13 +46,18 @@ interface CursorPosition {
 
 interface ScrollToLineRequest {
   line: number;
-  id: number;
+  id: string;
 }
 
 interface ReplaceLineRequest {
   line: number;
   text: string;
   id: number;
+}
+
+interface TransientHighlightLineRequest {
+  line: number;
+  id: string;
 }
 
 interface TextEditorProps {
@@ -51,12 +69,21 @@ interface TextEditorProps {
   encoding?: string;
   characterNames?: string[];
   scrollToLine?: ScrollToLineRequest | null;
+  transientHighlightLine?: TransientHighlightLineRequest | null;
   replaceLineRequest?: ReplaceLineRequest | null;
+  /** 内联 diff 数据（显示在编辑器内部的局部对比） */
+  inlineDiff?: InlineDiffRange | null;
+  /** 暴露 EditorView ref 供外部直接操作（精确事务替换等） */
+  editorViewRef?: React.MutableRefObject<EditorView | null>;
   onContentChange?: (content: string) => void;
   onCursorChange?: (pos: CursorPosition) => void;
   onSaveUntitled?: (untitledPath: string, content: string) => void;
+  onScrollProcessed?: () => void;
+  onTransientHighlightProcessed?: () => void;
   settingsComponent?: React.ReactNode;
 }
+
+export type { InlineDiffRange };
 
 const FOCUS_VISIBLE_RADIUS = 0;
 
@@ -215,12 +242,10 @@ const darkTheme = EditorView.theme(
     '.cm-scroller::-webkit-scrollbar-corner': {
       background: 'transparent',
     },
-    // ── Search panel ──
+    // ── Panel host (search, etc.) ──
     '.cm-panels': {
       backgroundColor: '#252526',
       color: '#d4d4d4',
-      fontFamily:
-        "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
     },
     '.cm-panels.cm-panels-top': {
       borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
@@ -230,174 +255,65 @@ const darkTheme = EditorView.theme(
       borderTop: '1px solid rgba(255, 255, 255, 0.06)',
       boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.25)',
     },
-    // Search form — full width row layout
-    '.cm-search': {
-      width: '100%',
-      boxSizing: 'border-box',
-      padding: '8px 12px',
-      display: 'flex',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-      gap: '4px 6px',
-      fontSize: '13px',
-    },
-    // Text input fields (Find / Replace)
-    '.cm-search input[type="text"], .cm-search input[main-field], .cm-search input[name="search"], .cm-search input[name="replace"]':
-      {
-        flex: '1 1 180px',
-        minWidth: '0',
-      },
-    '.cm-search input, .cm-search select': {
-      backgroundColor: '#1e1e1e',
-      color: '#d4d4d4',
-      border: '1px solid #383838',
-      borderRadius: '5px',
-      padding: '5px 10px',
-      height: '28px',
-      boxSizing: 'border-box',
-      fontSize: '13px',
-      outline: 'none',
-      fontFamily: "'Fira Code', 'Monaco', 'Menlo', monospace",
-      transition: 'border-color 0.15s, box-shadow 0.15s',
-    },
-    '.cm-search input::placeholder': {
-      color: '#555',
-    },
-    '.cm-search input:focus': {
-      borderColor: '#007acc',
-      boxShadow: '0 0 0 1px rgba(0, 122, 204, 0.2)',
-    },
-    // Action buttons — pill shape, subtle
-    '.cm-search button': {
-      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-      color: '#ccc',
-      border: '1px solid rgba(255, 255, 255, 0.08)',
-      borderRadius: '5px',
-      padding: '4px 10px',
-      height: '28px',
-      boxSizing: 'border-box',
-      fontSize: '12px',
-      cursor: 'pointer',
-      whiteSpace: 'nowrap',
-      transition: 'all 0.15s ease',
-      lineHeight: '1',
-    },
-    '.cm-search button:hover': {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      borderColor: 'rgba(255, 255, 255, 0.15)',
-      color: '#fff',
-    },
-    '.cm-search button:active': {
-      backgroundColor: 'rgba(255, 255, 255, 0.14)',
-      transform: 'scale(0.97)',
-    },
-    // Close button — icon-only, right-aligned
-    '.cm-search button[name="close"]': {
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: '28px',
-      height: '28px',
-      padding: '0',
-      marginLeft: 'auto',
-      flexShrink: '0',
-      fontSize: '16px',
-      color: '#666',
-      backgroundColor: 'transparent',
-      border: 'none',
-      borderRadius: '6px',
-      transition: 'all 0.15s ease',
-    },
-    '.cm-search button[name="close"]:hover': {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      color: '#d4d4d4',
-    },
-    '.cm-search button[name="close"]:active': {
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
-      transform: 'scale(0.92)',
-    },
-    // Checkbox labels — compact, inline
-    '.cm-search label': {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '3px',
-      fontSize: '12px',
-      color: '#999',
-      cursor: 'pointer',
-      padding: '2px 4px',
-      borderRadius: '4px',
-      transition: 'color 0.15s ease',
-      userSelect: 'none',
-      whiteSpace: 'nowrap',
-    },
-    '.cm-search label:hover': {
-      color: '#d4d4d4',
-    },
-    '.cm-search label input[type="checkbox"]': {
-      accentColor: '#007acc',
-      margin: '0',
-      width: '13px',
-      height: '13px',
-      flex: 'none',
-    },
-    '.cm-search .cm-button': {
-      backgroundImage: 'none',
-    },
-    // br = flex line break (preserves CM6 row structure)
-    '.cm-search br': {
-      display: 'block',
-      width: '100%',
-      height: '0',
-      flexBasis: '100%',
-      content: "''",
-    },
-    // Replace buttons — subtle blue accent
-    '.cm-search button[name="replace"], .cm-search button[name="replaceAll"]': {
-      backgroundColor: 'rgba(0, 122, 204, 0.12)',
-      color: '#569cd6',
-      borderColor: 'rgba(0, 122, 204, 0.15)',
-    },
-    '.cm-search button[name="replace"]:hover, .cm-search button[name="replaceAll"]:hover': {
-      backgroundColor: 'rgba(0, 122, 204, 0.22)',
-      borderColor: 'rgba(0, 122, 204, 0.3)',
-      color: '#7bb8e8',
-    },
-    '.cm-search button[name="replace"]:active, .cm-search button[name="replaceAll"]:active': {
-      backgroundColor: 'rgba(0, 122, 204, 0.3)',
-    },
-    // Search match highlights
-    '.cm-searchMatch': {
-      backgroundColor: 'rgba(255, 200, 0, 0.15)',
-      outline: '1px solid rgba(255, 200, 0, 0.3)',
-      borderRadius: '2px',
-    },
-    '.cm-searchMatch.cm-searchMatch-selected': {
-      backgroundColor: 'rgba(255, 150, 0, 0.28)',
-      outline: '1px solid rgba(255, 150, 0, 0.5)',
-    },
   },
   { dark: true }
 );
 
-/** Chinese localization for CM6 search panel */
-const chinesePhrases = EditorState.phrases.of({
-  Find: '查找',
-  Replace: '替换',
-  next: '下一个',
-  previous: '上一个',
-  all: '全部',
-  'match case': '区分大小写',
-  'by word': '全字匹配',
-  regexp: '正则表达式',
-  replace: '替换',
-  'replace all': '全部替换',
-  close: '✕',
-  'current match': '当前匹配',
-  'on line': '在第',
-  'replaced $ matches': '已替换 $ 处匹配',
-  'replaced match on line $': '已替换第 $ 行的匹配',
-  'Go to line': '跳转到行',
-  go: '跳转',
+const setTransientLineHighlightEffect = StateEffect.define<number | null>();
+const setAppliedLineMarkerEffect = StateEffect.define<number | null>();
+
+const transientLineHighlightField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (deco, tr) => {
+    let next = deco.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (effect.is(setTransientLineHighlightEffect)) {
+        if (effect.value === null) {
+          next = Decoration.none;
+        } else {
+          next = Decoration.set([
+            Decoration.line({ class: 'cm-transient-highlight' }).range(effect.value),
+          ]);
+        }
+      }
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+class AppliedLineMarker extends GutterMarker {
+  toDOM() {
+    const span = document.createElement('span');
+    span.className = 'cm-applied-gutter-marker';
+    span.textContent = '已应用';
+    return span;
+  }
+}
+
+const appliedLineMarker = new AppliedLineMarker();
+
+const appliedLineMarkerField = StateField.define<RangeSet<GutterMarker>>({
+  create: () => RangeSet.empty,
+  update: (set, tr) => {
+    let next = set.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (effect.is(setAppliedLineMarkerEffect)) {
+        if (effect.value === null) {
+          next = RangeSet.empty;
+        } else {
+          next = RangeSet.of([appliedLineMarker.range(effect.value)]);
+        }
+      }
+    }
+    return next;
+  },
+});
+
+const appliedLineGutter = gutter({
+  class: 'cm-applied-gutter',
+  markers: (view) => view.state.field(appliedLineMarkerField),
+  initialSpacer: () => appliedLineMarker,
 });
 
 const TextEditor: React.FC<TextEditorProps> = ({
@@ -409,10 +325,15 @@ const TextEditor: React.FC<TextEditorProps> = ({
   encoding = 'UTF-8',
   characterNames = [],
   scrollToLine,
+  transientHighlightLine,
   replaceLineRequest,
+  inlineDiff,
+  editorViewRef,
   onContentChange,
   onCursorChange,
   onSaveUntitled,
+  onScrollProcessed,
+  onTransientHighlightProcessed,
   settingsComponent,
 }) => {
   const isUntitled = isUntitledPath(filePath);
@@ -440,7 +361,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const currentFilePathRef = useRef<string | null>(null);
   const currentContentRef = useRef<string>('');
   const currentOriginalContentRef = useRef<string>('');
-  const lastScrollIdRef = useRef(0);
+  const lastScrollIdRef = useRef('');
+  const lastTransientHighlightIdRef = useRef('');
+  const transientHighlightTimerRef = useRef<number | null>(null);
+  const appliedLineMarkerTimerRef = useRef<number | null>(null);
 
   // Stable refs for callbacks to avoid re-creating EditorView
   const onContentChangeRef = useRef(onContentChange);
@@ -547,13 +471,17 @@ const TextEditor: React.FC<TextEditorProps> = ({
         doc: '',
         extensions: [
           lineNumberCompartment.current.of(focusMode ? [] : lineNumbers()),
+          appliedLineMarkerField,
+          appliedLineGutter,
           highlightActiveLine(),
           highlightSelectionMatches(),
           history(),
-          search({ top: true }),
+          ...searchExtensions(),
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+          transientLineHighlightField,
           darkTheme,
-          chinesePhrases,
+          inlineDiffField,
+          inlineDiffTheme,
           placeholder('开始输入您的内容...'),
           readOnlyCompartment.current.of(EditorView.editable.of(!readOnly)),
           wordWrapCompartment.current.of(wordWrap || focusMode ? EditorView.lineWrapping : []),
@@ -594,10 +522,12 @@ const TextEditor: React.FC<TextEditorProps> = ({
     });
 
     viewRef.current = view;
+    if (editorViewRef) editorViewRef.current = view;
 
     return () => {
       view.destroy();
       viewRef.current = null;
+      if (editorViewRef) editorViewRef.current = null;
     };
   }, []);
 
@@ -658,6 +588,12 @@ const TextEditor: React.FC<TextEditorProps> = ({
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
+      }
+      if (transientHighlightTimerRef.current) {
+        window.clearTimeout(transientHighlightTimerRef.current);
+      }
+      if (appliedLineMarkerTimerRef.current) {
+        window.clearTimeout(appliedLineMarkerTimerRef.current);
       }
       if (
         currentFilePathRef.current &&
@@ -817,7 +753,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   useEffect(() => {
     const view = viewRef.current;
     if (!scrollToLine || !view) return;
-    if (scrollToLine.id <= lastScrollIdRef.current) return;
+    if (scrollToLine.id === lastScrollIdRef.current) return;
     lastScrollIdRef.current = scrollToLine.id;
 
     const lineInfo = view.state.doc.line(Math.min(scrollToLine.line, view.state.doc.lines));
@@ -826,7 +762,72 @@ const TextEditor: React.FC<TextEditorProps> = ({
       scrollIntoView: true,
     });
     view.focus();
+    onScrollProcessed?.();
   }, [scrollToLine]);
+
+  // Transient highlight line (flash once for 1.5s)
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!transientHighlightLine || !view) return;
+    if (transientHighlightLine.id === lastTransientHighlightIdRef.current) return;
+    lastTransientHighlightIdRef.current = transientHighlightLine.id;
+    onTransientHighlightProcessed?.();
+
+    const lineNum = Math.min(Math.max(1, transientHighlightLine.line), view.state.doc.lines);
+    const lineInfo = view.state.doc.line(lineNum);
+
+    // 新请求到来时，清理上一轮 transient + gutter 标记
+    if (appliedLineMarkerTimerRef.current) {
+      window.clearTimeout(appliedLineMarkerTimerRef.current);
+      appliedLineMarkerTimerRef.current = null;
+    }
+    view.dispatch({
+      effects: [
+        setTransientLineHighlightEffect.of(null),
+        setAppliedLineMarkerEffect.of(null),
+        setTransientLineHighlightEffect.of(lineInfo.from),
+      ],
+    });
+
+    if (transientHighlightTimerRef.current) {
+      window.clearTimeout(transientHighlightTimerRef.current);
+    }
+    transientHighlightTimerRef.current = window.setTimeout(() => {
+      const activeView = viewRef.current;
+      if (!activeView) return;
+      activeView.dispatch({
+        effects: [
+          setTransientLineHighlightEffect.of(null),
+          setAppliedLineMarkerEffect.of(lineInfo.from),
+        ],
+      });
+      transientHighlightTimerRef.current = null;
+
+      appliedLineMarkerTimerRef.current = window.setTimeout(() => {
+        const v = viewRef.current;
+        if (!v) return;
+        v.dispatch({ effects: setAppliedLineMarkerEffect.of(null) });
+        appliedLineMarkerTimerRef.current = null;
+      }, 3000);
+    }, 1500);
+  }, [transientHighlightLine]);
+
+  // Inline diff decoration
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (inlineDiff) {
+      // Scroll to the diff area first
+      const line = view.state.doc.lineAt(Math.min(inlineDiff.from, view.state.doc.length));
+      view.dispatch({
+        effects: setInlineDiffEffect.of(inlineDiff),
+        selection: { anchor: line.from },
+        scrollIntoView: true,
+      });
+    } else {
+      view.dispatch({ effects: setInlineDiffEffect.of(null) });
+    }
+  }, [inlineDiff]);
 
   // Replace line text (append AI title etc.)
   const lastReplaceIdRef = useRef(0);

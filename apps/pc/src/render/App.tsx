@@ -1,9 +1,11 @@
-import React, { Suspense, lazy, useState, useCallback, useRef, useMemo } from 'react';
+import React, { Suspense, lazy, useState, useCallback, useRef, useMemo, useReducer } from 'react';
+import { EditorView } from '@codemirror/view';
 import type { FileNode } from './types';
 import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
 import RightPanel from './components/RightPanel';
+import { PanelResizer } from './components/PanelResizer';
 import { AIAssistantDialog } from './components/RightPanel/AIAssistantDialog';
 import { AiConfigProvider } from './components/RightPanel/useAiConfig';
 import StatusBar from './components/StatusBar';
@@ -17,6 +19,26 @@ import type { ContextMenuEvent } from './components/FileTree';
 import styles from './App.module.scss';
 import { initKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/initKeyboardShortcuts';
 import { cleanupKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/cleanupKeyboardShortcuts';
+import {
+  preciseReplaceWithReport,
+  formatPreciseReplaceReport,
+  normalizedSearch as normalizedSearchInDoc,
+} from './utils/preciseReplace';
+import { createAISessionChannel } from './utils/aiSessionChannel';
+import { setInlineDiffEffect } from './components/TextEditor/inline-diff';
+import { fnv1a32 } from './components/RightPanel/utils';
+import {
+  buildAISessionStorageKey,
+  parseAISessionSnapshot,
+  type PendingApplyItem,
+  type AISessionSnapshot,
+} from './state/aiSessionSnapshot';
+import {
+  reduceFixSession,
+  initialFixSessionState,
+  fixSessionSelectors,
+  type FixDiffState,
+} from './state/fixSessionState';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
@@ -64,11 +86,15 @@ const App: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [creatingType, setCreatingType] = useState<CreatingType>(null);
   const [clipboard, setClipboard] = useState<string[]>([]);
-  const [scrollToLine, setScrollToLine] = useState<{ line: number; id: number } | null>(null);
+  const [scrollToLine, setScrollToLine] = useState<{ line: number; id: string } | null>(null);
   const [replaceLineRequest, setReplaceLineRequest] = useState<{
     line: number;
     text: string;
     id: number;
+  } | null>(null);
+  const [transientHighlightLine, setTransientHighlightLine] = useState<{
+    line: number;
+    id: string;
   } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showSettingsCenter, setShowSettingsCenter] = useState(false);
@@ -77,13 +103,30 @@ const App: React.FC = () => {
   const [userInitials, setUserInitials] = useState('U');
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [editorReloadToken, setEditorReloadToken] = useState(0);
-  const [diffState, setDiffState] = useState<{
-    original: string;
-    modified: string;
-    originalLabel: string;
-    modifiedLabel: string;
-  } | null>(null);
+  const [fixState, dispatchFixCommand] = useReducer(reduceFixSession, initialFixSessionState);
   const [dbReady, setDbReady] = useState(false);
+
+  // 修复流程状态（selector 只读）
+  const inlineDiff = fixSessionSelectors.inlineDiff(fixState);
+  const diffState = fixSessionSelectors.diffState(fixState);
+  const pendingApplyQueue = fixSessionSelectors.pendingApplyQueue(fixState);
+  // 编辑器 EditorView ref（用于精确事务替换）
+  const editorViewRef = useRef<EditorView | null>(null);
+  const aiSessionChannelRef = useRef<ReturnType<typeof createAISessionChannel> | null>(null);
+  const aiSessionRef = useRef<AISessionSnapshot | null>(null);
+  const aiSessionKey = useMemo(() => buildAISessionStorageKey(folderPath), [folderPath]);
+
+  // Panel resize widths (VSCode-style draggable 3-pane layout)
+  // Left/right panels have NO minimum — they auto-collapse when dragged below threshold (VSCode behavior)
+  const LEFT_COLLAPSED_WIDTH = 36;
+  const RIGHT_COLLAPSED_WIDTH = 32;
+  const LEFT_COLLAPSE_THRESHOLD = 100;
+  const RIGHT_COLLAPSE_THRESHOLD = 120;
+  const LEFT_MAX = 480;
+  const RIGHT_MAX = 520;
+  const CENTER_MIN = 320;
+  const [leftPanelWidth, setLeftPanelWidth] = useState(260);
+  const [rightPanelWidth, setRightPanelWidth] = useState(300);
 
   // Untitled tab counter
   const untitledCounterRef = useRef(0);
@@ -104,6 +147,92 @@ const App: React.FC = () => {
   filesRef.current = files;
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
+
+  React.useEffect(() => {
+    const ch = createAISessionChannel();
+    aiSessionChannelRef.current = ch;
+    ch.onMessage((incoming, incomingSessionKey) => {
+      if (incomingSessionKey && incomingSessionKey !== aiSessionKey) return;
+      aiSessionRef.current = incoming;
+      dispatchFixCommand({
+        type: 'FIX_SESSION_HYDRATED',
+        inlineDiff: incoming.inlineDiff || null,
+        pendingApplyQueue: incoming.pendingApplyQueue || [],
+      });
+
+      // 单向同步时补齐滚动联动：当收到预览 diff，自动滚动到对应行
+      if (incoming.inlineDiff && editorViewRef.current) {
+        const line = editorViewRef.current.state.doc.lineAt(
+          Math.min(incoming.inlineDiff.from, editorViewRef.current.state.doc.length)
+        );
+        setScrollToLine({
+          line: line.number,
+          id: fnv1a32(`diff:${incoming.inlineDiff.from}:${incoming.inlineDiff.to}`),
+        });
+      }
+    });
+    return () => ch.close();
+  }, [aiSessionKey]);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    let cancelled = false;
+    const restoreSession = async () => {
+      try {
+        const raw = (await ipc.invoke('db-settings-get', aiSessionKey)) as string | null;
+        const parsed = parseAISessionSnapshot(raw);
+        if (!parsed || cancelled) return;
+        aiSessionRef.current = parsed;
+        dispatchFixCommand({
+          type: 'FIX_SESSION_HYDRATED',
+          inlineDiff: parsed.inlineDiff || null,
+          pendingApplyQueue: parsed.pendingApplyQueue || [],
+        });
+      } catch {
+        // ignore
+      }
+    };
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [aiSessionKey]);
+
+  const persistSessionTimerRef = useRef<number | null>(null);
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const base = aiSessionRef.current || {
+      workflow: 'consistency',
+      result: '',
+      snapshotFilePath: null,
+      prompt: '',
+      fixResults: {},
+      activeFilePath: activeTabRef.current,
+    };
+    const nextSnapshot: AISessionSnapshot = {
+      ...base,
+      activeFilePath: activeTabRef.current,
+      inlineDiff,
+      pendingApplyQueue,
+    };
+    aiSessionRef.current = nextSnapshot;
+
+    if (persistSessionTimerRef.current) {
+      window.clearTimeout(persistSessionTimerRef.current);
+    }
+    persistSessionTimerRef.current = window.setTimeout(() => {
+      ipc.invoke('db-settings-set', aiSessionKey, JSON.stringify(nextSnapshot)).catch(() => {});
+    }, 180);
+
+    return () => {
+      if (persistSessionTimerRef.current) {
+        window.clearTimeout(persistSessionTimerRef.current);
+        persistSessionTimerRef.current = null;
+      }
+    };
+  }, [inlineDiff, pendingApplyQueue, aiSessionKey]);
 
   React.useEffect(() => {
     const loadUserSettings = async () => {
@@ -127,11 +256,202 @@ const App: React.FC = () => {
 
   // 侧边栏焦点跟踪（VS Code 风格：mousedown 判断是否在侧边栏区域内）
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const appMainRef = useRef<HTMLDivElement>(null);
   const sidebarFocusedRef = useRef(false);
   const sidebarCollapsedRef = useRef(sidebarCollapsed);
   sidebarCollapsedRef.current = sidebarCollapsed;
   const rightPanelCollapsedRef = useRef(rightPanelCollapsed);
   rightPanelCollapsedRef.current = rightPanelCollapsed;
+  // Keep current width in refs to avoid stale closures in drag handlers
+  const leftPanelWidthRef = useRef(leftPanelWidth);
+  leftPanelWidthRef.current = leftPanelWidth;
+  const rightPanelWidthRef = useRef(rightPanelWidth);
+  rightPanelWidthRef.current = rightPanelWidth;
+
+  const resolvePaneLayout = useCallback(
+    (options?: {
+      nextSidebarCollapsed?: boolean;
+      nextRightPanelCollapsed?: boolean;
+      preferExpanding?: 'left' | 'right';
+    }) => {
+      const containerWidth = appMainRef.current?.offsetWidth ?? 0;
+
+      let nextSidebarCollapsed = options?.nextSidebarCollapsed ?? sidebarCollapsedRef.current;
+      let nextRightPanelCollapsed =
+        options?.nextRightPanelCollapsed ?? rightPanelCollapsedRef.current;
+      let nextLeftWidth = Math.min(LEFT_MAX, leftPanelWidthRef.current);
+      let nextRightWidth = Math.min(RIGHT_MAX, rightPanelWidthRef.current);
+
+      if (containerWidth > 0) {
+        const availableForSides = Math.max(0, containerWidth - CENTER_MIN);
+        // First pass: keep both sides visible whenever possible by shrinking widths.
+        if (!nextSidebarCollapsed && !nextRightPanelCollapsed) {
+          const desiredTotal = nextLeftWidth + nextRightWidth;
+          if (desiredTotal > availableForSides) {
+            if (options?.preferExpanding === 'right') {
+              nextLeftWidth = Math.max(0, availableForSides - nextRightWidth);
+              if (nextLeftWidth + nextRightWidth > availableForSides) {
+                nextRightWidth = Math.max(0, availableForSides - nextLeftWidth);
+              }
+            } else {
+              nextRightWidth = Math.max(0, availableForSides - nextLeftWidth);
+              if (nextLeftWidth + nextRightWidth > availableForSides) {
+                nextLeftWidth = Math.max(0, availableForSides - nextRightWidth);
+              }
+            }
+          }
+
+          // Only collapse as a last resort when one side has effectively no drawable width.
+          if (nextLeftWidth <= 0.5 && availableForSides > RIGHT_COLLAPSED_WIDTH) {
+            nextSidebarCollapsed = true;
+          }
+          if (nextRightWidth <= 0.5 && availableForSides > LEFT_COLLAPSED_WIDTH) {
+            nextRightPanelCollapsed = true;
+          }
+        }
+
+        // Second pass: enforce center minimum with collapsed side widths if one side is hidden.
+        if (!nextSidebarCollapsed && nextRightPanelCollapsed) {
+          nextLeftWidth = Math.min(
+            LEFT_MAX,
+            Math.max(0, availableForSides - RIGHT_COLLAPSED_WIDTH)
+          );
+          if (nextLeftWidth <= 0.5) nextSidebarCollapsed = true;
+        } else if (nextSidebarCollapsed && !nextRightPanelCollapsed) {
+          nextRightWidth = Math.min(
+            RIGHT_MAX,
+            Math.max(0, availableForSides - LEFT_COLLAPSED_WIDTH)
+          );
+          if (nextRightWidth <= 0.5) nextRightPanelCollapsed = true;
+        }
+      }
+
+      if (sidebarCollapsedRef.current !== nextSidebarCollapsed) {
+        setSidebarCollapsed(nextSidebarCollapsed);
+      }
+      if (rightPanelCollapsedRef.current !== nextRightPanelCollapsed) {
+        setRightPanelCollapsed(nextRightPanelCollapsed);
+      }
+      if (Math.abs(leftPanelWidthRef.current - nextLeftWidth) > 0.5) {
+        setLeftPanelWidth(nextLeftWidth);
+      }
+      if (Math.abs(rightPanelWidthRef.current - nextRightWidth) > 0.5) {
+        setRightPanelWidth(nextRightWidth);
+      }
+    },
+    [CENTER_MIN, LEFT_COLLAPSED_WIDTH, LEFT_MAX, RIGHT_COLLAPSED_WIDTH, RIGHT_MAX]
+  );
+
+  const handleExpandSidebar = useCallback(() => {
+    resolvePaneLayout({ nextSidebarCollapsed: false, preferExpanding: 'left' });
+  }, [resolvePaneLayout]);
+
+  const handleCollapseSidebar = useCallback(() => {
+    setSidebarCollapsed(true);
+  }, []);
+
+  const handleToggleSidebar = useCallback(() => {
+    if (sidebarCollapsedRef.current) {
+      handleExpandSidebar();
+      return;
+    }
+    handleCollapseSidebar();
+  }, [handleCollapseSidebar, handleExpandSidebar]);
+
+  const handleLeftResizerMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = leftPanelWidthRef.current;
+      const onMouseMove = (ev: MouseEvent) => {
+        const next = startWidth + (ev.clientX - startX);
+        // Auto-collapse when dragged below threshold (VSCode behavior)
+        if (next < LEFT_COLLAPSE_THRESHOLD) {
+          setSidebarCollapsed(true);
+          return;
+        }
+        const containerWidth = appMainRef.current?.offsetWidth ?? 0;
+        const rightWidth = rightPanelCollapsedRef.current
+          ? RIGHT_COLLAPSED_WIDTH
+          : rightPanelWidthRef.current;
+        const maxAllowed = containerWidth - CENTER_MIN - rightWidth;
+
+        // Expanding left panel can force right panel to auto-collapse to preserve center minimum width.
+        if (next > maxAllowed && !rightPanelCollapsedRef.current) {
+          setRightPanelCollapsed(true);
+          const maxAfterCollapse = containerWidth - CENTER_MIN - RIGHT_COLLAPSED_WIDTH;
+          setLeftPanelWidth(Math.min(LEFT_MAX, maxAfterCollapse, next));
+          return;
+        }
+
+        setLeftPanelWidth(Math.min(LEFT_MAX, maxAllowed, next));
+        if (sidebarCollapsedRef.current) setSidebarCollapsed(false);
+      };
+      const cleanup = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', cleanup);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', cleanup);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const handleRightResizerMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = rightPanelWidthRef.current;
+      const onMouseMove = (ev: MouseEvent) => {
+        // Dragging the right resizer leftward enlarges the right panel
+        const next = startWidth - (ev.clientX - startX);
+        // Auto-collapse when dragged below threshold
+        if (next < RIGHT_COLLAPSE_THRESHOLD) {
+          setRightPanelCollapsed(true);
+          return;
+        }
+        const containerWidth = appMainRef.current?.offsetWidth ?? 0;
+        const leftWidth = sidebarCollapsedRef.current
+          ? LEFT_COLLAPSED_WIDTH
+          : leftPanelWidthRef.current;
+        const maxAllowed = containerWidth - CENTER_MIN - leftWidth;
+
+        // Expanding right panel can force left panel to auto-collapse to preserve center minimum width.
+        if (next > maxAllowed && !sidebarCollapsedRef.current) {
+          setSidebarCollapsed(true);
+          const maxAfterCollapse = containerWidth - CENTER_MIN - LEFT_COLLAPSED_WIDTH;
+          setRightPanelWidth(Math.min(RIGHT_MAX, maxAfterCollapse, next));
+          return;
+        }
+
+        setRightPanelWidth(Math.min(RIGHT_MAX, maxAllowed, next));
+        if (rightPanelCollapsedRef.current) setRightPanelCollapsed(false);
+      };
+      const cleanup = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', cleanup);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', cleanup);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  React.useEffect(() => {
+    const onResize = () => resolvePaneLayout();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [resolvePaneLayout]);
 
   const initializeProjectStore = useCallback(async (projectFolderPath: string) => {
     if (!window.electron?.ipcRenderer) return;
@@ -535,7 +855,7 @@ const App: React.FC = () => {
       // Cmd+B: 切换侧边栏
       if (mod && !e.shiftKey && e.key === 'b') {
         e.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
+        handleToggleSidebar();
       }
       // Cmd+Shift+F 或 F11: 切换专注模式
       if (e.key === 'F11' || (mod && e.shiftKey && e.key === 'f')) {
@@ -618,6 +938,180 @@ const App: React.FC = () => {
       dispose?.();
     };
   }, [handleExportProject]);
+
+  // 监听 AI 独立窗口发来的事件
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+
+    // AI 窗口请求打开文件
+    const disposeOpenFile = ipc.on('open-file-from-ai', (_event: unknown, filePath: string) => {
+      openFileInTab(filePath);
+    });
+
+    // AI 窗口请求打开设置
+    const disposeOpenSettings = ipc.on('open-settings-from-ai', () => {
+      setSettingsCenterTab('ai');
+      setShowSettingsCenter(true);
+    });
+
+    // AI 窗口提交修复 → 精确局部替换 + 写盘
+    const disposeApplyFix = ipc.on(
+      'ai-apply-fix-request',
+      async (
+        _event: unknown,
+        payload: {
+          filePath: string;
+          original: string;
+          modified: string;
+          explanation?: string;
+          proposedFullContent?: string;
+          targetLine?: number;
+        }
+      ) => {
+        const {
+          filePath: fp,
+          original,
+          modified,
+          targetLine: delegatedTargetLine,
+          proposedFullContent,
+        } = payload;
+
+        // 1. 打开目标 tab
+        openFileInTab(fp);
+
+        // 2. 等待 EditorView 就绪（tab 切换可能是异步的）
+        const waitForView = (): Promise<void> =>
+          new Promise((resolve) => {
+            if (editorViewRef.current) {
+              resolve();
+            } else {
+              const timer = setTimeout(resolve, 200);
+              const check = setInterval(() => {
+                if (editorViewRef.current) {
+                  clearInterval(check);
+                  clearTimeout(timer);
+                  resolve();
+                }
+              }, 20);
+            }
+          });
+        await waitForView();
+
+        const view = editorViewRef.current;
+        let fullContent = proposedFullContent || '';
+        let matchFrom = -1;
+        let sourceForLine = '';
+        if (view) {
+          const doc = view.state.doc.toString();
+          sourceForLine = doc;
+          matchFrom = doc.indexOf(original);
+          if (!fullContent) {
+            const result = preciseReplaceWithReport(doc, original, modified);
+            if (!result.content) {
+              toast.error('AI 修复未命中，已生成诊断报告');
+              console.warn(formatPreciseReplaceReport(result.report));
+              return;
+            }
+            fullContent = result.content;
+          }
+        } else {
+          try {
+            const diskContent = (await ipc.invoke('read-file', fp)) as string;
+            sourceForLine = diskContent;
+            matchFrom = diskContent.indexOf(original);
+            if (!fullContent) {
+              const result = preciseReplaceWithReport(diskContent, original, modified);
+              if (!result.content) {
+                toast.error('AI 修复未命中');
+                return;
+              }
+              fullContent = result.content;
+            }
+          } catch {
+            toast.error('文件读写失败');
+            return;
+          }
+        }
+
+        const targetLine =
+          delegatedTargetLine ||
+          (matchFrom >= 0 ? sourceForLine.slice(0, matchFrom).split('\n').length : 1);
+
+        // AI 侧已确认应用，这里直接落盘，不再触发编辑器二次确认
+        dispatchFixCommand({ type: 'FIX_APPLY_STARTED' });
+        try {
+          await ipc.invoke('write-file', fp, fullContent);
+          if (view) {
+            // ── 原子事务：文档变更 + diff 装饰在同一个 CM6 transaction 中 ──
+            // 这样 StateField 先处理 effect（创建装饰），再遇到 docChanged 时已经 return，
+            // 装饰不会被 Decoration.none 清除
+            const newFrom = fullContent.indexOf(modified);
+            if (newFrom >= 0) {
+              const diffEffect = setInlineDiffEffect.of({
+                from: newFrom,
+                to: newFrom + modified.length,
+                oldText: original,
+                newText: modified,
+              });
+              view.dispatch({
+                changes: { from: 0, to: view.state.doc.length, insert: fullContent },
+                effects: diffEffect,
+                selection: { anchor: newFrom },
+                scrollIntoView: true,
+              });
+            } else {
+              view.dispatch({
+                changes: { from: 0, to: view.state.doc.length, insert: fullContent },
+              });
+            }
+            setEditorContent(view.state.doc.toString());
+          } else {
+            setEditorContent(fullContent);
+            setEditorReloadToken((prev) => prev + 1);
+          }
+        } catch {
+          dispatchFixCommand({ type: 'FIX_APPLY_FAILED', error: '文件写入失败' });
+          toast.error('文件写入失败');
+          return;
+        }
+        dispatchFixCommand({ type: 'FIX_APPLY_SUCCEEDED' });
+
+        // React state 同步（仅用于 SQLite 持久化，CM6 装饰已在上方原子事务中设置）
+        if (matchFrom >= 0) {
+          const newFrom = fullContent.indexOf(modified);
+          if (newFrom >= 0) {
+            dispatchFixCommand({
+              type: 'FIX_PREVIEW_READY',
+              inlineDiff: {
+                from: newFrom,
+                to: newFrom + modified.length,
+                oldText: original,
+                newText: modified,
+              },
+            });
+          }
+        }
+
+        if (targetLine > 0) {
+          setScrollToLine({
+            line: targetLine,
+            id: fnv1a32(`apply:${targetLine}:${original}`),
+          });
+          setTransientHighlightLine({
+            line: targetLine,
+            id: fnv1a32(`apply:${targetLine}:${original}`),
+          });
+        }
+      }
+    );
+
+    return () => {
+      disposeOpenFile?.();
+      disposeOpenSettings?.();
+      disposeApplyFix?.();
+    };
+  }, [openFileInTab, toast]);
 
   // 侧边栏 Cmd+C/V 快捷键（独立 effect，确保 clipboard 最新值始终可用）
   React.useEffect(() => {
@@ -784,12 +1278,23 @@ const App: React.FC = () => {
   }, []);
 
   const handleToggleRightPanel = useCallback(() => {
-    setRightPanelCollapsed((prev) => !prev);
+    if (rightPanelCollapsedRef.current) {
+      resolvePaneLayout({ nextRightPanelCollapsed: false, preferExpanding: 'right' });
+      return;
+    }
+    setRightPanelCollapsed(true);
+  }, [resolvePaneLayout]);
+
+  const handleScrollProcessed = useCallback(() => {
+    setScrollToLine(null);
   }, []);
 
-  const scrollIdRef = useRef(0);
-  const handleScrollToLine = useCallback((line: number) => {
-    setScrollToLine({ line, id: ++scrollIdRef.current });
+  const handleTransientHighlightProcessed = useCallback(() => {
+    setTransientHighlightLine(null);
+  }, []);
+
+  const handleScrollToLine = useCallback((line: number, contentKey?: string) => {
+    setScrollToLine({ line, id: fnv1a32(contentKey ?? `line:${line}`) });
   }, []);
 
   const replaceIdRef = useRef(0);
@@ -797,16 +1302,46 @@ const App: React.FC = () => {
     setReplaceLineRequest({ line, text, id: ++replaceIdRef.current });
   }, []);
 
+  const handleTransientHighlightLine = useCallback((line: number) => {
+    setTransientHighlightLine({ line, id: fnv1a32(`line:${line}`) });
+  }, []);
+
   const handleDiffRequest = useCallback(
     (original: string, modified: string, originalLabel: string, modifiedLabel: string) => {
-      setDiffState({ original, modified, originalLabel, modifiedLabel });
+      const nextDiff: FixDiffState = { original, modified, originalLabel, modifiedLabel };
+      dispatchFixCommand({ type: 'FIX_DIFF_VIEW_OPEN', diffState: nextDiff });
     },
     []
   );
 
   const handleCloseDiff = useCallback(() => {
-    setDiffState(null);
+    dispatchFixCommand({ type: 'FIX_CLEAR' });
   }, []);
+
+  // 接受 AI 修复：写入文件并刷新编辑器
+  const handleAcceptFix = useCallback(async () => {
+    const fix = pendingApplyQueue[0] || null;
+    if (!fix) return;
+    dispatchFixCommand({ type: 'FIX_APPLY_STARTED' });
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    try {
+      await ipc.invoke('write-file', fix.filePath, fix.content);
+
+      // 强制同步：接受修改后总是打开并聚焦目标 tab，再更新编辑器与定位
+      openFileInTab(fix.filePath);
+      setEditorContent(fix.content);
+      if (typeof fix.targetLine === 'number' && fix.targetLine > 0) {
+        handleScrollToLine(fix.targetLine);
+        handleTransientHighlightLine(fix.targetLine);
+      }
+      setEditorReloadToken((prev) => prev + 1);
+    } catch {
+      dispatchFixCommand({ type: 'FIX_APPLY_FAILED', error: '文件写入失败' });
+      return;
+    }
+    dispatchFixCommand({ type: 'FIX_APPLY_SUCCEEDED' });
+  }, [openFileInTab, handleScrollToLine, handleTransientHighlightLine, pendingApplyQueue]);
 
   const handleVersionRestore = useCallback(
     async (restoredFilePath: string) => {
@@ -876,17 +1411,18 @@ const App: React.FC = () => {
           />
         )}
 
-        <div className={styles.appMain}>
+        <div className={styles.appMain} ref={appMainRef}>
           {/* 左侧文件面板 */}
           {!focusMode && (
             <div
               ref={sidebarRef}
               className={`${styles.leftPanel} ${sidebarCollapsed ? styles.leftPanelCollapsed : ''}`}
+              style={sidebarCollapsed ? undefined : { width: leftPanelWidth }}
             >
               {sidebarCollapsed ? (
                 <button
                   className={styles.sidebarToggle}
-                  onClick={() => setSidebarCollapsed(false)}
+                  onClick={handleExpandSidebar}
                   title="展开侧边栏"
                 >
                   ▶
@@ -903,7 +1439,7 @@ const App: React.FC = () => {
                   onRefresh={refreshCurrentFolder}
                   onOpenFolder={handleOpenLocal}
                   onImportFile={handleImportFile}
-                  onCollapse={() => setSidebarCollapsed(true)}
+                  onCollapse={handleCollapseSidebar}
                   onContextMenu={handleFileContextMenu}
                   onBackgroundContextMenu={handleBackgroundContextMenu}
                   onCopyFile={handleCopyFile}
@@ -919,8 +1455,13 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {/* 左侧拖拽把手 */}
+          {!focusMode && !sidebarCollapsed && (
+            <PanelResizer onMouseDown={handleLeftResizerMouseDown} />
+          )}
+
           {/* 中间内容面板 */}
-          <div className={styles.centerPanel}>
+          <div className={styles.centerPanel} style={{ minWidth: CENTER_MIN }}>
             {diffState ? (
               <Suspense fallback={<div className={styles.lazyFallback}>正在加载差异编辑器...</div>}>
                 <DiffEditor
@@ -929,6 +1470,7 @@ const App: React.FC = () => {
                   originalLabel={diffState.originalLabel}
                   modifiedLabel={diffState.modifiedLabel}
                   onClose={handleCloseDiff}
+                  onAccept={pendingApplyQueue.length > 0 ? handleAcceptFix : undefined}
                 />
               </Suspense>
             ) : (
@@ -939,7 +1481,10 @@ const App: React.FC = () => {
                 reloadToken={editorReloadToken}
                 encoding={encoding}
                 scrollToLine={scrollToLine}
+                transientHighlightLine={transientHighlightLine}
                 replaceLineRequest={replaceLineRequest}
+                inlineDiff={inlineDiff}
+                editorViewRef={editorViewRef}
                 onTabSelect={setActiveTab}
                 onTabClose={closeTab}
                 onCloseOtherTabs={handleCloseOtherTabs}
@@ -948,6 +1493,8 @@ const App: React.FC = () => {
                 onContentChange={handleContentChange}
                 onCursorChange={handleCursorChange}
                 onSaveUntitled={handleSaveUntitled}
+                onScrollProcessed={handleScrollProcessed}
+                onTransientHighlightProcessed={handleTransientHighlightProcessed}
               />
             )}
             {focusMode && (
@@ -961,17 +1508,29 @@ const App: React.FC = () => {
             )}
           </div>
 
-          {/* 右侧信息面板 */}
+          {/* 右侧拖拽把手 + 右侧信息面板 */}
           {!focusMode && (
-            <RightPanel
-              content={editorContent}
-              collapsed={rightPanelCollapsed}
-              onToggle={handleToggleRightPanel}
-              onScrollToLine={handleScrollToLine}
-              onReplaceLineText={handleReplaceLineText}
-              folderPath={folderPath}
-              dbReady={dbReady}
-            />
+            <>
+              {!rightPanelCollapsed && <PanelResizer onMouseDown={handleRightResizerMouseDown} />}
+              <div
+                className={styles.rightPanelWrapper}
+                style={
+                  rightPanelCollapsed
+                    ? { width: RIGHT_COLLAPSED_WIDTH }
+                    : { width: rightPanelWidth }
+                }
+              >
+                <RightPanel
+                  content={editorContent}
+                  collapsed={rightPanelCollapsed}
+                  onToggle={handleToggleRightPanel}
+                  onScrollToLine={handleScrollToLine}
+                  onReplaceLineText={handleReplaceLineText}
+                  folderPath={folderPath}
+                  dbReady={dbReady}
+                />
+              </div>
+            </>
           )}
         </div>
 
@@ -1042,6 +1601,139 @@ const App: React.FC = () => {
           onClose={() => setShowAIAssistant(false)}
           folderPath={folderPath}
           content={editorContent}
+          filePath={activeTab}
+          onApplyFix={async (
+            original: string,
+            modified: string,
+            targetPath?: string,
+            targetLine?: number
+          ) => {
+            dispatchFixCommand({ type: 'FIX_APPLY_STARTED' });
+            const view = editorViewRef.current;
+            const ipc = window.electron?.ipcRenderer;
+            const isCurrentTab = !targetPath || targetPath === activeTabRef.current;
+
+            if (isCurrentTab && view) {
+              // ── 原子事务：文档变更 + diff 装饰在同一个 CM6 transaction ──
+              const doc = view.state.doc.toString();
+              const matchFrom = doc.indexOf(original);
+              if (matchFrom >= 0) {
+                const diffEffect = setInlineDiffEffect.of({
+                  from: matchFrom,
+                  to: matchFrom + modified.length,
+                  oldText: original,
+                  newText: modified,
+                });
+                view.dispatch({
+                  changes: { from: matchFrom, to: matchFrom + original.length, insert: modified },
+                  effects: diffEffect,
+                  selection: { anchor: matchFrom },
+                  scrollIntoView: true,
+                });
+              } else {
+                const result = preciseReplaceWithReport(doc, original, modified);
+                if (result.content) {
+                  const newFrom = result.content.indexOf(modified);
+                  const effects =
+                    newFrom >= 0
+                      ? setInlineDiffEffect.of({
+                          from: newFrom,
+                          to: newFrom + modified.length,
+                          oldText: original,
+                          newText: modified,
+                        })
+                      : undefined;
+                  view.dispatch({
+                    changes: { from: 0, to: doc.length, insert: result.content },
+                    effects: effects ? [effects] : undefined,
+                    selection: newFrom >= 0 ? { anchor: newFrom } : undefined,
+                    scrollIntoView: newFrom >= 0,
+                  });
+                }
+              }
+              // 同步 state + 写盘
+              const newDoc = view.state.doc.toString();
+              setEditorContent(newDoc);
+              if (ipc && targetPath) {
+                ipc.invoke('write-file', targetPath, newDoc).catch(() => {});
+              }
+
+              // React state 同步（仅用于 SQLite 持久化）
+              const postDoc = view.state.doc.toString();
+              const newFrom = postDoc.indexOf(modified);
+              if (newFrom >= 0) {
+                dispatchFixCommand({
+                  type: 'FIX_PREVIEW_READY',
+                  inlineDiff: {
+                    from: newFrom,
+                    to: newFrom + modified.length,
+                    oldText: original,
+                    newText: modified,
+                  },
+                });
+              }
+            } else {
+              // 非当前 tab：读盘 → 替换 → 写盘 → reloadToken
+              if (ipc && targetPath) {
+                try {
+                  const diskContent = (await ipc.invoke('read-file', targetPath)) as string;
+                  const result = preciseReplaceWithReport(diskContent, original, modified);
+                  if (result.content) {
+                    await ipc.invoke('write-file', targetPath, result.content);
+                  }
+                } catch {
+                  dispatchFixCommand({ type: 'FIX_APPLY_FAILED', error: '文件读写失败' });
+                  return;
+                }
+              }
+              setEditorReloadToken((prev) => prev + 1);
+            }
+            dispatchFixCommand({ type: 'FIX_APPLY_SUCCEEDED', keepPreview: true });
+            // Scroll + highlight
+            if (targetLine && targetLine > 0) {
+              setScrollToLine({
+                line: targetLine,
+                id: fnv1a32(`fix:${targetLine}:${original}`),
+              });
+              setTransientHighlightLine({
+                line: targetLine,
+                id: fnv1a32(`fix:${targetLine}:${original}`),
+              });
+            }
+          }}
+          onOpenFile={openFileInTab}
+          onPreviewDiff={(original, modified) => {
+            // 在编辑器文档中定位 original 片段，设置内联 diff 装饰
+            const view = editorViewRef.current;
+            if (!view) return;
+            const doc = view.state.doc.toString();
+            let from = doc.indexOf(original);
+            if (from < 0) {
+              // 归一化回退查找
+              const match = normalizedSearchInDoc(doc, original);
+              if (!match) return;
+              from = match.from;
+            }
+            const inlineDiffData = {
+              from,
+              to: from + original.length,
+              oldText: original,
+              newText: modified,
+            };
+            // ── 直接 dispatch 到 CM6，不经过 React state pipeline ──
+            // 确保装饰立即生效，不受 BroadcastChannel / useEffect 时序干扰
+            const line = view.state.doc.lineAt(Math.min(from, view.state.doc.length));
+            view.dispatch({
+              effects: setInlineDiffEffect.of(inlineDiffData),
+              selection: { anchor: line.from },
+              scrollIntoView: true,
+            });
+            // React state 同步（仅用于 SQLite 持久化）
+            dispatchFixCommand({
+              type: 'FIX_PREVIEW_READY',
+              inlineDiff: inlineDiffData,
+            });
+          }}
           onOpenSettings={() => {
             setShowAIAssistant(false);
             setSettingsCenterTab('ai');

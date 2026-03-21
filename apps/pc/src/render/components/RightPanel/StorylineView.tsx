@@ -7,7 +7,7 @@ import { AiCacheProvider } from './AiCacheContext';
 
 export const StorylineView: React.FC<{
   content: string;
-  onScrollToLine?: (line: number) => void;
+  onScrollToLine?: (line: number, contentKey?: string) => void;
   onReplaceLineText?: (line: number, text: string) => void;
   folderPath: string | null;
   dbReady: boolean;

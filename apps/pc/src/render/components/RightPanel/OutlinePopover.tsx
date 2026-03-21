@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 import type { OutlineEntry, OutlinePopoverAnchor } from './types';
 import { OUTLINE_POPOVER_WIDTH, OUTLINE_POPOVER_ESTIMATED_HEIGHT } from './constants';
@@ -126,7 +127,9 @@ export const OutlinePopover: React.FC<OutlinePopoverProps> = React.memo(
           </>
         ) : summaryState === 'error' ? (
           <div className={styles.outlinePopoverErrorBlock}>
-            <span className={styles.outlinePopoverErrorText}>{summaryError || '摘要生成失败'}</span>
+            <Tooltip content={summaryError || '摘要生成失败'} position="top">
+              <span className={styles.outlinePopoverErrorText}>摘要生成失败</span>
+            </Tooltip>
             <button
               className={styles.outlinePopoverRetryBtn}
               onClick={() => onRefreshSummary(entry)}

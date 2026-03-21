@@ -29,6 +29,16 @@ export interface PlotSceneBoard {
   tension: string;
   outcome: string;
   status: 'draft' | 'ready' | 'done';
+  /** Characters involved in this scene */
+  characters: string[];
+  /** Beat notes within the scene */
+  beats: string[];
+  /** Causal link: key of the scene this scene causes/leads to */
+  causesScene: string | null;
+  /** POV character for swimlane placement */
+  pov: string;
+  /** Emotional intensity 1-5 for visual heat mapping */
+  intensity: number;
 }
 
 export interface PlotActBoard {
@@ -41,6 +51,8 @@ export interface PlotActBoard {
   aiSuggestion: string;
   sceneBoards: PlotSceneBoard[];
 }
+
+export type StorylineLayoutMode = 'board' | 'timeline' | 'causal';
 
 export interface PersistedAISettings {
   enabled?: boolean;
@@ -72,6 +84,7 @@ export interface CharacterGraphAIResult {
 }
 
 export interface OutlineEntry {
+  cacheKey: string;
   line: number;
   level: number;
   text: string;
@@ -95,7 +108,7 @@ export interface RightPanelProps {
   content: string;
   collapsed: boolean;
   onToggle: () => void;
-  onScrollToLine?: (line: number) => void;
+  onScrollToLine?: (line: number, contentKey?: string) => void;
   onReplaceLineText?: (line: number, text: string) => void;
   folderPath: string | null;
   dbReady: boolean;

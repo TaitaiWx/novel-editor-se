@@ -17,7 +17,7 @@ import { RELATION_TONE_LABELS, ROLE_COLORS } from './constants';
  * FNV-1a 32-bit hash — fast, synchronous, zero-dependency.
  * Returns a compact 8-char hex string suitable for cache keys.
  */
-function fnv1a32(input: string): string {
+export function fnv1a32(input: string): string {
   let hash = 0x811c9dc5; // FNV offset basis
   for (let i = 0; i < input.length; i++) {
     hash ^= input.charCodeAt(i);
@@ -32,8 +32,11 @@ function fnv1a32(input: string): string {
  * Uses FNV-1a hash for compact, O(1) lookup in Map and SQLite.
  */
 export function buildOutlineEntryCacheKey(entry: OutlineEntry): string {
-  const title = entry.originalText || entry.text;
-  return fnv1a32(title);
+  return entry.cacheKey || fnv1a32(entry.originalText || entry.text);
+}
+
+export function buildOutlineCacheKeyFromTitle(title: string): string {
+  return fnv1a32(title.trim());
 }
 
 /** Check whether a DB cache_key is already in the new hash format */
@@ -425,6 +428,7 @@ export function buildOutlineEntries(content: string, headings: OutlineNode[]): O
     const bodyText = lines.join('\n').trim();
     return [
       {
+        cacheKey: buildOutlineCacheKeyFromTitle('未命名章节'),
         line: 1,
         level: 1,
         text: '未命名章节',
@@ -445,6 +449,7 @@ export function buildOutlineEntries(content: string, headings: OutlineNode[]): O
       .join('\n')
       .trim();
     return {
+      cacheKey: buildOutlineCacheKeyFromTitle(normalizedText || '未命名章节'),
       line: heading.line,
       level: 1,
       text: normalizedText || '未命名章节',
@@ -512,7 +517,12 @@ export function createDefaultActBoard(act: ActNode, actIndex: number): PlotActBo
       objective: '',
       tension: '',
       outcome: '',
-      status: 'draft',
+      status: 'draft' as const,
+      characters: [],
+      beats: [],
+      causesScene: null,
+      pov: '',
+      intensity: 1,
     })),
   };
 }
@@ -533,7 +543,16 @@ export function mergeActBoard(act: ActNode, actIndex: number, board?: PlotActBoa
       const saved = board.sceneBoards.find(
         (item) => item.sceneKey === scene.sceneKey || item.title === scene.title
       );
-      return saved ? { ...scene, ...saved } : scene;
+      if (!saved) return scene;
+      return {
+        ...scene,
+        ...saved,
+        characters: Array.isArray(saved.characters) ? saved.characters : [],
+        beats: Array.isArray(saved.beats) ? saved.beats : [],
+        causesScene: saved.causesScene ?? null,
+        pov: saved.pov ?? '',
+        intensity: saved.intensity ?? 1,
+      };
     }),
   };
 }

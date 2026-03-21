@@ -3,24 +3,25 @@
 // ============================================================
 
 .rightPanel {
-  width: 300px;
-  min-width: 220px;
-  max-width: 420px;
+  width: 100%;
+  min-width: 0;
   background: #1e1e1e;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1;
 }
 
 .collapsedPanel {
-  width: 32px;
+  width: 100%;
   background-color: #1e1e1e;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding-top: 8px;
+  flex: 1;
 }
 
 .expandButton,
@@ -277,10 +278,32 @@
   flex: 1;
 }
 
+.outlineInlineSummaryMuted {
+  font-size: 11px;
+  color: rgba(180, 190, 205, 0.32);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.outlineInlineSummaryError {
+  font-size: 11px;
+  color: rgba(240, 142, 142, 0.88);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
 .outlineInlineSummaryLoading {
-  font-size: 10px;
+  font-size: 11px;
   color: rgba(111, 180, 235, 0.45);
   font-style: italic;
+  min-width: 0;
+  flex: 1;
 }
 
 .outlineInlineRefreshBtn {
@@ -1029,12 +1052,9 @@
 }
 
 .storyBoardScroller {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(220px, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 6px;
 }
 
 .storyActCard {
@@ -1094,9 +1114,8 @@
 .storyTempoTrack {
   margin-top: 10px;
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .storyTempoEmpty {
@@ -2283,7 +2302,7 @@
 
 .aiPromptInput {
   width: 100%;
-  resize: vertical;
+  resize: none;
   min-height: 80px;
   padding: 10px 12px;
   border-radius: 8px;
@@ -2353,14 +2372,478 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
   color: rgba(255, 255, 255, 0.78);
-  white-space: pre-wrap;
   line-height: 1.75;
   font-size: 12px;
+}
+
+.aiResultContent {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.aiResultActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.aiActionDivider {
+  width: 90%;
+  height: 1px;
+  margin: 6px auto 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.aiCopyButton {
+  appearance: none;
+  border: 1px solid rgba(86, 156, 214, 0.3);
+  border-radius: 5px;
+  padding: 4px 14px;
+  background: rgba(86, 156, 214, 0.1);
+  color: rgba(86, 156, 214, 0.9);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(86, 156, 214, 0.2);
+    color: #7cc4f5;
+    border-color: rgba(86, 156, 214, 0.5);
+  }
+}
+
+.aiJsonToggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  user-select: none;
+
+  input[type='checkbox'] {
+    accent-color: rgba(86, 156, 214, 0.88);
+    margin: 0;
+    cursor: pointer;
+  }
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+.aiHistoryButton {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.8);
+  }
+}
+
+.aiHistoryPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+}
+
+.aiHistoryEmpty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+  padding: 24px 0;
+}
+
+.aiHistoryItem {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.aiHistoryItemActive {
+  border-color: rgba(86, 156, 214, 0.4);
+  background: rgba(86, 156, 214, 0.06);
+}
+
+.aiHistoryItemHeader {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.aiHistoryItemTag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(86, 156, 214, 0.15);
+  color: rgba(86, 156, 214, 0.9);
+}
+
+.aiHistoryItemFooter {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.aiHistoryItemTime {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 500;
+}
+
+.aiHistoryItemPreview {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.aiHistoryBadges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.aiHistoryBadge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.aiHistoryItemDelete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  appearance: none;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+
+  .aiHistoryItem:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    color: #ff6b6b;
+    background: rgba(255, 100, 100, 0.15);
+  }
 }
 
 .aiResultLoading {
   color: rgba(255, 255, 255, 0.4);
   font-style: italic;
+}
+
+.aiSaveButton {
+  appearance: none;
+  border: 1px solid rgba(86, 156, 214, 0.3);
+  background: rgba(86, 156, 214, 0.1);
+  color: rgba(86, 156, 214, 0.9);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(86, 156, 214, 0.2);
+    color: #7cc4f5;
+    border-color: rgba(86, 156, 214, 0.5);
+  }
+}
+
+// ─── Structured JSON result rendering ───
+.aiJsonResult {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aiJsonSummary {
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.aiJsonItem {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aiJsonItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.aiJsonItemTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  flex: 1;
+  min-width: 0;
+}
+
+.aiJsonItemTags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.aiJsonItemType {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.aiJsonItemSeverity {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.aiSeverityHigh {
+  background: rgba(255, 85, 85, 0.15);
+  color: rgba(255, 120, 120, 0.9);
+}
+
+.aiSeverityMedium {
+  background: rgba(255, 180, 50, 0.15);
+  color: rgba(255, 200, 100, 0.9);
+}
+
+.aiSeverityLow {
+  background: rgba(100, 200, 100, 0.12);
+  color: rgba(140, 220, 140, 0.85);
+}
+
+.aiJsonItemDesc {
+  font-size: 12px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.aiJsonItemField {
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.55);
+  padding-left: 4px;
+}
+
+.aiJsonFieldLabel {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(86, 156, 214, 0.7);
+  margin-right: 6px;
+  min-width: 28px;
+}
+
+.aiJsonConclusion {
+  font-size: 12px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.6);
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.aiJsonItemActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.aiFixAppliedBadge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  background: rgba(78, 172, 107, 0.15);
+  color: rgba(78, 172, 107, 0.9);
+  white-space: nowrap;
+}
+
+.aiAutoFixButton {
+  appearance: none;
+  border: 1px solid rgba(86, 156, 214, 0.25);
+  border-radius: 4px;
+  padding: 3px 10px;
+  background: rgba(86, 156, 214, 0.08);
+  color: rgba(86, 156, 214, 0.85);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(86, 156, 214, 0.18);
+    color: #7cc4f5;
+    border-color: rgba(86, 156, 214, 0.45);
+  }
+}
+
+.aiAutoFixLoading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(86, 156, 214, 0.7);
+  font-style: italic;
+}
+
+.aiAutoFixSpinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(86, 156, 214, 0.3);
+  border-top-color: rgba(86, 156, 214, 0.95);
+  animation: aiSpin 0.8s linear infinite;
+}
+
+@keyframes aiSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.aiFixResult {
+  margin-top: 6px;
+  border: 1px solid rgba(86, 156, 214, 0.2);
+  border-radius: 5px;
+  background: rgba(86, 156, 214, 0.04);
+  overflow: hidden;
+}
+
+.aiFixResultHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: rgba(86, 156, 214, 0.08);
+  border-bottom: 1px solid rgba(86, 156, 214, 0.1);
+}
+
+.aiFixResultLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(86, 156, 214, 0.8);
+}
+
+.aiFixResultActions {
+  display: flex;
+  gap: 6px;
+}
+
+.aiFixCopyButton {
+  appearance: none;
+  border: none;
+  background: rgba(86, 156, 214, 0.12);
+  color: rgba(86, 156, 214, 0.85);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(86, 156, 214, 0.25);
+    color: #7cc4f5;
+  }
+}
+
+.aiFixApplyButton {
+  appearance: none;
+  border: 1px solid rgba(78, 172, 107, 0.3);
+  background: rgba(78, 172, 107, 0.12);
+  color: rgba(78, 172, 107, 0.9);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(78, 172, 107, 0.25);
+    color: #6cd98d;
+    border-color: rgba(78, 172, 107, 0.5);
+  }
+}
+
+.aiFixResultContent {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 1160px) {
@@ -2426,6 +2909,37 @@
   }
 }
 
+.aiDialogHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.aiDialogCopy,
+.aiDialogExpand {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  font-size: 15px;
+  padding: 2px 6px;
+  border-radius: 4px;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.aiDialogExpanded {
+  width: min(80vw, 800px);
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  max-height: calc(100vh - 80px);
+  top: 40px;
+}
+
 .aiDialogBody {
   flex: 1;
   overflow-y: auto;
@@ -2438,5 +2952,863 @@
   &::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.1);
     border-radius: 3px;
+  }
+}
+
+// ============================================================
+// Acts View — Root / Layout Switcher / Act Selector
+// ============================================================
+
+.actsViewRoot {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0;
+}
+
+.layoutModeSwitcher {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.layoutModeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #737c88;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+
+  &:hover {
+    color: #c0cad6;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.layoutModeActive {
+  color: #e8f4ff;
+  background: rgba(86, 156, 214, 0.14);
+  border-color: rgba(86, 156, 214, 0.28);
+  box-shadow: 0 0 0 1px rgba(86, 156, 214, 0.06) inset;
+}
+
+.actSelectorStrip {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px 8px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+
+  &::-webkit-scrollbar {
+    height: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+  }
+}
+
+.actSelectorChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #8d96a1;
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+
+  &:hover {
+    color: #c6d0da;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.actSelectorActive {
+  color: #e8f4ff;
+  background: rgba(var(--act-color-rgb, 86, 156, 214), 0.14);
+  border-color: var(--act-color, rgba(86, 156, 214, 0.3));
+  box-shadow: 0 0 8px rgba(86, 156, 214, 0.1);
+}
+
+.actSelectorDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.actSelectorLabel {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.actSelectorProgress {
+  font-size: 10px;
+  color: #5a6270;
+  font-variant-numeric: tabular-nums;
+}
+
+.actsVisualizationArea {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+
+  &::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+  }
+}
+
+// ============================================================
+// Scene Board Card v2 — Compact + Expandable
+// ============================================================
+
+.sceneCard2 {
+  position: relative;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 3px solid var(--scene-accent, #569cd6);
+  background: rgba(16, 20, 28, 0.72);
+  transition: all 0.2s ease;
+  cursor: grab;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    border-left-color: var(--scene-accent, #569cd6);
+    background: rgba(20, 24, 32, 0.82);
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.sceneCard2Expanded {
+  background: rgba(16, 20, 28, 0.9);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.sceneCard2Header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sceneCard2Index {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #8d96a1;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sceneCard2TitleZone {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sceneCard2Title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e0e6ed;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.sceneCard2Preview {
+  font-size: 10px;
+  color: #5a6270;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.sceneCard2Actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.sceneIntensityBar {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.intensityDot {
+  width: 10px;
+  height: 3px;
+  border-radius: 1.5px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.12s ease;
+
+  &:hover {
+    transform: scaleY(2);
+  }
+}
+
+.intensityDotActive {
+  box-shadow: 0 0 4px currentColor;
+}
+
+.sceneStatusButton {
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #5a6270;
+  padding: 2px 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #c0cad6;
+  }
+}
+
+.sceneStatus_draft {
+  color: #5a6270;
+}
+
+.sceneStatus_ready {
+  color: #dcdcaa;
+}
+
+.sceneStatus_done {
+  color: #4ec9b0;
+}
+
+.sceneExpandToggle {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #4a5260;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #a0aab5;
+  }
+}
+
+// ── Expanded editing zone ──
+
+.sceneExpandedZone {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sceneStructuredFields {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sceneField {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+// Colored dot indicators replacing emoji
+.sceneFieldDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sceneFieldDotGoal {
+  background: #4ec9b0;
+  box-shadow: 0 0 4px rgba(78, 201, 176, 0.4);
+}
+
+.sceneFieldDotConflict {
+  background: #f14c4c;
+  box-shadow: 0 0 4px rgba(241, 76, 76, 0.4);
+}
+
+.sceneFieldDotOutcome {
+  background: #c586c0;
+  box-shadow: 0 0 4px rgba(197, 134, 192, 0.4);
+}
+
+.sceneFieldBody {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  label {
+    font-size: 10px;
+    color: #5a6270;
+    font-weight: 600;
+    flex-shrink: 0;
+    min-width: 24px;
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    color: #d4d4d4;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 3px 6px;
+    font-family: inherit;
+    transition: border-color 0.15s ease;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(86, 156, 214, 0.35);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    &::placeholder {
+      color: #2e3640;
+      font-size: 10px;
+    }
+  }
+}
+
+.sceneSecondaryFields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.sceneFieldInline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  label {
+    font-size: 10px;
+    color: #5a6270;
+    font-weight: 600;
+    min-width: 24px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  input,
+  select {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    color: #d4d4d4;
+    font-size: 11px;
+    padding: 3px 6px;
+    font-family: inherit;
+    transition: border-color 0.15s ease;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(86, 156, 214, 0.35);
+    }
+
+    &::placeholder {
+      color: #2e3640;
+      font-size: 10px;
+    }
+  }
+
+  select {
+    appearance: none;
+    cursor: pointer;
+  }
+}
+
+.sceneBeatsZone {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sceneBeatsHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  label {
+    font-size: 10px;
+    color: #5a6270;
+    font-weight: 600;
+  }
+
+  button {
+    border: none;
+    background: transparent;
+    color: #569cd6;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: auto;
+
+    &:hover {
+      background: rgba(86, 156, 214, 0.12);
+    }
+  }
+}
+
+.sceneBeatsHint {
+  font-size: 9px;
+  color: #3a424d;
+}
+
+.sceneBeatRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+    color: #d4d4d4;
+    font-size: 11px;
+    padding: 2px 6px;
+    font-family: inherit;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(86, 156, 214, 0.3);
+    }
+
+    &::placeholder {
+      color: #2e3640;
+      font-size: 10px;
+    }
+  }
+}
+
+.sceneBeatNum {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: #4a5260;
+  font-size: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sceneBeatRemove {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: #4a5260;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(241, 76, 76, 0.12);
+    color: #f14c4c;
+  }
+}
+
+.sceneCardToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.sceneCardToolbarLeft {
+  display: flex;
+  gap: 3px;
+}
+
+.sceneAiButton {
+  border: 1px solid rgba(86, 156, 214, 0.18);
+  border-radius: 4px;
+  background: rgba(86, 156, 214, 0.06);
+  color: #569cd6;
+  font-size: 10px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+
+  &:hover {
+    background: rgba(86, 156, 214, 0.14);
+    border-color: rgba(86, 156, 214, 0.3);
+  }
+}
+
+// ============================================================
+// Swimlane Timeline
+// ============================================================
+
+.swimlaneContainer {
+  padding: 12px;
+  overflow: auto;
+  height: 100%;
+
+  &::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+  }
+}
+
+.swimlaneGrid {
+  display: grid;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  // columns set dynamically via grid-template-columns
+  // first column = POV label; rest = timeline slots
+}
+
+.swimlaneCorner {
+  background: rgba(18, 22, 30, 0.9);
+  padding: 8px 10px;
+  font-size: 10px;
+  color: #5a6270;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+
+.swimlaneColHeader {
+  background: rgba(18, 22, 30, 0.85);
+  padding: 6px 8px;
+  font-size: 10px;
+  color: #737c88;
+  font-weight: 700;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+
+  span {
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.04);
+    align-items: center;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.swimlaneRowLabel {
+  background: rgba(18, 22, 30, 0.9);
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #a0aab5;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-left: 3px solid transparent;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  white-space: nowrap;
+}
+
+.swimlanePovDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.swimlaneCell {
+  background: rgba(14, 18, 24, 0.6);
+  padding: 6px;
+  min-width: 140px;
+  min-height: 80px;
+  transition: background 0.15s ease;
+}
+
+.swimlaneCellActive {
+  background: rgba(86, 156, 214, 0.06);
+}
+
+.swimlaneCellDropTarget {
+  background: rgba(86, 156, 214, 0.12);
+  box-shadow: inset 0 0 0 2px rgba(86, 156, 214, 0.3);
+}
+
+.swimlaneCard {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid transparent;
+  padding: 8px 10px;
+  cursor: grab;
+  transition: all 0.18s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.swimlaneCardDragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+
+.swimlaneCardTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8eef5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swimlaneCardMeta {
+  font-size: 10px;
+  color: #8d96a1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.swimlaneStatusDot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+
+  span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+}
+
+.swimlaneStatus_draft {
+  background: #5a6270;
+}
+
+.swimlaneStatus_ready {
+  background: #dcdcaa;
+}
+
+.swimlaneStatus_done {
+  background: #4ec9b0;
+}
+
+.swimlaneEmptyCell {
+  width: 100%;
+  height: 100%;
+  min-height: 60px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.04);
+}
+
+// ============================================================
+// Causal Chain View (DAG)
+// ============================================================
+
+.causalContainer {
+  position: relative;
+  overflow: auto;
+  height: 100%;
+  padding: 12px;
+
+  &::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+  }
+}
+
+.causalCanvas {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.causalEdges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.causalEdgePath {
+  transition: stroke 0.3s ease;
+}
+
+.causalNode {
+  position: absolute;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid #569cd6;
+  background: rgba(18, 22, 30, 0.88);
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.2s ease;
+  overflow: hidden;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    transform: translateY(-1px);
+  }
+}
+
+.causalNodeActive {
+  border-color: rgba(86, 156, 214, 0.4);
+  background: rgba(86, 156, 214, 0.08);
+  box-shadow: 0 0 16px rgba(86, 156, 214, 0.15);
+}
+
+.causalNodeHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.causalNodeIndex {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #8d96a1;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.causalNodeTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8eef5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.causalNodeSub {
+  font-size: 10px;
+  color: #737c88;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.causalStatusBadge {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: auto;
+  align-self: flex-end;
+
+  &[data-status='draft'] {
+    background: #5a6270;
+  }
+
+  &[data-status='ready'] {
+    background: #dcdcaa;
+  }
+
+  &[data-status='done'] {
+    background: #4ec9b0;
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { OutlineEntry, OutlineAiState } from './types';
 import {
   OUTLINE_AI_DEBOUNCE_MS,
@@ -10,6 +10,38 @@ import { buildOutlineEntryCacheKey, parseOutlineTitleCompletions } from './utils
 import { useAiCache } from './AiCacheContext';
 import { useAiConfig } from './useAiConfig';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Architecture: 4-phase pipeline
+//
+//   Phase 1 – Resolution  : classify every entry (resolved / pending / failed / loading)
+//   Phase 2 – Prioritisation : sort pending by visibility & proximity
+//   Phase 3 – Request engine : queue → batch → API → persist
+//   Phase 4 – Auto-prefetch  : debounced trigger for visible pending entries
+//
+// The Resolution phase is the SINGLE source of truth. Downstream phases
+// only see entries that Resolution explicitly marks as "pending".
+// This eliminates scattered if-else cache checks.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Categorised result of Phase 1 */
+interface TitleResolution {
+  /** cacheKey → title for every resolved entry (from persistent cache OR API) */
+  titles: Record<string, string>;
+  /** Entries that genuinely need AI generation */
+  pending: OutlineEntry[];
+  /** Entries whose last attempt failed */
+  failed: OutlineEntry[];
+  /** Number of entries currently in-flight */
+  loadingCount: number;
+}
+
+const EMPTY_RESOLUTION: TitleResolution = {
+  titles: {},
+  pending: [],
+  failed: [],
+  loadingCount: 0,
+};
+
 export function useAiTitles(
   content: string,
   outlineEntries: OutlineEntry[],
@@ -19,10 +51,12 @@ export function useAiTitles(
   const { ready: aiReady } = useAiConfig();
   const { titleCache, cacheReady } = useAiCache();
 
-  const [aiTitles, setAiTitles] = useState<Record<number, string>>({});
-  const [aiStates, setAiStates] = useState<Record<number, OutlineAiState>>({});
-  const [aiErrors, setAiErrors] = useState<Record<number, string>>({});
+  // ─── API-local state (populated only by runBatch API results) ─────────────
+  const [aiTitlesByKey, setAiTitlesByKey] = useState<Record<string, string>>({});
+  const [aiStatesByKey, setAiStatesByKey] = useState<Record<string, OutlineAiState>>({});
+  const [aiErrorsByKey, setAiErrorsByKey] = useState<Record<string, string>>({});
 
+  // Refs for closure access inside processQueue / debounce callbacks
   const queueRef = useRef<OutlineEntry[]>([]);
   const inFlightRef = useRef(0);
   const debounceTimerRef = useRef<number | null>(null);
@@ -33,26 +67,84 @@ export function useAiTitles(
   outlineEntriesRef.current = outlineEntries;
   const aiReadyRef = useRef(aiReady);
   aiReadyRef.current = aiReady;
+  const aiTitlesByKeyRef = useRef(aiTitlesByKey);
+  aiTitlesByKeyRef.current = aiTitlesByKey;
 
-  const pendingAiEntries = (() => {
-    const candidates = outlineEntries.filter((entry) => {
-      if (!entry.needsAiTitle) return false;
-      if (aiTitles[entry.line]?.trim()) return false;
-      return aiStates[entry.line] !== 'loading' && aiStates[entry.line] !== 'error';
-    });
-    return candidates.sort((a, b) => {
-      const aPriority = a.line === activeLine ? 0 : visibleLines.has(a.line) ? 1 : 2;
-      const bPriority = b.line === activeLine ? 0 : visibleLines.has(b.line) ? 1 : 2;
-      if (aPriority !== bPriority) return aPriority - bPriority;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Phase 1 – Resolution
+  //
+  // Classifies EVERY entry by checking:
+  //   L1: titleCache (persistent Map hydrated from SQLite)
+  //   L2: aiTitlesByKey (API-resolved this session, not yet in L1 at render time)
+  //   L3: aiStatesByKey (inflight / error markers)
+  //
+  // Key dep: cacheReady — forces re-computation when the persistent cache
+  // finishes hydration. Without this, titleCache.has() returns false for
+  // entries that ARE cached, because the memo ran before hydration completed
+  // and titleCache is a stable Map ref that doesn't trigger memo re-runs.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const resolution = useMemo<TitleResolution>(() => {
+    if (!cacheReady) return EMPTY_RESOLUTION;
+
+    const titles: Record<string, string> = {};
+    const pending: OutlineEntry[] = [];
+    const failed: OutlineEntry[] = [];
+    let loadingCount = 0;
+
+    for (const entry of outlineEntries) {
+      if (!entry.needsAiTitle) continue;
+      const key = buildOutlineEntryCacheKey(entry);
+
+      // L1: persistent cache (hydrated from SQLite, mutated by runBatch)
+      const cached = titleCache.get(key);
+      if (cached) {
+        titles[key] = cached;
+        continue;
+      }
+
+      // L2: API-resolved this session
+      const local = aiTitlesByKey[key];
+      if (local?.trim()) {
+        titles[key] = local;
+        continue;
+      }
+
+      // L3: check inflight / error state
+      const state = aiStatesByKey[key];
+      if (state === 'loading') {
+        loadingCount++;
+      } else if (state === 'error') {
+        failed.push(entry);
+      } else {
+        pending.push(entry);
+      }
+    }
+
+    return { titles, pending, failed, loadingCount };
+  }, [outlineEntries, cacheReady, titleCache, aiTitlesByKey, aiStatesByKey]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Phase 2 – Prioritisation
+  // Sort pending by: active line > visible > off-screen, then by proximity.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const prioritizedPending = useMemo(() => {
+    return [...resolution.pending].sort((a, b) => {
+      const aPri = a.line === activeLine ? 0 : visibleLines.has(a.line) ? 1 : 2;
+      const bPri = b.line === activeLine ? 0 : visibleLines.has(b.line) ? 1 : 2;
+      if (aPri !== bPri) return aPri - bPri;
       if (activeLine === null) return a.line - b.line;
       return Math.abs(a.line - activeLine) - Math.abs(b.line - activeLine);
     });
-  })();
+  }, [resolution.pending, activeLine, visibleLines]);
 
-  const failedAiEntries = outlineEntries.filter(
-    (entry) => entry.needsAiTitle && aiStates[entry.line] === 'error' && !aiTitles[entry.line]
+  const visiblePendingCount = useMemo(
+    () => prioritizedPending.filter((e) => visibleLines.has(e.line)).length,
+    [prioritizedPending, visibleLines]
   );
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Phase 3 – Request engine
+  // ═══════════════════════════════════════════════════════════════════════════
   const processQueue = useCallback(() => {
     if (!aiReadyRef.current) return;
     if (!contentRef.current.trim()) return;
@@ -61,51 +153,28 @@ export function useAiTitles(
     const generation = requestGenerationRef.current;
 
     const runBatch = async (entries: OutlineEntry[]) => {
-      const uncached = entries.filter((entry) => !titleCache.get(buildOutlineEntryCacheKey(entry)));
-
-      if (uncached.length !== entries.length) {
-        setAiTitles((prev) => {
-          let changed = false;
-          const next = { ...prev };
-          entries.forEach((entry) => {
-            const c = titleCache.get(buildOutlineEntryCacheKey(entry));
-            if (c && next[entry.line] !== c) {
-              next[entry.line] = c;
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
-        });
-        setAiStates((prev) => {
-          let changed = false;
-          const next = { ...prev };
-          entries.forEach((entry) => {
-            if (
-              titleCache.get(buildOutlineEntryCacheKey(entry)) &&
-              next[entry.line] !== 'success'
-            ) {
-              next[entry.line] = 'success';
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
-        });
-      }
+      // Final cache gate: re-check right before API call.
+      // Between queue-time and now, cache may have been populated.
+      const uncached = entries.filter((entry) => {
+        const cacheKey = buildOutlineEntryCacheKey(entry);
+        if (titleCache.has(cacheKey)) return false;
+        return !aiTitlesByKeyRef.current[cacheKey]?.trim();
+      });
 
       if (!uncached.length) return;
 
-      const lines = uncached.map((entry) => entry.line);
-      setAiStates((prev) => {
+      const cacheKeys = uncached.map((entry) => buildOutlineEntryCacheKey(entry));
+      setAiStatesByKey((prev) => {
         const next = { ...prev };
-        lines.forEach((line) => {
-          next[line] = 'loading';
+        cacheKeys.forEach((k) => {
+          next[k] = 'loading';
         });
         return next;
       });
-      setAiErrors((prev) => {
+      setAiErrorsByKey((prev) => {
         const next = { ...prev };
-        lines.forEach((line) => {
-          delete next[line];
+        cacheKeys.forEach((k) => {
+          delete next[k];
         });
         return next;
       });
@@ -133,17 +202,17 @@ export function useAiTitles(
 
         if (!response.ok) {
           const message = response.error || 'AI 标题补全失败';
-          setAiStates((prev) => {
+          setAiStatesByKey((prev) => {
             const next = { ...prev };
-            lines.forEach((line) => {
-              next[line] = 'error';
+            cacheKeys.forEach((k) => {
+              next[k] = 'error';
             });
             return next;
           });
-          setAiErrors((prev) => {
+          setAiErrorsByKey((prev) => {
             const next = { ...prev };
-            lines.forEach((line) => {
-              next[line] = message;
+            cacheKeys.forEach((k) => {
+              next[k] = message;
             });
             return next;
           });
@@ -154,34 +223,36 @@ export function useAiTitles(
         const completionMap = new Map<number, string>();
         completions.forEach((item) => completionMap.set(item.line, item.title.trim()));
 
-        setAiTitles((prev) => {
+        setAiTitlesByKey((prev) => {
           const next = { ...prev };
           uncached.forEach((entry) => {
             const title = completionMap.get(entry.line);
             if (title) {
-              next[entry.line] = title;
-              const ck = buildOutlineEntryCacheKey(entry);
-              titleCache.set(ck, title);
-              // Persist to SQLite (fire-and-forget)
-              void ipc.invoke('ai-cache-set', ck, 'title', title);
+              const cacheKey = buildOutlineEntryCacheKey(entry);
+              next[cacheKey] = title;
+              titleCache.set(cacheKey, title);
+              void ipc.invoke('ai-cache-set', cacheKey, 'title', title);
             }
           });
           return next;
         });
-        setAiStates((prev) => {
+        setAiStatesByKey((prev) => {
           const next = { ...prev };
           uncached.forEach((entry) => {
-            next[entry.line] = completionMap.get(entry.line) ? 'success' : 'error';
+            next[buildOutlineEntryCacheKey(entry)] = completionMap.get(entry.line)
+              ? 'success'
+              : 'error';
           });
           return next;
         });
-        setAiErrors((prev) => {
+        setAiErrorsByKey((prev) => {
           const next = { ...prev };
           uncached.forEach((entry) => {
+            const cacheKey = buildOutlineEntryCacheKey(entry);
             if (completionMap.get(entry.line)) {
-              delete next[entry.line];
+              delete next[cacheKey];
             } else {
-              next[entry.line] = '该章节未返回可用标题';
+              next[cacheKey] = '该章节未返回可用标题';
             }
           });
           return next;
@@ -189,17 +260,17 @@ export function useAiTitles(
       } catch (error) {
         if (generation !== requestGenerationRef.current) return;
         const message = error instanceof Error ? error.message : 'AI 标题补全失败';
-        setAiStates((prev) => {
+        setAiStatesByKey((prev) => {
           const next = { ...prev };
-          lines.forEach((line) => {
-            next[line] = 'error';
+          cacheKeys.forEach((k) => {
+            next[k] = 'error';
           });
           return next;
         });
-        setAiErrors((prev) => {
+        setAiErrorsByKey((prev) => {
           const next = { ...prev };
-          lines.forEach((line) => {
-            next[line] = message;
+          cacheKeys.forEach((k) => {
+            next[k] = message;
           });
           return next;
         });
@@ -218,7 +289,7 @@ export function useAiTitles(
     };
 
     startNext();
-  }, []);
+  }, [titleCache]);
 
   const requestAiTitles = useCallback(
     (entries: OutlineEntry[]) => {
@@ -227,23 +298,25 @@ export function useAiTitles(
       entries.forEach((entry) => dedupMap.set(entry.line, entry));
       const uniqueEntries = Array.from(dedupMap.values());
 
-      setAiStates((prev) => {
+      setAiStatesByKey((prev) => {
         let changed = false;
         const next = { ...prev };
         uniqueEntries.forEach((entry) => {
-          if (next[entry.line] === 'error') {
-            next[entry.line] = 'idle';
+          const cacheKey = buildOutlineEntryCacheKey(entry);
+          if (next[cacheKey] === 'error') {
+            next[cacheKey] = 'idle';
             changed = true;
           }
         });
         return changed ? next : prev;
       });
-      setAiErrors((prev) => {
+      setAiErrorsByKey((prev) => {
         let changed = false;
         const next = { ...prev };
         uniqueEntries.forEach((entry) => {
-          if (entry.line in next) {
-            delete next[entry.line];
+          const cacheKey = buildOutlineEntryCacheKey(entry);
+          if (cacheKey in next) {
+            delete next[cacheKey];
             changed = true;
           }
         });
@@ -262,8 +335,8 @@ export function useAiTitles(
     [processQueue]
   );
 
-  // Stale-while-revalidate on content change:
-  // Restore cached titles for entries that still exist instead of clearing all.
+  // ─── Content change: reset generation & queue ─────────────────────────────
+  // No cache → state promotion needed: resolution reads titleCache directly.
   useEffect(() => {
     requestGenerationRef.current += 1;
     if (debounceTimerRef.current !== null) {
@@ -271,50 +344,89 @@ export function useAiTitles(
     }
     queueRef.current = [];
     inFlightRef.current = 0;
+  }, [content]);
 
-    // Only restore state from cache after Provider hydration ensures cache is populated
-    if (!cacheReady) return;
-
-    const restoredTitles: Record<number, string> = {};
-    const restoredStates: Record<number, OutlineAiState> = {};
-    for (const entry of outlineEntriesRef.current) {
-      const cacheKey = buildOutlineEntryCacheKey(entry);
-      const cached = titleCache.get(cacheKey);
-      if (cached) {
-        restoredTitles[entry.line] = cached;
-        restoredStates[entry.line] = 'success';
-      }
-    }
-    setAiTitles(restoredTitles);
-    setAiStates(restoredStates);
-    setAiErrors({});
-  }, [content, cacheReady]);
-
-  // Debounced AI title prefetch for visible entries
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Phase 4 – Auto-prefetch
+  //
+  // Only fires when ALL conditions are met:
+  //   - AI configured & cache hydrated
+  //   - Content is non-empty
+  //   - Phase 1 says there are visible pending entries (visiblePendingCount > 0)
+  //
+  // The debounce callback uses prioritizedPending directly — already filtered
+  // by the Resolution phase. No redundant cache re-checks needed.
+  // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    if (!aiReady || !cacheReady || !content.trim() || pendingAiEntries.length === 0) return;
+    if (!aiReady || !cacheReady || !content.trim() || visiblePendingCount === 0) return;
     if (debounceTimerRef.current !== null) {
       window.clearTimeout(debounceTimerRef.current);
     }
     debounceTimerRef.current = window.setTimeout(() => {
-      requestAiTitles(pendingAiEntries.slice(0, OUTLINE_AI_PREFETCH_SIZE));
+      const visiblePending = prioritizedPending.filter((e) => visibleLines.has(e.line));
+      if (visiblePending.length > 0) {
+        requestAiTitles(visiblePending.slice(0, OUTLINE_AI_PREFETCH_SIZE));
+      }
     }, OUTLINE_AI_DEBOUNCE_MS);
     return () => {
       if (debounceTimerRef.current !== null) {
         window.clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [aiReady, cacheReady, content, pendingAiEntries, requestAiTitles]);
+  }, [
+    aiReady,
+    cacheReady,
+    content,
+    visiblePendingCount,
+    prioritizedPending,
+    requestAiTitles,
+    visibleLines,
+  ]);
+
+  // ─── Output memos ─────────────────────────────────────────────────────────
+  // All derive from resolution.titles (which combines persistent cache + API).
+  const aiTitles = useMemo(() => {
+    const out: Record<number, string> = {};
+    for (const entry of outlineEntries) {
+      const title = resolution.titles[buildOutlineEntryCacheKey(entry)];
+      if (title) out[entry.line] = title;
+    }
+    return out;
+  }, [outlineEntries, resolution.titles]);
+
+  const aiStates = useMemo(() => {
+    const out: Record<number, OutlineAiState> = {};
+    for (const entry of outlineEntries) {
+      if (!entry.needsAiTitle) continue;
+      const key = buildOutlineEntryCacheKey(entry);
+      if (resolution.titles[key]) {
+        out[entry.line] = 'success';
+        continue;
+      }
+      const state = aiStatesByKey[key];
+      if (state) out[entry.line] = state;
+    }
+    return out;
+  }, [outlineEntries, resolution.titles, aiStatesByKey]);
+
+  const aiErrors = useMemo(() => {
+    const out: Record<number, string> = {};
+    for (const entry of outlineEntries) {
+      const err = aiErrorsByKey[buildOutlineEntryCacheKey(entry)];
+      if (err) out[entry.line] = err;
+    }
+    return out;
+  }, [outlineEntries, aiErrorsByKey]);
 
   return {
     aiTitles,
     aiStates,
     aiErrors,
-    failedAiEntries,
+    failedAiEntries: resolution.failed,
     requestAiTitles,
     retryAiEntry: useCallback((entry: OutlineEntry) => requestAiTitles([entry]), [requestAiTitles]),
     retryFailedEntries: useCallback(() => {
-      if (failedAiEntries.length) requestAiTitles(failedAiEntries);
-    }, [failedAiEntries, requestAiTitles]),
+      if (resolution.failed.length) requestAiTitles(resolution.failed);
+    }, [resolution.failed, requestAiTitles]),
   };
 }

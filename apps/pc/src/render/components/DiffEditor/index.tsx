@@ -20,6 +20,8 @@ interface DiffEditorProps {
   modifiedLabel?: string;
   /** 关闭回调 */
   onClose?: () => void;
+  /** 接受变更回调（用于 AI 修复确认） */
+  onAccept?: () => void;
 }
 
 /** 共用暗色主题 */
@@ -65,10 +67,27 @@ const DiffEditor: React.FC<DiffEditorProps> = ({
   originalLabel = '原始版本',
   modifiedLabel = '修改版本',
   onClose,
+  onAccept,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mergeViewRef = useRef<MergeView | null>(null);
   const [chunkCount, setChunkCount] = useState(0);
+  const [activeChunkIndex, setActiveChunkIndex] = useState<number>(0);
+
+  const resolveActiveChunkIndex = useCallback((view: EditorView, merge: MergeView): number => {
+    if (merge.chunks.length === 0) return 0;
+    const pos = view.state.selection.main.head;
+
+    for (let i = 0; i < merge.chunks.length; i++) {
+      const chunk = merge.chunks[i];
+      const from = chunk.fromB;
+      const to = Math.max(chunk.toB, from + 1);
+      if (pos >= from && pos <= to) return i + 1;
+      if (pos < from) return i + 1;
+    }
+
+    return merge.chunks.length;
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -98,61 +117,96 @@ const DiffEditor: React.FC<DiffEditorProps> = ({
 
     mergeViewRef.current = view;
     setChunkCount(view.chunks.length);
+    setActiveChunkIndex(view.chunks.length > 0 ? 1 : 0);
+
+    // 打开 diff 时自动定位并高亮首个变更块（VS Code 风格）
+    if (view.chunks.length > 0) {
+      requestAnimationFrame(() => {
+        view.b.focus();
+        goToNextChunk(view.b);
+        setActiveChunkIndex(resolveActiveChunkIndex(view.b, view));
+      });
+    }
 
     return () => {
       view.destroy();
       mergeViewRef.current = null;
       setChunkCount(0);
     };
-  }, [original, modified]);
+  }, [original, modified, resolveActiveChunkIndex]);
 
   const handleClose = useCallback(() => {
     onClose?.();
   }, [onClose]);
 
-  const handleNavigateChunk = useCallback((direction: 'previous' | 'next') => {
-    const editorView = mergeViewRef.current?.b;
-    if (!editorView) {
-      return;
-    }
+  const handleNavigateChunk = useCallback(
+    (direction: 'previous' | 'next') => {
+      const merge = mergeViewRef.current;
+      const editorView = merge?.b;
+      if (!editorView || !merge) {
+        return;
+      }
 
-    editorView.focus();
-    if (direction === 'previous') {
-      goToPreviousChunk(editorView);
-      return;
-    }
+      editorView.focus();
+      if (direction === 'previous') {
+        goToPreviousChunk(editorView);
+        setActiveChunkIndex(resolveActiveChunkIndex(editorView, merge));
+        return;
+      }
 
-    goToNextChunk(editorView);
-  }, []);
+      goToNextChunk(editorView);
+      setActiveChunkIndex(resolveActiveChunkIndex(editorView, merge));
+    },
+    [resolveActiveChunkIndex]
+  );
 
   return (
     <div className={styles.diffEditor}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <span className={styles.label}>{originalLabel}</span>
+          <span className={styles.label} title={originalLabel}>
+            {originalLabel}
+          </span>
           <span className={styles.label}>↔</span>
-          <span className={styles.label}>{modifiedLabel}</span>
+          <span className={styles.label} title={modifiedLabel}>
+            {modifiedLabel}
+          </span>
         </div>
         <div className={styles.headerRight}>
           <span className={styles.summaryBadge}>
-            {chunkCount > 0 ? `共 ${chunkCount} 处变更` : '两个版本内容一致'}
+            {chunkCount > 0 ? `共${chunkCount}处` : '无变更'}
           </span>
+          {chunkCount > 0 && (
+            <span className={styles.summaryBadge}>
+              {activeChunkIndex}/{chunkCount}
+            </span>
+          )}
           <button
             className={styles.navButton}
             onClick={() => handleNavigateChunk('previous')}
             disabled={chunkCount === 0}
-            title="定位到上一处变更"
+            title="上一处变更"
           >
-            上一处
+            上
           </button>
           <button
             className={styles.navButton}
             onClick={() => handleNavigateChunk('next')}
             disabled={chunkCount === 0}
-            title="定位到下一处变更"
+            title="下一处变更"
           >
-            下一处
+            下
           </button>
+          {onAccept && (
+            <button
+              className={styles.navButton}
+              onClick={onAccept}
+              title="接受修改"
+              style={{ color: '#73c991', fontWeight: 600 }}
+            >
+              ✓ 接受修改
+            </button>
+          )}
           <button className={styles.closeButton} onClick={handleClose} title="关闭对比">
             ✕
           </button>

@@ -125,6 +125,48 @@
   :global(.cm-editor) {
     height: 100%;
   }
+
+  :global(.cm-line.cm-transient-highlight) {
+    animation: cmTransientLineFlash 1.5s ease-out 1;
+    background: linear-gradient(90deg,
+        rgba(86, 156, 214, 0.38) 0%,
+        rgba(86, 156, 214, 0.22) 45%,
+        rgba(86, 156, 214, 0.08) 100%);
+    border-radius: 3px;
+  }
+
+  :global(.cm-applied-gutter) {
+    min-width: 42px;
+  }
+
+  :global(.cm-applied-gutter .cm-gutterElement) {
+    padding: 0 4px;
+    text-align: right;
+  }
+
+  :global(.cm-applied-gutter-marker) {
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0.2px;
+    color: rgba(125, 180, 255, 0.45);
+    opacity: 0.72;
+    user-select: none;
+    pointer-events: none;
+  }
+}
+
+@keyframes cmTransientLineFlash {
+  0% {
+    background: rgba(86, 156, 214, 0.48);
+  }
+
+  70% {
+    background: rgba(86, 156, 214, 0.18);
+  }
+
+  100% {
+    background: transparent;
+  }
 }
 
 // Full-size overlay for empty / loading / error states

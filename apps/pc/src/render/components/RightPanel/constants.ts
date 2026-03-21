@@ -1,4 +1,11 @@
-import type { TabType, LoreCategory, RelationTone, CharacterCamp, PlotSceneBoard } from './types';
+import type {
+  TabType,
+  LoreCategory,
+  RelationTone,
+  CharacterCamp,
+  PlotSceneBoard,
+  StorylineLayoutMode,
+} from './types';
 
 export const OUTLINE_AI_DEBOUNCE_MS = 320;
 export const OUTLINE_AI_BATCH_SIZE = 5;
@@ -66,3 +73,22 @@ export const ROLE_COLORS: Record<string, string> = {
 };
 
 export const ACT_COLORS = ['#007acc', '#4ec9b0', '#c586c0', '#dcdcaa', '#9cdcfe', '#f14c4c'];
+
+export const LAYOUT_MODE_LABELS: Record<StorylineLayoutMode, string> = {
+  board: '故事板',
+  timeline: '泳道线',
+  causal: '因果链',
+};
+
+export const LAYOUT_MODE_KEYS = Object.keys(LAYOUT_MODE_LABELS) as StorylineLayoutMode[];
+
+/** Intensity heat-map gradient stops (1–5) */
+export const INTENSITY_COLORS = [
+  'rgba(86, 156, 214, 0.25)', // 1 - calm
+  'rgba(78, 201, 176, 0.35)', // 2 - building
+  'rgba(220, 220, 170, 0.4)', // 3 - tension
+  'rgba(241, 148, 76, 0.5)', // 4 - high
+  'rgba(241, 76, 76, 0.55)', // 5 - climax
+];
+
+export const INTENSITY_LABELS = ['平静', '铺垫', '紧张', '激烈', '高潮'];

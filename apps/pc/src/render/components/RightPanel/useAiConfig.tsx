@@ -75,8 +75,24 @@ export function AiConfigProvider({ children }: { children: ReactNode }) {
     // 每次窗口获得焦点时重新读取配置（覆盖用户在设置中心修改后返回的场景）
     const handleFocus = () => void loadConfig();
     window.addEventListener('focus', handleFocus);
+
+    // 主进程设置写入后主动推送，实时同步 AI 状态
+    const ipc = window.electron?.ipcRenderer;
+    let disposeSettingsUpdated: (() => void) | void;
+    try {
+      disposeSettingsUpdated = ipc?.on?.('settings-updated', (_event, key?: string) => {
+        if (!key || key === SETTINGS_STORAGE_KEY) {
+          void loadConfig();
+        }
+      });
+    } catch {
+      // preload 尚未更新时退回到 focus 刷新，避免渲染层直接崩溃
+      disposeSettingsUpdated = undefined;
+    }
+
     return () => {
       window.removeEventListener('focus', handleFocus);
+      if (typeof disposeSettingsUpdated === 'function') disposeSettingsUpdated();
     };
   }, [loadConfig]);
 

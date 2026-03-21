@@ -124,6 +124,13 @@ contextBridge.exposeInMainWorld('electron', {
         'read-docx-data',
         // PPT 美化
         'beautify-pptx',
+        // AI 助手
+        'save-analysis-file',
+        'open-ai-assistant-window',
+        'ai-window-request-open-file',
+        'ai-window-request-open-settings',
+        'ai-window-apply-fix',
+        'ai-save-session-state',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -137,6 +144,7 @@ contextBridge.exposeInMainWorld('electron', {
         'shortcut-save-file',
         'shortcut-save-as-file',
         'menu-export-project',
+        'settings-updated',
         'update-available',
         'update-not-available',
         'update-download-progress',
@@ -144,6 +152,9 @@ contextBridge.exposeInMainWorld('electron', {
         'update-state-changed',
         'update-rollback-available',
         'file-changed',
+        'open-file-from-ai',
+        'open-settings-from-ai',
+        'ai-apply-fix-request',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.on(channel, listener);
@@ -162,6 +173,7 @@ contextBridge.exposeInMainWorld('electron', {
         'shortcut-save-file',
         'shortcut-save-as-file',
         'menu-export-project',
+        'settings-updated',
         'update-available',
         'update-not-available',
         'update-download-progress',
@@ -183,6 +195,7 @@ contextBridge.exposeInMainWorld('electron', {
         'shortcut-save-file',
         'shortcut-save-as-file',
         'menu-export-project',
+        'settings-updated',
         'update-available',
         'update-not-available',
         'update-download-progress',

@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AiOutlineEye } from 'react-icons/ai';
 import { VscCode } from 'react-icons/vsc';
+import { EditorView } from '@codemirror/view';
 import TabBar from '../TabBar';
 import TextEditor from '../TextEditor';
+import type { InlineDiffRange } from '../TextEditor';
 import ChangelogViewer from '../ChangelogViewer';
 import SettingsButton from '../SettingsButton';
 import ResourceViewer, {
@@ -22,13 +24,18 @@ interface CursorPosition {
 
 interface ScrollToLineRequest {
   line: number;
-  id: number;
+  id: string;
 }
 
 interface ReplaceLineRequest {
   line: number;
   text: string;
   id: number;
+}
+
+interface TransientHighlightLineRequest {
+  line: number;
+  id: string;
 }
 
 interface ContentPanelProps {
@@ -38,7 +45,10 @@ interface ContentPanelProps {
   reloadToken?: number;
   encoding?: string;
   scrollToLine?: ScrollToLineRequest | null;
+  transientHighlightLine?: TransientHighlightLineRequest | null;
   replaceLineRequest?: ReplaceLineRequest | null;
+  inlineDiff?: InlineDiffRange | null;
+  editorViewRef?: React.MutableRefObject<EditorView | null>;
   onTabSelect: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
   onCloseOtherTabs?: (filePath: string) => void;
@@ -47,6 +57,8 @@ interface ContentPanelProps {
   onContentChange?: (content: string) => void;
   onCursorChange?: (pos: CursorPosition) => void;
   onSaveUntitled?: (untitledPath: string, content: string) => void;
+  onScrollProcessed?: () => void;
+  onTransientHighlightProcessed?: () => void;
 }
 
 const ContentPanel: React.FC<ContentPanelProps> = ({
@@ -56,7 +68,10 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   reloadToken,
   encoding,
   scrollToLine,
+  transientHighlightLine,
   replaceLineRequest,
+  inlineDiff,
+  editorViewRef,
   onTabSelect,
   onTabClose,
   onCloseOtherTabs,
@@ -65,6 +80,8 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   onContentChange,
   onCursorChange,
   onSaveUntitled,
+  onScrollProcessed,
+  onTransientHighlightProcessed,
 }) => {
   const [wordWrap, setWordWrap] = useState(false);
   const [viewMode, setViewMode] = useState<'preview' | 'content'>('content');
@@ -166,10 +183,15 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
             wordWrap={wordWrap}
             encoding={encoding}
             scrollToLine={scrollToLine}
+            transientHighlightLine={transientHighlightLine}
             replaceLineRequest={replaceLineRequest}
+            inlineDiff={inlineDiff}
+            editorViewRef={editorViewRef}
             onContentChange={onContentChange}
             onCursorChange={onCursorChange}
             onSaveUntitled={onSaveUntitled}
+            onScrollProcessed={onScrollProcessed}
+            onTransientHighlightProcessed={onTransientHighlightProcessed}
             settingsComponent={settingsComponent}
           />
         )}

@@ -28,8 +28,8 @@ extraResources:
     to: sample-data
     filter:
       - "**/*"
-  - from: CHANGELOG.md
-    to: CHANGELOG.md
+  - from: release-notes.json
+    to: release-notes.json
 
 mac:
   icon: resources/icon.icns

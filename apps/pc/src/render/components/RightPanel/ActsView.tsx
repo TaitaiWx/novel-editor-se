@@ -1,24 +1,70 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { extractActs, type ActNode } from '@novel-editor/basic-algorithm';
 import styles from './styles.module.scss';
-import type { PlotActBoard, PlotSceneBoard } from './types';
-import { STRUCTURE_NODE_PRESETS, PLOT_STATUS_LABELS, ACT_COLORS } from './constants';
+import type { PlotActBoard, PlotSceneBoard, StorylineLayoutMode } from './types';
 import { createPlotStorageKey, createActBoardKey, mergeActBoard } from './utils';
-import { VerticalSplit } from './VerticalSplit';
+import { LAYOUT_MODE_LABELS, LAYOUT_MODE_KEYS, ACT_COLORS } from './constants';
+import { PlotBoardInspector } from './PlotBoardInspector';
+import { SwimlaneTimeline } from './SwimlaneTimeline';
+import { CausalChainView } from './CausalChainView';
 
 export const ActsView: React.FC<{
   content: string;
-  onScrollToLine?: (line: number) => void;
+  onScrollToLine?: (line: number, contentKey?: string) => void;
   folderPath: string | null;
 }> = React.memo(({ content, onScrollToLine, folderPath }) => {
+  // ── State ──────────────────────────────────────────────────────────────────
   const [activeAct, setActiveAct] = useState<number | null>(null);
   const [activeScene, setActiveScene] = useState<string | null>(null);
   const [plotBoards, setPlotBoards] = useState<Record<string, PlotActBoard>>({});
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const [sceneDragKey, setSceneDragKey] = useState<string | null>(null);
+  const [layoutMode, setLayoutMode] = useState<StorylineLayoutMode>('board');
 
+  // ── Derived data (useMemo — single source of truth) ────────────────────────
   const acts: ActNode[] = useMemo(() => extractActs(content), [content]);
 
+  const selectedActIndex = useMemo(
+    () => (activeAct !== null ? activeAct : acts.length > 0 ? 0 : null),
+    [activeAct, acts.length]
+  );
+
+  const selectedAct = useMemo(
+    () => (selectedActIndex !== null ? acts[selectedActIndex] || null : null),
+    [selectedActIndex, acts]
+  );
+
+  const selectedBoardKey = useMemo(
+    () =>
+      selectedAct && selectedActIndex !== null
+        ? createActBoardKey(selectedAct, selectedActIndex)
+        : null,
+    [selectedAct, selectedActIndex]
+  );
+
+  const selectedBoard = useMemo(
+    () =>
+      selectedAct && selectedActIndex !== null
+        ? mergeActBoard(
+            selectedAct,
+            selectedActIndex,
+            selectedBoardKey ? plotBoards[selectedBoardKey] : undefined
+          )
+        : null,
+    [selectedAct, selectedActIndex, selectedBoardKey, plotBoards]
+  );
+
+  // ── Refs (stable closure access for async callbacks) ───────────────────────
+  const selectedActRef = useRef(selectedAct);
+  selectedActRef.current = selectedAct;
+  const selectedActIndexRef = useRef(selectedActIndex);
+  selectedActIndexRef.current = selectedActIndex;
+  const plotBoardsRef = useRef(plotBoards);
+  plotBoardsRef.current = plotBoards;
+  const selectedBoardRef = useRef(selectedBoard);
+  selectedBoardRef.current = selectedBoard;
+
+  // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const loadBoards = async () => {
       const key = createPlotStorageKey(folderPath);
@@ -37,6 +83,7 @@ export const ActsView: React.FC<{
     loadBoards();
   }, [folderPath]);
 
+  // ── Callbacks ──────────────────────────────────────────────────────────────
   const persistPlotBoards = useCallback(
     async (nextBoards: Record<string, PlotActBoard>) => {
       const key = createPlotStorageKey(folderPath);
@@ -64,6 +111,169 @@ export const ActsView: React.FC<{
     [onScrollToLine]
   );
 
+  const handleSceneClickByKey = useCallback(
+    (sceneKey: string) => {
+      setActiveScene((prev) => (prev === sceneKey ? null : sceneKey));
+      const actIdx = activeAct ?? 0;
+      const act = acts[actIdx];
+      if (!act) return;
+      const boardKey = createActBoardKey(act, actIdx);
+      const board = mergeActBoard(act, actIdx, plotBoards[boardKey]);
+      const sceneIdx = board.sceneBoards.findIndex((s) => s.sceneKey === sceneKey);
+      const sceneLine = act.scenes[sceneIdx]?.line ?? act.line;
+      onScrollToLine?.(sceneLine);
+    },
+    [activeAct, acts, plotBoards, onScrollToLine]
+  );
+
+  const updateSelectedBoard = useCallback(
+    async (updater: (prev: PlotActBoard) => PlotActBoard) => {
+      const act = selectedActRef.current;
+      const actIndex = selectedActIndexRef.current;
+      if (!act || actIndex === null) return;
+      const boardKey = createActBoardKey(act, actIndex);
+      const currentBoard = mergeActBoard(act, actIndex, plotBoardsRef.current[boardKey]);
+      const nextBoard = updater(currentBoard);
+      const nextBoards = { ...plotBoardsRef.current, [boardKey]: nextBoard };
+      setPlotBoards(nextBoards);
+      await persistPlotBoards(nextBoards);
+    },
+    [persistPlotBoards]
+  );
+
+  const handleSceneUpdate = useCallback(
+    (sceneKey: string, partial: Partial<PlotSceneBoard>) => {
+      void updateSelectedBoard((prev) => ({
+        ...prev,
+        sceneBoards: prev.sceneBoards.map((s) =>
+          s.sceneKey === sceneKey ? { ...s, ...partial } : s
+        ),
+      }));
+    },
+    [updateSelectedBoard]
+  );
+
+  const handleToggleStructureNode = useCallback(
+    (node: string) => {
+      void updateSelectedBoard((prev) => ({
+        ...prev,
+        structureNodes: prev.structureNodes.includes(node)
+          ? prev.structureNodes.filter((item) => item !== node)
+          : [...prev.structureNodes, node],
+      }));
+    },
+    [updateSelectedBoard]
+  );
+
+  const handleMoveScene = useCallback(
+    (sceneKey: string, direction: -1 | 1) => {
+      void updateSelectedBoard((prev) => {
+        const index = prev.sceneBoards.findIndex((item) => item.sceneKey === sceneKey);
+        const target = index + direction;
+        if (index < 0 || target < 0 || target >= prev.sceneBoards.length) return prev;
+        const next = [...prev.sceneBoards];
+        const [moving] = next.splice(index, 1);
+        next.splice(target, 0, moving);
+        return { ...prev, sceneBoards: next };
+      });
+    },
+    [updateSelectedBoard]
+  );
+
+  const handleSceneDragReorder = useCallback(
+    (sourceKey: string, targetKey: string) => {
+      void updateSelectedBoard((prev) => {
+        const sourceIndex = prev.sceneBoards.findIndex((item) => item.sceneKey === sourceKey);
+        const targetIndex = prev.sceneBoards.findIndex((item) => item.sceneKey === targetKey);
+        if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return prev;
+        const next = [...prev.sceneBoards];
+        const [moving] = next.splice(sourceIndex, 1);
+        next.splice(targetIndex, 0, moving);
+        return { ...prev, sceneBoards: next };
+      });
+    },
+    [updateSelectedBoard]
+  );
+
+  const handleSceneDrop = useCallback(
+    (targetKey: string) => {
+      const sourceKey = sceneDragKey;
+      if (!sourceKey) return;
+      handleSceneDragReorder(sourceKey, targetKey);
+      setSceneDragKey(null);
+    },
+    [sceneDragKey, handleSceneDragReorder]
+  );
+
+  const handleGenerateAI = useCallback(async () => {
+    const act = selectedActRef.current;
+    const board = selectedBoardRef.current;
+    if (!act || !board) return;
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    setAiSuggesting(true);
+    try {
+      const response = (await ipc.invoke('ai-request', {
+        prompt: `请为「${act.title}」输出剧情板建议，要求包含：
+1) 本幕目标
+2) 核心冲突
+3) 转折点
+4) 结果回收
+5) 每个场景的推进建议（含目标、张力来源、结果）
+6) 每个场景的情绪强度评估(1-5)
+7) 场景之间的因果关系推荐`,
+        systemPrompt:
+          '你是专业剧情策划编辑，请输出清晰、可执行、简洁的中文建议。使用结构化格式输出。',
+        context: [
+          `正文片段:\n${content.slice(0, 2400)}`,
+          `当前剧情板:\n前提: ${board.premise}\n目标: ${board.goal}\n冲突: ${board.conflict}\n转折: ${board.twist}\n结果: ${board.payoff}`,
+          `场景列表:\n${board.sceneBoards.map((item, i) => `${i + 1}. ${item.title} [目标:${item.objective || '未填'}] [状态:${item.status}]`).join('\n')}`,
+        ].join('\n\n'),
+      })) as { ok: boolean; text?: string; error?: string };
+      void updateSelectedBoard((prev) => ({
+        ...prev,
+        aiSuggestion: response.ok
+          ? response.text || 'AI 未返回内容'
+          : response.error || 'AI 请求失败',
+      }));
+    } finally {
+      setAiSuggesting(false);
+    }
+  }, [content, updateSelectedBoard]);
+
+  const handleSceneAiSuggest = useCallback(
+    async (sceneKey: string) => {
+      const act = selectedActRef.current;
+      const board = selectedBoardRef.current;
+      if (!act || !board) return;
+      const scene = board.sceneBoards.find((s) => s.sceneKey === sceneKey);
+      if (!scene) return;
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) return;
+
+      const response = (await ipc.invoke('ai-request', {
+        prompt: `请为场景「${scene.title}」补充：
+1) 场景目标（如果为空）
+2) 张力/冲突来源
+3) 场景结果
+4) 3-5个关键节拍(beat)
+5) 情绪强度评估(1-5)`,
+        systemPrompt: '你是专业剧情策划编辑，输出简洁的中文建议。',
+        context: `所属幕: ${act.title}\n场景: ${scene.title}\n当前目标: ${scene.objective || '空'}\n当前冲突: ${scene.tension || '空'}`,
+      })) as { ok: boolean; text?: string; error?: string };
+
+      if (response.ok && response.text) {
+        handleSceneUpdate(sceneKey, {
+          outcome: scene.outcome || response.text.slice(0, 100),
+        });
+      }
+    },
+    [handleSceneUpdate]
+  );
+
+  const handleSceneDragStart = useCallback((key: string) => setSceneDragKey(key), []);
+
+  // ── Early returns (ALL hooks are above — React Rules of Hooks satisfied) ──
   if (!content) {
     return <div className={styles.emptyHint}>打开文件后查看幕剧结构</div>;
   }
@@ -78,395 +288,95 @@ export const ActsView: React.FC<{
     );
   }
 
-  const selectedActIndex = activeAct !== null ? activeAct : acts.length > 0 ? 0 : null;
-  const selectedAct = selectedActIndex !== null ? acts[selectedActIndex] || null : null;
-  const selectedBoardKey =
-    selectedAct && selectedActIndex !== null
-      ? createActBoardKey(selectedAct, selectedActIndex)
-      : null;
-  const selectedBoard =
-    selectedAct && selectedActIndex !== null
-      ? mergeActBoard(
-          selectedAct,
-          selectedActIndex,
-          selectedBoardKey ? plotBoards[selectedBoardKey] : undefined
-        )
-      : null;
+  // ── Render visualization based on layout mode ──
+  const renderVisualization = () => {
+    if (!selectedBoard || selectedActIndex === null) return null;
 
-  const updateSelectedBoard = async (updater: (prev: PlotActBoard) => PlotActBoard) => {
-    if (!selectedAct || selectedActIndex === null) return;
-    const boardKey = createActBoardKey(selectedAct, selectedActIndex);
-    const currentBoard = mergeActBoard(selectedAct, selectedActIndex, plotBoards[boardKey]);
-    const nextBoard = updater(currentBoard);
-    const nextBoards = { ...plotBoards, [boardKey]: nextBoard };
-    setPlotBoards(nextBoards);
-    await persistPlotBoards(nextBoards);
-  };
-
-  const toggleStructureNode = async (node: string) => {
-    await updateSelectedBoard((prev) => ({
-      ...prev,
-      structureNodes: prev.structureNodes.includes(node)
-        ? prev.structureNodes.filter((item) => item !== node)
-        : [...prev.structureNodes, node],
-    }));
-  };
-
-  const moveScene = async (sceneKey: string, direction: -1 | 1) => {
-    await updateSelectedBoard((prev) => {
-      const index = prev.sceneBoards.findIndex((item) => item.sceneKey === sceneKey);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= prev.sceneBoards.length) return prev;
-      const next = [...prev.sceneBoards];
-      const [moving] = next.splice(index, 1);
-      next.splice(target, 0, moving);
-      return { ...prev, sceneBoards: next };
-    });
-  };
-
-  const reorderSceneByKey = async (sourceKey: string, targetKey: string) => {
-    await updateSelectedBoard((prev) => {
-      const sourceIndex = prev.sceneBoards.findIndex((item) => item.sceneKey === sourceKey);
-      const targetIndex = prev.sceneBoards.findIndex((item) => item.sceneKey === targetKey);
-      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return prev;
-      const next = [...prev.sceneBoards];
-      const [moving] = next.splice(sourceIndex, 1);
-      next.splice(targetIndex, 0, moving);
-      return { ...prev, sceneBoards: next };
-    });
-  };
-
-  const generateAISuggestion = async () => {
-    if (!selectedAct || !selectedBoard) return;
-    const ipc = window.electron?.ipcRenderer;
-    if (!ipc) return;
-    setAiSuggesting(true);
-    try {
-      const response = (await ipc.invoke('ai-request', {
-        prompt: `请为「${selectedAct.title}」输出剧情板建议，要求包含：1) 本幕目标 2) 冲突 3) 转折 4) 结果回收 5) 每个场景的一句推进建议。`,
-        systemPrompt: '你是专业剧情策划编辑，请输出清晰、可执行、简洁的中文建议。',
-        context: [
-          `正文片段:\n${content.slice(0, 1800)}`,
-          `当前剧情板:\n目标: ${selectedBoard.goal}\n冲突: ${selectedBoard.conflict}\n转折: ${selectedBoard.twist}\n结果: ${selectedBoard.payoff}`,
-          `场景列表:\n${selectedBoard.sceneBoards.map((item) => `- ${item.title}`).join('\n')}`,
-        ].join('\n\n'),
-      })) as { ok: boolean; text?: string; error?: string };
-      await updateSelectedBoard((prev) => ({
-        ...prev,
-        aiSuggestion: response.ok
-          ? response.text || 'AI 未返回内容'
-          : response.error || 'AI 请求失败',
-      }));
-    } finally {
-      setAiSuggesting(false);
+    switch (layoutMode) {
+      case 'timeline':
+        return (
+          <SwimlaneTimeline
+            board={selectedBoard}
+            actIndex={selectedActIndex}
+            activeScene={activeScene}
+            onSceneClick={handleSceneClickByKey}
+            onSceneUpdate={handleSceneUpdate}
+            onSceneDragReorder={handleSceneDragReorder}
+          />
+        );
+      case 'causal':
+        return (
+          <CausalChainView
+            board={selectedBoard}
+            activeScene={activeScene}
+            onSceneClick={handleSceneClickByKey}
+            onSceneUpdate={handleSceneUpdate}
+          />
+        );
+      case 'board':
+      default:
+        return (
+          <PlotBoardInspector
+            selectedAct={selectedAct}
+            selectedBoard={selectedBoard}
+            aiSuggesting={aiSuggesting}
+            onUpdateBoard={updateSelectedBoard}
+            onToggleStructureNode={handleToggleStructureNode}
+            onMoveScene={handleMoveScene}
+            onGenerateAI={handleGenerateAI}
+            onSceneAiSuggest={handleSceneAiSuggest}
+          />
+        );
     }
   };
 
-  const cardsView = (
-    <div className={styles.storyBoardWrap}>
-      <div className={styles.storyBoardHeader}>
-        <span>横向结构卡编排</span>
-        <span className={styles.sectionSubtle}>拖拽卡片可重排，颜色条用于节奏对照</span>
+  return (
+    <div className={styles.actsViewRoot}>
+      {/* ── Layout mode switcher ── */}
+      <div className={styles.layoutModeSwitcher}>
+        {LAYOUT_MODE_KEYS.map((mode) => (
+          <button
+            key={mode}
+            className={`${styles.layoutModeButton} ${layoutMode === mode ? styles.layoutModeActive : ''}`}
+            onClick={() => setLayoutMode(mode)}
+          >
+            {mode === 'board' && '▦'}
+            {mode === 'timeline' && '≡'}
+            {mode === 'causal' && '⟠'}
+            <span>{LAYOUT_MODE_LABELS[mode]}</span>
+          </button>
+        ))}
       </div>
-      <div className={styles.storyBoardScroller}>
-        {acts.map((act, actIdx) => {
-          const color = ACT_COLORS[actIdx % ACT_COLORS.length];
-          const isActActive = activeAct === actIdx;
-          const boardKey = createActBoardKey(act, actIdx);
-          const board = mergeActBoard(act, actIdx, plotBoards[boardKey]);
-          const sceneCount = board.sceneBoards.length;
-          const completeCount = board.sceneBoards.filter((item) => item.status === 'done').length;
+
+      {/* ── Act selector strip ── */}
+      <div className={styles.actSelectorStrip}>
+        {acts.map((act, idx) => {
+          const color = ACT_COLORS[idx % ACT_COLORS.length];
+          const isActive = selectedActIndex === idx;
+          const boardKey = createActBoardKey(act, idx);
+          const board = mergeActBoard(act, idx, plotBoards[boardKey]);
+          const doneCount = board.sceneBoards.filter((s) => s.status === 'done').length;
+          const total = board.sceneBoards.length;
+
           return (
-            <div
-              key={actIdx}
-              className={`${styles.storyActCard} ${isActActive ? styles.storyActCardActive : ''}`}
-              onClick={() => handleActClick(actIdx, act.line)}
-              style={{ borderTopColor: color }}
+            <button
+              key={idx}
+              className={`${styles.actSelectorChip} ${isActive ? styles.actSelectorActive : ''}`}
+              style={{ '--act-color': color } as React.CSSProperties}
+              onClick={() => handleActClick(idx, act.line)}
             >
-              <div className={styles.storyActTop}>
-                <span className={styles.storyActTitle}>{act.title}</span>
-                <span className={styles.storyActMeta}>
-                  {completeCount}/{sceneCount}
-                </span>
-              </div>
-              {act.scenes.length > 0 && (
-                <div className={styles.storyActRange}>
-                  {act.scenes[0].title} — {act.scenes[act.scenes.length - 1].title}
-                </div>
-              )}
-              <div className={styles.storyTempoTrack}>
-                {board.sceneBoards.length === 0 ? (
-                  <span className={styles.storyTempoEmpty}>暂无场景</span>
-                ) : (
-                  board.sceneBoards.map((sceneBoard, index) => {
-                    const sceneKey = `${actIdx}-${index}`;
-                    const sceneLine = act.scenes[index]?.line || act.line;
-                    const isSceneActive = activeScene === sceneKey;
-                    const statusClass =
-                      sceneBoard.status === 'done'
-                        ? styles.tempoDone
-                        : sceneBoard.status === 'ready'
-                          ? styles.tempoReady
-                          : styles.tempoDraft;
-                    return (
-                      <button
-                        key={sceneBoard.sceneKey}
-                        className={`${styles.storySceneChip} ${isSceneActive ? styles.storySceneChipActive : ''} ${statusClass}`}
-                        draggable={isActActive}
-                        onDragStart={() => setSceneDragKey(sceneBoard.sceneKey)}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={async () => {
-                          if (sceneDragKey) {
-                            await reorderSceneByKey(sceneDragKey, sceneBoard.sceneKey);
-                            setSceneDragKey(null);
-                          }
-                        }}
-                        onClick={(e) => handleSceneClick(e, sceneKey, sceneLine)}
-                      >
-                        <span>{index + 1}</span>
-                        <em>{sceneBoard.title}</em>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
+              <span className={styles.actSelectorDot} style={{ background: color }} />
+              <span className={styles.actSelectorLabel}>{act.title}</span>
+              <span className={styles.actSelectorProgress}>
+                {doneCount}/{total}
+              </span>
+            </button>
           );
         })}
       </div>
+
+      {/* ── Main visualization area ── */}
+      <div className={styles.actsVisualizationArea}>{renderVisualization()}</div>
     </div>
   );
-
-  const inspectorView = (
-    <div className={styles.plotInspector}>
-      <div className={styles.sectionHeader}>
-        <span>剧情板</span>
-        <span className={styles.sectionSubtle}>按幕管理目标、冲突与场景推进</span>
-      </div>
-      {selectedAct && selectedBoard ? (
-        <>
-          <div className={styles.inspectorTitle} title={selectedAct.title}>
-            {selectedAct.title}
-          </div>
-          <div className={styles.inspectorMeta}>
-            {selectedAct.scenes.length > 0
-              ? `${selectedAct.scenes[0].title} — ${selectedAct.scenes[selectedAct.scenes.length - 1].title}  ·  ${selectedAct.scenes.length} 场景`
-              : `${selectedAct.scenes.length} 场景`}
-          </div>
-          <div className={styles.inspectorChecklist}>
-            <span className={styles.inspectorChip}>目标</span>
-            <span className={styles.inspectorChip}>冲突</span>
-            <span className={styles.inspectorChip}>转折</span>
-            <span className={styles.inspectorChip}>结果</span>
-          </div>
-
-          <div className={styles.plotFieldGroup}>
-            <label className={styles.plotFieldLabel}>本幕前提</label>
-            <textarea
-              className={styles.formTextarea}
-              rows={2}
-              value={selectedBoard.premise}
-              onChange={(e) =>
-                updateSelectedBoard((prev) => ({ ...prev, premise: e.target.value }))
-              }
-              placeholder="这一幕开始前，人物与局势处于什么状态？"
-            />
-          </div>
-
-          <div className={styles.plotFieldGrid}>
-            <div className={styles.plotFieldGroup}>
-              <label className={styles.plotFieldLabel}>目标</label>
-              <textarea
-                className={styles.formTextarea}
-                rows={2}
-                value={selectedBoard.goal}
-                onChange={(e) => updateSelectedBoard((prev) => ({ ...prev, goal: e.target.value }))}
-                placeholder="主角在这一幕要达成什么？"
-              />
-            </div>
-            <div className={styles.plotFieldGroup}>
-              <label className={styles.plotFieldLabel}>核心冲突</label>
-              <textarea
-                className={styles.formTextarea}
-                rows={2}
-                value={selectedBoard.conflict}
-                onChange={(e) =>
-                  updateSelectedBoard((prev) => ({ ...prev, conflict: e.target.value }))
-                }
-                placeholder="谁或什么在阻止目标完成？"
-              />
-            </div>
-            <div className={styles.plotFieldGroup}>
-              <label className={styles.plotFieldLabel}>转折</label>
-              <textarea
-                className={styles.formTextarea}
-                rows={2}
-                value={selectedBoard.twist}
-                onChange={(e) =>
-                  updateSelectedBoard((prev) => ({ ...prev, twist: e.target.value }))
-                }
-                placeholder="这一幕的意外、揭示或反转是什么？"
-              />
-            </div>
-            <div className={styles.plotFieldGroup}>
-              <label className={styles.plotFieldLabel}>结果 / 回收</label>
-              <textarea
-                className={styles.formTextarea}
-                rows={2}
-                value={selectedBoard.payoff}
-                onChange={(e) =>
-                  updateSelectedBoard((prev) => ({ ...prev, payoff: e.target.value }))
-                }
-                placeholder="这一幕结束后留下什么结果、代价或伏笔？"
-              />
-            </div>
-          </div>
-
-          <div className={styles.inspectorText}>
-            下面把每一场拆成目标、张力和结果，用来做真正的情节推进管理。
-          </div>
-
-          <div className={styles.structureNodeGroup}>
-            {STRUCTURE_NODE_PRESETS.map((node) => (
-              <button
-                key={node}
-                className={`${styles.structureNodeChip} ${selectedBoard.structureNodes.includes(node) ? styles.structureNodeChipActive : ''}`}
-                onClick={() => toggleStructureNode(node)}
-              >
-                {node}
-              </button>
-            ))}
-          </div>
-
-          <div className={styles.aiInlinePanel}>
-            <button
-              className={styles.submitButton}
-              disabled={aiSuggesting}
-              onClick={generateAISuggestion}
-            >
-              {aiSuggesting ? 'AI 生成中...' : 'AI 一键建议'}
-            </button>
-            <div className={styles.aiInlineResult}>
-              {selectedBoard.aiSuggestion || '点击按钮生成这一幕的剧情建议'}
-            </div>
-          </div>
-
-          <div className={styles.sceneBoardList}>
-            {selectedBoard.sceneBoards.length === 0 ? (
-              <div className={styles.emptyHint}>当前幕暂无场景，可先在正文里补结构标题</div>
-            ) : (
-              selectedBoard.sceneBoards.map((sceneBoard) => (
-                <div key={sceneBoard.sceneKey} className={styles.sceneBoardCard}>
-                  <div className={styles.sceneBoardHeader}>
-                    <div className={styles.sceneBoardTitle}>{sceneBoard.title}</div>
-                    <div className={styles.sceneHeaderActions}>
-                      <button
-                        className={styles.sceneMoveButton}
-                        onClick={() => moveScene(sceneBoard.sceneKey, -1)}
-                        title="上移"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        className={styles.sceneMoveButton}
-                        onClick={() => moveScene(sceneBoard.sceneKey, 1)}
-                        title="下移"
-                      >
-                        ↓
-                      </button>
-                      <select
-                        className={styles.sceneStatusSelect}
-                        value={sceneBoard.status}
-                        onChange={(e) =>
-                          updateSelectedBoard((prev) => ({
-                            ...prev,
-                            sceneBoards: prev.sceneBoards.map((item) =>
-                              item.sceneKey === sceneBoard.sceneKey
-                                ? { ...item, status: e.target.value as PlotSceneBoard['status'] }
-                                : item
-                            ),
-                          }))
-                        }
-                      >
-                        {(Object.keys(PLOT_STATUS_LABELS) as PlotSceneBoard['status'][]).map(
-                          (status) => (
-                            <option key={status} value={status}>
-                              {PLOT_STATUS_LABELS[status]}
-                            </option>
-                          )
-                        )}
-                      </select>
-                    </div>
-                  </div>
-                  <div className={styles.plotFieldGrid}>
-                    <div className={styles.plotFieldGroup}>
-                      <label className={styles.plotFieldLabel}>场景目标</label>
-                      <textarea
-                        className={styles.formTextarea}
-                        rows={2}
-                        value={sceneBoard.objective}
-                        onChange={(e) =>
-                          updateSelectedBoard((prev) => ({
-                            ...prev,
-                            sceneBoards: prev.sceneBoards.map((item) =>
-                              item.sceneKey === sceneBoard.sceneKey
-                                ? { ...item, objective: e.target.value }
-                                : item
-                            ),
-                          }))
-                        }
-                        placeholder="这一场推进什么信息、行动或人物状态？"
-                      />
-                    </div>
-                    <div className={styles.plotFieldGroup}>
-                      <label className={styles.plotFieldLabel}>张力来源</label>
-                      <textarea
-                        className={styles.formTextarea}
-                        rows={2}
-                        value={sceneBoard.tension}
-                        onChange={(e) =>
-                          updateSelectedBoard((prev) => ({
-                            ...prev,
-                            sceneBoards: prev.sceneBoards.map((item) =>
-                              item.sceneKey === sceneBoard.sceneKey
-                                ? { ...item, tension: e.target.value }
-                                : item
-                            ),
-                          }))
-                        }
-                        placeholder="冲突、信息差、误会、压迫感来自哪里？"
-                      />
-                    </div>
-                  </div>
-                  <div className={styles.plotFieldGroup}>
-                    <label className={styles.plotFieldLabel}>场景结果</label>
-                    <textarea
-                      className={styles.formTextarea}
-                      rows={2}
-                      value={sceneBoard.outcome}
-                      onChange={(e) =>
-                        updateSelectedBoard((prev) => ({
-                          ...prev,
-                          sceneBoards: prev.sceneBoards.map((item) =>
-                            item.sceneKey === sceneBoard.sceneKey
-                              ? { ...item, outcome: e.target.value }
-                              : item
-                          ),
-                        }))
-                      }
-                      placeholder="结尾状态、代价、悬念或下一步推进点"
-                    />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </>
-      ) : (
-        <div className={styles.emptyHint}>选择一张情节卡查看结构详情</div>
-      )}
-    </div>
-  );
-
-  return <VerticalSplit top={cardsView} bottom={inspectorView} initialTopHeight={320} />;
 });

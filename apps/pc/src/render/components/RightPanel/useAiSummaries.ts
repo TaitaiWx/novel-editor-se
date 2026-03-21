@@ -1,24 +1,23 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { OutlineEntry, OutlineSummaryAiState } from './types';
 import { OUTLINE_SUMMARY_MAX_CONCURRENCY } from './constants';
 import { buildOutlineEntryCacheKey, sanitizeAiSummary, extractChapterContent } from './utils';
 import { useAiCache } from './AiCacheContext';
 import { useAiConfig } from './useAiConfig';
 
-/** Interval between scheduling next summary batch (ms) */
-const SUMMARY_SCHEDULE_INTERVAL = 600;
-
 export function useAiSummaries(
   content: string,
   outlineEntries: OutlineEntry[],
-  visibleLines: Set<number>
+  _visibleLines: Set<number>
 ) {
   const { ready: aiReady } = useAiConfig();
   const { summaryCache, cacheReady } = useAiCache();
 
-  const [aiSummaryTexts, setAiSummaryTexts] = useState<Record<number, string>>({});
-  const [aiSummaryStates, setAiSummaryStates] = useState<Record<number, OutlineSummaryAiState>>({});
-  const [aiSummaryErrors, setAiSummaryErrors] = useState<Record<number, string>>({});
+  const [aiSummaryTextsByKey, setAiSummaryTextsByKey] = useState<Record<string, string>>({});
+  const [aiSummaryStatesByKey, setAiSummaryStatesByKey] = useState<
+    Record<string, OutlineSummaryAiState>
+  >({});
+  const [aiSummaryErrorsByKey, setAiSummaryErrorsByKey] = useState<Record<string, string>>({});
 
   const summaryQueueRef = useRef<OutlineEntry[]>([]);
   const summaryInFlightRef = useRef(0);
@@ -27,11 +26,13 @@ export function useAiSummaries(
   contentRef.current = content;
   const outlineEntriesRef = useRef(outlineEntries);
   outlineEntriesRef.current = outlineEntries;
-  const aiSummaryStatesRef = useRef(aiSummaryStates);
-  aiSummaryStatesRef.current = aiSummaryStates;
   const scheduleTimerRef = useRef<number | null>(null);
   const aiReadyRef = useRef(aiReady);
   aiReadyRef.current = aiReady;
+  const aiSummaryTextsByKeyRef = useRef(aiSummaryTextsByKey);
+  aiSummaryTextsByKeyRef.current = aiSummaryTextsByKey;
+  const aiSummaryStatesByKeyRef = useRef(aiSummaryStatesByKey);
+  aiSummaryStatesByKeyRef.current = aiSummaryStatesByKey;
 
   const processSummaryQueue = useCallback(() => {
     if (!aiReadyRef.current) return;
@@ -43,28 +44,28 @@ export function useAiSummaries(
       const cacheKey = buildOutlineEntryCacheKey(entry);
       const cached = summaryCache.get(cacheKey);
       if (cached) {
-        setAiSummaryTexts((prev) =>
-          prev[entry.line] === cached ? prev : { ...prev, [entry.line]: cached }
+        setAiSummaryTextsByKey((prev) =>
+          prev[cacheKey] === cached ? prev : { ...prev, [cacheKey]: cached }
         );
-        setAiSummaryStates((prev) =>
-          prev[entry.line] === 'success' ? prev : { ...prev, [entry.line]: 'success' }
+        setAiSummaryStatesByKey((prev) =>
+          prev[cacheKey] === 'success' ? prev : { ...prev, [cacheKey]: 'success' }
         );
         return;
       }
 
       if (!entry.summary || entry.summary === '暂无内容摘要') {
-        setAiSummaryStates((prev) => ({ ...prev, [entry.line]: 'error' }));
-        setAiSummaryErrors((prev) => ({
+        setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'error' }));
+        setAiSummaryErrorsByKey((prev) => ({
           ...prev,
-          [entry.line]: '未提取到可用正文，已回退为节选',
+          [cacheKey]: '未提取到可用正文，已回退为节选',
         }));
         return;
       }
 
-      setAiSummaryStates((prev) => ({ ...prev, [entry.line]: 'loading' }));
-      setAiSummaryErrors((prev) => {
+      setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'loading' }));
+      setAiSummaryErrorsByKey((prev) => {
         const next = { ...prev };
-        delete next[entry.line];
+        delete next[cacheKey];
         return next;
       });
 
@@ -90,20 +91,20 @@ export function useAiSummaries(
         if (generation !== summaryGenerationRef.current) return;
 
         if (!response.ok) {
-          setAiSummaryStates((prev) => ({ ...prev, [entry.line]: 'error' }));
-          setAiSummaryErrors((prev) => ({
+          setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'error' }));
+          setAiSummaryErrorsByKey((prev) => ({
             ...prev,
-            [entry.line]: response.error || 'AI 总结失败',
+            [cacheKey]: response.error || 'AI 总结失败',
           }));
           return;
         }
 
         const text = sanitizeAiSummary(response.text || '');
         if (!text) {
-          setAiSummaryStates((prev) => ({ ...prev, [entry.line]: 'error' }));
-          setAiSummaryErrors((prev) => ({
+          setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'error' }));
+          setAiSummaryErrorsByKey((prev) => ({
             ...prev,
-            [entry.line]: 'AI 未返回可用总结',
+            [cacheKey]: 'AI 未返回可用总结',
           }));
           return;
         }
@@ -111,19 +112,19 @@ export function useAiSummaries(
         summaryCache.set(cacheKey, text);
         // Persist to SQLite (fire-and-forget)
         void ipc.invoke('ai-cache-set', cacheKey, 'summary', text);
-        setAiSummaryTexts((prev) => ({ ...prev, [entry.line]: text }));
-        setAiSummaryStates((prev) => ({ ...prev, [entry.line]: 'success' }));
-        setAiSummaryErrors((prev) => {
+        setAiSummaryTextsByKey((prev) => ({ ...prev, [cacheKey]: text }));
+        setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'success' }));
+        setAiSummaryErrorsByKey((prev) => {
           const next = { ...prev };
-          delete next[entry.line];
+          delete next[cacheKey];
           return next;
         });
       } catch (error) {
         if (generation !== summaryGenerationRef.current) return;
-        setAiSummaryStates((prev) => ({ ...prev, [entry.line]: 'error' }));
-        setAiSummaryErrors((prev) => ({
+        setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'error' }));
+        setAiSummaryErrorsByKey((prev) => ({
           ...prev,
-          [entry.line]: error instanceof Error ? error.message : 'AI 总结失败',
+          [cacheKey]: error instanceof Error ? error.message : 'AI 总结失败',
         }));
       }
     };
@@ -144,13 +145,15 @@ export function useAiSummaries(
 
   const requestAiSummary = useCallback(
     (entry: OutlineEntry) => {
-      const state = aiSummaryStatesRef.current[entry.line] || 'idle';
+      const cacheKey = buildOutlineEntryCacheKey(entry);
+      if (summaryCache.has(cacheKey) || aiSummaryTextsByKeyRef.current[cacheKey]?.trim()) return;
+      const state = aiSummaryStatesByKeyRef.current[cacheKey] || 'idle';
       if (state === 'loading' || state === 'success') return;
-      if (summaryQueueRef.current.some((item) => item.line === entry.line)) return;
+      if (summaryQueueRef.current.some((item) => item.cacheKey === entry.cacheKey)) return;
       summaryQueueRef.current.push(entry);
       processSummaryQueue();
     },
-    [processSummaryQueue]
+    [processSummaryQueue, summaryCache]
   );
 
   const refreshSummary = useCallback(
@@ -159,18 +162,20 @@ export function useAiSummaries(
       summaryCache.delete(cacheKey);
       // Delete from SQLite (fire-and-forget)
       void window.electron?.ipcRenderer?.invoke('ai-cache-delete', cacheKey, 'summary');
-      setAiSummaryTexts((prev) => {
+      setAiSummaryTextsByKey((prev) => {
         const next = { ...prev };
-        delete next[entry.line];
+        delete next[cacheKey];
         return next;
       });
-      setAiSummaryStates((prev) => ({ ...prev, [entry.line]: 'idle' }));
-      setAiSummaryErrors((prev) => {
+      setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'idle' }));
+      setAiSummaryErrorsByKey((prev) => {
         const next = { ...prev };
-        delete next[entry.line];
+        delete next[cacheKey];
         return next;
       });
-      summaryQueueRef.current = summaryQueueRef.current.filter((item) => item.line !== entry.line);
+      summaryQueueRef.current = summaryQueueRef.current.filter(
+        (item) => item.cacheKey !== entry.cacheKey
+      );
       summaryQueueRef.current.push(entry);
       processSummaryQueue();
     },
@@ -188,51 +193,86 @@ export function useAiSummaries(
       scheduleTimerRef.current = null;
     }
 
-    // Only restore state from cache after Provider hydration ensures cache is populated
     if (!cacheReady) return;
 
-    const restoredTexts: Record<number, string> = {};
-    const restoredStates: Record<number, OutlineSummaryAiState> = {};
-    for (const entry of outlineEntriesRef.current) {
-      const cacheKey = buildOutlineEntryCacheKey(entry);
-      const cached = summaryCache.get(cacheKey);
-      if (cached) {
-        restoredTexts[entry.line] = cached;
-        restoredStates[entry.line] = 'success';
-      }
-    }
-    setAiSummaryTexts(restoredTexts);
-    setAiSummaryStates(restoredStates);
-    setAiSummaryErrors({});
-  }, [content, cacheReady]);
-
-  // Auto-generate summaries for visible entries that have no cache (first-time only, throttled)
-  useEffect(() => {
-    if (!aiReady || !cacheReady || visibleLines.size === 0 || !content.trim()) return;
-
-    if (scheduleTimerRef.current !== null) {
-      window.clearTimeout(scheduleTimerRef.current);
-    }
-
-    scheduleTimerRef.current = window.setTimeout(() => {
-      const visibleEntries = outlineEntries.filter((entry) => {
-        if (!visibleLines.has(entry.line)) return false;
-        // Skip if already cached — only request entries without any cached result
+    setAiSummaryTextsByKey((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const entry of outlineEntriesRef.current) {
         const cacheKey = buildOutlineEntryCacheKey(entry);
-        if (summaryCache.has(cacheKey)) return false;
-        return true;
-      });
-      for (const entry of visibleEntries) {
-        requestAiSummary(entry);
+        const cached = summaryCache.get(cacheKey);
+        if (cached && next[cacheKey] !== cached) {
+          next[cacheKey] = cached;
+          changed = true;
+        }
       }
-    }, SUMMARY_SCHEDULE_INTERVAL);
+      return changed ? next : prev;
+    });
+    setAiSummaryStatesByKey((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const entry of outlineEntriesRef.current) {
+        const cacheKey = buildOutlineEntryCacheKey(entry);
+        if (
+          (summaryCache.has(cacheKey) || aiSummaryTextsByKeyRef.current[cacheKey]?.trim()) &&
+          next[cacheKey] !== 'success'
+        ) {
+          next[cacheKey] = 'success';
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    setAiSummaryErrorsByKey((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const entry of outlineEntriesRef.current) {
+        const cacheKey = buildOutlineEntryCacheKey(entry);
+        if (
+          (summaryCache.has(cacheKey) || aiSummaryTextsByKeyRef.current[cacheKey]?.trim()) &&
+          cacheKey in next
+        ) {
+          delete next[cacheKey];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [content, cacheReady, summaryCache]);
 
-    return () => {
-      if (scheduleTimerRef.current !== null) {
-        window.clearTimeout(scheduleTimerRef.current);
+  // 摘要改为按需请求：悬浮或显式刷新时才触发，避免列表滚动时大规模排队请求。
+
+  const aiSummaryTexts = useMemo(() => {
+    const next: Record<number, string> = {};
+    outlineEntries.forEach((entry) => {
+      const text = aiSummaryTextsByKey[buildOutlineEntryCacheKey(entry)];
+      if (text) next[entry.line] = text;
+    });
+    return next;
+  }, [aiSummaryTextsByKey, outlineEntries]);
+
+  const aiSummaryStates = useMemo(() => {
+    const next: Record<number, OutlineSummaryAiState> = {};
+    outlineEntries.forEach((entry) => {
+      const cacheKey = buildOutlineEntryCacheKey(entry);
+      if (summaryCache.has(cacheKey) || aiSummaryTextsByKey[cacheKey]?.trim()) {
+        next[entry.line] = 'success';
+        return;
       }
-    };
-  }, [aiReady, cacheReady, visibleLines, outlineEntries, content, requestAiSummary]);
+      const state = aiSummaryStatesByKey[cacheKey];
+      if (state) next[entry.line] = state;
+    });
+    return next;
+  }, [aiSummaryStatesByKey, aiSummaryTextsByKey, outlineEntries, summaryCache]);
+
+  const aiSummaryErrors = useMemo(() => {
+    const next: Record<number, string> = {};
+    outlineEntries.forEach((entry) => {
+      const error = aiSummaryErrorsByKey[buildOutlineEntryCacheKey(entry)];
+      if (error) next[entry.line] = error;
+    });
+    return next;
+  }, [aiSummaryErrorsByKey, outlineEntries]);
 
   return {
     aiSummaryTexts,
