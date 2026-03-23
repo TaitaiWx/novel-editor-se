@@ -100,9 +100,15 @@ importers:
       electron-updater:
         specifier: ^6.8.3
         version: 6.8.3
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
       fs-extra:
         specifier: ^11.3.0
         version: 11.3.0
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
       mammoth:
         specifier: ^1.12.0
         version: 1.12.0
@@ -164,12 +170,6 @@ importers:
       electron-builder-squirrel-windows:
         specifier: 24.13.3
         version: 24.13.3(dmg-builder@24.13.3)
-      exceljs:
-        specifier: ^4.4.0
-        version: 4.4.0
-      jszip:
-        specifier: ^3.10.1
-        version: 3.10.1
       nodemon:
         specifier: ^3.1.0
         version: 3.1.9
