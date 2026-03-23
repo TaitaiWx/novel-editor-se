@@ -1,5 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// ── MessagePort 转发 ────────────────────────────────────────
+// 将 main process 通过 webContents.postMessage 发来的 MessagePort
+// 从隔离的 preload 世界转发到渲染进程的 main world。
+// 这是 Electron contextIsolation 下传递 MessagePort 的官方模式。
+ipcRenderer.on('port-transfer', (event, channelName: string) => {
+  window.postMessage(
+    { type: 'port-transfer', channelName },
+    '*',
+    event.ports as unknown as MessagePort[]
+  );
+});
+
 // Electron 28 + contextIsolation: File.path 在 preload 特权上下文中仍可用，
 // 但在隔离的渲染进程中为空。在 capture 阶段拦截 drop 事件提取路径。
 let lastDroppedPaths: string[] = [];
@@ -82,6 +94,20 @@ contextBridge.exposeInMainWorld('electron', {
         'db-outline-replace-by-folder',
         'db-outline-clear-by-folder',
         'db-outline-reorder-by-folder',
+        'db-outline-version-list-by-folder',
+        'db-outline-version-create-by-folder',
+        'db-outline-version-apply-by-folder',
+        'db-outline-version-update',
+        'db-outline-version-delete',
+        'db-story-idea-card-list-by-folder',
+        'db-story-idea-card-create-by-folder',
+        'db-story-idea-card-update',
+        'db-story-idea-card-delete',
+        'db-story-idea-output-list',
+        'db-story-idea-output-replace-by-folder',
+        'db-story-idea-output-update',
+        'db-story-idea-output-select',
+        'db-story-idea-output-delete',
         'db-world-setting-list-by-folder',
         'db-world-setting-create-by-folder',
         'db-world-setting-bulk-create-by-folder',

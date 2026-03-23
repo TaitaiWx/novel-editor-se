@@ -1,6 +1,6 @@
 export type TabType = 'storyline' | 'characters' | 'lore';
 
-export type StorylineViewMode = 'outline' | 'acts';
+export type StorylineViewMode = 'catalog' | 'outline' | 'acts' | 'ideas';
 
 export type LoreCategory = 'world' | 'faction' | 'system' | 'term';
 
@@ -121,6 +121,7 @@ export interface RightPanelProps {
   onReplaceLineText?: (line: number, text: string) => void;
   folderPath: string | null;
   dbReady: boolean;
+  currentLine?: number;
 }
 
 export interface Character {

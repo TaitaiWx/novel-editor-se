@@ -2,6 +2,34 @@ import { extractOutline } from '@novel-editor/basic-algorithm';
 import type { PersistedOutlineNodeInput } from '@/render/types/electron-api';
 import { buildOutlineEntries, extractJsonBlock, splitTextIntoChunks } from './utils';
 
+export type OutlineAiStyle = 'balanced' | 'cinematic' | 'detailed' | 'suspense';
+export type OutlineAiGranularity = 'coarse' | 'medium' | 'fine';
+
+export interface OutlineAiGenerationOptions {
+  style: OutlineAiStyle;
+  granularity: OutlineAiGranularity;
+  maxDepth: number;
+}
+
+export const DEFAULT_OUTLINE_AI_OPTIONS: OutlineAiGenerationOptions = {
+  style: 'balanced',
+  granularity: 'medium',
+  maxDepth: 3,
+};
+
+export const OUTLINE_AI_STYLE_LABELS: Record<OutlineAiStyle, string> = {
+  balanced: '均衡',
+  cinematic: '电影感',
+  detailed: '细纲',
+  suspense: '悬疑钩子',
+};
+
+export const OUTLINE_AI_GRANULARITY_LABELS: Record<OutlineAiGranularity, string> = {
+  coarse: '粗',
+  medium: '中',
+  fine: '细',
+};
+
 interface StructuredPreview {
   fileName: string;
   content: string;
@@ -96,6 +124,49 @@ function parseAiOutlineResponse(raw: string): PersistedOutlineNodeInput[] | null
   }
 }
 
+function clampDepth(value: number): number {
+  return Math.min(4, Math.max(1, value));
+}
+
+function limitTreeDepth(
+  nodes: PersistedOutlineNodeInput[],
+  maxDepth: number,
+  currentDepth = 1
+): PersistedOutlineNodeInput[] {
+  return nodes.map((node) => ({
+    ...node,
+    children:
+      currentDepth >= maxDepth
+        ? []
+        : limitTreeDepth(node.children || [], maxDepth, currentDepth + 1),
+  }));
+}
+
+function buildAiOutlinePrompt(options: OutlineAiGenerationOptions): string {
+  const styleInstructions: Record<OutlineAiStyle, string> = {
+    balanced: '风格要求：结构均衡，优先提炼稳定的章节骨架与核心推进。',
+    cinematic: '风格要求：强调戏剧节拍、场景推进和画面感，适合影视化拆分。',
+    detailed: '风格要求：尽量细化为可直接写作的细纲，保留关键事件与推进节点。',
+    suspense: '风格要求：突出悬念、反转、钩子和信息揭示节奏。',
+  };
+
+  const granularityInstructions: Record<OutlineAiGranularity, string> = {
+    coarse: '粒度要求：偏粗粒度，优先输出卷/章级结构，不要过度拆分场景。',
+    medium: '粒度要求：中等粒度，优先输出章/节级结构。',
+    fine: '粒度要求：偏细粒度，可以拆到章节下的场景或关键 beat。',
+  };
+
+  return [
+    '请把原始大纲或章节文本解析为结构化小说目录。只返回 JSON。',
+    '每个节点必须包含 title，可选 content 和 children。',
+    'content 只保留 1 句摘要，不超过 80 个字。',
+    `层级要求：最多 ${clampDepth(options.maxDepth)} 层，不能超过该层级深度。`,
+    styleInstructions[options.style],
+    granularityInstructions[options.granularity],
+    '不要输出解释、Markdown 或额外文本。',
+  ].join(' ');
+}
+
 function buildChunkFallbacks(content: string): ChunkFallback[] {
   const lines = content.split(/\r?\n/);
   const chunks = splitTextIntoChunks(content, 1800);
@@ -159,13 +230,15 @@ function buildFallbackOutline(content: string): PersistedOutlineNodeInput[] {
   }));
 }
 
-async function requestAiOutline(content: string): Promise<PersistedOutlineNodeInput[] | null> {
+export async function requestAiOutline(
+  content: string,
+  options: OutlineAiGenerationOptions = DEFAULT_OUTLINE_AI_OPTIONS
+): Promise<PersistedOutlineNodeInput[] | null> {
   const ipc = window.electron?.ipcRenderer;
   if (!ipc) return null;
 
   const response = (await ipc.invoke('ai-request', {
-    prompt:
-      '请把原始大纲或章节文本解析为结构化小说目录。只返回 JSON。每个节点必须包含 title，可选 content 和 children。content 只保留 1 句摘要，不超过 80 个字。不要输出解释、Markdown 或额外文本。',
+    prompt: buildAiOutlinePrompt(options),
     systemPrompt:
       '你是小说大纲结构化助手。你只能输出严格 JSON，格式为数组，元素为 {"title":"","content":"","children":[]}。',
     context: `待解析文本:\n${content.slice(0, 12000)}`,
@@ -177,7 +250,28 @@ async function requestAiOutline(content: string): Promise<PersistedOutlineNodeIn
     return null;
   }
 
-  return parseAiOutlineResponse(response.text);
+  const parsed = parseAiOutlineResponse(response.text);
+  if (!parsed || parsed.length === 0) {
+    return null;
+  }
+
+  return limitTreeDepth(parsed, clampDepth(options.maxDepth));
+}
+
+export async function buildOutlineTreeFromAi(
+  content: string,
+  aiReady: boolean,
+  options: OutlineAiGenerationOptions = DEFAULT_OUTLINE_AI_OPTIONS
+): Promise<PersistedOutlineNodeInput[]> {
+  const rawContent = content.trim();
+  if (!rawContent || !aiReady) return [];
+
+  const aiNodes = await requestAiOutline(rawContent, options);
+  if (!aiNodes || aiNodes.length === 0) {
+    return [];
+  }
+
+  return aiNodes.map((item, index) => ({ ...item, sortOrder: index }));
 }
 
 function getFileTitle(fileName: string): string {
@@ -215,6 +309,14 @@ export async function buildOutlineTreeFromImports(
   return trees.map((item, index) => ({ ...item, sortOrder: index }));
 }
 
-export function buildOutlineTreeFromContent(content: string): PersistedOutlineNodeInput[] {
-  return buildFallbackOutline(content).map((item, index) => ({ ...item, sortOrder: index }));
+export async function buildOutlineTreeFromContent(
+  content: string,
+  aiReady: boolean
+): Promise<PersistedOutlineNodeInput[]> {
+  const rawContent = content.trim();
+  if (!rawContent) return [];
+
+  const aiNodes = aiReady ? await requestAiOutline(rawContent) : null;
+  const nodes = aiNodes && aiNodes.length > 0 ? aiNodes : buildFallbackOutline(rawContent);
+  return nodes.map((item, index) => ({ ...item, sortOrder: index }));
 }

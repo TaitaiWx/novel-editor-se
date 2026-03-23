@@ -149,6 +149,68 @@ function createTables(database: Database.Database): void {
       FOREIGN KEY (parent_id) REFERENCES outlines(id) ON DELETE SET NULL
     );
 
+    -- 大纲版本中心（独立资产快照，不影响当前大纲主表）
+    CREATE TABLE IF NOT EXISTS outline_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      novel_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      source TEXT NOT NULL CHECK(source IN ('import', 'rebuild', 'ai', 'manual')),
+      note TEXT DEFAULT '',
+      story_idea_card_id INTEGER DEFAULT NULL,
+      story_idea_snapshot_json TEXT DEFAULT '',
+      tree_json TEXT NOT NULL,
+      total_nodes INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_outline_versions_novel_id_created_at
+      ON outline_versions (novel_id, created_at DESC);
+
+    -- 三签创作法：创意卡
+    CREATE TABLE IF NOT EXISTS story_idea_cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      novel_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      premise TEXT DEFAULT '',
+      tags_json TEXT DEFAULT '[]',
+      source TEXT NOT NULL CHECK(source IN ('manual', 'ai')),
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'exploring', 'shortlisted', 'promoted_to_board', 'promoted_to_outline', 'archived')),
+      theme_seed TEXT DEFAULT '',
+      conflict_seed TEXT DEFAULT '',
+      twist_seed TEXT DEFAULT '',
+      protagonist_wish TEXT DEFAULT '',
+      core_obstacle TEXT DEFAULT '',
+      irony_or_gap TEXT DEFAULT '',
+      escalation_path TEXT DEFAULT '',
+      payoff_hint TEXT DEFAULT '',
+      selected_logline TEXT DEFAULT '',
+      selected_direction TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_story_idea_cards_novel_id_updated_at
+      ON story_idea_cards (novel_id, updated_at DESC, id DESC);
+
+    -- 三签创作法：衍生候选
+    CREATE TABLE IF NOT EXISTS story_idea_outputs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      idea_card_id INTEGER NOT NULL,
+      novel_id INTEGER NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('logline', 'scene_hook', 'outline_direction')),
+      content TEXT NOT NULL,
+      meta_json TEXT DEFAULT '{}',
+      sort_order INTEGER DEFAULT 0,
+      is_selected INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (idea_card_id) REFERENCES story_idea_cards(id) ON DELETE CASCADE,
+      FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_story_idea_outputs_card_type
+      ON story_idea_outputs (idea_card_id, type, sort_order, id);
+
     -- 设定资料库（规则、技能、世界观等）
     CREATE TABLE IF NOT EXISTS world_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -247,6 +309,16 @@ function migrateTables(database: Database.Database): void {
   }
   if (!hasColumn(database, 'outlines', 'line_hint')) {
     database.exec(`ALTER TABLE outlines ADD COLUMN line_hint INTEGER DEFAULT NULL;`);
+  }
+  if (!hasColumn(database, 'outline_versions', 'story_idea_card_id')) {
+    database.exec(
+      `ALTER TABLE outline_versions ADD COLUMN story_idea_card_id INTEGER DEFAULT NULL;`
+    );
+  }
+  if (!hasColumn(database, 'outline_versions', 'story_idea_snapshot_json')) {
+    database.exec(
+      `ALTER TABLE outline_versions ADD COLUMN story_idea_snapshot_json TEXT DEFAULT '';`
+    );
   }
 }
 
@@ -420,6 +492,94 @@ type OutlineTreeNode = {
   children?: OutlineTreeNode[];
 };
 
+export type OutlineVersionSource = 'import' | 'rebuild' | 'ai' | 'manual';
+
+export type StoryIdeaCardSource = 'manual' | 'ai';
+export type StoryIdeaCardStatus =
+  | 'draft'
+  | 'exploring'
+  | 'shortlisted'
+  | 'promoted_to_board'
+  | 'promoted_to_outline'
+  | 'archived';
+
+export type StoryIdeaOutputType = 'logline' | 'scene_hook' | 'outline_direction';
+
+export interface OutlineVersionRow {
+  id: number;
+  novel_id: number;
+  name: string;
+  source: OutlineVersionSource;
+  note: string;
+  story_idea_card_id: number | null;
+  story_idea_snapshot_json: string;
+  tree_json: string;
+  total_nodes: number;
+  created_at: string;
+}
+
+export interface StoryIdeaCardRow {
+  id: number;
+  novel_id: number;
+  title: string;
+  premise: string;
+  tags_json: string;
+  source: StoryIdeaCardSource;
+  status: StoryIdeaCardStatus;
+  theme_seed: string;
+  conflict_seed: string;
+  twist_seed: string;
+  protagonist_wish: string;
+  core_obstacle: string;
+  irony_or_gap: string;
+  escalation_path: string;
+  payoff_hint: string;
+  selected_logline: string;
+  selected_direction: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoryIdeaOutputRow {
+  id: number;
+  idea_card_id: number;
+  novel_id: number;
+  type: StoryIdeaOutputType;
+  content: string;
+  meta_json: string;
+  sort_order: number;
+  is_selected: number;
+  created_at: string;
+  updated_at: string;
+}
+
+const OUTLINE_VERSION_SOURCES = ['import', 'rebuild', 'ai', 'manual'] as const;
+const STORY_IDEA_CARD_SOURCES = ['manual', 'ai'] as const;
+const STORY_IDEA_CARD_STATUSES = [
+  'draft',
+  'exploring',
+  'shortlisted',
+  'promoted_to_board',
+  'promoted_to_outline',
+  'archived',
+] as const;
+const STORY_IDEA_OUTPUT_TYPES = ['logline', 'scene_hook', 'outline_direction'] as const;
+
+function countOutlineNodes(entries: OutlineTreeNode[]): number {
+  let total = 0;
+  const visit = (nodes: OutlineTreeNode[]) => {
+    nodes.forEach((node) => {
+      total += 1;
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        visit(node.children);
+      }
+    });
+  };
+  visit(entries);
+  return total;
+}
+
 /** 大纲树 */
 export const outlineOps = {
   getByNovel(novelId: number) {
@@ -479,6 +639,354 @@ export const outlineOps = {
 
     transaction();
     return { changes: entries.length };
+  },
+};
+
+/** 大纲版本中心 */
+export const outlineVersionOps = {
+  listByNovel(novelId: number) {
+    return getDatabase()
+      .prepare(
+        `SELECT * FROM outline_versions
+         WHERE novel_id = ?
+         ORDER BY created_at DESC, id DESC`
+      )
+      .all(novelId) as OutlineVersionRow[];
+  },
+
+  create(
+    novelId: number,
+    name: string,
+    source: OutlineVersionSource,
+    note = '',
+    entries: OutlineTreeNode[],
+    options?: { storyIdeaCardId?: number | null; storyIdeaSnapshotJson?: string }
+  ) {
+    if (!OUTLINE_VERSION_SOURCES.includes(source)) {
+      throw new Error(`Unsupported outline version source: ${source}`);
+    }
+    return getDatabase()
+      .prepare(
+        `INSERT INTO outline_versions (
+          novel_id, name, source, note, story_idea_card_id, story_idea_snapshot_json, tree_json, total_nodes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        novelId,
+        name,
+        source,
+        note,
+        options?.storyIdeaCardId ?? null,
+        options?.storyIdeaSnapshotJson || '',
+        JSON.stringify(entries),
+        countOutlineNodes(entries)
+      );
+  },
+
+  getById(id: number): (OutlineVersionRow & { tree: OutlineTreeNode[] }) | undefined {
+    const row = getDatabase().prepare('SELECT * FROM outline_versions WHERE id = ?').get(id) as
+      | OutlineVersionRow
+      | undefined;
+    if (!row) return undefined;
+
+    let tree: OutlineTreeNode[] = [];
+    try {
+      const parsed = JSON.parse(row.tree_json) as OutlineTreeNode[];
+      tree = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      tree = [];
+    }
+
+    return { ...row, tree };
+  },
+
+  update(id: number, fields: { name?: string; note?: string }) {
+    const updates: string[] = [];
+    const values: Array<string | number> = [];
+
+    if (typeof fields.name === 'string') {
+      updates.push('name = ?');
+      values.push(fields.name);
+    }
+    if (typeof fields.note === 'string') {
+      updates.push('note = ?');
+      values.push(fields.note);
+    }
+
+    if (updates.length === 0) {
+      return { changes: 0 };
+    }
+
+    values.push(id);
+    return getDatabase()
+      .prepare(`UPDATE outline_versions SET ${updates.join(', ')} WHERE id = ?`)
+      .run(...values);
+  },
+
+  delete(id: number) {
+    return getDatabase().prepare('DELETE FROM outline_versions WHERE id = ?').run(id);
+  },
+};
+
+/** 三签创作法 */
+export const storyIdeaOps = {
+  listCardsByNovel(novelId: number) {
+    return getDatabase()
+      .prepare(
+        `SELECT * FROM story_idea_cards
+         WHERE novel_id = ?
+         ORDER BY datetime(updated_at) DESC, id DESC`
+      )
+      .all(novelId) as StoryIdeaCardRow[];
+  },
+
+  getCardById(id: number) {
+    return getDatabase().prepare('SELECT * FROM story_idea_cards WHERE id = ?').get(id) as
+      | StoryIdeaCardRow
+      | undefined;
+  },
+
+  createCard(
+    novelId: number,
+    payload: {
+      title: string;
+      premise?: string;
+      tagsJson?: string;
+      source?: StoryIdeaCardSource;
+      status?: StoryIdeaCardStatus;
+      themeSeed?: string;
+      conflictSeed?: string;
+      twistSeed?: string;
+      protagonistWish?: string;
+      coreObstacle?: string;
+      ironyOrGap?: string;
+      escalationPath?: string;
+      payoffHint?: string;
+      selectedLogline?: string;
+      selectedDirection?: string;
+      note?: string;
+    }
+  ) {
+    const source = payload.source ?? 'manual';
+    const status = payload.status ?? 'draft';
+    if (!STORY_IDEA_CARD_SOURCES.includes(source)) {
+      throw new Error(`Unsupported story idea source: ${source}`);
+    }
+    if (!STORY_IDEA_CARD_STATUSES.includes(status)) {
+      throw new Error(`Unsupported story idea status: ${status}`);
+    }
+    return getDatabase()
+      .prepare(
+        `INSERT INTO story_idea_cards (
+          novel_id, title, premise, tags_json, source, status,
+          theme_seed, conflict_seed, twist_seed,
+          protagonist_wish, core_obstacle, irony_or_gap,
+          escalation_path, payoff_hint,
+          selected_logline, selected_direction, note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        novelId,
+        payload.title,
+        payload.premise || '',
+        payload.tagsJson || '[]',
+        source,
+        status,
+        payload.themeSeed || '',
+        payload.conflictSeed || '',
+        payload.twistSeed || '',
+        payload.protagonistWish || '',
+        payload.coreObstacle || '',
+        payload.ironyOrGap || '',
+        payload.escalationPath || '',
+        payload.payoffHint || '',
+        payload.selectedLogline || '',
+        payload.selectedDirection || '',
+        payload.note || ''
+      );
+  },
+
+  updateCard(
+    id: number,
+    fields: {
+      title?: string;
+      premise?: string;
+      tags_json?: string;
+      source?: StoryIdeaCardSource;
+      status?: StoryIdeaCardStatus;
+      theme_seed?: string;
+      conflict_seed?: string;
+      twist_seed?: string;
+      protagonist_wish?: string;
+      core_obstacle?: string;
+      irony_or_gap?: string;
+      escalation_path?: string;
+      payoff_hint?: string;
+      selected_logline?: string;
+      selected_direction?: string;
+      note?: string;
+    }
+  ) {
+    const ALLOWED_COLS = new Set([
+      'title',
+      'premise',
+      'tags_json',
+      'source',
+      'status',
+      'theme_seed',
+      'conflict_seed',
+      'twist_seed',
+      'protagonist_wish',
+      'core_obstacle',
+      'irony_or_gap',
+      'escalation_path',
+      'payoff_hint',
+      'selected_logline',
+      'selected_direction',
+      'note',
+    ]);
+    const updates: string[] = [];
+    const values: Array<string | number> = [];
+    for (const [key, val] of Object.entries(fields)) {
+      if (val === undefined || !ALLOWED_COLS.has(key)) {
+        continue;
+      }
+      if (key === 'source' && !STORY_IDEA_CARD_SOURCES.includes(val as StoryIdeaCardSource)) {
+        throw new Error(`Unsupported story idea source: ${String(val)}`);
+      }
+      if (key === 'status' && !STORY_IDEA_CARD_STATUSES.includes(val as StoryIdeaCardStatus)) {
+        throw new Error(`Unsupported story idea status: ${String(val)}`);
+      }
+      updates.push(`${key} = ?`);
+      values.push(val as string | number);
+    }
+    if (updates.length === 0) {
+      return { changes: 0 };
+    }
+    updates.push("updated_at = datetime('now')");
+    values.push(id);
+    return getDatabase()
+      .prepare(`UPDATE story_idea_cards SET ${updates.join(', ')} WHERE id = ?`)
+      .run(...values);
+  },
+
+  deleteCard(id: number) {
+    return getDatabase().prepare('DELETE FROM story_idea_cards WHERE id = ?').run(id);
+  },
+
+  listOutputsByCard(ideaCardId: number) {
+    return getDatabase()
+      .prepare(
+        `SELECT * FROM story_idea_outputs
+         WHERE idea_card_id = ?
+         ORDER BY type, sort_order, id`
+      )
+      .all(ideaCardId) as StoryIdeaOutputRow[];
+  },
+
+  replaceOutputs(
+    novelId: number,
+    ideaCardId: number,
+    type: StoryIdeaOutputType,
+    outputs: Array<{ content: string; metaJson?: string; isSelected?: boolean }>
+  ) {
+    if (!STORY_IDEA_OUTPUT_TYPES.includes(type)) {
+      throw new Error(`Unsupported story idea output type: ${type}`);
+    }
+    const database = getDatabase();
+    const deleteStmt = database.prepare(
+      'DELETE FROM story_idea_outputs WHERE idea_card_id = ? AND type = ?'
+    );
+    const insertStmt = database.prepare(
+      `INSERT INTO story_idea_outputs (
+        idea_card_id, novel_id, type, content, meta_json, sort_order, is_selected
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    const transaction = database.transaction(() => {
+      deleteStmt.run(ideaCardId, type);
+      outputs.forEach((output, index) => {
+        insertStmt.run(
+          ideaCardId,
+          novelId,
+          type,
+          output.content,
+          output.metaJson || '{}',
+          index,
+          output.isSelected ? 1 : 0
+        );
+      });
+    });
+    transaction();
+    return { changes: outputs.length };
+  },
+
+  updateOutput(
+    id: number,
+    fields: { content?: string; meta_json?: string; sort_order?: number; is_selected?: number }
+  ) {
+    const ALLOWED_COLS = new Set(['content', 'meta_json', 'sort_order', 'is_selected']);
+    const updates: string[] = [];
+    const values: Array<string | number> = [];
+    for (const [key, val] of Object.entries(fields)) {
+      if (val === undefined || !ALLOWED_COLS.has(key)) {
+        continue;
+      }
+      updates.push(`${key} = ?`);
+      values.push(val as string | number);
+    }
+    if (updates.length === 0) {
+      return { changes: 0 };
+    }
+    updates.push("updated_at = datetime('now')");
+    values.push(id);
+    return getDatabase()
+      .prepare(`UPDATE story_idea_outputs SET ${updates.join(', ')} WHERE id = ?`)
+      .run(...values);
+  },
+
+  clearOutputSelection(ideaCardId: number, type: StoryIdeaOutputType) {
+    if (!STORY_IDEA_OUTPUT_TYPES.includes(type)) {
+      throw new Error(`Unsupported story idea output type: ${type}`);
+    }
+    return getDatabase()
+      .prepare(
+        `UPDATE story_idea_outputs
+         SET is_selected = 0, updated_at = datetime('now')
+         WHERE idea_card_id = ? AND type = ?`
+      )
+      .run(ideaCardId, type);
+  },
+
+  selectOutput(id: number) {
+    const row = getDatabase()
+      .prepare('SELECT idea_card_id, type FROM story_idea_outputs WHERE id = ?')
+      .get(id) as { idea_card_id: number; type: StoryIdeaOutputType } | undefined;
+    if (!row) {
+      return { changes: 0 };
+    }
+    const database = getDatabase();
+    const transaction = database.transaction(() => {
+      database
+        .prepare(
+          `UPDATE story_idea_outputs
+           SET is_selected = 0, updated_at = datetime('now')
+           WHERE idea_card_id = ? AND type = ?`
+        )
+        .run(row.idea_card_id, row.type);
+      database
+        .prepare(
+          `UPDATE story_idea_outputs
+           SET is_selected = 1, updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(id);
+    });
+    transaction();
+    return { changes: 1 };
+  },
+
+  deleteOutput(id: number) {
+    return getDatabase().prepare('DELETE FROM story_idea_outputs WHERE id = ?').run(id);
   },
 };
 
@@ -624,6 +1132,9 @@ export interface ExportData {
   acts: Record<string, unknown>[];
   scenes: Record<string, unknown>[];
   outlines: Record<string, unknown>[];
+  outline_versions?: Record<string, unknown>[];
+  story_idea_cards?: Record<string, unknown>[];
+  story_idea_outputs?: Record<string, unknown>[];
   world_settings: Record<string, unknown>[];
   writing_stats: Record<string, unknown>[];
   settings: Record<string, unknown>[];
@@ -643,6 +1154,18 @@ export function exportAllData(): ExportData {
     acts: database.prepare('SELECT * FROM acts').all() as Record<string, unknown>[],
     scenes: database.prepare('SELECT * FROM scenes').all() as Record<string, unknown>[],
     outlines: database.prepare('SELECT * FROM outlines').all() as Record<string, unknown>[],
+    outline_versions: database.prepare('SELECT * FROM outline_versions').all() as Record<
+      string,
+      unknown
+    >[],
+    story_idea_cards: database.prepare('SELECT * FROM story_idea_cards').all() as Record<
+      string,
+      unknown
+    >[],
+    story_idea_outputs: database.prepare('SELECT * FROM story_idea_outputs').all() as Record<
+      string,
+      unknown
+    >[],
     world_settings: database.prepare('SELECT * FROM world_settings').all() as Record<
       string,
       unknown
@@ -677,6 +1200,9 @@ export function importData(data: ExportData): void {
     'settings',
     'writing_stats',
     'world_settings',
+    'story_idea_outputs',
+    'story_idea_cards',
+    'outline_versions',
     'outlines',
     'scenes',
     'acts',
@@ -708,6 +1234,9 @@ export function importData(data: ExportData): void {
     insertRows('acts', data.acts);
     insertRows('scenes', data.scenes);
     insertRows('outlines', data.outlines);
+    insertRows('outline_versions', data.outline_versions || []);
+    insertRows('story_idea_cards', data.story_idea_cards || []);
+    insertRows('story_idea_outputs', data.story_idea_outputs || []);
     insertRows('world_settings', data.world_settings);
     insertRows('writing_stats', data.writing_stats);
     insertRows('settings', data.settings);

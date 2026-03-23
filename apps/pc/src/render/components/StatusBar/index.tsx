@@ -304,31 +304,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
   return (
     <div className={styles.statusBar}>
       <div className={styles.left}>
-        {folderPath && onToggleVersionHistory && (
-          <>
-            <span
-              className={`${styles.item} ${styles.clickable} ${styles.versionHistoryBtn}`}
-              onClick={onToggleVersionHistory}
-              title="版本历史"
-            >
-              <VscHistory className={styles.versionIcon} />
-              <span>版本历史</span>
-            </span>
-            {filePath && <span className={styles.separator}>|</span>}
-          </>
-        )}
-        {filePath && (
-          <>
-            <span className={styles.item}>
-              行 {currentLine}, 列 {currentColumn}
-            </span>
-            <span className={styles.separator}>|</span>
-            <span className={styles.item}>{formatNumber(lineCount)} 行</span>
-            <span className={styles.separator}>|</span>
-            <span className={styles.item}>{formatNumber(charCount)} 字</span>
-          </>
-        )}
-        <span className={styles.separator}>|</span>
         <Tooltip content={networkTooltip} position="top">
           <span
             className={`${styles.item} ${styles.networkStatus} ${styles[`network${networkStatus.quality[0].toUpperCase()}${networkStatus.quality.slice(1)}`]}`}
@@ -343,6 +318,31 @@ const StatusBar: React.FC<StatusBarProps> = ({
             </span>
           </span>
         </Tooltip>
+        {folderPath && onToggleVersionHistory && (
+          <>
+            <span className={styles.separator}>|</span>
+            <span
+              className={`${styles.item} ${styles.clickable} ${styles.versionHistoryBtn}`}
+              onClick={onToggleVersionHistory}
+              title="版本历史"
+            >
+              <VscHistory className={styles.versionIcon} />
+              <span>版本历史</span>
+            </span>
+          </>
+        )}
+        {filePath && (
+          <>
+            <span className={styles.separator}>|</span>
+            <span className={styles.item}>
+              行 {currentLine}, 列 {currentColumn}
+            </span>
+            <span className={styles.separator}>|</span>
+            <span className={styles.item}>{formatNumber(lineCount)} 行</span>
+            <span className={styles.separator}>|</span>
+            <span className={styles.item}>{formatNumber(charCount)} 字</span>
+          </>
+        )}
       </div>
       <div className={styles.right}>
         {/* Inline status hints in status bar */}

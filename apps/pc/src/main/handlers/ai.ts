@@ -8,6 +8,8 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { settingsOps } from '@novel-editor/store';
+import { establishPortChannel } from '../message-port-bridge';
+import { PortChannel } from '../../shared/portChannels';
 
 const __handler_filename = fileURLToPath(import.meta.url);
 const __handler_dirname = path.dirname(__handler_filename);
@@ -179,66 +181,96 @@ export function registerAIHandlers(): void {
   });
 
   // ── 右侧面板独立窗口 ──────────────────────────────────────
-  ipcMain.handle('open-right-panel-window', (_event, folderPath: string) => {
-    const existing = BrowserWindow.getAllWindows().find(
-      (w) => !w.isDestroyed() && w.webContents.getURL().includes('mode=right-panel')
-    );
-    if (existing) {
-      existing.focus();
-      return { success: true, reused: true };
-    }
-
-    const mainWin = BrowserWindow.getAllWindows()[0];
-    const bounds = mainWin?.getBounds();
-
-    const panelWindow = new BrowserWindow({
-      width: 520,
-      height: 720,
-      minWidth: 380,
-      minHeight: 500,
-      x: bounds ? bounds.x + bounds.width - 540 : undefined,
-      y: bounds ? bounds.y + 40 : undefined,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        preload: path.join(__dist_dir, 'preload.js'),
-        webSecurity: true,
-      },
-      backgroundColor: '#1e1e1e',
-      title: '故事面板',
-      autoHideMenuBar: true,
-      frame: false,
-    });
-
-    const indexPath = path.join(__dist_dir, 'index.html');
-    void panelWindow.loadFile(indexPath, {
-      query: { mode: 'right-panel', folderPath: folderPath || '' },
-    });
-
-    panelWindow.once('ready-to-show', () => {
-      panelWindow.show();
-      if (process.env.NODE_ENV === 'development') {
-        panelWindow.webContents.openDevTools();
-      }
-    });
-
-    panelWindow.on('closed', () => {
-      // 通知主窗口恢复三栏布局
-      const mw = BrowserWindow.getAllWindows().find(
-        (w) =>
-          !w.isDestroyed() &&
-          !w.webContents.getURL().includes('mode=right-panel') &&
-          !w.webContents.getURL().includes('mode=ai-assistant')
+  ipcMain.handle(
+    'open-right-panel-window',
+    (_event, folderPath: string, _content?: string, hasActiveTab?: boolean) => {
+      const existing = BrowserWindow.getAllWindows().find(
+        (w) => !w.isDestroyed() && w.webContents.getURL().includes('mode=right-panel')
       );
-      if (mw) {
-        mw.webContents.send('right-panel-window-closed');
+      if (existing) {
+        // 重新建立 MessagePort 通道（旧端口在窗口 reload 时已失效）
+        const mainWin = BrowserWindow.getAllWindows().find(
+          (w) =>
+            !w.isDestroyed() &&
+            !w.webContents.getURL().includes('mode=right-panel') &&
+            !w.webContents.getURL().includes('mode=ai-assistant')
+        );
+        if (mainWin) {
+          establishPortChannel(mainWin, existing, PortChannel.ContentSync);
+          establishPortChannel(mainWin, existing, PortChannel.CrdtOps);
+        }
+        existing.focus();
+        return { success: true, reused: true };
       }
-    });
 
-    panelWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      const mainWin =
+        BrowserWindow.getAllWindows().find(
+          (w) =>
+            !w.isDestroyed() &&
+            !w.webContents.getURL().includes('mode=right-panel') &&
+            !w.webContents.getURL().includes('mode=ai-assistant')
+        ) ?? BrowserWindow.getAllWindows()[0];
+      const bounds = mainWin?.getBounds();
 
-    return { success: true, reused: false };
-  });
+      const panelWindow = new BrowserWindow({
+        width: 520,
+        height: 720,
+        minWidth: 380,
+        minHeight: 500,
+        x: bounds ? bounds.x + bounds.width - 540 : undefined,
+        y: bounds ? bounds.y + 40 : undefined,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          preload: path.join(__dist_dir, 'preload.js'),
+          webSecurity: true,
+        },
+        backgroundColor: '#1e1e1e',
+        title: '故事面板',
+        autoHideMenuBar: true,
+        frame: false,
+      });
+
+      const indexPath = path.join(__dist_dir, 'index.html');
+      void panelWindow.loadFile(indexPath, {
+        query: {
+          mode: 'right-panel',
+          folderPath: folderPath || '',
+          hasActiveTab: hasActiveTab ? '1' : '0',
+        },
+      });
+
+      panelWindow.once('ready-to-show', () => {
+        panelWindow.show();
+        // 建立 MessagePort 直连通道：主窗口 ↔ 面板窗口
+        // 后续内容同步全部走 MessagePort，不再经过 main process
+        if (mainWin) {
+          establishPortChannel(mainWin, panelWindow, PortChannel.ContentSync);
+          establishPortChannel(mainWin, panelWindow, PortChannel.CrdtOps);
+        }
+        if (process.env.NODE_ENV === 'development') {
+          panelWindow.webContents.openDevTools();
+        }
+      });
+
+      panelWindow.on('closed', () => {
+        // 通知主窗口恢复三栏布局
+        const mw = BrowserWindow.getAllWindows().find(
+          (w) =>
+            !w.isDestroyed() &&
+            !w.webContents.getURL().includes('mode=right-panel') &&
+            !w.webContents.getURL().includes('mode=ai-assistant')
+        );
+        if (mw) {
+          mw.webContents.send('right-panel-window-closed');
+        }
+      });
+
+      panelWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+      return { success: true, reused: false };
+    }
+  );
 
   // AI 独立窗口请求主窗口打开文件
   ipcMain.handle('ai-window-request-open-file', (_event, filePath: string) => {

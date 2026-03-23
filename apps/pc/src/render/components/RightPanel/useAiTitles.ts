@@ -9,6 +9,7 @@ import {
 import { buildOutlineEntryCacheKey, parseOutlineTitleCompletions } from './utils';
 import { useAiCache } from './AiCacheContext';
 import { useAiConfig } from './useAiConfig';
+import { useDebounce } from './useDebounce';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Architecture: 4-phase pipeline
@@ -50,6 +51,9 @@ export function useAiTitles(
 ) {
   const { ready: aiReady } = useAiConfig();
   const { titleCache, cacheReady } = useAiCache();
+
+  // Debounce content (300ms) to reduce effect churn on every keystroke
+  const debouncedContent = useDebounce(content, 300);
 
   // ─── API-local state (populated only by runBatch API results) ─────────────
   const [aiTitlesByKey, setAiTitlesByKey] = useState<Record<string, string>>({});
@@ -344,7 +348,7 @@ export function useAiTitles(
     }
     queueRef.current = [];
     inFlightRef.current = 0;
-  }, [content]);
+  }, [debouncedContent]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Phase 4 – Auto-prefetch
@@ -358,7 +362,7 @@ export function useAiTitles(
   // by the Resolution phase. No redundant cache re-checks needed.
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    if (!aiReady || !cacheReady || !content.trim() || visiblePendingCount === 0) return;
+    if (!aiReady || !cacheReady || !debouncedContent.trim() || visiblePendingCount === 0) return;
     if (debounceTimerRef.current !== null) {
       window.clearTimeout(debounceTimerRef.current);
     }
@@ -376,7 +380,7 @@ export function useAiTitles(
   }, [
     aiReady,
     cacheReady,
-    content,
+    debouncedContent,
     visiblePendingCount,
     prioritizedPending,
     requestAiTitles,

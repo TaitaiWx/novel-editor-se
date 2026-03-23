@@ -84,7 +84,7 @@ export const LAYOUT_MODE_KEYS = Object.keys(LAYOUT_MODE_LABELS) as StorylineLayo
 
 /** Intensity heat-map gradient stops (1–5) */
 export const INTENSITY_COLORS = [
-  'rgba(86, 156, 214, 0.25)', // 1 - calm
+  'rgba(180, 180, 170, 0.25)', // 1 - calm
   'rgba(78, 201, 176, 0.35)', // 2 - building
   'rgba(220, 220, 170, 0.4)', // 3 - tension
   'rgba(241, 148, 76, 0.5)', // 4 - high

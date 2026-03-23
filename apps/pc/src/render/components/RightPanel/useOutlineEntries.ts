@@ -1,9 +1,72 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PersistedOutlineNodeInput, PersistedOutlineRow } from '@/render/types/electron-api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type {
+  OutlineVersionSource,
+  PersistedOutlineNodeInput,
+  PersistedOutlineRow,
+  PersistedOutlineVersionRow,
+} from '@/render/types/electron-api';
 import type { OutlineEntry } from './types';
-import { buildOutlineTreeFromContent, buildOutlineTreeFromImports } from './outline-import';
+import {
+  buildOutlineTreeFromAi,
+  buildOutlineTreeFromContent,
+  buildOutlineTreeFromImports,
+  OUTLINE_AI_GRANULARITY_LABELS,
+  OUTLINE_AI_STYLE_LABELS,
+  type OutlineAiGenerationOptions,
+} from './outline-import';
 import { buildOutlineEntries, fnv1a32 } from './utils';
 import { extractOutline } from '@novel-editor/basic-algorithm';
+import { useDebounce } from './useDebounce';
+
+interface SaveOutlineVersionInput {
+  name: string;
+  source: OutlineVersionSource;
+  note?: string;
+  entries?: PersistedOutlineNodeInput[];
+  silentStatus?: boolean;
+}
+
+function buildPersistedTreeFromRows(rows: PersistedOutlineRow[]): PersistedOutlineNodeInput[] {
+  if (rows.length === 0) return [];
+
+  const childrenMap = new Map<number | null, PersistedOutlineRow[]>();
+  rows.forEach((row) => {
+    const key = row.parent_id ?? null;
+    const bucket = childrenMap.get(key);
+    if (bucket) bucket.push(row);
+    else childrenMap.set(key, [row]);
+  });
+
+  for (const bucket of childrenMap.values()) {
+    bucket.sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
+  }
+
+  const visit = (parentId: number | null): PersistedOutlineNodeInput[] => {
+    const nodes = childrenMap.get(parentId) || [];
+    return nodes.map((row, index) => ({
+      title: row.title,
+      content: row.content,
+      anchorText: row.anchor_text,
+      lineHint: row.line_hint,
+      sortOrder: row.sort_order ?? index,
+      children: visit(row.id),
+    }));
+  };
+
+  return visit(null);
+}
+
+function buildOutlineVersionName(source: OutlineVersionSource): string {
+  const labels: Record<OutlineVersionSource, string> = {
+    import: '导入大纲',
+    rebuild: '正文重建',
+    ai: 'AI 生成',
+    manual: '手工保存',
+  };
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${labels[source]} ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
 
 function normalizeAnchorText(value: string): string {
   return value
@@ -137,14 +200,7 @@ export function useOutlineEntries(
   aiReady: boolean
 ) {
   // Debounce content changes for liveEntries (300ms) to avoid re-parsing on every keystroke
-  const [debouncedContent, setDebouncedContent] = useState(content);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    debounceRef.current = setTimeout(() => setDebouncedContent(content), 300);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [content]);
+  const debouncedContent = useDebounce(content, 300);
 
   const liveEntries = useMemo(() => {
     const headings = extractOutline(debouncedContent, { enableHeuristic: false });
@@ -155,16 +211,18 @@ export function useOutlineEntries(
   }, [debouncedContent]);
 
   const [persistedRows, setPersistedRows] = useState<PersistedOutlineRow[]>([]);
+  const [versions, setVersions] = useState<PersistedOutlineVersionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
 
   const persistedEntries = useMemo(
-    () => buildEntriesFromRows(persistedRows, content),
-    [content, persistedRows]
+    () => buildEntriesFromRows(persistedRows, debouncedContent),
+    [debouncedContent, persistedRows]
   );
 
   const hasPersistedOutline = persistedEntries.length > 0;
+  const persistedTree = useMemo(() => buildPersistedTreeFromRows(persistedRows), [persistedRows]);
 
   const loadPersisted = useCallback(async () => {
     if (!folderPath || !dbReady) {
@@ -191,6 +249,52 @@ export function useOutlineEntries(
     void loadPersisted();
   }, [loadPersisted]);
 
+  const loadVersions = useCallback(async () => {
+    if (!folderPath || !dbReady) {
+      setVersions([]);
+      return;
+    }
+    try {
+      const rows = await window.electron.ipcRenderer.invoke(
+        'db-outline-version-list-by-folder',
+        folderPath
+      );
+      setVersions(rows);
+    } catch {
+      setVersions([]);
+    }
+  }, [dbReady, folderPath]);
+
+  useEffect(() => {
+    void loadVersions();
+  }, [loadVersions]);
+
+  const saveOutlineVersion = useCallback(
+    async ({ name, source, note = '', entries, silentStatus = false }: SaveOutlineVersionInput) => {
+      if (!folderPath || !dbReady) {
+        if (!silentStatus) setStatusMessage('项目数据库尚未就绪，无法保存大纲版本');
+        return false;
+      }
+
+      const targetEntries = entries ?? persistedTree;
+      if (targetEntries.length === 0) {
+        if (!silentStatus) setStatusMessage('当前没有可保存的大纲结构');
+        return false;
+      }
+
+      await window.electron.ipcRenderer.invoke('db-outline-version-create-by-folder', folderPath, {
+        name,
+        source,
+        note,
+        entries: targetEntries,
+      });
+      await loadVersions();
+      if (!silentStatus) setStatusMessage(`已保存大纲版本：${name}`);
+      return true;
+    },
+    [dbReady, folderPath, loadVersions, persistedTree]
+  );
+
   const importOutline = useCallback(async () => {
     if (!folderPath || !dbReady) {
       setStatusMessage('项目数据库尚未就绪，无法导入大纲');
@@ -213,15 +317,29 @@ export function useOutlineEntries(
 
       await writeOutlineTree(folderPath, tree);
       await loadPersisted();
+      let versionSaved = false;
+      try {
+        versionSaved = await saveOutlineVersion({
+          name: buildOutlineVersionName('import'),
+          source: 'import',
+          note: `导入 ${result.previews.length} 个文件`,
+          entries: tree,
+          silentStatus: true,
+        });
+      } catch {
+        versionSaved = false;
+      }
       const importedCount = tree.length;
       const suffix = result.errors.length > 0 ? `，${result.errors.length} 个文件失败` : '';
-      setStatusMessage(`已导入 ${importedCount} 个顶层节点${suffix}`);
+      setStatusMessage(
+        `已导入 ${importedCount} 个顶层节点${suffix}${versionSaved ? '，并保存为大纲版本' : ''}`
+      );
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : '导入大纲失败');
     } finally {
       setImporting(false);
     }
-  }, [aiReady, dbReady, folderPath, loadPersisted]);
+  }, [aiReady, dbReady, folderPath, loadPersisted, saveOutlineVersion]);
 
   const rebuildFromContent = useCallback(async () => {
     if (!folderPath || !dbReady) {
@@ -229,9 +347,9 @@ export function useOutlineEntries(
       return;
     }
 
-    const tree = buildOutlineTreeFromContent(content);
+    const tree = await buildOutlineTreeFromContent(content, aiReady);
     if (tree.length === 0) {
-      setStatusMessage('当前正文没有可同步的目录结构');
+      setStatusMessage('当前正文没有可重建的大纲结构（AI 与本地解析均未命中）');
       return;
     }
 
@@ -239,13 +357,27 @@ export function useOutlineEntries(
     try {
       await writeOutlineTree(folderPath, tree);
       await loadPersisted();
-      setStatusMessage(`已从正文重建 ${tree.length} 个目录节点`);
+      let versionSaved = false;
+      try {
+        versionSaved = await saveOutlineVersion({
+          name: buildOutlineVersionName('rebuild'),
+          source: 'rebuild',
+          note: '从正文重建当前大纲',
+          entries: tree,
+          silentStatus: true,
+        });
+      } catch {
+        versionSaved = false;
+      }
+      setStatusMessage(
+        `已从正文重建 ${tree.length} 个目录节点${versionSaved ? '，并保存为大纲版本' : ''}`
+      );
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : '重建目录失败');
     } finally {
       setImporting(false);
     }
-  }, [content, dbReady, folderPath, loadPersisted]);
+  }, [aiReady, content, dbReady, folderPath, loadPersisted, saveOutlineVersion]);
 
   const clearPersisted = useCallback(async () => {
     if (!folderPath || !dbReady) {
@@ -264,6 +396,123 @@ export function useOutlineEntries(
       setImporting(false);
     }
   }, [dbReady, folderPath]);
+
+  const applyOutlineVersion = useCallback(
+    async (versionId: number) => {
+      if (!folderPath || !dbReady) {
+        setStatusMessage('项目数据库尚未就绪，无法应用大纲版本');
+        return;
+      }
+      setImporting(true);
+      try {
+        await window.electron.ipcRenderer.invoke(
+          'db-outline-version-apply-by-folder',
+          folderPath,
+          versionId
+        );
+        await loadPersisted();
+        await loadVersions();
+        setStatusMessage('已将所选版本应用为当前大纲');
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : '应用大纲版本失败');
+      } finally {
+        setImporting(false);
+      }
+    },
+    [dbReady, folderPath, loadPersisted, loadVersions]
+  );
+
+  const updateOutlineVersion = useCallback(
+    async (versionId: number, fields: { name?: string; note?: string }) => {
+      const trimmedFields = {
+        name: typeof fields.name === 'string' ? fields.name.trim() : undefined,
+        note: typeof fields.note === 'string' ? fields.note.trim() : undefined,
+      };
+
+      if (!trimmedFields.name && trimmedFields.note === undefined) {
+        setStatusMessage('未检测到可更新的大纲版本信息');
+        return false;
+      }
+
+      try {
+        await window.electron.ipcRenderer.invoke('db-outline-version-update', versionId, {
+          ...(trimmedFields.name ? { name: trimmedFields.name } : {}),
+          ...(trimmedFields.note !== undefined ? { note: trimmedFields.note } : {}),
+        });
+        await loadVersions();
+        setStatusMessage('已更新大纲版本信息');
+        return true;
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : '更新大纲版本信息失败');
+        return false;
+      }
+    },
+    [loadVersions]
+  );
+
+  const deleteOutlineVersion = useCallback(
+    async (versionId: number) => {
+      setImporting(true);
+      try {
+        await window.electron.ipcRenderer.invoke('db-outline-version-delete', versionId);
+        await loadVersions();
+        setStatusMessage('已删除大纲版本');
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : '删除大纲版本失败');
+      } finally {
+        setImporting(false);
+      }
+    },
+    [loadVersions]
+  );
+
+  const generateAiOutline = useCallback(
+    async (options?: OutlineAiGenerationOptions) => {
+      if (!folderPath || !dbReady) {
+        setStatusMessage('项目数据库尚未就绪，无法生成 AI 大纲');
+        return;
+      }
+      if (!aiReady) {
+        setStatusMessage('请先配置并开启 AI，再使用 AI 生成大纲');
+        return;
+      }
+
+      setImporting(true);
+      try {
+        const tree = await buildOutlineTreeFromAi(content, aiReady, options);
+        if (tree.length === 0) {
+          setStatusMessage('AI 未生成可用的大纲结构，请调整正文内容后重试');
+          return;
+        }
+
+        await writeOutlineTree(folderPath, tree);
+        await loadPersisted();
+        let versionSaved = false;
+        const optionsSummary = options
+          ? `${OUTLINE_AI_STYLE_LABELS[options.style]} / ${OUTLINE_AI_GRANULARITY_LABELS[options.granularity]} / ${options.maxDepth} 层`
+          : '默认参数';
+        try {
+          versionSaved = await saveOutlineVersion({
+            name: buildOutlineVersionName('ai'),
+            source: 'ai',
+            note: `基于当前正文由 AI 生成大纲（${optionsSummary}）`,
+            entries: tree,
+            silentStatus: true,
+          });
+        } catch {
+          versionSaved = false;
+        }
+        setStatusMessage(
+          `已通过 AI 生成 ${tree.length} 个大纲节点（${optionsSummary}）${versionSaved ? '，并保存为大纲版本' : ''}`
+        );
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'AI 生成大纲失败');
+      } finally {
+        setImporting(false);
+      }
+    },
+    [aiReady, content, dbReady, folderPath, loadPersisted, saveOutlineVersion]
+  );
 
   const reorderEntries = useCallback(
     async (fromIndex: number, toIndex: number) => {
@@ -304,7 +553,9 @@ export function useOutlineEntries(
   );
 
   return {
-    outlineEntries: hasPersistedOutline ? persistedEntries : liveEntries,
+    liveEntries,
+    persistedEntries,
+    versions,
     hasPersistedOutline,
     loading,
     importing,
@@ -312,6 +563,11 @@ export function useOutlineEntries(
     importOutline,
     rebuildFromContent,
     clearPersisted,
+    saveOutlineVersion,
+    applyOutlineVersion,
+    updateOutlineVersion,
+    deleteOutlineVersion,
+    generateAiOutline,
     reorderEntries,
   };
 }

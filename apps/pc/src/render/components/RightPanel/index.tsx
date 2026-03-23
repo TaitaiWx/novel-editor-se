@@ -16,6 +16,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
   onReplaceLineText,
   folderPath,
   dbReady,
+  currentLine,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('storyline');
 
@@ -66,6 +67,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
             onReplaceLineText={onReplaceLineText}
             folderPath={folderPath}
             dbReady={dbReady}
+            currentLine={currentLine}
           />
         )}
         {activeTab === 'characters' && <CharactersView folderPath={folderPath} content={content} />}

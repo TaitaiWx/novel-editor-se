@@ -72,7 +72,7 @@ export function extractActs(text: string): ActNode[] {
 
   // Fallback: if no explicit act/scene markers, generate from chapter headings
   if (acts.length === 0) {
-    return generateActsFromChapters(text);
+    return generateActsFromChapters(text, lines);
   }
 
   return acts;
@@ -82,11 +82,10 @@ export function extractActs(text: string): ActNode[] {
  * 当正文没有"第X幕/第X场"标记时，从章节标题自动生成幕结构。
  * 每 CHAPTERS_PER_ACT 个章节归为一幕，每个章节作为一个场景。
  */
-function generateActsFromChapters(text: string): ActNode[] {
+function generateActsFromChapters(text: string, lines: string[]): ActNode[] {
   const headings = extractOutline(text, { enableHeuristic: false });
   if (headings.length === 0) return [];
 
-  const textLines = text.split('\n');
   const acts: ActNode[] = [];
   const totalActs = Math.ceil(headings.length / CHAPTERS_PER_ACT);
 
@@ -98,8 +97,8 @@ function generateActsFromChapters(text: string): ActNode[] {
     const scenes: SceneNode[] = chapterSlice.map((heading, _j) => {
       // Extract preview: first non-empty line after the heading
       let preview = '';
-      for (let li = heading.line; li < textLines.length && li < heading.line + 5; li++) {
-        const line = textLines[li]?.trim();
+      for (let li = heading.line; li < lines.length && li < heading.line + 5; li++) {
+        const line = lines[li]?.trim();
         if (line && line !== heading.text) {
           preview = line.length > 80 ? line.slice(0, 80) + '…' : line;
           break;

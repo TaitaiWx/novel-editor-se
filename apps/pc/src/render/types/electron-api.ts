@@ -42,6 +42,67 @@ export interface PersistedOutlineNodeInput {
   children?: PersistedOutlineNodeInput[];
 }
 
+export type OutlineVersionSource = 'import' | 'rebuild' | 'ai' | 'manual';
+
+export type StoryIdeaCardSource = 'manual' | 'ai';
+export type StoryIdeaCardStatus =
+  | 'draft'
+  | 'exploring'
+  | 'shortlisted'
+  | 'promoted_to_board'
+  | 'promoted_to_outline'
+  | 'archived';
+export type StoryIdeaOutputType = 'logline' | 'scene_hook' | 'outline_direction';
+
+export interface PersistedOutlineVersionRow {
+  id: number;
+  novel_id: number;
+  name: string;
+  source: OutlineVersionSource;
+  note: string;
+  story_idea_card_id: number | null;
+  story_idea_snapshot_json: string;
+  tree_json: string;
+  total_nodes: number;
+  created_at: string;
+}
+
+export interface StoryIdeaCardRow {
+  id: number;
+  novel_id: number;
+  title: string;
+  premise: string;
+  tags_json: string;
+  source: StoryIdeaCardSource;
+  status: StoryIdeaCardStatus;
+  theme_seed: string;
+  conflict_seed: string;
+  twist_seed: string;
+  protagonist_wish: string;
+  core_obstacle: string;
+  irony_or_gap: string;
+  escalation_path: string;
+  payoff_hint: string;
+  selected_logline: string;
+  selected_direction: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoryIdeaOutputRow {
+  id: number;
+  idea_card_id: number;
+  novel_id: number;
+  type: StoryIdeaOutputType;
+  content: string;
+  meta_json: string;
+  sort_order: number;
+  is_selected: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ElectronAPI {
   getLastDroppedPaths(): string[];
   ipcRenderer: {
@@ -99,6 +160,100 @@ export interface ElectronAPI {
       folderPath: string,
       ids: number[]
     ): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-outline-version-list-by-folder',
+      folderPath: string
+    ): Promise<PersistedOutlineVersionRow[]>;
+    invoke(
+      channel: 'db-outline-version-create-by-folder',
+      folderPath: string,
+      payload: {
+        name: string;
+        source: OutlineVersionSource;
+        note?: string;
+        storyIdeaCardId?: number | null;
+        storyIdeaSnapshotJson?: string;
+        entries: PersistedOutlineNodeInput[];
+      }
+    ): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-outline-version-apply-by-folder',
+      folderPath: string,
+      versionId: number
+    ): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-outline-version-update',
+      versionId: number,
+      fields: {
+        name?: string;
+        note?: string;
+      }
+    ): Promise<{ changes: number }>;
+    invoke(channel: 'db-outline-version-delete', versionId: number): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-story-idea-card-list-by-folder',
+      folderPath: string
+    ): Promise<StoryIdeaCardRow[]>;
+    invoke(
+      channel: 'db-story-idea-card-create-by-folder',
+      folderPath: string,
+      payload: {
+        title: string;
+        premise?: string;
+        tagsJson?: string;
+        source?: StoryIdeaCardSource;
+        status?: StoryIdeaCardStatus;
+        themeSeed?: string;
+        conflictSeed?: string;
+        twistSeed?: string;
+        protagonistWish?: string;
+        coreObstacle?: string;
+        ironyOrGap?: string;
+        escalationPath?: string;
+        payoffHint?: string;
+        selectedLogline?: string;
+        selectedDirection?: string;
+        note?: string;
+      }
+    ): Promise<{ changes: number; lastInsertRowid?: number | bigint }>;
+    invoke(
+      channel: 'db-story-idea-card-update',
+      cardId: number,
+      fields: {
+        title?: string;
+        premise?: string;
+        tags_json?: string;
+        source?: StoryIdeaCardSource;
+        status?: StoryIdeaCardStatus;
+        theme_seed?: string;
+        conflict_seed?: string;
+        twist_seed?: string;
+        protagonist_wish?: string;
+        core_obstacle?: string;
+        irony_or_gap?: string;
+        escalation_path?: string;
+        payoff_hint?: string;
+        selected_logline?: string;
+        selected_direction?: string;
+        note?: string;
+      }
+    ): Promise<{ changes: number }>;
+    invoke(channel: 'db-story-idea-card-delete', cardId: number): Promise<{ changes: number }>;
+    invoke(channel: 'db-story-idea-output-list', cardId: number): Promise<StoryIdeaOutputRow[]>;
+    invoke(
+      channel: 'db-story-idea-output-replace-by-folder',
+      folderPath: string,
+      cardId: number,
+      type: StoryIdeaOutputType,
+      outputs: Array<{ content: string; metaJson?: string; isSelected?: boolean }>
+    ): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-story-idea-output-update',
+      outputId: number,
+      fields: { content?: string; meta_json?: string; sort_order?: number; is_selected?: number }
+    ): Promise<{ changes: number }>;
+    invoke(channel: 'db-story-idea-output-select', outputId: number): Promise<{ changes: number }>;
+    invoke(channel: 'db-story-idea-output-delete', outputId: number): Promise<{ changes: number }>;
     invoke(
       channel: 'db-world-setting-list-by-folder',
       folderPath: string

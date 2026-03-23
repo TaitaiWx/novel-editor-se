@@ -7,6 +7,7 @@ import { LAYOUT_MODE_LABELS, LAYOUT_MODE_KEYS, ACT_COLORS } from './constants';
 import { PlotBoardInspector } from './PlotBoardInspector';
 import { SwimlaneTimeline } from './SwimlaneTimeline';
 import { CausalChainView } from './CausalChainView';
+import { useDebounce } from './useDebounce';
 
 export const ActsView: React.FC<{
   content: string;
@@ -20,8 +21,11 @@ export const ActsView: React.FC<{
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const [layoutMode, setLayoutMode] = useState<StorylineLayoutMode>('board');
 
+  // ── Debounce content (300ms) to avoid re-parsing on every keystroke ──
+  const debouncedContent = useDebounce(content, 300);
+
   // ── Derived data (single useMemo — all four values share the same deps) ────
-  const acts: ActNode[] = useMemo(() => extractActs(content), [content]);
+  const acts: ActNode[] = useMemo(() => extractActs(debouncedContent), [debouncedContent]);
 
   const { selectedActIndex, selectedAct, selectedBoard } = useMemo(() => {
     const actIndex = activeAct !== null ? activeAct : acts.length > 0 ? 0 : null;
@@ -245,6 +249,22 @@ export const ActsView: React.FC<{
     }
   };
 
+  // ── Memoize act strip progress data ─────────────────────────────────────────
+  const actStripData = useMemo(
+    () =>
+      acts.map((act, idx) => {
+        const boardKey = createActBoardKey(act, idx);
+        const board = mergeActBoard(act, idx, plotBoards[boardKey]);
+        const doneCount = board.sceneBoards.filter((s) => s.status === 'done').length;
+        return {
+          color: ACT_COLORS[idx % ACT_COLORS.length],
+          doneCount,
+          total: board.sceneBoards.length,
+        };
+      }),
+    [acts, plotBoards]
+  );
+
   return (
     <div className={styles.actsViewRoot}>
       {/* ── Layout mode switcher ── */}
@@ -263,12 +283,12 @@ export const ActsView: React.FC<{
       {/* ── Act selector strip ── */}
       <div className={styles.actSelectorStrip}>
         {acts.map((act, idx) => {
-          const color = ACT_COLORS[idx % ACT_COLORS.length];
+          const { color, doneCount, total } = actStripData[idx] ?? {
+            color: ACT_COLORS[0],
+            doneCount: 0,
+            total: 0,
+          };
           const isActive = selectedActIndex === idx;
-          const boardKey = createActBoardKey(act, idx);
-          const board = mergeActBoard(act, idx, plotBoards[boardKey]);
-          const doneCount = board.sceneBoards.filter((s) => s.status === 'done').length;
-          const total = board.sceneBoards.length;
 
           return (
             <button

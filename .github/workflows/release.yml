@@ -117,6 +117,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NOVEL_EDITOR_RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
+          # TODO: 申请 Windows 代码签名证书后启用
+          # WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          # WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6

@@ -531,6 +531,38 @@ export function mergeActBoard(act: ActNode, actIndex: number, board?: PlotActBoa
   const fallback = createDefaultActBoard(act, actIndex);
   if (!board) return fallback;
 
+  const normalizedScenes = fallback.sceneBoards.map((scene) => {
+    const saved = board.sceneBoards.find(
+      (item) => item.sceneKey === scene.sceneKey || item.title === scene.title
+    );
+    if (!saved) return scene;
+    return {
+      ...scene,
+      ...saved,
+      characters: Array.isArray(saved.characters) ? saved.characters : [],
+      beats: Array.isArray(saved.beats) ? saved.beats : [],
+      causesScene: saved.causesScene ?? null,
+      pov: saved.pov ?? '',
+      intensity: saved.intensity ?? 1,
+    };
+  });
+
+  const extraScenes = (Array.isArray(board.sceneBoards) ? board.sceneBoards : [])
+    .filter(
+      (saved) =>
+        !fallback.sceneBoards.some(
+          (scene) => scene.sceneKey === saved.sceneKey || scene.title === saved.title
+        )
+    )
+    .map((scene) => ({
+      ...scene,
+      characters: Array.isArray(scene.characters) ? scene.characters : [],
+      beats: Array.isArray(scene.beats) ? scene.beats : [],
+      causesScene: scene.causesScene ?? null,
+      pov: scene.pov ?? '',
+      intensity: scene.intensity ?? 1,
+    }));
+
   return {
     premise: board.premise || '',
     goal: board.goal || '',
@@ -539,21 +571,7 @@ export function mergeActBoard(act: ActNode, actIndex: number, board?: PlotActBoa
     payoff: board.payoff || '',
     structureNodes: Array.isArray(board.structureNodes) ? board.structureNodes : [],
     aiSuggestion: board.aiSuggestion || '',
-    sceneBoards: fallback.sceneBoards.map((scene) => {
-      const saved = board.sceneBoards.find(
-        (item) => item.sceneKey === scene.sceneKey || item.title === scene.title
-      );
-      if (!saved) return scene;
-      return {
-        ...scene,
-        ...saved,
-        characters: Array.isArray(saved.characters) ? saved.characters : [],
-        beats: Array.isArray(saved.beats) ? saved.beats : [],
-        causesScene: saved.causesScene ?? null,
-        pov: saved.pov ?? '',
-        intensity: saved.intensity ?? 1,
-      };
-    }),
+    sceneBoards: [...normalizedScenes, ...extraScenes],
   };
 }
 

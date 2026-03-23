@@ -1,13 +1,16 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import styles from './styles.module.scss';
 import type { LoreEntry, LoreCategory } from './types';
 import { LORE_CATEGORY_LABELS } from './constants';
 import { VerticalSplit } from './VerticalSplit';
+import { parseLoreAuditSections, parseLoreDraftFromAuditItem } from './lore-data';
 import { useLoreEntries } from './useLoreEntries';
 import { parseLoreDraftsFromImport } from './lore-import';
 
 export const LoreView: React.FC<{ folderPath: string | null; content: string }> = React.memo(
   ({ folderPath, content }) => {
+    const contentRef = useRef(content);
+    contentRef.current = content;
     const [category, setCategory] = useState<LoreCategory>('world');
     const [query, setQuery] = useState('');
     const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
@@ -15,6 +18,7 @@ export const LoreView: React.FC<{ folderPath: string | null; content: string }> 
     const [summary, setSummary] = useState('');
     const [auditLoading, setAuditLoading] = useState(false);
     const [auditResult, setAuditResult] = useState('');
+    const [copiedAuditKey, setCopiedAuditKey] = useState<string | null>(null);
     const [importResult, setImportResult] = useState('');
     const { entries, loading, createEntry, updateEntry, deleteEntry, importEntries } =
       useLoreEntries(folderPath);
@@ -109,6 +113,32 @@ export const LoreView: React.FC<{ folderPath: string | null; content: string }> 
       [entries]
     );
 
+    const auditSections = useMemo(() => parseLoreAuditSections(auditResult), [auditResult]);
+
+    const handleCopyAuditText = useCallback((key: string, text: string) => {
+      const normalized = text.trim();
+      if (!normalized) return;
+      void navigator.clipboard.writeText(normalized).then(() => {
+        setCopiedAuditKey(key);
+        window.setTimeout(() => {
+          setCopiedAuditKey((current) => (current === key ? null : current));
+        }, 1600);
+      });
+    }, []);
+
+    const handleApplyAuditTemplate = useCallback(
+      (item: string) => {
+        const draft = parseLoreDraftFromAuditItem(item, category);
+        if (!draft) return;
+        setEditingEntryId(null);
+        setCategory(draft.category);
+        setTitle(draft.title);
+        setSummary(draft.summary);
+        setImportResult('已写入草稿区，可继续补充后保存');
+      },
+      [category]
+    );
+
     const runLoreAudit = useCallback(async () => {
       const ipc = window.electron?.ipcRenderer;
       if (!ipc || entries.length === 0) {
@@ -124,7 +154,7 @@ export const LoreView: React.FC<{ folderPath: string | null; content: string }> 
           systemPrompt: '你是小说世界观设计顾问，需要识别设定缺口、冲突和复用机会。',
           context: [
             `设定集:\n${entries.map((item) => `[${LORE_CATEGORY_LABELS[item.category]}] ${item.title}: ${item.summary}`).join('\n')}`,
-            content ? `正文抽样:\n${content.slice(0, 2200)}` : '',
+            contentRef.current ? `正文抽样:\n${contentRef.current.slice(0, 2200)}` : '',
           ]
             .filter(Boolean)
             .join('\n\n'),
@@ -137,7 +167,7 @@ export const LoreView: React.FC<{ folderPath: string | null; content: string }> 
       } finally {
         setAuditLoading(false);
       }
-    }, [content, entries]);
+    }, [entries]);
 
     if (!folderPath) {
       return <div className={styles.emptyHint}>打开项目后管理设定集</div>;
@@ -202,16 +232,74 @@ export const LoreView: React.FC<{ folderPath: string | null; content: string }> 
         <div className={styles.loreReferenceCard}>
           <div className={styles.loreReferenceHeader}>
             <span>AI 引用与诊断</span>
-            <button className={styles.addButton} onClick={runLoreAudit} disabled={auditLoading}>
-              {auditLoading ? '诊断中...' : '诊断设定缺口'}
-            </button>
+            <div className={styles.loreAuditToolbar}>
+              {auditResult && (
+                <button
+                  className={styles.deleteInlineButton}
+                  onClick={() => handleCopyAuditText('all', auditResult)}
+                >
+                  {copiedAuditKey === 'all' ? '已复制全部' : '复制全部'}
+                </button>
+              )}
+              <button className={styles.addButton} onClick={runLoreAudit} disabled={auditLoading}>
+                {auditLoading ? '诊断中...' : '诊断设定缺口'}
+              </button>
+            </div>
           </div>
           <div className={styles.loreReferenceText}>
             设定集不只是资料箱，它会被人物生成、情节诊断、一致性检查直接引用。
           </div>
-          <div className={styles.aiInlineResult}>
-            {auditResult || '可以先让 AI 检查设定缺口与潜在冲突。'}
-          </div>
+          {auditSections.length > 0 ? (
+            <div className={styles.loreAuditSections}>
+              {auditSections.map((section) => (
+                <div key={section.key} className={styles.loreAuditSectionCard}>
+                  <div className={styles.loreAuditSectionHeader}>
+                    <span>{section.title}</span>
+                    <button
+                      className={styles.deleteInlineButton}
+                      onClick={() => handleCopyAuditText(section.key, section.body)}
+                    >
+                      {copiedAuditKey === section.key ? '已复制' : '复制本段'}
+                    </button>
+                  </div>
+                  {section.items.length > 0 ? (
+                    <div className={styles.loreAuditSectionItems}>
+                      {section.items.map((item, index) => {
+                        const itemKey = `${section.key}-${index}`;
+                        return (
+                          <div key={itemKey} className={styles.loreAuditSectionItem}>
+                            <span>{item}</span>
+                            <div className={styles.inlineActions}>
+                              {section.key === 'template' && (
+                                <button
+                                  className={styles.deleteInlineButton}
+                                  onClick={() => handleApplyAuditTemplate(item)}
+                                >
+                                  写入草稿
+                                </button>
+                              )}
+                              <button
+                                className={styles.deleteInlineButton}
+                                onClick={() => handleCopyAuditText(itemKey, item)}
+                              >
+                                {copiedAuditKey === itemKey ? '已复制' : '复制'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className={styles.aiInlineResult}>{section.body}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.aiInlineResult}>
+              {auditResult || '可以先让 AI 检查设定缺口与潜在冲突。'}
+            </div>
+          )}
         </div>
         <div className={styles.loreCategoryTabs}>
           {(Object.keys(LORE_CATEGORY_LABELS) as LoreCategory[]).map((item) => (
@@ -281,5 +369,6 @@ export const LoreView: React.FC<{ folderPath: string | null; content: string }> 
     );
 
     return <VerticalSplit top={topView} bottom={bottomView} initialTopHeight={310} />;
-  }
+  },
+  (prev, next) => prev.folderPath === next.folderPath
 );

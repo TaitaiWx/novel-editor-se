@@ -6,6 +6,9 @@ import { RightPanelStandaloneApp } from './RightPanelStandaloneApp';
 import { ToastProvider } from './components/Toast';
 import { DialogProvider } from './components/Dialog';
 
+// MessagePort 全局监听器：必须在 React 渲染前注册，确保端口到达时不会丢失
+import './utils/messagePortChannel';
+
 import './styles/global.scss';
 
 const rootElement = document.getElementById('root');

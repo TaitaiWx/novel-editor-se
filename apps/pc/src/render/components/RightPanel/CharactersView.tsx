@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useDebounce } from './useDebounce';
 import styles from './styles.module.scss';
 import type {
   Character,
@@ -31,6 +32,7 @@ import { VerticalSplit } from './VerticalSplit';
 
 export const CharactersView: React.FC<{ folderPath: string | null; content: string }> = React.memo(
   ({ folderPath, content }) => {
+    const debouncedContent = useDebounce(content, 300);
     const [characters, setCharacters] = useState<Character[]>([]);
     const [relations, setRelations] = useState<CharacterRelation[]>([]);
     const [novelId, setNovelId] = useState<number | null>(null);
@@ -598,13 +600,16 @@ export const CharactersView: React.FC<{ folderPath: string | null; content: stri
       };
       characters.forEach((character) => {
         const camp = inferCharacterCamp(character, relations);
-        grouped[camp].push({ ...character, heat: estimateAppearanceHeat(content, character.name) });
+        grouped[camp].push({
+          ...character,
+          heat: estimateAppearanceHeat(debouncedContent, character.name),
+        });
       });
       (Object.keys(grouped) as CharacterCamp[]).forEach((camp) => {
         grouped[camp].sort((a, b) => b.heat - a.heat);
       });
       return grouped;
-    }, [characters, relations, content]);
+    }, [characters, relations, debouncedContent]);
 
     const relationStageStats = useMemo(() => {
       const stats = new Map<string, number>();

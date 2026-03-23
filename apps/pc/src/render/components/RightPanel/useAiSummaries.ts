@@ -4,6 +4,7 @@ import { OUTLINE_SUMMARY_MAX_CONCURRENCY } from './constants';
 import { buildOutlineEntryCacheKey, sanitizeAiSummary, extractChapterContent } from './utils';
 import { useAiCache } from './AiCacheContext';
 import { useAiConfig } from './useAiConfig';
+import { useDebounce } from './useDebounce';
 
 export function useAiSummaries(
   content: string,
@@ -12,6 +13,9 @@ export function useAiSummaries(
 ) {
   const { ready: aiReady } = useAiConfig();
   const { summaryCache, cacheReady } = useAiCache();
+
+  // Debounce content (300ms) to avoid re-running stale-while-revalidate on every keystroke
+  const debouncedContent = useDebounce(content, 300);
 
   const [aiSummaryTextsByKey, setAiSummaryTextsByKey] = useState<Record<string, string>>({});
   const [aiSummaryStatesByKey, setAiSummaryStatesByKey] = useState<
@@ -238,7 +242,7 @@ export function useAiSummaries(
       }
       return changed ? next : prev;
     });
-  }, [content, cacheReady, summaryCache]);
+  }, [debouncedContent, cacheReady, summaryCache]);
 
   // 摘要改为按需请求：悬浮或显式刷新时才触发，避免列表滚动时大规模排队请求。
 

@@ -6,6 +6,8 @@ export {
   novelOps,
   characterOps,
   outlineOps,
+  outlineVersionOps,
+  storyIdeaOps,
   worldSettingOps,
   statsOps,
   settingsOps,
@@ -16,4 +18,13 @@ export {
 export { versionOps } from './versioning';
 
 export type { ExportData } from './database';
+export type {
+  OutlineVersionRow,
+  OutlineVersionSource,
+  StoryIdeaCardRow,
+  StoryIdeaCardSource,
+  StoryIdeaCardStatus,
+  StoryIdeaOutputRow,
+  StoryIdeaOutputType,
+} from './database';
 export type { VersionSnapshotInfo, SnapshotFileContent, SnapshotProgress } from './versioning';
