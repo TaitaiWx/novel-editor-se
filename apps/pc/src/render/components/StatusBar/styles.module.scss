@@ -335,6 +335,22 @@
   transition: width 0.3s ease;
 }
 
+.progressFillPulse {
+  animation: preCachePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes preCachePulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
 .panelFooter {
   padding: 8px 14px;
   display: flex;

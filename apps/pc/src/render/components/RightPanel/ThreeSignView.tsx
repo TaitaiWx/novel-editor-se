@@ -8,6 +8,7 @@ import styles from './styles.module.scss';
 import { useAiConfig } from './useAiConfig';
 import { useDialog } from '../Dialog';
 import { useStoryIdeaCards } from './useStoryIdeaCards';
+import { FlowCard, FlowCollapsibleCard } from './FlowCards';
 import {
   buildStoryIdeaSearchText,
   STORY_IDEA_GENERATION_SCOPE_LABELS,
@@ -132,123 +133,117 @@ function StoryIdeaTermEditor({
 }) {
   const summary = buildStoryIdeaTermSummary(value, 3);
   return (
-    <section
-      className={`${styles.storyIdeaTermCard} ${isExpanded ? styles.storyIdeaTermCardExpanded : ''}`}
-    >
-      <button
-        className={styles.storyIdeaTermCardHeader}
-        onClick={() => onToggle(section)}
-        type="button"
-      >
-        <div>
-          <div className={styles.storyIdeaTermCardTitle}>{label}</div>
-          <div className={styles.storyIdeaTermCardSubtitle}>{description}</div>
-        </div>
-        <div className={styles.storyIdeaTermCardHeaderRight}>
+    <FlowCollapsibleCard
+      title={label}
+      subtitle={description}
+      expanded={isExpanded}
+      onToggle={() => onToggle(section)}
+      tone={isExpanded ? 'info' : 'default'}
+      meta={
+        <>
           <span className={styles.storyIdeaTermCardCount}>{value.length}/5</span>
           <span className={styles.storyIdeaTermCardToggle}>{isExpanded ? '收起' : '展开'}</span>
-        </div>
-      </button>
-      <div className={styles.storyIdeaTermSummaryBar}>
-        <span className={styles.storyIdeaTermSummaryLabel}>摘要</span>
-        <div className={styles.storyIdeaTermSummaryContent}>
-          {summary.visibleTerms.length === 0 ? (
-            <span className={styles.storyIdeaTermPlaceholder}>任选这一张先起手，填 3-5 个即可</span>
-          ) : (
-            <>
-              {summary.visibleTerms.map((item) => (
-                <span key={`${label}-${item}`} className={styles.storyIdeaTermChip}>
-                  {item}
-                </span>
-              ))}
-              {summary.hiddenCount > 0 && (
-                <span className={styles.storyIdeaTermOverflowChip}>+{summary.hiddenCount}</span>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-      {isExpanded && (
-        <div className={styles.storyIdeaTermCardBody}>
-          <div className={styles.storyIdeaTermGroup}>
-            <label className={styles.storyIdeaField}>
-              <span className={styles.storyIdeaFieldLabel}>签词输入</span>
-              <input
-                className={styles.storyIdeaInput}
-                value={value.join('，')}
-                onChange={(event) => onChange(normalizeIdeaTerms(event.target.value))}
-                placeholder={placeholder}
-              />
-            </label>
-            <div className={styles.storyIdeaTermActions}>
-              <button
-                className={styles.outlineSecondaryButton}
-                onClick={() => onQuickFillFromPool(section)}
-                disabled={working || poolTerms.length === 0}
-                type="button"
-              >
-                词池抽 3 个
-              </button>
-              <button
-                className={styles.outlineSecondaryButton}
-                onClick={() => onAddCurrentToPool(section)}
-                disabled={working || value.length === 0}
-                type="button"
-              >
-                收进词池
-              </button>
-              <button
-                className={styles.outlineSecondaryButton}
-                onClick={() => onRequestRelated(section)}
-                disabled={working}
-                type="button"
-              >
-                AI 提相关
-              </button>
-              <button
-                className={styles.outlineSecondaryButton}
-                onClick={() => onRedrawRandom(section)}
-                disabled={working}
-                type="button"
-              >
-                随机重抽一签
-              </button>
-            </div>
-            <div className={styles.storyIdeaPoolBox}>
-              <div className={styles.storyIdeaPoolTitle}>可直接点选的词池</div>
-              <div className={styles.storyIdeaTagCloud}>
-                {poolTerms.length === 0 ? (
-                  <span className={styles.storyIdeaTermPlaceholder}>
-                    历史词、AI 提词会沉淀到这里
+        </>
+      }
+      summary={
+        <div className={styles.storyIdeaTermSummaryBar}>
+          <span className={styles.storyIdeaTermSummaryLabel}>摘要</span>
+          <div className={styles.storyIdeaTermSummaryContent}>
+            {summary.visibleTerms.length === 0 ? (
+              <span className={styles.storyIdeaTermPlaceholder}>
+                任选这一张先起手，填 3-5 个即可
+              </span>
+            ) : (
+              <>
+                {summary.visibleTerms.map((item) => (
+                  <span key={`${label}-${item}`} className={styles.storyIdeaTermChip}>
+                    {item}
                   </span>
-                ) : (
-                  poolTerms.map((item) => (
-                    <button
-                      key={`${section}-${item.term}`}
-                      className={styles.storyIdeaPoolChip}
-                      onClick={() => onPickPoolTerm(section, item.term)}
-                      type="button"
-                    >
-                      <span>{item.term}</span>
-                      <span className={styles.storyIdeaPoolSources}>
-                        {item.sources.map((source) => (
-                          <span
-                            key={`${item.term}-${source}`}
-                            className={styles.storyIdeaPoolSourceBadge}
-                          >
-                            {STORY_IDEA_TERM_POOL_SOURCE_LABELS[source]}
-                          </span>
-                        ))}
-                      </span>
-                    </button>
-                  ))
+                ))}
+                {summary.hiddenCount > 0 && (
+                  <span className={styles.storyIdeaTermOverflowChip}>+{summary.hiddenCount}</span>
                 )}
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
-      )}
-    </section>
+      }
+    >
+      <div className={styles.storyIdeaTermGroup}>
+        <label className={styles.storyIdeaField}>
+          <span className={styles.storyIdeaFieldLabel}>签词输入</span>
+          <input
+            className={styles.storyIdeaInput}
+            value={value.join('，')}
+            onChange={(event) => onChange(normalizeIdeaTerms(event.target.value))}
+            placeholder={placeholder}
+          />
+        </label>
+        <div className={styles.storyIdeaTermActions}>
+          <button
+            className={styles.outlineSecondaryButton}
+            onClick={() => onQuickFillFromPool(section)}
+            disabled={working || poolTerms.length === 0}
+            type="button"
+          >
+            词池抽 3 个
+          </button>
+          <button
+            className={styles.outlineSecondaryButton}
+            onClick={() => onAddCurrentToPool(section)}
+            disabled={working || value.length === 0}
+            type="button"
+          >
+            收进词池
+          </button>
+          <button
+            className={styles.outlineSecondaryButton}
+            onClick={() => onRequestRelated(section)}
+            disabled={working}
+            type="button"
+          >
+            AI 提相关
+          </button>
+          <button
+            className={styles.outlineSecondaryButton}
+            onClick={() => onRedrawRandom(section)}
+            disabled={working}
+            type="button"
+          >
+            随机重抽一签
+          </button>
+        </div>
+        <div className={styles.storyIdeaPoolBox}>
+          <div className={styles.storyIdeaPoolTitle}>可直接点选的词池</div>
+          <div className={styles.storyIdeaTagCloud}>
+            {poolTerms.length === 0 ? (
+              <span className={styles.storyIdeaTermPlaceholder}>历史词、AI 提词会沉淀到这里</span>
+            ) : (
+              poolTerms.map((item) => (
+                <button
+                  key={`${section}-${item.term}`}
+                  className={styles.storyIdeaPoolChip}
+                  onClick={() => onPickPoolTerm(section, item.term)}
+                  type="button"
+                >
+                  <span>{item.term}</span>
+                  <span className={styles.storyIdeaPoolSources}>
+                    {item.sources.map((source) => (
+                      <span
+                        key={`${item.term}-${source}`}
+                        className={styles.storyIdeaPoolSourceBadge}
+                      >
+                        {STORY_IDEA_TERM_POOL_SOURCE_LABELS[source]}
+                      </span>
+                    ))}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </FlowCollapsibleCard>
   );
 }
 
@@ -790,14 +785,11 @@ export const ThreeSignView: React.FC<{
       </div>
 
       <div className={styles.storyIdeaTopSection}>
-        <div className={styles.storyIdeaHistorySection}>
-          <div className={styles.storyIdeaSectionHeader}>
-            <div>
-              <div className={styles.storyIdeaSectionTitle}>历史搜索</div>
-              <div className={styles.storyIdeaSectionSubtitle}>
-                先从已有灵感里找接近的卡，再决定复用、扩写还是新起一张。
-              </div>
-            </div>
+        <FlowCard
+          tone="info"
+          title="① 历史搜索"
+          subtitle="先从已有灵感里找接近的卡，再决定复用、扩写还是新起一张。"
+          meta={
             <div className={styles.storyIdeaStatsRow}>
               <span className={styles.outlineStatChip}>{cards.length} 张创意卡</span>
               {activeCard && (
@@ -821,7 +813,8 @@ export const ThreeSignView: React.FC<{
                 <span className={styles.outlineAiHintChip}>AI 未就绪</span>
               )}
             </div>
-          </div>
+          }
+        >
           <div className={styles.storyIdeaFilterPanel}>
             <input
               className={styles.storyIdeaInput}
@@ -895,7 +888,7 @@ export const ThreeSignView: React.FC<{
               })}
             </div>
           )}
-        </div>
+        </FlowCard>
       </div>
 
       {statusMessage && <div className={styles.outlineImportStatus}>{statusMessage}</div>}
@@ -907,14 +900,11 @@ export const ThreeSignView: React.FC<{
           </div>
         ) : (
           <div className={styles.storyIdeaEditor}>
-            <div className={styles.storyIdeaScopePanel}>
-              <div className={styles.storyIdeaSectionHeader}>
-                <div>
-                  <div className={styles.storyIdeaSectionTitle}>当前发想范围</div>
-                  <div className={styles.storyIdeaSectionSubtitle}>
-                    三签不必被当前章节锁死。先定范围，再决定这轮是向外发散还是开始收束。
-                  </div>
-                </div>
+            <FlowCard
+              tone="accent"
+              title="② 当前发想范围"
+              subtitle="三签不必被当前章节锁死。先定范围，再决定这轮是向外发散还是开始收束。"
+              actions={
                 <div className={styles.storyIdeaEditorActions}>
                   <button
                     className={styles.outlineActionButton}
@@ -932,7 +922,8 @@ export const ThreeSignView: React.FC<{
                     新建空白灵感卡
                   </button>
                 </div>
-              </div>
+              }
+            >
               <div className={styles.storyIdeaTagCloud}>
                 {Object.entries(STORY_IDEA_GENERATION_SCOPE_LABELS).map(([value, label]) => (
                   <button
@@ -981,268 +972,250 @@ export const ThreeSignView: React.FC<{
                   转为大纲
                 </button>
               </div>
-            </div>
+            </FlowCard>
 
-            <div className={styles.storyIdeaEditorHeader}>
-              <div>
-                <div className={styles.storyIdeaEditorTitle}>三张签卡</div>
-                <div className={styles.storyIdeaEditorSubtitle}>
-                  顶部始终先看这组三签。你只需要盯住当前一张，反复扩它，直到觉得可以收束。
-                </div>
-              </div>
-              <div className={styles.storyIdeaEditorActions}>
-                {!showOptionalInputs && hasOptionalConstraints && (
-                  <span className={styles.storyIdeaConstraintPill}>这张卡带有限定</span>
-                )}
-                <button
-                  className={styles.outlineSecondaryButton}
-                  onClick={() => setShowOptionalInputs((current) => !current)}
-                >
-                  {showOptionalInputs ? '收起限定' : '补充限定（可选）'}
-                </button>
-              </div>
-            </div>
-
-            {hasOptionalConstraints && !showOptionalInputs && (
-              <div className={styles.storyIdeaConstraintSummary}>
-                {draft.premise.trim() || '这张卡已带有补充限定'}
-              </div>
-            )}
-
-            {showOptionalInputs && (
-              <div className={styles.storyIdeaOptionalPanel}>
-                <label className={styles.storyIdeaField}>
-                  <span className={styles.storyIdeaFieldLabel}>标题</span>
-                  <input
-                    className={styles.storyIdeaInput}
-                    value={draft.title}
-                    onChange={(event) => setField('title', event.target.value)}
-                  />
-                </label>
-
-                <label className={styles.storyIdeaField}>
-                  <span className={styles.storyIdeaFieldLabel}>一句话 premise</span>
-                  <textarea
-                    className={styles.storyIdeaTextarea}
-                    value={draft.premise}
-                    onChange={(event) => setField('premise', event.target.value)}
-                    rows={2}
-                    placeholder="可选：补一句你想要的故事方向"
-                  />
-                </label>
-
-                <label className={styles.storyIdeaField}>
-                  <span className={styles.storyIdeaFieldLabel}>标签</span>
-                  <input
-                    className={styles.storyIdeaInput}
-                    value={draft.tags.join('，')}
-                    onChange={(event) => setField('tags', normalizeIdeaTags(event.target.value))}
-                    placeholder="悬疑，校园，双线"
-                  />
-                </label>
-
-                <label className={styles.storyIdeaField}>
-                  <span className={styles.storyIdeaFieldLabel}>联想备注</span>
-                  <textarea
-                    className={styles.storyIdeaTextarea}
-                    value={draft.note}
-                    onChange={(event) => setField('note', event.target.value)}
-                    rows={2}
-                    placeholder="可选：只在你想主动加限定时再写"
-                  />
-                </label>
-
-                <div className={styles.storyIdeaFilterRow}>
-                  <label className={styles.storyIdeaField}>
-                    <span className={styles.storyIdeaFieldLabel}>状态</span>
-                    <select
-                      className={styles.storyIdeaSelect}
-                      value={draft.status}
-                      onChange={(event) =>
-                        setField('status', event.target.value as StoryIdeaCardDraft['status'])
-                      }
-                    >
-                      {Object.entries(STORY_IDEA_STATUS_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={styles.storyIdeaField}>
-                    <span className={styles.storyIdeaFieldLabel}>来源</span>
-                    <select
-                      className={styles.storyIdeaSelect}
-                      value={draft.source}
-                      onChange={(event) =>
-                        setField('source', event.target.value as StoryIdeaCardDraft['source'])
-                      }
-                    >
-                      {Object.entries(STORY_IDEA_SOURCE_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
+            <FlowCard
+              tone="default"
+              title="③ 三张签卡"
+              subtitle="顶部始终先看这组三签。你只需要盯住当前一张，反复扩它，直到觉得可以收束。"
+              actions={
                 <div className={styles.storyIdeaEditorActions}>
+                  {!showOptionalInputs && hasOptionalConstraints && (
+                    <span className={styles.storyIdeaConstraintPill}>这张卡带有限定</span>
+                  )}
                   <button
                     className={styles.outlineSecondaryButton}
-                    onClick={() =>
-                      window.dispatchEvent(new CustomEvent('open-settings-tab', { detail: 'ai' }))
-                    }
-                    disabled={working}
-                    type="button"
+                    onClick={() => setShowOptionalInputs((current) => !current)}
                   >
-                    AI 设置
-                  </button>
-                  <button
-                    className={styles.outlineSecondaryButton}
-                    onClick={() => void handleDeleteCard()}
-                    disabled={working}
-                    type="button"
-                  >
-                    删除卡片
+                    {showOptionalInputs ? '收起限定' : '补充限定（可选）'}
                   </button>
                 </div>
-              </div>
-            )}
+              }
+            >
+              {hasOptionalConstraints && !showOptionalInputs && (
+                <div className={styles.storyIdeaConstraintSummary}>
+                  {draft.premise.trim() || '这张卡已带有补充限定'}
+                </div>
+              )}
 
-            <div className={styles.storyIdeaSignatureStack}>
-              <div className={styles.storyIdeaSignatureIntro}>
-                三签的本质，不是按流程填表，而是先抓题眼、冲突、变形三种不同张力，再让其中一张被你不断掰开。真正的使用节奏是：先扩一张，再看是否值得收束，而不是从上到下机械填完。
-              </div>
-              <div className={styles.storyIdeaPoolFilterRow}>
-                <div className={styles.storyIdeaPoolFilterHeader}>
-                  <span className={styles.storyIdeaFieldLabel}>词池来源</span>
-                  <span className={styles.storyIdeaPoolFilterHint}>记住上次筛选，下次打开沿用</span>
-                </div>
-                <div className={styles.storyIdeaTagCloud}>
-                  {[
-                    { value: 'all', label: '全部' },
-                    { value: 'history', label: '历史' },
-                    { value: 'ai', label: 'AI' },
-                    { value: 'manual', label: '手动' },
-                  ].map((item) => (
+              {showOptionalInputs && (
+                <div className={styles.storyIdeaOptionalPanel}>
+                  <label className={styles.storyIdeaField}>
+                    <span className={styles.storyIdeaFieldLabel}>标题</span>
+                    <input
+                      className={styles.storyIdeaInput}
+                      value={draft.title}
+                      onChange={(event) => setField('title', event.target.value)}
+                    />
+                  </label>
+
+                  <label className={styles.storyIdeaField}>
+                    <span className={styles.storyIdeaFieldLabel}>一句话 premise</span>
+                    <textarea
+                      className={styles.storyIdeaTextarea}
+                      value={draft.premise}
+                      onChange={(event) => setField('premise', event.target.value)}
+                      rows={2}
+                      placeholder="可选：补一句你想要的故事方向"
+                    />
+                  </label>
+
+                  <label className={styles.storyIdeaField}>
+                    <span className={styles.storyIdeaFieldLabel}>标签</span>
+                    <input
+                      className={styles.storyIdeaInput}
+                      value={draft.tags.join('，')}
+                      onChange={(event) => setField('tags', normalizeIdeaTags(event.target.value))}
+                      placeholder="悬疑，校园，双线"
+                    />
+                  </label>
+
+                  <label className={styles.storyIdeaField}>
+                    <span className={styles.storyIdeaFieldLabel}>联想备注</span>
+                    <textarea
+                      className={styles.storyIdeaTextarea}
+                      value={draft.note}
+                      onChange={(event) => setField('note', event.target.value)}
+                      rows={2}
+                      placeholder="可选：只在你想主动加限定时再写"
+                    />
+                  </label>
+
+                  <div className={styles.storyIdeaFilterRow}>
+                    <label className={styles.storyIdeaField}>
+                      <span className={styles.storyIdeaFieldLabel}>状态</span>
+                      <select
+                        className={styles.storyIdeaSelect}
+                        value={draft.status}
+                        onChange={(event) =>
+                          setField('status', event.target.value as StoryIdeaCardDraft['status'])
+                        }
+                      >
+                        {Object.entries(STORY_IDEA_STATUS_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={styles.storyIdeaField}>
+                      <span className={styles.storyIdeaFieldLabel}>来源</span>
+                      <select
+                        className={styles.storyIdeaSelect}
+                        value={draft.source}
+                        onChange={(event) =>
+                          setField('source', event.target.value as StoryIdeaCardDraft['source'])
+                        }
+                      >
+                        {Object.entries(STORY_IDEA_SOURCE_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className={styles.storyIdeaEditorActions}>
                     <button
-                      key={item.value}
-                      className={`${styles.storyIdeaTagChip} ${poolSourceFilter === item.value ? styles.storyIdeaTagChipActive : ''}`}
+                      className={styles.outlineSecondaryButton}
                       onClick={() =>
-                        setPoolSourceFilter(item.value as 'all' | 'history' | 'ai' | 'manual')
+                        window.dispatchEvent(new CustomEvent('open-settings-tab', { detail: 'ai' }))
                       }
+                      disabled={working}
                       type="button"
                     >
-                      {item.label}
+                      AI 设置
                     </button>
-                  ))}
-                </div>
-              </div>
-              <div className={styles.storyIdeaSignatureDeck}>
-                <StoryIdeaTermEditor
-                  section="theme"
-                  label={STORY_IDEA_TERM_SECTION_LABELS.theme}
-                  description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.theme}
-                  isExpanded={activeTermSection === 'theme'}
-                  value={draft.themeTerms}
-                  poolTerms={filteredTermPool.theme}
-                  placeholder="例如：雨夜，失约，旧校舍，借名人生"
-                  working={working}
-                  onToggle={handleToggleTermSection}
-                  onChange={(next) => setField('themeTerms', next)}
-                  onAddCurrentToPool={handleAddCurrentTermsToPool}
-                  onQuickFillFromPool={handleQuickFillFromPool}
-                  onRequestRelated={handleRequestRelatedTerms}
-                  onRedrawRandom={handleRedrawRandom}
-                  onPickPoolTerm={handlePickPoolTerm}
-                />
-                <StoryIdeaTermEditor
-                  section="conflict"
-                  label={STORY_IDEA_TERM_SECTION_LABELS.conflict}
-                  description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.conflict}
-                  isExpanded={activeTermSection === 'conflict'}
-                  value={draft.conflictTerms}
-                  poolTerms={filteredTermPool.conflict}
-                  placeholder="例如：冒名顶替，被迫合作，证词作废，代价升级"
-                  working={working}
-                  onToggle={handleToggleTermSection}
-                  onChange={(next) => setField('conflictTerms', next)}
-                  onAddCurrentToPool={handleAddCurrentTermsToPool}
-                  onQuickFillFromPool={handleQuickFillFromPool}
-                  onRequestRelated={handleRequestRelatedTerms}
-                  onRedrawRandom={handleRedrawRandom}
-                  onPickPoolTerm={handlePickPoolTerm}
-                />
-                <StoryIdeaTermEditor
-                  section="twist"
-                  label={STORY_IDEA_TERM_SECTION_LABELS.twist}
-                  description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.twist}
-                  isExpanded={activeTermSection === 'twist'}
-                  value={draft.twistTerms}
-                  poolTerms={filteredTermPool.twist}
-                  placeholder="例如：救人者才是幕后人，胜利即暴露，记忆被嫁接"
-                  working={working}
-                  onToggle={handleToggleTermSection}
-                  onChange={(next) => setField('twistTerms', next)}
-                  onAddCurrentToPool={handleAddCurrentTermsToPool}
-                  onQuickFillFromPool={handleQuickFillFromPool}
-                  onRequestRelated={handleRequestRelatedTerms}
-                  onRedrawRandom={handleRedrawRandom}
-                  onPickPoolTerm={handlePickPoolTerm}
-                />
-              </div>
-            </div>
-
-            <div className={styles.storyIdeaOutputsWrap}>
-              <div className={styles.storyIdeaDecisionPanel}>
-                <div className={styles.storyIdeaSectionHeader}>
-                  <div>
-                    <div className={styles.storyIdeaSectionTitle}>结果后的下一步</div>
-                    <div className={styles.storyIdeaSectionSubtitle}>
-                      一轮结果出来后，不是结束，而是二选一：继续炸开当前这张签，或者沿现有三签再收束一轮。
-                    </div>
+                    <button
+                      className={styles.outlineSecondaryButton}
+                      onClick={() => void handleDeleteCard()}
+                      disabled={working}
+                      type="button"
+                    >
+                      删除卡片
+                    </button>
                   </div>
                 </div>
-                <div className={styles.storyIdeaDecisionBar}>
-                  <button
-                    className={styles.outlineActionButton}
-                    onClick={() => void handleContinueDiverging()}
-                    disabled={working || !aiActionsReady}
-                    type="button"
-                  >
-                    继续发散当前签
-                  </button>
-                  <button
-                    className={styles.outlineSecondaryButton}
-                    onClick={() => void handleConvergeAgain()}
-                    disabled={working || !aiActionsReady}
-                    type="button"
-                  >
-                    再收束一轮候选
-                  </button>
+              )}
+
+              <div className={styles.storyIdeaSignatureStack}>
+                <div className={styles.storyIdeaSignatureIntro}>
+                  三签的本质，不是按流程填表，而是先抓题眼、冲突、变形三种不同张力，再让其中一张被你不断掰开。真正的使用节奏是：先扩一张，再看是否值得收束，而不是从上到下机械填完。
+                </div>
+                <div className={styles.storyIdeaPoolFilterRow}>
+                  <div className={styles.storyIdeaPoolFilterHeader}>
+                    <span className={styles.storyIdeaFieldLabel}>词池来源</span>
+                    <span className={styles.storyIdeaPoolFilterHint}>
+                      记住上次筛选，下次打开沿用
+                    </span>
+                  </div>
+                  <div className={styles.storyIdeaTagCloud}>
+                    {[
+                      { value: 'all', label: '全部' },
+                      { value: 'history', label: '历史' },
+                      { value: 'ai', label: 'AI' },
+                      { value: 'manual', label: '手动' },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        className={`${styles.storyIdeaTagChip} ${poolSourceFilter === item.value ? styles.storyIdeaTagChipActive : ''}`}
+                        onClick={() =>
+                          setPoolSourceFilter(item.value as 'all' | 'history' | 'ai' | 'manual')
+                        }
+                        type="button"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.storyIdeaSignatureDeck}>
+                  <StoryIdeaTermEditor
+                    section="theme"
+                    label={STORY_IDEA_TERM_SECTION_LABELS.theme}
+                    description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.theme}
+                    isExpanded={activeTermSection === 'theme'}
+                    value={draft.themeTerms}
+                    poolTerms={filteredTermPool.theme}
+                    placeholder="例如：雨夜，失约，旧校舍，借名人生"
+                    working={working}
+                    onToggle={handleToggleTermSection}
+                    onChange={(next) => setField('themeTerms', next)}
+                    onAddCurrentToPool={handleAddCurrentTermsToPool}
+                    onQuickFillFromPool={handleQuickFillFromPool}
+                    onRequestRelated={handleRequestRelatedTerms}
+                    onRedrawRandom={handleRedrawRandom}
+                    onPickPoolTerm={handlePickPoolTerm}
+                  />
+                  <StoryIdeaTermEditor
+                    section="conflict"
+                    label={STORY_IDEA_TERM_SECTION_LABELS.conflict}
+                    description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.conflict}
+                    isExpanded={activeTermSection === 'conflict'}
+                    value={draft.conflictTerms}
+                    poolTerms={filteredTermPool.conflict}
+                    placeholder="例如：冒名顶替，被迫合作，证词作废，代价升级"
+                    working={working}
+                    onToggle={handleToggleTermSection}
+                    onChange={(next) => setField('conflictTerms', next)}
+                    onAddCurrentToPool={handleAddCurrentTermsToPool}
+                    onQuickFillFromPool={handleQuickFillFromPool}
+                    onRequestRelated={handleRequestRelatedTerms}
+                    onRedrawRandom={handleRedrawRandom}
+                    onPickPoolTerm={handlePickPoolTerm}
+                  />
+                  <StoryIdeaTermEditor
+                    section="twist"
+                    label={STORY_IDEA_TERM_SECTION_LABELS.twist}
+                    description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.twist}
+                    isExpanded={activeTermSection === 'twist'}
+                    value={draft.twistTerms}
+                    poolTerms={filteredTermPool.twist}
+                    placeholder="例如：救人者才是幕后人，胜利即暴露，记忆被嫁接"
+                    working={working}
+                    onToggle={handleToggleTermSection}
+                    onChange={(next) => setField('twistTerms', next)}
+                    onAddCurrentToPool={handleAddCurrentTermsToPool}
+                    onQuickFillFromPool={handleQuickFillFromPool}
+                    onRequestRelated={handleRequestRelatedTerms}
+                    onRedrawRandom={handleRedrawRandom}
+                    onPickPoolTerm={handlePickPoolTerm}
+                  />
                 </div>
               </div>
-              <div className={styles.storyIdeaOutputControlBar}>
-                <label className={styles.storyIdeaField}>
-                  <span className={styles.storyIdeaFieldLabel}>送情节板目标幕</span>
-                  <select
-                    className={styles.storyIdeaSelect}
-                    value={acts.length === 0 ? '' : String(boardTargetActIndex)}
-                    onChange={(event) => setBoardTargetActIndex(Number(event.target.value))}
-                    disabled={acts.length === 0}
-                  >
-                    {acts.length === 0 ? (
-                      <option value="">正文里还没有幕结构</option>
-                    ) : (
-                      acts.map((act) => (
-                        <option key={act.index} value={act.index}>
-                          {act.title}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </label>
+            </FlowCard>
+
+            <FlowCard
+              tone="info"
+              title="④ 决策"
+              subtitle="一轮结果出来后，不是结束，而是二选一：继续炸开当前这张签，或者沿现有三签再收束一轮。"
+            >
+              <div className={styles.storyIdeaDecisionBar}>
+                <button
+                  className={styles.outlineActionButton}
+                  onClick={() => void handleContinueDiverging()}
+                  disabled={working || !aiActionsReady}
+                  type="button"
+                >
+                  继续发散当前签
+                </button>
+                <button
+                  className={styles.outlineSecondaryButton}
+                  onClick={() => void handleConvergeAgain()}
+                  disabled={working || !aiActionsReady}
+                  type="button"
+                >
+                  再收束一轮候选
+                </button>
+              </div>
+            </FlowCard>
+
+            <FlowCard
+              tone="plain"
+              title="⑤ 候选结果"
+              subtitle="收束产出的 logline、场景钩子和大纲方向，筛选后送出或继续迭代。"
+              meta={
                 <div className={styles.storyIdeaOutputTypeSummary}>
                   <button
                     className={`${styles.storyIdeaOutputTypeChip} ${outputTypeFilter === 'all' ? styles.storyIdeaOutputTypeChipActive : ''}`}
@@ -1269,6 +1242,28 @@ export const ThreeSignView: React.FC<{
                     只看已采用
                   </button>
                 </div>
+              }
+            >
+              <div className={styles.storyIdeaOutputControlBar}>
+                <label className={styles.storyIdeaField}>
+                  <span className={styles.storyIdeaFieldLabel}>送情节板目标幕</span>
+                  <select
+                    className={styles.storyIdeaSelect}
+                    value={acts.length === 0 ? '' : String(boardTargetActIndex)}
+                    onChange={(event) => setBoardTargetActIndex(Number(event.target.value))}
+                    disabled={acts.length === 0}
+                  >
+                    {acts.length === 0 ? (
+                      <option value="">正文里还没有幕结构</option>
+                    ) : (
+                      acts.map((act) => (
+                        <option key={act.index} value={act.index}>
+                          {act.title}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
               </div>
               {filteredOutputCards.length === 0 ? (
                 <div className={styles.storyIdeaOutputEmpty}>
@@ -1343,49 +1338,50 @@ export const ThreeSignView: React.FC<{
                   })}
                 </div>
               )}
-            </div>
 
-            <div className={styles.storyIdeaVersionTraceSection}>
-              <div className={styles.storyIdeaOutputHeader}>
-                <span className={styles.storyIdeaOutputTitle}>关联大纲版本</span>
-                <span className={styles.storyIdeaOutputCount}>
-                  {linkedOutlineVersions.length} 个
-                </span>
-              </div>
-              {linkedOutlineVersions.length === 0 ? (
-                <div className={styles.storyIdeaOutputEmpty}>这张卡还没有转出任何大纲版本</div>
-              ) : (
-                linkedOutlineVersions.map((version) => {
-                  const snapshot = parseStoryIdeaSnapshot(version.story_idea_snapshot_json);
-                  return (
-                    <div key={version.id} className={styles.storyIdeaTraceCard}>
-                      <div className={styles.storyIdeaTraceTitle}>{version.name}</div>
-                      <div className={styles.storyIdeaOutputMeta}>
-                        {new Date(version.created_at).toLocaleString()} / {version.total_nodes} 节点
-                      </div>
-                      {snapshot && (
-                        <div className={styles.storyIdeaTraceTerms}>
-                          {[
-                            ...snapshot.themeTerms,
-                            ...snapshot.conflictTerms,
-                            ...snapshot.twistTerms,
-                          ]
-                            .slice(0, 9)
-                            .map((term) => (
-                              <span
-                                key={`${version.id}-${term}`}
-                                className={styles.storyIdeaTermChip}
-                              >
-                                {term}
-                              </span>
-                            ))}
+              <div className={styles.storyIdeaVersionTraceSection}>
+                <div className={styles.storyIdeaOutputHeader}>
+                  <span className={styles.storyIdeaOutputTitle}>关联大纲版本</span>
+                  <span className={styles.storyIdeaOutputCount}>
+                    {linkedOutlineVersions.length} 个
+                  </span>
+                </div>
+                {linkedOutlineVersions.length === 0 ? (
+                  <div className={styles.storyIdeaOutputEmpty}>这张卡还没有转出任何大纲版本</div>
+                ) : (
+                  linkedOutlineVersions.map((version) => {
+                    const snapshot = parseStoryIdeaSnapshot(version.story_idea_snapshot_json);
+                    return (
+                      <div key={version.id} className={styles.storyIdeaTraceCard}>
+                        <div className={styles.storyIdeaTraceTitle}>{version.name}</div>
+                        <div className={styles.storyIdeaOutputMeta}>
+                          {new Date(version.created_at).toLocaleString()} / {version.total_nodes}{' '}
+                          节点
                         </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                        {snapshot && (
+                          <div className={styles.storyIdeaTraceTerms}>
+                            {[
+                              ...snapshot.themeTerms,
+                              ...snapshot.conflictTerms,
+                              ...snapshot.twistTerms,
+                            ]
+                              .slice(0, 9)
+                              .map((term) => (
+                                <span
+                                  key={`${version.id}-${term}`}
+                                  className={styles.storyIdeaTermChip}
+                                >
+                                  {term}
+                                </span>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </FlowCard>
           </div>
         )}
       </div>

@@ -281,6 +281,10 @@ const StatusBar: React.FC<StatusBarProps> = ({
       return { text: `已下载 ${updateStatus.downloadedVersion}`, type: 'ready' as const };
     }
 
+    if (updateStatus.preCaching) {
+      return { text: '预缓存回滚包...', type: 'precaching' as const };
+    }
+
     if (typeof updateStatus.downloadPercent === 'number' && updateStatus.availableVersion) {
       return {
         text: `下载中 ${Math.round(updateStatus.downloadPercent)}%`,
@@ -348,9 +352,11 @@ const StatusBar: React.FC<StatusBarProps> = ({
         {/* Inline status hints in status bar */}
         {updateSummary && !updateReady && (
           <span
-            className={`${styles.item} ${styles.updateHint} ${updateSummary.type === 'checking' ? styles.updateChecking : ''}`}
+            className={`${styles.item} ${styles.updateHint} ${updateSummary.type === 'checking' || updateSummary.type === 'precaching' ? styles.updateChecking : ''}`}
           >
-            {updateSummary.type === 'checking' && <VscSync className={styles.spinIcon} />}
+            {(updateSummary.type === 'checking' || updateSummary.type === 'precaching') && (
+              <VscSync className={styles.spinIcon} />
+            )}
             {updateSummary.text}
           </span>
         )}
@@ -457,11 +463,13 @@ const StatusBar: React.FC<StatusBarProps> = ({
                 {typeof downloadPercent === 'number' && updateStatus?.availableVersion && (
                   <div className={styles.progressSection}>
                     <div className={styles.progressText}>
-                      下载 {updateStatus.availableVersion} — {Math.round(downloadPercent)}%
+                      {updateStatus.preCaching
+                        ? `正在预缓存回滚包 ${updateStatus.availableVersion}`
+                        : `下载 ${updateStatus.availableVersion} — ${Math.round(downloadPercent)}%`}
                     </div>
                     <div className={styles.progressBar}>
                       <div
-                        className={styles.progressFill}
+                        className={`${styles.progressFill} ${updateStatus.preCaching ? styles.progressFillPulse : ''}`}
                         style={{ width: `${Math.min(downloadPercent, 100)}%` }}
                       />
                     </div>

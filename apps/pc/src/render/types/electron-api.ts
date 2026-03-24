@@ -17,6 +17,8 @@ export interface UpdateStatus {
   downloadPercent: number | null;
   rollbackAvailable: boolean;
   rollbackVersion: string | null;
+  /** 下载完成后正在预缓存当前版本安装包（用于回滚） */
+  preCaching: boolean;
   lastError: string | null;
 }
 

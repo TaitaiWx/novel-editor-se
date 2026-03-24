@@ -4125,6 +4125,94 @@
   min-height: 0;
 }
 
+.flowCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.flowCardAccent {
+  border-color: rgba(var(--rp-accent-rgb), 0.14);
+  background: linear-gradient(180deg, rgba(var(--rp-accent-rgb), 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.flowCardInfo {
+  border-color: rgba(var(--rp-info-rgb), 0.14);
+  background: linear-gradient(180deg, rgba(var(--rp-info-rgb), 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.flowCardPlain {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.flowCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.flowCardHeading {
+  min-width: 0;
+  flex: 1;
+}
+
+.flowCardTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f2e4bf;
+}
+
+.flowCardSubtitle {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.flowCardHeaderSide {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flowCardMeta,
+.flowCardActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.flowCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.flowCardCollapseToggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.flowCardSummary {
+  min-width: 0;
+}
+
 .storyIdeaTopSection {
   display: flex;
   flex-direction: column;

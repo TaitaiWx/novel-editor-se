@@ -92,6 +92,8 @@ export interface UpdateStatus {
   networkPhase: UpdateNetworkPhase;
   networkReachable: boolean | null;
   networkCheckedAt: number | null;
+  /** 下载完成后正在预缓存当前版本安装包（用于回滚） */
+  preCaching: boolean;
   lastError: string | null;
 }
 
@@ -132,6 +134,7 @@ const updaterStatus: UpdateStatus = {
   networkPhase: 'online',
   networkReachable: null,
   networkCheckedAt: null,
+  preCaching: false,
   lastError: null,
 };
 let startupHealthTimer: NodeJS.Timeout | null = null;
@@ -792,6 +795,9 @@ async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
   const state = await loadUpdaterState();
 
   // 核心：在安装新版本前，先把当前版本的安装包缓存到本地
+  updaterStatus.preCaching = true;
+  updaterStatus.downloadPercent = 100;
+  emitStatus();
   const rollbackTarget = await preCacheCurrentVersion();
   if (rollbackTarget) {
     state.rollbackTarget = rollbackTarget;
@@ -811,6 +817,7 @@ async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
 
   updaterStatus.checking = false;
   updaterStatus.updateReady = true;
+  updaterStatus.preCaching = false;
   updaterStatus.downloadPercent = 100;
   updaterStatus.downloadedVersion = info.version;
   updaterStatus.pendingVersion = info.version;
