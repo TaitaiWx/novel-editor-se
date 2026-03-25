@@ -30,6 +30,7 @@ import { useCrdtOpsSender } from './utils/useCrdtOpsChannel';
 import { throttle } from './utils/throttle';
 import type { ThrottledFunction } from './utils/throttle';
 import { PortChannel } from '../shared/portChannels';
+import type { EditorViewportSnapshot } from './components/TextEditor';
 import { setInlineDiffEffect } from './components/TextEditor/inline-diff';
 import { fnv1a32 } from './components/RightPanel/utils';
 import {
@@ -72,6 +73,67 @@ interface ContextMenuState {
   node: FileNode | null;
 }
 
+interface PersistedEditorSession {
+  openTabs: string[];
+  activeTab: string | null;
+  viewportSnapshots: Record<string, EditorViewportSnapshot>;
+}
+
+function isUntitledTabPath(path: string | null): boolean {
+  return typeof path === 'string' && path.startsWith('__untitled__:');
+}
+
+function isChangelogTabPath(path: string | null): boolean {
+  return typeof path === 'string' && path.startsWith('__changelog__:');
+}
+
+function buildEditorSessionStorageKey(folderPath: string | null): string | null {
+  return folderPath ? `novel-editor:editor-session:${folderPath}` : null;
+}
+
+function parseEditorSessionSnapshot(raw: string | null): PersistedEditorSession | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<PersistedEditorSession>;
+    return {
+      openTabs: Array.isArray(parsed.openTabs)
+        ? parsed.openTabs.filter((item): item is string => typeof item === 'string')
+        : [],
+      activeTab: typeof parsed.activeTab === 'string' ? parsed.activeTab : null,
+      viewportSnapshots:
+        parsed.viewportSnapshots && typeof parsed.viewportSnapshots === 'object'
+          ? Object.fromEntries(
+              Object.entries(parsed.viewportSnapshots).filter(
+                ([path, snapshot]) =>
+                  typeof path === 'string' &&
+                  snapshot !== null &&
+                  typeof snapshot === 'object' &&
+                  typeof (snapshot as EditorViewportSnapshot).anchor === 'number' &&
+                  typeof (snapshot as EditorViewportSnapshot).head === 'number' &&
+                  typeof (snapshot as EditorViewportSnapshot).scrollTop === 'number' &&
+                  typeof (snapshot as EditorViewportSnapshot).scrollLeft === 'number'
+              )
+            )
+          : {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+function sameViewportSnapshot(
+  left: EditorViewportSnapshot | undefined,
+  right: EditorViewportSnapshot
+): boolean {
+  return Boolean(
+    left &&
+      left.anchor === right.anchor &&
+      left.head === right.head &&
+      left.scrollTop === right.scrollTop &&
+      left.scrollLeft === right.scrollLeft
+  );
+}
+
 const App: React.FC = () => {
   const [files, setFiles] = useState<FileNode[]>([]);
   const [folderPath, setFolderPath] = useState<string | null>(null);
@@ -80,6 +142,9 @@ const App: React.FC = () => {
   // Tab management
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [initialViewportSnapshots, setInitialViewportSnapshots] = useState<
+    Record<string, EditorViewportSnapshot>
+  >({});
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -120,6 +185,7 @@ const App: React.FC = () => {
   const aiSessionChannelRef = useRef<ReturnType<typeof createAISessionChannel> | null>(null);
   const aiSessionRef = useRef<AISessionSnapshot | null>(null);
   const aiSessionKey = useMemo(() => buildAISessionStorageKey(folderPath), [folderPath]);
+  const editorSessionKey = useMemo(() => buildEditorSessionStorageKey(folderPath), [folderPath]);
 
   // Panel resize widths (VSCode-style draggable 3-pane layout)
   // Left/right panels have NO minimum — they auto-collapse when dragged below threshold (VSCode behavior)
@@ -152,6 +218,175 @@ const App: React.FC = () => {
   filesRef.current = files;
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
+  const editorViewportSnapshotsRef = useRef<Record<string, EditorViewportSnapshot>>({});
+  const restoredEditorSessionKeyRef = useRef<string | null>(null);
+  const editorSessionHydratedRef = useRef(false);
+  const persistEditorSessionTimerRef = useRef<number | null>(null);
+
+  const syncInitialViewportSnapshots = useCallback(
+    (next: Record<string, EditorViewportSnapshot>) => {
+      editorViewportSnapshotsRef.current = next;
+      setInitialViewportSnapshots(next);
+    },
+    []
+  );
+
+  const isPersistableTabPath = useCallback((path: string | null, nodes: FileNode[]): boolean => {
+    if (!path || isUntitledTabPath(path)) return false;
+    if (isChangelogTabPath(path)) return true;
+    const node = findNodeInTree(nodes, path);
+    return node?.type === 'file';
+  }, []);
+
+  const schedulePersistEditorSession = useCallback(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !editorSessionKey || !editorSessionHydratedRef.current) return;
+
+    const persistedActiveTab = isPersistableTabPath(activeTabRef.current, filesRef.current)
+      ? activeTabRef.current
+      : null;
+    const persistedOpenTabs = openTabsRef.current.filter((path) =>
+      isPersistableTabPath(path, filesRef.current)
+    );
+    const nextOpenTabs = persistedActiveTab
+      ? Array.from(new Set([...persistedOpenTabs, persistedActiveTab]))
+      : persistedOpenTabs;
+    const viewportSnapshots = Object.fromEntries(
+      Object.entries(editorViewportSnapshotsRef.current).filter(([path]) =>
+        isPersistableTabPath(path, filesRef.current)
+      )
+    ) as Record<string, EditorViewportSnapshot>;
+    const nextSession: PersistedEditorSession = {
+      openTabs: nextOpenTabs,
+      activeTab: persistedActiveTab,
+      viewportSnapshots,
+    };
+
+    if (persistEditorSessionTimerRef.current) {
+      window.clearTimeout(persistEditorSessionTimerRef.current);
+    }
+    persistEditorSessionTimerRef.current = window.setTimeout(() => {
+      ipc.invoke('db-settings-set', editorSessionKey, JSON.stringify(nextSession)).catch(() => {});
+    }, 180);
+  }, [editorSessionKey, isPersistableTabPath]);
+
+  const moveViewportSnapshot = useCallback(
+    (fromPath: string, toPath: string) => {
+      if (fromPath === toPath) return;
+      const current = editorViewportSnapshotsRef.current;
+      const snapshot = current[fromPath];
+      if (!snapshot) return;
+      const next = { ...current, [toPath]: snapshot };
+      delete next[fromPath];
+      syncInitialViewportSnapshots(next);
+      schedulePersistEditorSession();
+    },
+    [schedulePersistEditorSession, syncInitialViewportSnapshots]
+  );
+
+  const removeViewportSnapshots = useCallback(
+    (predicate: (path: string) => boolean) => {
+      const current = editorViewportSnapshotsRef.current;
+      let changed = false;
+      const next = Object.fromEntries(
+        Object.entries(current).filter(([path, snapshot]) => {
+          const keep = !predicate(path);
+          if (!keep) changed = true;
+          return keep && Boolean(snapshot);
+        })
+      ) as Record<string, EditorViewportSnapshot>;
+      if (changed) {
+        syncInitialViewportSnapshots(next);
+        schedulePersistEditorSession();
+      }
+    },
+    [schedulePersistEditorSession, syncInitialViewportSnapshots]
+  );
+
+  const handleViewportSnapshotChange = useCallback(
+    (filePath: string, snapshot: EditorViewportSnapshot) => {
+      const previous = editorViewportSnapshotsRef.current[filePath];
+      if (sameViewportSnapshot(previous, snapshot)) return;
+      editorViewportSnapshotsRef.current = {
+        ...editorViewportSnapshotsRef.current,
+        [filePath]: snapshot,
+      };
+      schedulePersistEditorSession();
+    },
+    [schedulePersistEditorSession]
+  );
+
+  React.useEffect(() => {
+    if (!editorSessionKey) {
+      restoredEditorSessionKeyRef.current = null;
+      editorSessionHydratedRef.current = false;
+      syncInitialViewportSnapshots({});
+      return;
+    }
+
+    restoredEditorSessionKeyRef.current = null;
+    editorSessionHydratedRef.current = false;
+    syncInitialViewportSnapshots({});
+  }, [editorSessionKey, syncInitialViewportSnapshots]);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !editorSessionKey) return;
+    if (restoredEditorSessionKeyRef.current === editorSessionKey) return;
+
+    let cancelled = false;
+    const restoreEditorSession = async () => {
+      try {
+        const raw = (await ipc.invoke('db-settings-get', editorSessionKey)) as string | null;
+        if (cancelled) return;
+        const parsed = parseEditorSessionSnapshot(raw);
+        if (parsed) {
+          const restoredOpenTabs = parsed.openTabs.filter((path) =>
+            isPersistableTabPath(path, files)
+          );
+          const restoredActiveTab = isPersistableTabPath(parsed.activeTab, files)
+            ? parsed.activeTab
+            : null;
+          const nextOpenTabs = restoredActiveTab
+            ? Array.from(new Set([...restoredOpenTabs, restoredActiveTab]))
+            : restoredOpenTabs;
+          const nextViewportSnapshots = Object.fromEntries(
+            Object.entries(parsed.viewportSnapshots).filter(([path]) =>
+              isPersistableTabPath(path, files)
+            )
+          ) as Record<string, EditorViewportSnapshot>;
+
+          syncInitialViewportSnapshots(nextViewportSnapshots);
+          setOpenTabs(nextOpenTabs);
+          setActiveTab(restoredActiveTab || nextOpenTabs[nextOpenTabs.length - 1] || null);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) {
+          restoredEditorSessionKeyRef.current = editorSessionKey;
+          editorSessionHydratedRef.current = true;
+        }
+      }
+    };
+
+    void restoreEditorSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [editorSessionKey, files, isPersistableTabPath, syncInitialViewportSnapshots]);
+
+  React.useEffect(() => {
+    schedulePersistEditorSession();
+  }, [openTabs, activeTab, schedulePersistEditorSession]);
+
+  React.useEffect(() => {
+    return () => {
+      if (persistEditorSessionTimerRef.current) {
+        window.clearTimeout(persistEditorSessionTimerRef.current);
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     const ch = createAISessionChannel();
@@ -730,6 +965,7 @@ const App: React.FC = () => {
       try {
         await window.electron.ipcRenderer.invoke('delete-file', filePath);
         closeTab(filePath);
+        removeViewportSnapshots((path) => path === filePath);
         await refreshCurrentFolder();
         toast.success(`已删除 "${name}"`);
       } catch (error) {
@@ -752,6 +988,7 @@ const App: React.FC = () => {
         await window.electron.ipcRenderer.invoke('delete-directory', dirPath);
         // Close any tabs under this directory
         setOpenTabs((prev) => prev.filter((t) => !t.startsWith(dirPath)));
+        removeViewportSnapshots((path) => path.startsWith(dirPath));
         if (activeTabRef.current?.startsWith(dirPath)) {
           setActiveTab(null);
         }
@@ -776,6 +1013,7 @@ const App: React.FC = () => {
         await window.electron.ipcRenderer.invoke('rename-file', oldPath, newPath);
         // Update tabs
         setOpenTabs((prev) => prev.map((t) => (t === oldPath ? newPath : t)));
+        moveViewportSnapshot(oldPath, newPath);
         if (activeTabRef.current === oldPath) {
           setActiveTab(newPath);
         }
@@ -1300,6 +1538,7 @@ const App: React.FC = () => {
         await window.electron.ipcRenderer.invoke('write-file', newPath, content);
         // Replace untitled tab with real file path
         setOpenTabs((prev) => prev.map((t) => (t === untitledPath ? newPath : t)));
+        moveViewportSnapshot(untitledPath, newPath);
         if (activeTabRef.current === untitledPath) {
           setActiveTab(newPath);
         }
@@ -1532,6 +1771,8 @@ const App: React.FC = () => {
                 replaceLineRequest={replaceLineRequest}
                 inlineDiff={inlineDiff}
                 editorViewRef={editorViewRef}
+                viewportSnapshots={initialViewportSnapshots}
+                onViewportSnapshotChange={handleViewportSnapshotChange}
                 onTabSelect={setActiveTab}
                 onTabClose={closeTab}
                 onCloseOtherTabs={handleCloseOtherTabs}

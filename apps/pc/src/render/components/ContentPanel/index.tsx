@@ -4,7 +4,7 @@ import { VscCode } from 'react-icons/vsc';
 import { EditorView } from '@codemirror/view';
 import TabBar from '../TabBar';
 import TextEditor from '../TextEditor';
-import type { InlineDiffRange } from '../TextEditor';
+import type { EditorViewportSnapshot, InlineDiffRange } from '../TextEditor';
 import ChangelogViewer from '../ChangelogViewer';
 import SettingsButton from '../SettingsButton';
 import ResourceViewer, {
@@ -49,6 +49,8 @@ interface ContentPanelProps {
   replaceLineRequest?: ReplaceLineRequest | null;
   inlineDiff?: InlineDiffRange | null;
   editorViewRef?: React.MutableRefObject<EditorView | null>;
+  viewportSnapshots?: Record<string, EditorViewportSnapshot>;
+  onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onTabSelect: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
   onCloseOtherTabs?: (filePath: string) => void;
@@ -72,6 +74,8 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   replaceLineRequest,
   inlineDiff,
   editorViewRef,
+  viewportSnapshots,
+  onViewportSnapshotChange,
   onTabSelect,
   onTabClose,
   onCloseOtherTabs,
@@ -187,6 +191,8 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
             replaceLineRequest={replaceLineRequest}
             inlineDiff={inlineDiff}
             editorViewRef={editorViewRef}
+            viewportSnapshots={viewportSnapshots}
+            onViewportSnapshotChange={onViewportSnapshotChange}
             onContentChange={onContentChange}
             onCursorChange={onCursorChange}
             onSaveUntitled={onSaveUntitled}

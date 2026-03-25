@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Compartment,
   EditorState,
+  EditorSelection,
   Range,
   RangeSet,
   StateEffect,
@@ -60,6 +61,13 @@ interface TransientHighlightLineRequest {
   id: string;
 }
 
+export interface EditorViewportSnapshot {
+  anchor: number;
+  head: number;
+  scrollTop: number;
+  scrollLeft: number;
+}
+
 interface TextEditorProps {
   filePath: string | null;
   reloadToken?: number;
@@ -75,6 +83,8 @@ interface TextEditorProps {
   inlineDiff?: InlineDiffRange | null;
   /** 暴露 EditorView ref 供外部直接操作（精确事务替换等） */
   editorViewRef?: React.MutableRefObject<EditorView | null>;
+  viewportSnapshots?: Record<string, EditorViewportSnapshot>;
+  onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onContentChange?: (content: string) => void;
   onCursorChange?: (pos: CursorPosition) => void;
   onSaveUntitled?: (untitledPath: string, content: string) => void;
@@ -329,6 +339,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
   replaceLineRequest,
   inlineDiff,
   editorViewRef,
+  viewportSnapshots,
+  onViewportSnapshotChange,
   onContentChange,
   onCursorChange,
   onSaveUntitled,
@@ -361,6 +373,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const currentFilePathRef = useRef<string | null>(null);
   const currentContentRef = useRef<string>('');
   const currentOriginalContentRef = useRef<string>('');
+  const viewportSnapshotsRef = useRef<Map<string, EditorViewportSnapshot>>(new Map());
   const lastScrollIdRef = useRef('');
   const lastTransientHighlightIdRef = useRef('');
   const transientHighlightTimerRef = useRef<number | null>(null);
@@ -370,6 +383,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const onContentChangeRef = useRef(onContentChange);
   const onCursorChangeRef = useRef(onCursorChange);
   const onSaveUntitledRef = useRef(onSaveUntitled);
+  const onViewportSnapshotChangeRef = useRef(onViewportSnapshotChange);
   const readOnlyRef = useRef(readOnly);
   const filePathRef = useRef(filePath);
   const isUntitledRef = useRef(isUntitled);
@@ -385,12 +399,66 @@ const TextEditor: React.FC<TextEditorProps> = ({
     onSaveUntitledRef.current = onSaveUntitled;
   }, [onSaveUntitled]);
   useEffect(() => {
+    onViewportSnapshotChangeRef.current = onViewportSnapshotChange;
+  }, [onViewportSnapshotChange]);
+  useEffect(() => {
     readOnlyRef.current = readOnly;
   }, [readOnly]);
   useEffect(() => {
     filePathRef.current = filePath;
     isUntitledRef.current = isUntitledPath(filePath);
   }, [filePath]);
+  useEffect(() => {
+    viewportSnapshotsRef.current = new Map(Object.entries(viewportSnapshots || {}));
+  }, [viewportSnapshots]);
+
+  const saveViewportSnapshot = useCallback((targetPath?: string | null) => {
+    const view = viewRef.current;
+    const snapshotPath = targetPath ?? currentFilePathRef.current;
+    if (!view || !snapshotPath) return;
+
+    const snapshot = {
+      anchor: view.state.selection.main.anchor,
+      head: view.state.selection.main.head,
+      scrollTop: view.scrollDOM.scrollTop,
+      scrollLeft: view.scrollDOM.scrollLeft,
+    };
+    viewportSnapshotsRef.current.set(snapshotPath, snapshot);
+    onViewportSnapshotChangeRef.current?.(snapshotPath, snapshot);
+  }, []);
+
+  const restoreViewportSnapshot = useCallback((targetPath: string, contentLength: number) => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const snapshot = viewportSnapshotsRef.current.get(targetPath);
+    if (!snapshot) {
+      view.dispatch({ selection: EditorSelection.cursor(0) });
+      view.scrollDOM.scrollTop = 0;
+      view.scrollDOM.scrollLeft = 0;
+      return;
+    }
+
+    const anchor = Math.min(snapshot.anchor, contentLength);
+    const head = Math.min(snapshot.head, contentLength);
+    view.dispatch({ selection: EditorSelection.range(anchor, head) });
+    window.requestAnimationFrame(() => {
+      const activeView = viewRef.current;
+      if (!activeView) return;
+      activeView.scrollDOM.scrollTop = snapshot.scrollTop;
+      activeView.scrollDOM.scrollLeft = snapshot.scrollLeft;
+    });
+  }, []);
+
+  const emitCursorPosition = useCallback((view: EditorView | null) => {
+    if (!view) return;
+    const pos = view.state.selection.main.head;
+    const line = view.state.doc.lineAt(pos);
+    onCursorChangeRef.current?.({
+      line: line.number,
+      column: pos - line.from + 1,
+    });
+  }, []);
 
   const autoSaveFile = useCallback(async () => {
     const targetPath = currentFilePathRef.current;
@@ -505,6 +573,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
                 column: pos - line.from + 1,
               });
             }
+            if (update.docChanged || update.selectionSet || update.viewportChanged) {
+              saveViewportSnapshot();
+            }
           }),
           // Ctrl/Cmd+S keybinding
           keymap.of([
@@ -524,12 +595,19 @@ const TextEditor: React.FC<TextEditorProps> = ({
     viewRef.current = view;
     if (editorViewRef) editorViewRef.current = view;
 
+    const handleScroll = () => {
+      saveViewportSnapshot();
+    };
+    view.scrollDOM.addEventListener('scroll', handleScroll, { passive: true });
+
     return () => {
+      saveViewportSnapshot();
+      view.scrollDOM.removeEventListener('scroll', handleScroll);
       view.destroy();
       viewRef.current = null;
       if (editorViewRef) editorViewRef.current = null;
     };
-  }, []);
+  }, [editorViewRef, saveViewportSnapshot]);
 
   // Update readOnly
   useEffect(() => {
@@ -636,6 +714,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
         }
       }
 
+      if (currentFilePathRef.current && filePath !== currentFilePathRef.current) {
+        saveViewportSnapshot(currentFilePathRef.current);
+      }
+
       if (!filePath) {
         currentFilePathRef.current = null;
         currentContentRef.current = '';
@@ -666,9 +748,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
           view.dispatch({
             changes: { from: 0, to: view.state.doc.length, insert: '' },
           });
+          restoreViewportSnapshot(filePath, 0);
+          emitCursorPosition(view);
         }
         onContentChange?.('');
-        onCursorChange?.({ line: 1, column: 1 });
         return;
       }
 
@@ -692,6 +775,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
                 wordWrapCompartment.current.reconfigure(EditorView.lineWrapping),
               ],
             });
+            restoreViewportSnapshot(filePath, content.length);
+            emitCursorPosition(view);
           }
         } catch (err) {
           setError(err instanceof Error ? err.message : '加载更新日志失败');
@@ -728,6 +813,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
               wordWrapCompartment.current.reconfigure(wordWrap ? EditorView.lineWrapping : []),
             ],
           });
+          restoreViewportSnapshot(filePath, fileContent.length);
+          emitCursorPosition(view);
         }
 
         setIsLargeFile(fileContent.length > LARGE_FILE_THRESHOLD);
@@ -736,7 +823,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
         setLoading(false);
 
         onContentChange?.(fileContent);
-        onCursorChange?.({ line: 1, column: 1 });
       } catch (err) {
         console.error('Error reading file:', err);
         setError(`无法读取文件: ${filePath}`);
@@ -747,7 +833,18 @@ const TextEditor: React.FC<TextEditorProps> = ({
     };
 
     loadContent();
-  }, [filePath, encoding, reloadToken]);
+  }, [
+    filePath,
+    encoding,
+    reloadToken,
+    readOnly,
+    wordWrap,
+    emitCursorPosition,
+    restoreViewportSnapshot,
+    saveViewportSnapshot,
+    onContentChange,
+    onCursorChange,
+  ]);
 
   // Scroll to line
   useEffect(() => {
