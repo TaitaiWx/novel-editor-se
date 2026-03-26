@@ -42,10 +42,14 @@ const STORY_IDEA_TERM_CARD_DESCRIPTIONS: Record<StoryIdeaTermSection, string> = 
   twist: '变形签抓反转、错位和揭示，它决定故事怎么翻面。',
 };
 
+const STORY_IDEA_TERM_ORDER: StoryIdeaTermSection[] = ['theme', 'conflict', 'twist'];
+
 type StoryIdeaOutputFilterState = {
   type: 'all' | StoryIdeaOutputType;
   selectedOnly: boolean;
 };
+
+type StoryIdeaInteractionMode = 'guided' | 'advanced';
 
 function createPoolSourceFilterKey(folderPath: string | null): string | null {
   return folderPath ? `novel-editor:story-idea-pool-filter:${folderPath}` : null;
@@ -105,6 +109,7 @@ function StoryIdeaTermEditor({
   isExpanded,
   value,
   poolTerms,
+  compactMode,
   placeholder,
   working,
   onToggle,
@@ -121,6 +126,7 @@ function StoryIdeaTermEditor({
   isExpanded: boolean;
   value: string[];
   poolTerms: StoryIdeaTermPoolEntry[];
+  compactMode: boolean;
   placeholder: string;
   working: boolean;
   onToggle: (section: StoryIdeaTermSection) => void;
@@ -190,19 +196,11 @@ function StoryIdeaTermEditor({
           </button>
           <button
             className={styles.outlineSecondaryButton}
-            onClick={() => onAddCurrentToPool(section)}
-            disabled={working || value.length === 0}
-            type="button"
-          >
-            收进词池
-          </button>
-          <button
-            className={styles.outlineSecondaryButton}
             onClick={() => onRequestRelated(section)}
             disabled={working}
             type="button"
           >
-            AI 提相关
+            {compactMode ? 'AI 补词' : 'AI 提相关'}
           </button>
           <button
             className={styles.outlineSecondaryButton}
@@ -210,8 +208,18 @@ function StoryIdeaTermEditor({
             disabled={working}
             type="button"
           >
-            随机重抽一签
+            {compactMode ? '换一组' : '随机重抽一签'}
           </button>
+          {!compactMode && (
+            <button
+              className={styles.outlineSecondaryButton}
+              onClick={() => onAddCurrentToPool(section)}
+              disabled={working || value.length === 0}
+              type="button"
+            >
+              收进词池
+            </button>
+          )}
         </div>
         <div className={styles.storyIdeaPoolBox}>
           <div className={styles.storyIdeaPoolTitle}>可直接点选的词池</div>
@@ -304,6 +312,8 @@ export const ThreeSignView: React.FC<{
   const [outputFilterLoaded, setOutputFilterLoaded] = useState(false);
   const [generationScope, setGenerationScope] = useState<StoryIdeaGenerationScope>('hybrid');
   const [generationGuidance, setGenerationGuidance] = useState('');
+  const [interactionMode, setInteractionMode] = useState<StoryIdeaInteractionMode>('guided');
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   useEffect(() => {
     if (cards.length === 0) {
@@ -314,6 +324,16 @@ export const ThreeSignView: React.FC<{
       setActiveCardId(cards[0].id);
     }
   }, [activeCardId, cards]);
+
+  useEffect(() => {
+    if (interactionMode === 'guided') {
+      setShowOptionalInputs(false);
+      setHistoryExpanded(false);
+    }
+    if (interactionMode === 'advanced') {
+      setHistoryExpanded(true);
+    }
+  }, [interactionMode]);
 
   useEffect(() => {
     const handleOpenStoryIdeaCard = (event: Event) => {
@@ -571,6 +591,61 @@ export const ThreeSignView: React.FC<{
     [outputCards, outputTypeFilter, selectedOnly]
   );
 
+  const visibleHistoryCards = useMemo(
+    () => (interactionMode === 'guided' ? filteredCards.slice(0, 6) : filteredCards),
+    [filteredCards, interactionMode]
+  );
+
+  const recentCards = useMemo(() => cards.slice(0, 4), [cards]);
+
+  const activeTermStepIndex = useMemo(
+    () => STORY_IDEA_TERM_ORDER.indexOf(activeTermSection),
+    [activeTermSection]
+  );
+
+  const activeTermValue = useMemo(() => {
+    if (activeTermSection === 'theme') return draft.themeTerms;
+    if (activeTermSection === 'conflict') return draft.conflictTerms;
+    return draft.twistTerms;
+  }, [activeTermSection, draft.conflictTerms, draft.themeTerms, draft.twistTerms]);
+
+  const guidedTermSteps = useMemo(
+    () =>
+      STORY_IDEA_TERM_ORDER.map((section) => ({
+        section,
+        label: STORY_IDEA_TERM_SECTION_LABELS[section],
+        description: STORY_IDEA_TERM_CARD_DESCRIPTIONS[section],
+        value:
+          section === 'theme'
+            ? draft.themeTerms
+            : section === 'conflict'
+              ? draft.conflictTerms
+              : draft.twistTerms,
+        poolTerms:
+          section === 'theme'
+            ? filteredTermPool.theme
+            : section === 'conflict'
+              ? filteredTermPool.conflict
+              : filteredTermPool.twist,
+        placeholder:
+          section === 'theme'
+            ? '例如：雨夜，失约，旧校舍，借名人生'
+            : section === 'conflict'
+              ? '例如：冒名顶替，被迫合作，证词作废，代价升级'
+              : '例如：救人者才是幕后人，胜利即暴露，记忆被嫁接',
+      })),
+    [
+      draft.conflictTerms,
+      draft.themeTerms,
+      draft.twistTerms,
+      filteredTermPool.conflict,
+      filteredTermPool.theme,
+      filteredTermPool.twist,
+    ]
+  );
+
+  const activeGuidedTermStep = guidedTermSteps[activeTermStepIndex] ?? guidedTermSteps[0];
+
   useEffect(() => {
     if (boardTargetActIndex >= acts.length) {
       setBoardTargetActIndex(0);
@@ -769,6 +844,22 @@ export const ThreeSignView: React.FC<{
     [filteredTermPool.conflict, filteredTermPool.theme, filteredTermPool.twist, setField]
   );
 
+  const handleGoToNextTermStep = useCallback(() => {
+    setActiveTermSection((current) => {
+      const currentIndex = STORY_IDEA_TERM_ORDER.indexOf(current);
+      const nextIndex = Math.min(STORY_IDEA_TERM_ORDER.length - 1, currentIndex + 1);
+      return STORY_IDEA_TERM_ORDER[nextIndex] ?? current;
+    });
+  }, []);
+
+  const handleGoToPrevTermStep = useCallback(() => {
+    setActiveTermSection((current) => {
+      const currentIndex = STORY_IDEA_TERM_ORDER.indexOf(current);
+      const nextIndex = Math.max(0, currentIndex - 1);
+      return STORY_IDEA_TERM_ORDER[nextIndex] ?? current;
+    });
+  }, []);
+
   if (!folderPath || !dbReady) {
     return <div className={styles.emptyHint}>项目数据库尚未就绪，无法使用三签创作法</div>;
   }
@@ -779,16 +870,48 @@ export const ThreeSignView: React.FC<{
         <div>
           <div className={styles.storyIdeaTitle}>三签创作法</div>
           <div className={styles.storyIdeaSubtitle}>
-            先搜历史卡，再抓当前这组三签，决定是继续发散还是开始收束。
+            不懂理论也没关系。默认只做三步：抓三签，补一签，出候选。
+          </div>
+        </div>
+        <div className={styles.storyIdeaHeaderActions}>
+          <div className={styles.storyIdeaModeSwitch}>
+            <button
+              className={`${styles.storyIdeaModeChip} ${interactionMode === 'guided' ? styles.storyIdeaModeChipActive : ''}`}
+              onClick={() => setInteractionMode('guided')}
+              type="button"
+            >
+              新手模式
+            </button>
+            <button
+              className={`${styles.storyIdeaModeChip} ${interactionMode === 'advanced' ? styles.storyIdeaModeChipActive : ''}`}
+              onClick={() => setInteractionMode('advanced')}
+              type="button"
+            >
+              高级模式
+            </button>
           </div>
         </div>
       </div>
 
+      <div className={styles.storyIdeaQuickGuide}>
+        <div className={styles.storyIdeaQuickGuideTitle}>不会用时，按这个顺序就行</div>
+        <div className={styles.storyIdeaQuickGuideSteps}>
+          <span className={styles.storyIdeaQuickStep}>1. 先抓三张签</span>
+          <span className={styles.storyIdeaQuickStep}>2. 只盯一张继续补词</span>
+          <span className={styles.storyIdeaQuickStep}>3. 生成故事候选</span>
+        </div>
+        <div className={styles.storyIdeaQuickGuideHint}>
+          新手模式会把词池筛选、范围参数和输出筛选先收起来，避免一上来就做太多决定。
+        </div>
+      </div>
+
       <div className={styles.storyIdeaTopSection}>
-        <FlowCard
+        <FlowCollapsibleCard
           tone="info"
           title="① 历史搜索"
           subtitle="先从已有灵感里找接近的卡，再决定复用、扩写还是新起一张。"
+          expanded={interactionMode === 'advanced' ? true : historyExpanded}
+          onToggle={() => setHistoryExpanded((current) => !current)}
           meta={
             <div className={styles.storyIdeaStatsRow}>
               <span className={styles.outlineStatChip}>{cards.length} 张创意卡</span>
@@ -814,6 +937,31 @@ export const ThreeSignView: React.FC<{
               )}
             </div>
           }
+          summary={
+            interactionMode === 'guided' ? (
+              <div className={styles.storyIdeaCollapsedHistory}>
+                {recentCards.length === 0 ? (
+                  <span className={styles.storyIdeaTermPlaceholder}>
+                    还没有历史卡，先新建一张即可。
+                  </span>
+                ) : (
+                  recentCards.map((card) => (
+                    <button
+                      key={card.id}
+                      className={`${styles.storyIdeaHistoryMiniCard} ${activeCardId === card.id ? styles.storyIdeaHistoryMiniCardActive : ''}`}
+                      onClick={() => setActiveCardId(card.id)}
+                      type="button"
+                    >
+                      <span className={styles.storyIdeaHistoryMiniTitle}>{card.title}</span>
+                      <span className={styles.storyIdeaHistoryMiniMeta}>
+                        {getTermSummary(toStoryIdeaDraft(card)) || '尚未整理签词'}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : undefined
+          }
         >
           <div className={styles.storyIdeaFilterPanel}>
             <input
@@ -822,41 +970,45 @@ export const ThreeSignView: React.FC<{
               onChange={(event) => setKeyword(event.target.value)}
               placeholder="搜标题、premise、签词"
             />
-            <div className={styles.storyIdeaFilterRow}>
-              <select
-                className={styles.storyIdeaSelect}
-                value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(event.target.value as 'all' | StoryIdeaCardDraft['status'])
-                }
-              >
-                <option value="all">全部状态</option>
-                {Object.entries(STORY_IDEA_STATUS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <input
-                className={styles.storyIdeaInput}
-                value={tagFilter}
-                onChange={(event) => setTagFilter(event.target.value)}
-                placeholder="按标签检索"
-              />
-            </div>
-            {popularTags.length > 0 && (
-              <div className={styles.storyIdeaTagCloud}>
-                {popularTags.map((tag) => (
-                  <button
-                    key={tag}
-                    className={`${styles.storyIdeaTagChip} ${tagFilter === tag ? styles.storyIdeaTagChipActive : ''}`}
-                    onClick={() => setTagFilter((current) => (current === tag ? '' : tag))}
-                    type="button"
+            {interactionMode === 'advanced' && (
+              <>
+                <div className={styles.storyIdeaFilterRow}>
+                  <select
+                    className={styles.storyIdeaSelect}
+                    value={statusFilter}
+                    onChange={(event) =>
+                      setStatusFilter(event.target.value as 'all' | StoryIdeaCardDraft['status'])
+                    }
                   >
-                    {tag}
-                  </button>
-                ))}
-              </div>
+                    <option value="all">全部状态</option>
+                    {Object.entries(STORY_IDEA_STATUS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className={styles.storyIdeaInput}
+                    value={tagFilter}
+                    onChange={(event) => setTagFilter(event.target.value)}
+                    placeholder="按标签检索"
+                  />
+                </div>
+                {popularTags.length > 0 && (
+                  <div className={styles.storyIdeaTagCloud}>
+                    {popularTags.map((tag) => (
+                      <button
+                        key={tag}
+                        className={`${styles.storyIdeaTagChip} ${tagFilter === tag ? styles.storyIdeaTagChipActive : ''}`}
+                        onClick={() => setTagFilter((current) => (current === tag ? '' : tag))}
+                        type="button"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
           {filteredCards.length === 0 ? (
@@ -866,7 +1018,7 @@ export const ThreeSignView: React.FC<{
             </div>
           ) : (
             <div className={styles.storyIdeaHistoryCards}>
-              {filteredCards.map((card) => {
+              {visibleHistoryCards.map((card) => {
                 const draftCard = toStoryIdeaDraft(card);
                 return (
                   <button
@@ -888,7 +1040,12 @@ export const ThreeSignView: React.FC<{
               })}
             </div>
           )}
-        </FlowCard>
+          {interactionMode === 'guided' && filteredCards.length > visibleHistoryCards.length && (
+            <div className={styles.storyIdeaQuickGuideHint}>
+              这里只先显示最近 6 张。想精细筛选时切到“高级模式”。
+            </div>
+          )}
+        </FlowCollapsibleCard>
       </div>
 
       {statusMessage && <div className={styles.outlineImportStatus}>{statusMessage}</div>}
@@ -896,7 +1053,35 @@ export const ThreeSignView: React.FC<{
       <div className={styles.storyIdeaLayout}>
         {!activeCard ? (
           <div className={styles.storyIdeaEditorEmpty}>
-            先从“从章节起手发想”开始，系统会自动创建当前灵感卡；如果你只想空想，也可以新建空白灵感卡。
+            <div className={styles.storyIdeaEmptyTitle}>先别管设置，先起一张卡</div>
+            <div className={styles.storyIdeaEmptyText}>
+              最顺手的起步方式是从正文抓一轮签词；如果你还没写正文，就新建空白卡再让 AI 帮你补。
+            </div>
+            <div className={styles.storyIdeaQuickActions}>
+              <button
+                className={styles.outlineActionButton}
+                onClick={() => void handleExtractFromContent()}
+                disabled={working || !aiActionsReady || !content.trim()}
+                type="button"
+              >
+                从正文抓三签
+              </button>
+              <button
+                className={styles.outlineSecondaryButton}
+                onClick={() => void handleCreateCard()}
+                type="button"
+              >
+                新建空白卡
+              </button>
+              <button
+                className={styles.outlineSecondaryButton}
+                onClick={() => void handleGenerateSeeds()}
+                disabled={working || !aiActionsReady}
+                type="button"
+              >
+                AI 直接补三签
+              </button>
+            </div>
           </div>
         ) : (
           <div className={styles.storyIdeaEditor}>
@@ -924,53 +1109,73 @@ export const ThreeSignView: React.FC<{
                 </div>
               }
             >
-              <div className={styles.storyIdeaTagCloud}>
-                {Object.entries(STORY_IDEA_GENERATION_SCOPE_LABELS).map(([value, label]) => (
-                  <button
-                    key={value}
-                    className={`${styles.storyIdeaTagChip} ${generationScope === value ? styles.storyIdeaTagChipActive : ''}`}
-                    onClick={() => setGenerationScope(value as StoryIdeaGenerationScope)}
-                    type="button"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <label className={styles.storyIdeaField}>
-                <span className={styles.storyIdeaFieldLabel}>用户限定 / 自动返回范围</span>
-                <textarea
-                  className={styles.storyIdeaTextarea}
-                  value={generationGuidance}
-                  onChange={(event) => setGenerationGuidance(event.target.value)}
-                  rows={2}
-                  placeholder="例如：先围绕师生关系与身份错位发散，但最后仍要能回到校园悬疑主线"
-                />
-              </label>
+              {interactionMode === 'advanced' ? (
+                <>
+                  <div className={styles.storyIdeaTagCloud}>
+                    {Object.entries(STORY_IDEA_GENERATION_SCOPE_LABELS).map(([value, label]) => (
+                      <button
+                        key={value}
+                        className={`${styles.storyIdeaTagChip} ${generationScope === value ? styles.storyIdeaTagChipActive : ''}`}
+                        onClick={() => setGenerationScope(value as StoryIdeaGenerationScope)}
+                        type="button"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className={styles.storyIdeaField}>
+                    <span className={styles.storyIdeaFieldLabel}>用户限定 / 自动返回范围</span>
+                    <textarea
+                      className={styles.storyIdeaTextarea}
+                      value={generationGuidance}
+                      onChange={(event) => setGenerationGuidance(event.target.value)}
+                      rows={2}
+                      placeholder="例如：先围绕师生关系与身份错位发散，但最后仍要能回到校园悬疑主线"
+                    />
+                  </label>
+                </>
+              ) : (
+                <div className={styles.storyIdeaQuickGuideHint}>
+                  默认会同时参考当前正文和整张卡的方向。看不懂这些范围参数时，不用调，直接点下面按钮开始。
+                </div>
+              )}
               <div className={styles.storyIdeaDecisionBar}>
+                <button
+                  className={styles.outlineActionButton}
+                  onClick={() => void handleExtractFromContent()}
+                  disabled={working || !aiActionsReady || !content.trim()}
+                  type="button"
+                >
+                  从正文抓三签
+                </button>
                 <button
                   className={styles.outlineSecondaryButton}
                   onClick={() => void handleGenerateSeeds()}
                   disabled={working || !aiActionsReady}
                   type="button"
                 >
-                  继续外扩三签
+                  AI 直接补三签
                 </button>
-                <button
-                  className={styles.outlineSecondaryButton}
-                  onClick={() => void handleGenerateOutputs()}
-                  disabled={working || !aiActionsReady}
-                  type="button"
-                >
-                  直接收束成候选
-                </button>
-                <button
-                  className={styles.outlineSecondaryButton}
-                  onClick={() => void handlePromote()}
-                  disabled={!activeCard || working || !selectedOutlineDirection}
-                  type="button"
-                >
-                  转为大纲
-                </button>
+                {interactionMode === 'advanced' && (
+                  <>
+                    <button
+                      className={styles.outlineSecondaryButton}
+                      onClick={() => void handleGenerateOutputs()}
+                      disabled={working || !aiActionsReady}
+                      type="button"
+                    >
+                      直接收束成候选
+                    </button>
+                    <button
+                      className={styles.outlineSecondaryButton}
+                      onClick={() => void handlePromote()}
+                      disabled={!activeCard || working || !selectedOutlineDirection}
+                      type="button"
+                    >
+                      转为大纲
+                    </button>
+                  </>
+                )}
               </div>
             </FlowCard>
 
@@ -980,25 +1185,29 @@ export const ThreeSignView: React.FC<{
               subtitle="顶部始终先看这组三签。你只需要盯住当前一张，反复扩它，直到觉得可以收束。"
               actions={
                 <div className={styles.storyIdeaEditorActions}>
-                  {!showOptionalInputs && hasOptionalConstraints && (
-                    <span className={styles.storyIdeaConstraintPill}>这张卡带有限定</span>
+                  {!showOptionalInputs &&
+                    hasOptionalConstraints &&
+                    interactionMode === 'advanced' && (
+                      <span className={styles.storyIdeaConstraintPill}>这张卡带有限定</span>
+                    )}
+                  {interactionMode === 'advanced' && (
+                    <button
+                      className={styles.outlineSecondaryButton}
+                      onClick={() => setShowOptionalInputs((current) => !current)}
+                    >
+                      {showOptionalInputs ? '收起限定' : '补充限定（可选）'}
+                    </button>
                   )}
-                  <button
-                    className={styles.outlineSecondaryButton}
-                    onClick={() => setShowOptionalInputs((current) => !current)}
-                  >
-                    {showOptionalInputs ? '收起限定' : '补充限定（可选）'}
-                  </button>
                 </div>
               }
             >
-              {hasOptionalConstraints && !showOptionalInputs && (
+              {interactionMode === 'advanced' && hasOptionalConstraints && !showOptionalInputs && (
                 <div className={styles.storyIdeaConstraintSummary}>
                   {draft.premise.trim() || '这张卡已带有补充限定'}
                 </div>
               )}
 
-              {showOptionalInputs && (
+              {interactionMode === 'advanced' && showOptionalInputs && (
                 <div className={styles.storyIdeaOptionalPanel}>
                   <label className={styles.storyIdeaField}>
                     <span className={styles.storyIdeaFieldLabel}>标题</span>
@@ -1101,88 +1310,181 @@ export const ThreeSignView: React.FC<{
 
               <div className={styles.storyIdeaSignatureStack}>
                 <div className={styles.storyIdeaSignatureIntro}>
-                  三签的本质，不是按流程填表，而是先抓题眼、冲突、变形三种不同张力，再让其中一张被你不断掰开。真正的使用节奏是：先扩一张，再看是否值得收束，而不是从上到下机械填完。
+                  {interactionMode === 'guided'
+                    ? '每张签只要先写 2 到 3 个词就够了。不要试图一次填满三张，先盯住你最有感觉的那一张继续补。'
+                    : '三签的本质，不是按流程填表，而是先抓题眼、冲突、变形三种不同张力，再让其中一张被你不断掰开。真正的使用节奏是：先扩一张，再看是否值得收束，而不是从上到下机械填完。'}
                 </div>
-                <div className={styles.storyIdeaPoolFilterRow}>
-                  <div className={styles.storyIdeaPoolFilterHeader}>
-                    <span className={styles.storyIdeaFieldLabel}>词池来源</span>
-                    <span className={styles.storyIdeaPoolFilterHint}>
-                      记住上次筛选，下次打开沿用
-                    </span>
+                {interactionMode === 'advanced' && (
+                  <div className={styles.storyIdeaPoolFilterRow}>
+                    <div className={styles.storyIdeaPoolFilterHeader}>
+                      <span className={styles.storyIdeaFieldLabel}>词池来源</span>
+                      <span className={styles.storyIdeaPoolFilterHint}>
+                        记住上次筛选，下次打开沿用
+                      </span>
+                    </div>
+                    <div className={styles.storyIdeaTagCloud}>
+                      {[
+                        { value: 'all', label: '全部' },
+                        { value: 'history', label: '历史' },
+                        { value: 'ai', label: 'AI' },
+                        { value: 'manual', label: '手动' },
+                      ].map((item) => (
+                        <button
+                          key={item.value}
+                          className={`${styles.storyIdeaTagChip} ${poolSourceFilter === item.value ? styles.storyIdeaTagChipActive : ''}`}
+                          onClick={() =>
+                            setPoolSourceFilter(item.value as 'all' | 'history' | 'ai' | 'manual')
+                          }
+                          type="button"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className={styles.storyIdeaTagCloud}>
-                    {[
-                      { value: 'all', label: '全部' },
-                      { value: 'history', label: '历史' },
-                      { value: 'ai', label: 'AI' },
-                      { value: 'manual', label: '手动' },
-                    ].map((item) => (
-                      <button
-                        key={item.value}
-                        className={`${styles.storyIdeaTagChip} ${poolSourceFilter === item.value ? styles.storyIdeaTagChipActive : ''}`}
-                        onClick={() =>
-                          setPoolSourceFilter(item.value as 'all' | 'history' | 'ai' | 'manual')
-                        }
-                        type="button"
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+                )}
+                {interactionMode === 'guided' ? (
+                  <div className={styles.storyIdeaWizardColumn}>
+                    <div className={styles.storyIdeaWizardProgress}>
+                      {guidedTermSteps.map((step, index) => {
+                        const isActive = step.section === activeTermSection;
+                        const isDone = step.value.length >= 2;
+                        return (
+                          <button
+                            key={step.section}
+                            className={`${styles.storyIdeaWizardStep} ${isActive ? styles.storyIdeaWizardStepActive : ''} ${isDone ? styles.storyIdeaWizardStepDone : ''}`}
+                            onClick={() => setActiveTermSection(step.section)}
+                            type="button"
+                          >
+                            <span className={styles.storyIdeaWizardStepIndex}>{index + 1}</span>
+                            <span className={styles.storyIdeaWizardStepText}>{step.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {activeGuidedTermStep && (
+                      <StoryIdeaTermEditor
+                        section={activeGuidedTermStep.section}
+                        label={activeGuidedTermStep.label}
+                        description={activeGuidedTermStep.description}
+                        isExpanded
+                        value={activeGuidedTermStep.value}
+                        poolTerms={activeGuidedTermStep.poolTerms}
+                        compactMode
+                        placeholder={activeGuidedTermStep.placeholder}
+                        working={working}
+                        onToggle={handleToggleTermSection}
+                        onChange={(next) => {
+                          if (activeGuidedTermStep.section === 'theme')
+                            setField('themeTerms', next);
+                          else if (activeGuidedTermStep.section === 'conflict') {
+                            setField('conflictTerms', next);
+                          } else {
+                            setField('twistTerms', next);
+                          }
+                        }}
+                        onAddCurrentToPool={handleAddCurrentTermsToPool}
+                        onQuickFillFromPool={handleQuickFillFromPool}
+                        onRequestRelated={handleRequestRelatedTerms}
+                        onRedrawRandom={handleRedrawRandom}
+                        onPickPoolTerm={handlePickPoolTerm}
+                      />
+                    )}
+
+                    <div className={styles.storyIdeaWizardFooter}>
+                      <div className={styles.storyIdeaQuickGuideHint}>
+                        当前这一步先凑够 2 到 3 个词就行，不需要想太满。
+                      </div>
+                      <div className={styles.storyIdeaWizardActions}>
+                        <button
+                          className={styles.outlineSecondaryButton}
+                          onClick={() => void handleGoToPrevTermStep()}
+                          disabled={activeTermStepIndex <= 0}
+                          type="button"
+                        >
+                          上一步
+                        </button>
+                        {activeTermStepIndex < STORY_IDEA_TERM_ORDER.length - 1 ? (
+                          <button
+                            className={styles.outlineActionButton}
+                            onClick={() => void handleGoToNextTermStep()}
+                            disabled={working || activeTermValue.length === 0}
+                            type="button"
+                          >
+                            下一步
+                          </button>
+                        ) : (
+                          <button
+                            className={styles.outlineActionButton}
+                            onClick={() => void handleGenerateOutputs()}
+                            disabled={working || !aiActionsReady}
+                            type="button"
+                          >
+                            去生成候选
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className={styles.storyIdeaSignatureDeck}>
-                  <StoryIdeaTermEditor
-                    section="theme"
-                    label={STORY_IDEA_TERM_SECTION_LABELS.theme}
-                    description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.theme}
-                    isExpanded={activeTermSection === 'theme'}
-                    value={draft.themeTerms}
-                    poolTerms={filteredTermPool.theme}
-                    placeholder="例如：雨夜，失约，旧校舍，借名人生"
-                    working={working}
-                    onToggle={handleToggleTermSection}
-                    onChange={(next) => setField('themeTerms', next)}
-                    onAddCurrentToPool={handleAddCurrentTermsToPool}
-                    onQuickFillFromPool={handleQuickFillFromPool}
-                    onRequestRelated={handleRequestRelatedTerms}
-                    onRedrawRandom={handleRedrawRandom}
-                    onPickPoolTerm={handlePickPoolTerm}
-                  />
-                  <StoryIdeaTermEditor
-                    section="conflict"
-                    label={STORY_IDEA_TERM_SECTION_LABELS.conflict}
-                    description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.conflict}
-                    isExpanded={activeTermSection === 'conflict'}
-                    value={draft.conflictTerms}
-                    poolTerms={filteredTermPool.conflict}
-                    placeholder="例如：冒名顶替，被迫合作，证词作废，代价升级"
-                    working={working}
-                    onToggle={handleToggleTermSection}
-                    onChange={(next) => setField('conflictTerms', next)}
-                    onAddCurrentToPool={handleAddCurrentTermsToPool}
-                    onQuickFillFromPool={handleQuickFillFromPool}
-                    onRequestRelated={handleRequestRelatedTerms}
-                    onRedrawRandom={handleRedrawRandom}
-                    onPickPoolTerm={handlePickPoolTerm}
-                  />
-                  <StoryIdeaTermEditor
-                    section="twist"
-                    label={STORY_IDEA_TERM_SECTION_LABELS.twist}
-                    description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.twist}
-                    isExpanded={activeTermSection === 'twist'}
-                    value={draft.twistTerms}
-                    poolTerms={filteredTermPool.twist}
-                    placeholder="例如：救人者才是幕后人，胜利即暴露，记忆被嫁接"
-                    working={working}
-                    onToggle={handleToggleTermSection}
-                    onChange={(next) => setField('twistTerms', next)}
-                    onAddCurrentToPool={handleAddCurrentTermsToPool}
-                    onQuickFillFromPool={handleQuickFillFromPool}
-                    onRequestRelated={handleRequestRelatedTerms}
-                    onRedrawRandom={handleRedrawRandom}
-                    onPickPoolTerm={handlePickPoolTerm}
-                  />
-                </div>
+                ) : (
+                  <div className={styles.storyIdeaSignatureDeck}>
+                    <StoryIdeaTermEditor
+                      section="theme"
+                      label={STORY_IDEA_TERM_SECTION_LABELS.theme}
+                      description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.theme}
+                      isExpanded={activeTermSection === 'theme'}
+                      value={draft.themeTerms}
+                      poolTerms={filteredTermPool.theme}
+                      compactMode={false}
+                      placeholder="例如：雨夜，失约，旧校舍，借名人生"
+                      working={working}
+                      onToggle={handleToggleTermSection}
+                      onChange={(next) => setField('themeTerms', next)}
+                      onAddCurrentToPool={handleAddCurrentTermsToPool}
+                      onQuickFillFromPool={handleQuickFillFromPool}
+                      onRequestRelated={handleRequestRelatedTerms}
+                      onRedrawRandom={handleRedrawRandom}
+                      onPickPoolTerm={handlePickPoolTerm}
+                    />
+                    <StoryIdeaTermEditor
+                      section="conflict"
+                      label={STORY_IDEA_TERM_SECTION_LABELS.conflict}
+                      description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.conflict}
+                      isExpanded={activeTermSection === 'conflict'}
+                      value={draft.conflictTerms}
+                      poolTerms={filteredTermPool.conflict}
+                      compactMode={false}
+                      placeholder="例如：冒名顶替，被迫合作，证词作废，代价升级"
+                      working={working}
+                      onToggle={handleToggleTermSection}
+                      onChange={(next) => setField('conflictTerms', next)}
+                      onAddCurrentToPool={handleAddCurrentTermsToPool}
+                      onQuickFillFromPool={handleQuickFillFromPool}
+                      onRequestRelated={handleRequestRelatedTerms}
+                      onRedrawRandom={handleRedrawRandom}
+                      onPickPoolTerm={handlePickPoolTerm}
+                    />
+                    <StoryIdeaTermEditor
+                      section="twist"
+                      label={STORY_IDEA_TERM_SECTION_LABELS.twist}
+                      description={STORY_IDEA_TERM_CARD_DESCRIPTIONS.twist}
+                      isExpanded={activeTermSection === 'twist'}
+                      value={draft.twistTerms}
+                      poolTerms={filteredTermPool.twist}
+                      compactMode={false}
+                      placeholder="例如：救人者才是幕后人，胜利即暴露，记忆被嫁接"
+                      working={working}
+                      onToggle={handleToggleTermSection}
+                      onChange={(next) => setField('twistTerms', next)}
+                      onAddCurrentToPool={handleAddCurrentTermsToPool}
+                      onQuickFillFromPool={handleQuickFillFromPool}
+                      onRequestRelated={handleRequestRelatedTerms}
+                      onRedrawRandom={handleRedrawRandom}
+                      onPickPoolTerm={handlePickPoolTerm}
+                    />
+                  </div>
+                )}
               </div>
             </FlowCard>
 
@@ -1198,7 +1500,7 @@ export const ThreeSignView: React.FC<{
                   disabled={working || !aiActionsReady}
                   type="button"
                 >
-                  继续发散当前签
+                  继续补当前签
                 </button>
                 <button
                   className={styles.outlineSecondaryButton}
@@ -1206,7 +1508,7 @@ export const ThreeSignView: React.FC<{
                   disabled={working || !aiActionsReady}
                   type="button"
                 >
-                  再收束一轮候选
+                  生成故事候选
                 </button>
               </div>
             </FlowCard>
@@ -1216,55 +1518,59 @@ export const ThreeSignView: React.FC<{
               title="⑤ 候选结果"
               subtitle="收束产出的 logline、场景钩子和大纲方向，筛选后送出或继续迭代。"
               meta={
-                <div className={styles.storyIdeaOutputTypeSummary}>
-                  <button
-                    className={`${styles.storyIdeaOutputTypeChip} ${outputTypeFilter === 'all' ? styles.storyIdeaOutputTypeChipActive : ''}`}
-                    onClick={() => setOutputTypeFilter('all')}
-                    type="button"
-                  >
-                    全部 {outputCards.length}
-                  </button>
-                  {(['logline', 'scene_hook', 'outline_direction'] as const).map((type) => (
+                interactionMode === 'advanced' ? (
+                  <div className={styles.storyIdeaOutputTypeSummary}>
                     <button
-                      key={type}
-                      className={`${styles.storyIdeaOutputTypeChip} ${outputTypeFilter === type ? styles.storyIdeaOutputTypeChipActive : ''}`}
-                      onClick={() => setOutputTypeFilter(type)}
+                      className={`${styles.storyIdeaOutputTypeChip} ${outputTypeFilter === 'all' ? styles.storyIdeaOutputTypeChipActive : ''}`}
+                      onClick={() => setOutputTypeFilter('all')}
                       type="button"
                     >
-                      {STORY_IDEA_OUTPUT_LABELS[type]} {outputsByType[type].length}
+                      全部 {outputCards.length}
                     </button>
-                  ))}
-                  <button
-                    className={`${styles.storyIdeaOutputTypeChip} ${selectedOnly ? styles.storyIdeaOutputTypeChipActive : ''}`}
-                    onClick={() => setSelectedOnly((current) => !current)}
-                    type="button"
-                  >
-                    只看已采用
-                  </button>
-                </div>
+                    {(['logline', 'scene_hook', 'outline_direction'] as const).map((type) => (
+                      <button
+                        key={type}
+                        className={`${styles.storyIdeaOutputTypeChip} ${outputTypeFilter === type ? styles.storyIdeaOutputTypeChipActive : ''}`}
+                        onClick={() => setOutputTypeFilter(type)}
+                        type="button"
+                      >
+                        {STORY_IDEA_OUTPUT_LABELS[type]} {outputsByType[type].length}
+                      </button>
+                    ))}
+                    <button
+                      className={`${styles.storyIdeaOutputTypeChip} ${selectedOnly ? styles.storyIdeaOutputTypeChipActive : ''}`}
+                      onClick={() => setSelectedOnly((current) => !current)}
+                      type="button"
+                    >
+                      只看已采用
+                    </button>
+                  </div>
+                ) : undefined
               }
             >
-              <div className={styles.storyIdeaOutputControlBar}>
-                <label className={styles.storyIdeaField}>
-                  <span className={styles.storyIdeaFieldLabel}>送情节板目标幕</span>
-                  <select
-                    className={styles.storyIdeaSelect}
-                    value={acts.length === 0 ? '' : String(boardTargetActIndex)}
-                    onChange={(event) => setBoardTargetActIndex(Number(event.target.value))}
-                    disabled={acts.length === 0}
-                  >
-                    {acts.length === 0 ? (
-                      <option value="">正文里还没有幕结构</option>
-                    ) : (
-                      acts.map((act) => (
-                        <option key={act.index} value={act.index}>
-                          {act.title}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </label>
-              </div>
+              {(interactionMode === 'advanced' || acts.length > 0) && (
+                <div className={styles.storyIdeaOutputControlBar}>
+                  <label className={styles.storyIdeaField}>
+                    <span className={styles.storyIdeaFieldLabel}>送情节板目标幕</span>
+                    <select
+                      className={styles.storyIdeaSelect}
+                      value={acts.length === 0 ? '' : String(boardTargetActIndex)}
+                      onChange={(event) => setBoardTargetActIndex(Number(event.target.value))}
+                      disabled={acts.length === 0}
+                    >
+                      {acts.length === 0 ? (
+                        <option value="">正文里还没有幕结构</option>
+                      ) : (
+                        acts.map((act) => (
+                          <option key={act.index} value={act.index}>
+                            {act.title}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                </div>
+              )}
               {filteredOutputCards.length === 0 ? (
                 <div className={styles.storyIdeaOutputEmpty}>
                   {outputCards.length === 0 ? '先点“生成候选”' : '当前筛选下没有匹配结果'}
@@ -1339,48 +1645,50 @@ export const ThreeSignView: React.FC<{
                 </div>
               )}
 
-              <div className={styles.storyIdeaVersionTraceSection}>
-                <div className={styles.storyIdeaOutputHeader}>
-                  <span className={styles.storyIdeaOutputTitle}>关联大纲版本</span>
-                  <span className={styles.storyIdeaOutputCount}>
-                    {linkedOutlineVersions.length} 个
-                  </span>
-                </div>
-                {linkedOutlineVersions.length === 0 ? (
-                  <div className={styles.storyIdeaOutputEmpty}>这张卡还没有转出任何大纲版本</div>
-                ) : (
-                  linkedOutlineVersions.map((version) => {
-                    const snapshot = parseStoryIdeaSnapshot(version.story_idea_snapshot_json);
-                    return (
-                      <div key={version.id} className={styles.storyIdeaTraceCard}>
-                        <div className={styles.storyIdeaTraceTitle}>{version.name}</div>
-                        <div className={styles.storyIdeaOutputMeta}>
-                          {new Date(version.created_at).toLocaleString()} / {version.total_nodes}{' '}
-                          节点
-                        </div>
-                        {snapshot && (
-                          <div className={styles.storyIdeaTraceTerms}>
-                            {[
-                              ...snapshot.themeTerms,
-                              ...snapshot.conflictTerms,
-                              ...snapshot.twistTerms,
-                            ]
-                              .slice(0, 9)
-                              .map((term) => (
-                                <span
-                                  key={`${version.id}-${term}`}
-                                  className={styles.storyIdeaTermChip}
-                                >
-                                  {term}
-                                </span>
-                              ))}
+              {(interactionMode === 'advanced' || linkedOutlineVersions.length > 0) && (
+                <div className={styles.storyIdeaVersionTraceSection}>
+                  <div className={styles.storyIdeaOutputHeader}>
+                    <span className={styles.storyIdeaOutputTitle}>关联大纲版本</span>
+                    <span className={styles.storyIdeaOutputCount}>
+                      {linkedOutlineVersions.length} 个
+                    </span>
+                  </div>
+                  {linkedOutlineVersions.length === 0 ? (
+                    <div className={styles.storyIdeaOutputEmpty}>这张卡还没有转出任何大纲版本</div>
+                  ) : (
+                    linkedOutlineVersions.map((version) => {
+                      const snapshot = parseStoryIdeaSnapshot(version.story_idea_snapshot_json);
+                      return (
+                        <div key={version.id} className={styles.storyIdeaTraceCard}>
+                          <div className={styles.storyIdeaTraceTitle}>{version.name}</div>
+                          <div className={styles.storyIdeaOutputMeta}>
+                            {new Date(version.created_at).toLocaleString()} / {version.total_nodes}{' '}
+                            节点
                           </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                          {snapshot && (
+                            <div className={styles.storyIdeaTraceTerms}>
+                              {[
+                                ...snapshot.themeTerms,
+                                ...snapshot.conflictTerms,
+                                ...snapshot.twistTerms,
+                              ]
+                                .slice(0, 9)
+                                .map((term) => (
+                                  <span
+                                    key={`${version.id}-${term}`}
+                                    className={styles.storyIdeaTermChip}
+                                  >
+                                    {term}
+                                  </span>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </FlowCard>
           </div>
         )}

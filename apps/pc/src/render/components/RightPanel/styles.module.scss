@@ -4082,6 +4082,12 @@
   flex-wrap: wrap;
 }
 
+.storyIdeaHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .storyIdeaTitle {
   font-size: 15px;
   font-weight: 700;
@@ -4092,6 +4098,72 @@
   margin-top: 4px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.56);
+}
+
+.storyIdeaModeSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.storyIdeaModeChip {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.storyIdeaModeChipActive {
+  background: rgba(var(--rp-info-rgb), 0.14);
+  color: var(--rp-info-fg);
+}
+
+.storyIdeaQuickGuide {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--rp-accent-rgb), 0.14);
+  background: linear-gradient(180deg, rgba(var(--rp-accent-rgb), 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.storyIdeaQuickGuideTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f2e4bf;
+}
+
+.storyIdeaQuickGuideSteps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.storyIdeaQuickStep {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.storyIdeaQuickGuideHint {
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .storyIdeaToolbar,
@@ -4379,6 +4451,53 @@
   gap: 10px;
 }
 
+.storyIdeaCollapsedHistory {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.storyIdeaHistoryMiniCard {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.15s ease;
+
+  &:hover {
+    border-color: rgba(var(--rp-info-rgb), 0.24);
+    background: rgba(var(--rp-info-rgb), 0.08);
+  }
+}
+
+.storyIdeaHistoryMiniCardActive {
+  border-color: rgba(var(--rp-info-rgb), 0.34);
+  background: rgba(var(--rp-info-rgb), 0.12);
+  transform: translateY(-1px);
+}
+
+.storyIdeaHistoryMiniTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f2e4bf;
+}
+
+.storyIdeaHistoryMiniMeta {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.58);
+}
+
 .storyIdeaFilterTitle {
   font-size: 12px;
   font-weight: 700;
@@ -4471,6 +4590,13 @@
   color: rgba(255, 255, 255, 0.58);
 }
 
+.storyIdeaQuickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .storyIdeaEmptyTitle {
   font-size: 13px;
   font-weight: 700;
@@ -4561,6 +4687,80 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.storyIdeaWizardColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.storyIdeaWizardProgress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.storyIdeaWizardStep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.74);
+  cursor: pointer;
+  text-align: left;
+}
+
+.storyIdeaWizardStepActive {
+  border-color: rgba(var(--rp-info-rgb), 0.34);
+  background: rgba(var(--rp-info-rgb), 0.14);
+  color: var(--rp-info-fg);
+}
+
+.storyIdeaWizardStepDone {
+  border-color: rgba(var(--rp-success-rgb), 0.24);
+}
+
+.storyIdeaWizardStepIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.storyIdeaWizardStepText {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.storyIdeaWizardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.storyIdeaWizardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .storyIdeaField {
