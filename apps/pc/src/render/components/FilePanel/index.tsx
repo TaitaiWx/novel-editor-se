@@ -10,6 +10,7 @@ import {
 import LoadingSpinner from '../LoadingSpinner';
 import EmptyState from '../EmptyState';
 import FileTree from '../FileTree';
+import Tooltip from '../Tooltip';
 import type { ContextMenuEvent } from '../FileTree';
 import { FileNode } from '../../types';
 import styles from './styles.module.scss';
@@ -211,32 +212,64 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       [selectedFile, files, onCopyFile, onPasteFiles, hasClipboard]
     );
 
+    const renderIconButton = (
+      tooltip: string,
+      onClick: (() => void) | undefined,
+      icon: React.ReactNode,
+      disabled = false,
+      className?: string
+    ) => (
+      <Tooltip content={tooltip} position="bottom">
+        <button
+          className={className || styles.workspaceAction}
+          onClick={onClick}
+          title={tooltip}
+          aria-label={tooltip}
+          disabled={disabled}
+          type="button"
+        >
+          {icon}
+        </button>
+      </Tooltip>
+    );
+
     return (
       <div className={styles.filePanel} tabIndex={-1} onKeyDown={handlePanelKeyDown}>
         <div className={styles.explorerHeader}>
           <span className={styles.explorerTitle}>资源管理器</span>
           <div className={styles.headerActions}>
-            <button
-              className={styles.explorerAction}
-              onClick={onOpenFolder}
-              disabled={isLoading}
-              title={folderPath ? '更换文件夹' : '打开文件夹'}
-            >
-              <AiOutlineFolderOpen />
-            </button>
+            {renderIconButton(
+              folderPath ? '更换文件夹' : '打开文件夹',
+              onOpenFolder,
+              <AiOutlineFolderOpen />,
+              isLoading,
+              styles.explorerAction
+            )}
             {folderPath && (
-              <button
-                className={`${styles.explorerAction} ${showSearch ? styles.active : ''}`}
-                onClick={handleToggleSearch}
-                title="搜索文件 (Cmd+P)"
-              >
-                <AiOutlineSearch />
-              </button>
+              <Tooltip content="搜索文件 (Cmd+P)" position="bottom">
+                <button
+                  className={`${styles.explorerAction} ${showSearch ? styles.active : ''}`}
+                  onClick={handleToggleSearch}
+                  title="搜索文件 (Cmd+P)"
+                  aria-label="搜索文件 (Cmd+P)"
+                  type="button"
+                >
+                  <AiOutlineSearch />
+                </button>
+              </Tooltip>
             )}
             {onCollapse && (
-              <button className={styles.explorerAction} onClick={onCollapse} title="折叠侧边栏">
-                ◀
-              </button>
+              <Tooltip content="折叠侧边栏" position="bottom">
+                <button
+                  className={styles.explorerAction}
+                  onClick={onCollapse}
+                  title="折叠侧边栏"
+                  aria-label="折叠侧边栏"
+                  type="button"
+                >
+                  ◀
+                </button>
+              </Tooltip>
             )}
           </div>
         </div>
@@ -283,40 +316,26 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                 <div className={styles.workspaceHeader}>
                   <span className={styles.workspaceName}>{folderName?.toUpperCase()}</span>
                   <div className={styles.workspaceActions}>
-                    <button
-                      className={styles.workspaceAction}
-                      onClick={onCreateFile}
-                      title="新建文件"
-                      disabled={isLoading}
-                    >
-                      <AiOutlineFile />
-                    </button>
-                    <button
-                      className={styles.workspaceAction}
-                      onClick={onCreateDirectory}
-                      title="新建目录"
-                      disabled={isLoading}
-                    >
-                      <AiOutlineFolderAdd />
-                    </button>
-                    {onImportFile && (
-                      <button
-                        className={styles.workspaceAction}
-                        onClick={onImportFile}
-                        title="导入 Word / Excel"
-                        disabled={isLoading}
-                      >
-                        <AiOutlineImport />
-                      </button>
+                    {renderIconButton('新建正文文件', onCreateFile, <AiOutlineFile />, isLoading)}
+                    {renderIconButton(
+                      '新建目录',
+                      onCreateDirectory,
+                      <AiOutlineFolderAdd />,
+                      isLoading
                     )}
-                    <button
-                      className={styles.workspaceAction}
-                      onClick={onRefresh}
-                      title="刷新"
-                      disabled={isLoading}
-                    >
-                      <AiOutlineReload />
-                    </button>
+                    {onImportFile &&
+                      renderIconButton(
+                        '导入 Word / Excel',
+                        onImportFile,
+                        <AiOutlineImport />,
+                        isLoading
+                      )}
+                    {renderIconButton(
+                      '重新扫描作品目录',
+                      onRefresh,
+                      <AiOutlineReload />,
+                      isLoading
+                    )}
                   </div>
                 </div>
                 <FileTree

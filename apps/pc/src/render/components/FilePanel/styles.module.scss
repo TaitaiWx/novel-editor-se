@@ -154,13 +154,8 @@
       .workspaceActions {
         display: flex;
         align-items: center;
-        gap: 1px;
-        opacity: 0;
-        transition: opacity 0.15s;
-      }
-
-      &:hover .workspaceActions {
-        opacity: 1;
+        gap: 2px;
+        flex-shrink: 0;
       }
 
       .workspaceAction {
