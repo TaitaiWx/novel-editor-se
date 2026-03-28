@@ -5,6 +5,7 @@ import { OutlineView } from './OutlineView';
 import { ActsView } from './ActsView';
 import { AiCacheProvider } from './AiCacheContext';
 import { ThreeSignView } from './ThreeSignView';
+import { CHAPTER_STATUS_LABELS, formatChapterIndex } from '../../utils/chapterWorkspace';
 
 const OPEN_STORYLINE_MODE_EVENT = 'open-storyline-mode';
 
@@ -15,8 +16,27 @@ export const StorylineView: React.FC<{
   folderPath: string | null;
   dbReady: boolean;
   currentLine?: number;
+  activeFilePath?: string | null;
+  activeChapter?: {
+    title: string;
+    order: number;
+    status: 'draft' | 'writing' | 'revising' | 'done';
+    summary?: string;
+    plotNote?: string;
+    linkedCharacters: number;
+    linkedLore: number;
+  } | null;
 }> = React.memo(
-  ({ content, onScrollToLine, onReplaceLineText, folderPath, dbReady, currentLine }) => {
+  ({
+    content,
+    onScrollToLine,
+    onReplaceLineText,
+    folderPath,
+    dbReady,
+    currentLine,
+    activeFilePath,
+    activeChapter,
+  }) => {
     const [viewMode, setViewMode] = useState<StorylineViewMode>('catalog');
 
     React.useEffect(() => {
@@ -36,6 +56,36 @@ export const StorylineView: React.FC<{
     return (
       <AiCacheProvider dbReady={dbReady}>
         <div className={styles.storylineView}>
+          {activeChapter && activeFilePath && (
+            <div className={styles.storylineChapterCard}>
+              <div className={styles.storylineChapterMeta}>
+                <span className={styles.storylineChapterEyebrow}>
+                  第{formatChapterIndex(activeChapter.order)}章
+                </span>
+                <h3 className={styles.storylineChapterTitle}>{activeChapter.title}</h3>
+              </div>
+              <div className={styles.storylineChapterBadges}>
+                <span className={styles.storylineChapterBadge}>
+                  {CHAPTER_STATUS_LABELS[activeChapter.status]}
+                </span>
+                {activeChapter.linkedCharacters > 0 && (
+                  <span className={styles.storylineChapterBadge}>
+                    {activeChapter.linkedCharacters} 人物
+                  </span>
+                )}
+                {activeChapter.linkedLore > 0 && (
+                  <span className={styles.storylineChapterBadge}>
+                    {activeChapter.linkedLore} 设定
+                  </span>
+                )}
+              </div>
+              {(activeChapter.summary || activeChapter.plotNote) && (
+                <p className={styles.storylineChapterSummary}>
+                  {activeChapter.summary || activeChapter.plotNote}
+                </p>
+              )}
+            </div>
+          )}
           <div className={styles.storylineToolbar}>
             <button
               className={`${styles.storylineToggle} ${viewMode === 'catalog' ? styles.storylineToggleActive : ''}`}

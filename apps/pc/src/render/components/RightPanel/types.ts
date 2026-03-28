@@ -122,6 +122,16 @@ export interface RightPanelProps {
   folderPath: string | null;
   dbReady: boolean;
   currentLine?: number;
+  activeFilePath?: string | null;
+  activeChapter?: {
+    title: string;
+    order: number;
+    status: 'draft' | 'writing' | 'revising' | 'done';
+    summary?: string;
+    plotNote?: string;
+    linkedCharacters: number;
+    linkedLore: number;
+  } | null;
 }
 
 export interface Character {

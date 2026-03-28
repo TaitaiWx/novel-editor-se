@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('electron', {
     invoke: (channel: string, ...args: any[]) => {
       const validChannels = [
         'open-local-folder',
+        'select-directory',
         'read-file',
         'read-file-binary',
         'read-xlsx-data',
@@ -53,6 +54,7 @@ contextBridge.exposeInMainWorld('electron', {
         'check-just-updated',
         'create-file',
         'create-directory',
+        'create-project-workspace',
         'refresh-folder',
         'window-minimize',
         'window-maximize',

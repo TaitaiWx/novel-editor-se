@@ -4,6 +4,7 @@ import type { FileNode } from './types';
 import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
+import ProjectHome from './components/ProjectHome';
 import RightPanel from './components/RightPanel';
 import { PanelResizer } from './components/PanelResizer';
 import { AIAssistantDialog } from './components/RightPanel/AIAssistantDialog';
@@ -16,6 +17,16 @@ import type { SettingsTab, SettingsDraft } from './components/AppSettingsCenter'
 import { useToast } from './components/Toast';
 import { useDialog } from './components/Dialog';
 import type { ContextMenuEvent } from './components/FileTree';
+import ProjectWizardDialog, {
+  type ProjectWizardValues,
+} from './components/WorkspaceDialogs/ProjectWizardDialog';
+import BatchChapterDialog, {
+  type BatchChapterValues,
+} from './components/WorkspaceDialogs/BatchChapterDialog';
+import ChapterDetailsDialog, {
+  type ChapterDetailsValues,
+  type ChapterReferenceOption,
+} from './components/WorkspaceDialogs/ChapterDetailsDialog';
 import styles from './App.module.scss';
 import { initKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/initKeyboardShortcuts';
 import { cleanupKeyboardShortcuts } from './components/ShortcutsHelp/shortcuts/cleanupKeyboardShortcuts';
@@ -44,21 +55,55 @@ import {
   fixSessionSelectors,
   type FixDiffState,
 } from './state/fixSessionState';
+import {
+  buildChapterFileName,
+  buildChapterInitialContent,
+  createChapterMetadataStorageKey,
+  extractChapterFiles,
+  findNodeInTree,
+  findPreferredChapterDirectory,
+  formatChapterIndex,
+  getRelativeDirectoryLabel,
+  getNextChapterNumber,
+  parseChapterFileName,
+  remapRecordKeys,
+  rewriteChapterHeading,
+  sanitizeChapterTitle,
+  type ChapterMetadata,
+  type ChapterStatus,
+} from './utils/chapterWorkspace';
+import {
+  autoReferenceIdsChanged,
+  buildEffectiveReferenceIds,
+  deriveReferenceOverrideState,
+  detectReferenceIds,
+  withAutoReferenceIds,
+} from './utils/chapterReferences';
+import { parseCharacterAttributes } from './components/RightPanel/utils';
+import { loadLoreEntriesByFolder } from './components/RightPanel/lore-data';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
 
 type CreatingType = 'file' | 'directory' | null;
 
-function findNodeInTree(nodes: FileNode[], path: string): FileNode | null {
-  for (const node of nodes) {
-    if (node.path === path) return node;
-    if (node.children) {
-      const found = findNodeInTree(node.children, path);
-      if (found) return found;
-    }
-  }
-  return null;
+function resolveCreateTargetPath(selectedPath: string | null, nodes: FileNode[]): string | null {
+  if (!selectedPath) return null;
+  const selectedNode = findNodeInTree(nodes, selectedPath);
+  if (!selectedNode) return null;
+  if (selectedNode.type === 'directory') return selectedNode.path;
+  if (nodes.some((node) => node.path === selectedPath)) return null;
+  const lastSlash = Math.max(selectedPath.lastIndexOf('/'), selectedPath.lastIndexOf('\\'));
+  return lastSlash > 0 ? selectedPath.substring(0, lastSlash) : null;
+}
+
+function resolveCreateTargetDir(
+  folderPath: string | null,
+  selectedPath: string | null,
+  nodes: FileNode[]
+): string | null {
+  if (!folderPath) return null;
+  return resolveCreateTargetPath(selectedPath, nodes) ?? folderPath;
 }
 
 interface CursorPosition {
@@ -77,6 +122,24 @@ interface PersistedEditorSession {
   openTabs: string[];
   activeTab: string | null;
   viewportSnapshots: Record<string, EditorViewportSnapshot>;
+}
+
+interface ChapterPanelItem {
+  path: string;
+  title: string;
+  order: number;
+  directory: string;
+  directoryLabel: string;
+  status: ChapterStatus;
+  summary?: string;
+  plotNote?: string;
+  linkedCharacters: number;
+  linkedLore: number;
+}
+
+interface ChapterReferenceCandidateOption extends ChapterReferenceOption {
+  aliases?: string[];
+  tags?: string[];
 }
 
 function isUntitledTabPath(path: string | null): boolean {
@@ -108,10 +171,14 @@ function parseEditorSessionSnapshot(raw: string | null): PersistedEditorSession 
                   typeof path === 'string' &&
                   snapshot !== null &&
                   typeof snapshot === 'object' &&
-                  typeof (snapshot as EditorViewportSnapshot).anchor === 'number' &&
-                  typeof (snapshot as EditorViewportSnapshot).head === 'number' &&
-                  typeof (snapshot as EditorViewportSnapshot).scrollTop === 'number' &&
-                  typeof (snapshot as EditorViewportSnapshot).scrollLeft === 'number'
+                  Number.isFinite((snapshot as EditorViewportSnapshot).anchor) &&
+                  Number.isFinite((snapshot as EditorViewportSnapshot).head) &&
+                  Number.isFinite((snapshot as EditorViewportSnapshot).scrollTop) &&
+                  Number.isFinite((snapshot as EditorViewportSnapshot).scrollLeft) &&
+                  (snapshot as EditorViewportSnapshot).anchor >= 0 &&
+                  (snapshot as EditorViewportSnapshot).head >= 0 &&
+                  (snapshot as EditorViewportSnapshot).scrollTop >= 0 &&
+                  (snapshot as EditorViewportSnapshot).scrollLeft >= 0
               )
             )
           : {},
@@ -175,6 +242,21 @@ const App: React.FC = () => {
   const [editorReloadToken, setEditorReloadToken] = useState(0);
   const [fixState, dispatchFixCommand] = useReducer(reduceFixSession, initialFixSessionState);
   const [dbReady, setDbReady] = useState(false);
+  const [chapterMetadataMap, setChapterMetadataMap] = useState<Record<string, ChapterMetadata>>({});
+  const [showProjectWizard, setShowProjectWizard] = useState(false);
+  const [projectWizardParentDir, setProjectWizardParentDir] = useState('');
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [showBatchChapterDialog, setShowBatchChapterDialog] = useState(false);
+  const [isBatchCreatingChapters, setIsBatchCreatingChapters] = useState(false);
+  const [editingChapterPath, setEditingChapterPath] = useState<string | null>(null);
+  const [isSavingChapterDetails, setIsSavingChapterDetails] = useState(false);
+  const [chapterReferenceOptions, setChapterReferenceOptions] = useState<{
+    characters: ChapterReferenceCandidateOption[];
+    lore: ChapterReferenceCandidateOption[];
+  }>({
+    characters: [],
+    lore: [],
+  });
 
   // 修复流程状态（selector 只读）
   const inlineDiff = fixSessionSelectors.inlineDiff(fixState);
@@ -186,6 +268,10 @@ const App: React.FC = () => {
   const aiSessionRef = useRef<AISessionSnapshot | null>(null);
   const aiSessionKey = useMemo(() => buildAISessionStorageKey(folderPath), [folderPath]);
   const editorSessionKey = useMemo(() => buildEditorSessionStorageKey(folderPath), [folderPath]);
+  const chapterMetadataStorageKey = useMemo(
+    () => createChapterMetadataStorageKey(folderPath),
+    [folderPath]
+  );
 
   // Panel resize widths (VSCode-style draggable 3-pane layout)
   // Left/right panels have NO minimum — they auto-collapse when dragged below threshold (VSCode behavior)
@@ -222,6 +308,72 @@ const App: React.FC = () => {
   const restoredEditorSessionKeyRef = useRef<string | null>(null);
   const editorSessionHydratedRef = useRef(false);
   const persistEditorSessionTimerRef = useRef<number | null>(null);
+  const persistChapterMetadataTimerRef = useRef<number | null>(null);
+
+  const chapterFiles = useMemo(() => extractChapterFiles(files), [files]);
+  const chapterPanelItems = useMemo<ChapterPanelItem[]>(
+    () =>
+      chapterFiles.map((chapter) => {
+        const metadata = chapterMetadataMap[chapter.path] || {};
+        const effectiveCharacterIds = buildEffectiveReferenceIds(metadata, 'character');
+        const effectiveLoreIds = buildEffectiveReferenceIds(metadata, 'lore');
+        return {
+          path: chapter.path,
+          title: chapter.title,
+          order: chapter.order,
+          directory: chapter.directory,
+          directoryLabel: getRelativeDirectoryLabel(folderPath, chapter.directory),
+          status: metadata.status || 'draft',
+          summary: metadata.summary,
+          plotNote: metadata.plotNote,
+          linkedCharacters: effectiveCharacterIds.length,
+          linkedLore: effectiveLoreIds.length,
+        };
+      }),
+    [chapterFiles, chapterMetadataMap, folderPath]
+  );
+  const activeChapterFile = useMemo(
+    () => chapterFiles.find((chapter) => chapter.path === activeTab) || null,
+    [chapterFiles, activeTab]
+  );
+  const editingChapter = useMemo(
+    () => chapterFiles.find((chapter) => chapter.path === editingChapterPath) || null,
+    [chapterFiles, editingChapterPath]
+  );
+  const activeChapterSummary = useMemo(() => {
+    if (!activeChapterFile) return null;
+    const metadata = chapterMetadataMap[activeChapterFile.path] || {};
+    const effectiveCharacterIds = buildEffectiveReferenceIds(metadata, 'character');
+    const effectiveLoreIds = buildEffectiveReferenceIds(metadata, 'lore');
+    return {
+      title: activeChapterFile.title,
+      order: activeChapterFile.order,
+      status: metadata.status || 'draft',
+      summary: metadata.summary || '',
+      plotNote: metadata.plotNote || '',
+      linkedCharacters: effectiveCharacterIds.length,
+      linkedLore: effectiveLoreIds.length,
+    };
+  }, [activeChapterFile, chapterMetadataMap]);
+
+  const applyAutoReferencesForChapter = useCallback(
+    (chapterPath: string, rawContent: string) => {
+      const nextCharacterIds = detectReferenceIds(rawContent, chapterReferenceOptions.characters);
+      const nextLoreIds = detectReferenceIds(rawContent, chapterReferenceOptions.lore);
+
+      setChapterMetadataMap((prev) => {
+        const current = prev[chapterPath] || {};
+        if (!autoReferenceIdsChanged(current, nextCharacterIds, nextLoreIds)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [chapterPath]: withAutoReferenceIds(current, nextCharacterIds, nextLoreIds),
+        };
+      });
+    },
+    [chapterReferenceOptions]
+  );
 
   const syncInitialViewportSnapshots = useCallback(
     (next: Record<string, EditorViewportSnapshot>) => {
@@ -301,6 +453,28 @@ const App: React.FC = () => {
       }
     },
     [schedulePersistEditorSession, syncInitialViewportSnapshots]
+  );
+
+  const applyPathRenameMap = useCallback(
+    (renameMap: Record<string, string>) => {
+      const renameEntries = Object.entries(renameMap).filter(
+        ([fromPath, toPath]) => fromPath !== toPath
+      );
+      if (renameEntries.length === 0) return;
+
+      setOpenTabs((prev) => Array.from(new Set(prev.map((path) => renameMap[path] || path))));
+      if (activeTabRef.current && renameMap[activeTabRef.current]) {
+        setActiveTab(renameMap[activeTabRef.current]);
+      }
+      if (editingChapterPath && renameMap[editingChapterPath]) {
+        setEditingChapterPath(renameMap[editingChapterPath]);
+      }
+      renameEntries.forEach(([fromPath, toPath]) => {
+        moveViewportSnapshot(fromPath, toPath);
+      });
+      setChapterMetadataMap((prev) => remapRecordKeys(prev, renameMap));
+    },
+    [editingChapterPath, moveViewportSnapshot]
   );
 
   const handleViewportSnapshotChange = useCallback(
@@ -387,6 +561,164 @@ const App: React.FC = () => {
       }
     };
   }, []);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !chapterMetadataStorageKey || !dbReady) {
+      setChapterMetadataMap({});
+      return;
+    }
+
+    let cancelled = false;
+    const loadChapterMetadata = async () => {
+      try {
+        const raw = (await ipc.invoke('db-settings-get', chapterMetadataStorageKey)) as
+          | string
+          | null;
+        if (cancelled) return;
+        if (!raw || typeof raw !== 'string') {
+          setChapterMetadataMap({});
+          return;
+        }
+        const parsed = JSON.parse(raw) as Record<string, ChapterMetadata>;
+        setChapterMetadataMap(parsed && typeof parsed === 'object' ? parsed : {});
+      } catch {
+        if (!cancelled) setChapterMetadataMap({});
+      }
+    };
+
+    void loadChapterMetadata();
+    return () => {
+      cancelled = true;
+    };
+  }, [chapterMetadataStorageKey, dbReady]);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !chapterMetadataStorageKey || !dbReady) return;
+
+    if (persistChapterMetadataTimerRef.current) {
+      window.clearTimeout(persistChapterMetadataTimerRef.current);
+    }
+    persistChapterMetadataTimerRef.current = window.setTimeout(() => {
+      ipc
+        .invoke('db-settings-set', chapterMetadataStorageKey, JSON.stringify(chapterMetadataMap))
+        .catch(() => {});
+    }, 180);
+
+    return () => {
+      if (persistChapterMetadataTimerRef.current) {
+        window.clearTimeout(persistChapterMetadataTimerRef.current);
+        persistChapterMetadataTimerRef.current = null;
+      }
+    };
+  }, [chapterMetadataMap, chapterMetadataStorageKey, dbReady]);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !folderPath || !dbReady) {
+      setChapterReferenceOptions({ characters: [], lore: [] });
+      return;
+    }
+
+    let cancelled = false;
+    const loadChapterReferenceOptions = async () => {
+      try {
+        const novel = (await ipc.invoke('db-novel-get-by-folder', folderPath)) as {
+          id: number;
+        } | null;
+        const characterRows = novel
+          ? ((await ipc.invoke('db-character-list', novel.id)) as Array<{
+              id: number;
+              name: string;
+              role: string;
+              attributes: string;
+            }>)
+          : [];
+        const loreRows = await loadLoreEntriesByFolder(folderPath);
+
+        if (cancelled) return;
+        setChapterReferenceOptions({
+          characters: characterRows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            meta: row.role || '未设定',
+            aliases: (parseCharacterAttributes(row.attributes).aliases || [])
+              .map((alias) => alias.trim())
+              .filter(Boolean),
+          })),
+          lore: loreRows.map((row) => ({
+            id: row.id,
+            name: row.title,
+            meta: row.category || '设定',
+            tags: row.tags,
+          })),
+        });
+      } catch {
+        if (!cancelled) setChapterReferenceOptions({ characters: [], lore: [] });
+      }
+    };
+
+    void loadChapterReferenceOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, [folderPath, dbReady]);
+
+  React.useEffect(() => {
+    setEditingChapterPath(null);
+    setShowBatchChapterDialog(false);
+  }, [folderPath]);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || chapterFiles.length === 0) return;
+
+    let cancelled = false;
+    const hydrateAutoReferences = async () => {
+      try {
+        const snapshots = await Promise.all(
+          chapterFiles.map(async (chapter) => ({
+            path: chapter.path,
+            content: ((await ipc.invoke('read-file', chapter.path)) as string) || '',
+          }))
+        );
+        if (cancelled) return;
+
+        setChapterMetadataMap((prev) => {
+          let changed = false;
+          const next = { ...prev };
+
+          snapshots.forEach((snapshot) => {
+            const current = next[snapshot.path] || {};
+            const nextCharacterIds = detectReferenceIds(
+              snapshot.content,
+              chapterReferenceOptions.characters
+            );
+            const nextLoreIds = detectReferenceIds(snapshot.content, chapterReferenceOptions.lore);
+            if (autoReferenceIdsChanged(current, nextCharacterIds, nextLoreIds)) {
+              next[snapshot.path] = withAutoReferenceIds(current, nextCharacterIds, nextLoreIds);
+              changed = true;
+            }
+          });
+
+          return changed ? next : prev;
+        });
+      } catch {
+        // ignore chapter scan failures
+      }
+    };
+
+    void hydrateAutoReferences();
+    return () => {
+      cancelled = true;
+    };
+  }, [chapterFiles, chapterReferenceOptions]);
+
+  React.useEffect(() => {
+    if (!activeChapterFile) return;
+    applyAutoReferencesForChapter(activeChapterFile.path, editorContent);
+  }, [activeChapterFile, applyAutoReferencesForChapter, editorContent]);
 
   React.useEffect(() => {
     const ch = createAISessionChannel();
@@ -726,6 +1058,322 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const refreshCurrentFolder = useCallback(async () => {
+    const currentFolderPath = folderPathRef.current;
+    if (!currentFolderPath) return;
+    setIsLoading(true);
+    try {
+      if (!window.electron?.ipcRenderer) {
+        toast.error('Electron IPC 不可用');
+        return;
+      }
+      const result = await window.electron.ipcRenderer.invoke('refresh-folder', currentFolderPath);
+      if (result) {
+        setFiles(result.files);
+      }
+    } catch (error) {
+      console.error('Error refreshing folder:', error);
+      toast.error(`刷新文件夹失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  const handleOpenProjectWizard = useCallback(() => {
+    const currentFolder = folderPathRef.current;
+    if (currentFolder) {
+      const lastSlash = Math.max(currentFolder.lastIndexOf('/'), currentFolder.lastIndexOf('\\'));
+      setProjectWizardParentDir(lastSlash >= 0 ? currentFolder.slice(0, lastSlash) : currentFolder);
+    }
+    setShowProjectWizard(true);
+  }, []);
+
+  const handlePickProjectLocation = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const selectedDir = await ipc.invoke('select-directory', '选择作品保存位置');
+    if (selectedDir) {
+      setProjectWizardParentDir(selectedDir);
+    }
+  }, []);
+
+  const renameChapterPath = useCallback(
+    async (chapterPath: string, chapterNumber: number, title: string): Promise<string> => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) throw new Error('Electron IPC 不可用');
+
+      const safeTitle = sanitizeChapterTitle(title);
+      const lastSlash = Math.max(chapterPath.lastIndexOf('/'), chapterPath.lastIndexOf('\\'));
+      const parentDir = lastSlash >= 0 ? chapterPath.slice(0, lastSlash) : '';
+      const oldName = lastSlash >= 0 ? chapterPath.slice(lastSlash + 1) : chapterPath;
+      const parsed = parseChapterFileName(oldName);
+      const extension = parsed.extension || '.md';
+      const nextPath = `${parentDir}/${buildChapterFileName(chapterNumber, safeTitle, extension)}`;
+
+      let currentContent = '';
+      try {
+        currentContent = (await ipc.invoke('read-file', chapterPath)) as string;
+      } catch {
+        currentContent = '';
+      }
+      const nextContent = rewriteChapterHeading(currentContent, chapterNumber, safeTitle);
+
+      if (nextPath !== chapterPath) {
+        await ipc.invoke('rename-file', chapterPath, nextPath);
+      }
+
+      await ipc.invoke('write-file', nextPath, nextContent);
+      applyPathRenameMap({ [chapterPath]: nextPath });
+      return nextPath;
+    },
+    [applyPathRenameMap]
+  );
+
+  const handleCreateProjectFromWizard = useCallback(
+    async (values: ProjectWizardValues) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) {
+        toast.error('Electron IPC 不可用');
+        return;
+      }
+
+      setIsCreatingProject(true);
+      try {
+        const result = (await ipc.invoke('create-project-workspace', values)) as {
+          path: string;
+          files: FileNode[];
+          firstChapterPath: string | null;
+        };
+        await initializeProjectStore(result.path);
+        await ipc.invoke('add-recent-folder', result.path);
+        setFolderPath(result.path);
+        setFiles(result.files);
+        setOpenTabs([]);
+        setActiveTab(null);
+        setShowProjectWizard(false);
+        if (result.firstChapterPath) {
+          openFileInTab(result.firstChapterPath);
+        }
+        toast.success(`已创建作品「${values.projectName}」`);
+      } catch (error) {
+        toast.error(`创建作品失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      } finally {
+        setIsCreatingProject(false);
+      }
+    },
+    [initializeProjectStore, openFileInTab, toast]
+  );
+
+  const handleOpenChapterEditor = useCallback((filePath: string) => {
+    setEditingChapterPath(filePath);
+  }, []);
+
+  const handleSaveChapterDetails = useCallback(
+    async (values: ChapterDetailsValues) => {
+      if (!editingChapter) return;
+      setIsSavingChapterDetails(true);
+      try {
+        const nextPath = await renameChapterPath(
+          editingChapter.path,
+          editingChapter.order,
+          values.title
+        );
+        setChapterMetadataMap((prev) => {
+          const baselineMetadata = prev[nextPath] || prev[editingChapter.path] || {};
+          const characterOverrides = deriveReferenceOverrideState(
+            values.linkedCharacterIds,
+            baselineMetadata.autoLinkedCharacterIds || []
+          );
+          const loreOverrides = deriveReferenceOverrideState(
+            values.linkedLoreIds,
+            baselineMetadata.autoLinkedLoreIds || []
+          );
+          const nextMetadata = {
+            ...baselineMetadata,
+            status: values.status,
+            summary: values.summary,
+            plotNote: values.plotNote,
+            linkedCharacterIds: characterOverrides.manualIds,
+            linkedLoreIds: loreOverrides.manualIds,
+            dismissedCharacterIds: characterOverrides.dismissedIds,
+            dismissedLoreIds: loreOverrides.dismissedIds,
+          } satisfies ChapterMetadata;
+          const nextMap = {
+            ...prev,
+            [nextPath]: nextMetadata,
+          };
+          if (nextPath !== editingChapter.path) {
+            delete nextMap[editingChapter.path];
+          }
+          return nextMap;
+        });
+        await refreshCurrentFolder();
+        setEditingChapterPath(null);
+        toast.success(`已更新第${formatChapterIndex(editingChapter.order)}章`);
+      } catch (error) {
+        toast.error(`保存章节信息失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      } finally {
+        setIsSavingChapterDetails(false);
+      }
+    },
+    [editingChapter, refreshCurrentFolder, renameChapterPath, toast]
+  );
+
+  const handleBatchCreateChapters = useCallback(
+    async (values: BatchChapterValues) => {
+      const ipc = window.electron?.ipcRenderer;
+      const rootFolder = folderPathRef.current;
+      if (!ipc || !rootFolder) {
+        toast.error('请先打开一个作品目录');
+        return;
+      }
+
+      const targetDir =
+        findPreferredChapterDirectory(rootFolder, filesRef.current, activeTabRef.current) ||
+        resolveCreateTargetDir(rootFolder, activeTabRef.current, filesRef.current) ||
+        rootFolder;
+
+      setIsBatchCreatingChapters(true);
+      try {
+        let nextNumber = getNextChapterNumber(filesRef.current);
+        let firstCreatedPath: string | null = null;
+
+        for (let index = 0; index < values.count; index += 1) {
+          const chapterNumber = nextNumber + index;
+          const title = `${sanitizeChapterTitle(values.titlePrefix)} ${formatChapterIndex(chapterNumber)}`;
+          const created = (await ipc.invoke(
+            'create-file',
+            targetDir,
+            buildChapterFileName(chapterNumber, title)
+          )) as {
+            filePath: string;
+          };
+          await ipc.invoke(
+            'write-file',
+            created.filePath,
+            buildChapterInitialContent(chapterNumber, title)
+          );
+          if (!firstCreatedPath) firstCreatedPath = created.filePath;
+        }
+
+        await refreshCurrentFolder();
+        if (firstCreatedPath) {
+          openFileInTab(firstCreatedPath);
+        }
+        setShowBatchChapterDialog(false);
+        toast.success(`已创建 ${values.count} 个章节骨架`);
+      } catch (error) {
+        toast.error(`批量创建章节失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      } finally {
+        setIsBatchCreatingChapters(false);
+      }
+    },
+    [openFileInTab, refreshCurrentFolder, toast]
+  );
+
+  const handleOpenStorylineMode = useCallback(
+    (filePath: string, mode: 'outline' | 'acts') => {
+      openFileInTab(filePath);
+      if (rightPanelCollapsedRef.current) {
+        resolvePaneLayout({ nextRightPanelCollapsed: false, preferExpanding: 'right' });
+      }
+      window.dispatchEvent(new CustomEvent('open-storyline-mode', { detail: { mode } }));
+    },
+    [openFileInTab, resolvePaneLayout]
+  );
+
+  const handleChapterReorder = useCallback(
+    async (sourcePath: string, targetPath: string) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) {
+        toast.error('Electron IPC 不可用');
+        return;
+      }
+
+      const sourceIndex = chapterFiles.findIndex((chapter) => chapter.path === sourcePath);
+      if (sourceIndex < 0 || sourcePath === targetPath) return;
+
+      const reordered = [...chapterFiles];
+      const [moving] = reordered.splice(sourceIndex, 1);
+      if (!moving) return;
+
+      const targetChapterIndex = reordered.findIndex((chapter) => chapter.path === targetPath);
+      const targetNode = findNodeInTree(filesRef.current, targetPath);
+
+      let destinationDirectory = moving.directory;
+      let insertIndex = reordered.length;
+
+      if (targetChapterIndex >= 0) {
+        destinationDirectory = reordered[targetChapterIndex].directory;
+        insertIndex = targetChapterIndex;
+      } else if (targetNode?.type === 'directory') {
+        destinationDirectory = targetNode.path;
+        const lastDirectoryIndex = reordered.reduce(
+          (lastIndex, chapter, index) =>
+            chapter.directory === destinationDirectory ? index : lastIndex,
+          -1
+        );
+        insertIndex = lastDirectoryIndex >= 0 ? lastDirectoryIndex + 1 : reordered.length;
+      } else {
+        return;
+      }
+
+      const movedAcrossDirectory = moving.directory !== destinationDirectory;
+      reordered.splice(insertIndex, 0, {
+        ...moving,
+        directory: destinationDirectory,
+      });
+
+      const timestamp = Date.now();
+      const tempRenames = reordered.map((chapter, index) => ({
+        originalPath: chapter.path,
+        tempPath: `${chapter.directory}/.__chapter-reorder-${timestamp}-${index}${chapter.extension || '.md'}`,
+        order: index + 1,
+        title: chapter.title,
+        extension: chapter.extension || '.md',
+      }));
+
+      try {
+        for (const item of tempRenames) {
+          await ipc.invoke('rename-file', item.originalPath, item.tempPath);
+        }
+
+        const finalRenameMap: Record<string, string> = {};
+        for (const item of tempRenames) {
+          const tempSeparatorIndex = Math.max(
+            item.tempPath.lastIndexOf('/'),
+            item.tempPath.lastIndexOf('\\')
+          );
+          const tempDir = tempSeparatorIndex >= 0 ? item.tempPath.slice(0, tempSeparatorIndex) : '';
+          const finalPath = `${tempDir}/${buildChapterFileName(item.order, item.title, item.extension)}`;
+          const content = (await ipc.invoke('read-file', item.tempPath)) as string;
+          await ipc.invoke('rename-file', item.tempPath, finalPath);
+          await ipc.invoke(
+            'write-file',
+            finalPath,
+            rewriteChapterHeading(content, item.order, item.title)
+          );
+          finalRenameMap[item.originalPath] = finalPath;
+        }
+
+        applyPathRenameMap(finalRenameMap);
+        await refreshCurrentFolder();
+        toast.success(
+          movedAcrossDirectory
+            ? `章节顺序已更新，并移动到${getRelativeDirectoryLabel(
+                folderPathRef.current,
+                destinationDirectory
+              )}`
+            : '章节顺序已更新'
+        );
+      } catch (error) {
+        toast.error(`章节重排失败: ${error instanceof Error ? error.message : '未知错误'}`);
+        await refreshCurrentFolder();
+      }
+    },
+    [applyPathRenameMap, chapterFiles, refreshCurrentFolder, toast]
+  );
+
   // Create new untitled tab (Cmd+N, like VS Code)
   const handleNewTab = useCallback(() => {
     const num = ++untitledCounterRef.current;
@@ -759,27 +1407,6 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const refreshCurrentFolder = useCallback(async () => {
-    const currentFolderPath = folderPathRef.current;
-    if (!currentFolderPath) return;
-    setIsLoading(true);
-    try {
-      if (!window.electron?.ipcRenderer) {
-        toast.error('Electron IPC 不可用');
-        return;
-      }
-      const result = await window.electron.ipcRenderer.invoke('refresh-folder', currentFolderPath);
-      if (result) {
-        setFiles(result.files);
-      }
-    } catch (error) {
-      console.error('Error refreshing folder:', error);
-      toast.error(`刷新文件夹失败: ${error instanceof Error ? error.message : '未知错误'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
-
   const loadDefaultPath = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -792,17 +1419,19 @@ const App: React.FC = () => {
       await window.electron.ipcRenderer.invoke('db-init-default');
       setDbReady(true);
 
-      // VS Code 风格：优先恢复上次打开的目录，首次安装打开 sample-data
+      // 优先恢复上次打开的目录；首次启动停留在首页，让用户自己决定怎么开始
       const lastFolder = await window.electron.ipcRenderer.invoke('get-last-folder');
-      const targetPath =
-        lastFolder || (await window.electron.ipcRenderer.invoke('get-default-data-path'));
-
-      await initializeProjectStore(targetPath);
-      await window.electron.ipcRenderer.invoke('add-recent-folder', targetPath);
-      const result = await window.electron.ipcRenderer.invoke('refresh-folder', targetPath);
-      if (result) {
-        setFolderPath(result.path);
-        setFiles(result.files);
+      if (lastFolder) {
+        await initializeProjectStore(lastFolder);
+        await window.electron.ipcRenderer.invoke('add-recent-folder', lastFolder);
+        const result = await window.electron.ipcRenderer.invoke('refresh-folder', lastFolder);
+        if (result) {
+          setFolderPath(result.path);
+          setFiles(result.files);
+        }
+      } else {
+        setFolderPath(null);
+        setFiles([]);
       }
 
       // 更新后首次启动：自动打开更新日志
@@ -871,6 +1500,57 @@ const App: React.FC = () => {
     setCreatingType('file');
   }, []);
 
+  const handleCreateChapter = useCallback(async () => {
+    const rootFolder = folderPathRef.current;
+    const ipc = window.electron?.ipcRenderer;
+    if (!rootFolder || !ipc) {
+      toast.error('请先打开一个作品目录');
+      return;
+    }
+
+    const targetDir =
+      findPreferredChapterDirectory(rootFolder, filesRef.current, activeTabRef.current) ||
+      resolveCreateTargetDir(rootFolder, activeTabRef.current, filesRef.current);
+    if (!targetDir) {
+      toast.error('无法确定章节创建目录');
+      return;
+    }
+
+    let nextChapterNumber = getNextChapterNumber(filesRef.current);
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const nextFileName = buildChapterFileName(nextChapterNumber, '未命名');
+      try {
+        const created = (await ipc.invoke('create-file', targetDir, nextFileName)) as {
+          success: boolean;
+          filePath: string;
+        };
+        await ipc.invoke(
+          'write-file',
+          created.filePath,
+          buildChapterInitialContent(nextChapterNumber, '未命名')
+        );
+        const refreshed = await ipc.invoke('refresh-folder', rootFolder);
+        if (refreshed) {
+          setFolderPath(refreshed.path);
+          setFiles(refreshed.files);
+        }
+        openFileInTab(created.filePath);
+        toast.success(`已创建章节：${nextFileName}`);
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('文件已存在')) {
+          nextChapterNumber += 1;
+          continue;
+        }
+        toast.error(`创建章节失败: ${message}`);
+        return;
+      }
+    }
+
+    toast.error('章节序号分配失败，请稍后再试');
+  }, [openFileInTab, toast]);
+
   const handleCreateDirectory = useCallback(() => {
     if (!folderPathRef.current) return;
     setCreatingType('directory');
@@ -879,16 +1559,8 @@ const App: React.FC = () => {
   // Determine target directory for inline creation based on selection
   // null = root level, string = specific directory path
   const createTargetPath = useMemo<string | null>(() => {
-    if (!creatingType || !folderPath) return null;
-    if (!activeTab) return null;
-    const selectedNode = findNodeInTree(files, activeTab);
-    if (!selectedNode) return null; // untitled or not in tree → root
-    if (selectedNode.type === 'directory') return selectedNode.path;
-    // File at root level → root
-    if (files.some((n) => n.path === activeTab)) return null;
-    // File in subdirectory → parent directory
-    const lastSlash = Math.max(activeTab.lastIndexOf('/'), activeTab.lastIndexOf('\\'));
-    return lastSlash > 0 ? activeTab.substring(0, lastSlash) : null;
+    if (!creatingType) return null;
+    return resolveCreateTargetPath(activeTab, files);
   }, [creatingType, folderPath, activeTab, files]);
 
   const handleInlineCreate = useCallback(
@@ -1004,6 +1676,10 @@ const App: React.FC = () => {
   const handleRename = useCallback(
     async (oldPath: string) => {
       if (!window.electron?.ipcRenderer) return;
+      if (chapterFiles.some((chapter) => chapter.path === oldPath)) {
+        setEditingChapterPath(oldPath);
+        return;
+      }
       const oldName = oldPath.split('/').pop() || oldPath;
       const newName = await dialog.prompt('重命名', '请输入新名称', oldName);
       if (!newName || newName === oldName) return;
@@ -1023,7 +1699,7 @@ const App: React.FC = () => {
         toast.error(`重命名失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [toast, dialog, refreshCurrentFolder]
+    [chapterFiles, toast, dialog, refreshCurrentFolder]
   );
 
   const handleCopyFile = useCallback((filePath: string) => {
@@ -1463,6 +2139,8 @@ const App: React.FC = () => {
     if (!node) {
       const bgPasteDir = folderPath;
       return [
+        { label: '新建章节', onClick: handleCreateChapter, disabled: !folderPath },
+        { label: '', onClick: () => {}, separator: true },
         { label: '新建文件', onClick: handleCreateFile },
         { label: '新建文件夹', onClick: handleCreateDirectory },
         { label: '', onClick: () => {}, separator: true },
@@ -1486,6 +2164,12 @@ const App: React.FC = () => {
       disabled?: boolean;
       separator?: boolean;
     }[] = [
+      ...(chapterFiles.some((chapter) => chapter.path === node.path)
+        ? [
+            { label: '章节信息', onClick: () => handleOpenChapterEditor(node.path) },
+            { label: '', onClick: () => {}, separator: true },
+          ]
+        : []),
       { label: '复制', onClick: () => handleCopyFile(node.path) },
       {
         label: '粘贴',
@@ -1513,8 +2197,11 @@ const App: React.FC = () => {
     contextMenu,
     folderPath,
     clipboard,
+    chapterFiles,
+    handleCreateChapter,
     handleCreateFile,
     handleCreateDirectory,
+    handleOpenChapterEditor,
     handleCopyFile,
     handlePasteFiles,
     handleRename,
@@ -1698,6 +2385,14 @@ const App: React.FC = () => {
         )}
 
         <div className={styles.appMain} ref={appMainRef}>
+          {/*
+            首页态：没有打开任何标签页时，先把用户带到“怎么开始写”的主路径，
+            而不是直接暴露全部高级面板。
+          */}
+          {/*
+            这里不单独抽到状态机，保持布尔条件简单：
+            没有 activeTab 且没有 openTabs 时，视为首页态。
+          */}
           {/* 左侧文件面板 */}
           {!focusMode && (
             <div
@@ -1720,6 +2415,7 @@ const App: React.FC = () => {
                   folderPath={folderPath}
                   isLoading={isLoading}
                   onFileSelect={handleFileSelect}
+                  onCreateChapter={handleCreateChapter}
                   onCreateFile={handleCreateFile}
                   onCreateDirectory={handleCreateDirectory}
                   onRefresh={refreshCurrentFolder}
@@ -1731,11 +2427,13 @@ const App: React.FC = () => {
                   onCopyFile={handleCopyFile}
                   onPasteFiles={handlePasteFiles}
                   onDropFiles={handleDropFiles}
-                  hasClipboard={clipboard.length > 0}
                   creatingType={creatingType}
                   createTargetPath={createTargetPath}
                   onInlineCreate={handleInlineCreate}
                   onCancelCreate={handleCancelCreate}
+                  chapters={chapterPanelItems}
+                  onBatchCreateChapters={() => setShowBatchChapterDialog(true)}
+                  onChapterReorder={handleChapterReorder}
                 />
               )}
             </div>
@@ -1759,6 +2457,20 @@ const App: React.FC = () => {
                   onAccept={pendingApplyQueue.length > 0 ? handleAcceptFix : undefined}
                 />
               </Suspense>
+            ) : !activeTab && openTabs.length === 0 ? (
+              <ProjectHome
+                folderPath={folderPath}
+                hasFiles={files.length > 0}
+                onOpenFolder={handleOpenLocal}
+                onOpenSampleData={handleOpenSampleData}
+                onCreateProject={handleOpenProjectWizard}
+                onCreateChapter={folderPath ? handleCreateChapter : undefined}
+                onBatchCreateChapters={
+                  folderPath ? () => setShowBatchChapterDialog(true) : undefined
+                }
+                onImportFile={folderPath ? handleImportFile : undefined}
+                onCreateDraft={handleNewTab}
+              />
             ) : (
               <ContentPanel
                 openTabs={openTabs}
@@ -1797,7 +2509,7 @@ const App: React.FC = () => {
           </div>
 
           {/* 右侧拖拽把手 + 右侧信息面板 */}
-          {!focusMode && !rightPanelPoppedOut && (
+          {!focusMode && !rightPanelPoppedOut && !(openTabs.length === 0 && !activeTab) && (
             <>
               {!rightPanelCollapsed && <PanelResizer onMouseDown={handleRightResizerMouseDown} />}
               <div
@@ -1818,6 +2530,8 @@ const App: React.FC = () => {
                   folderPath={folderPath}
                   dbReady={dbReady}
                   currentLine={cursorPosition.line}
+                  activeFilePath={activeTab}
+                  activeChapter={activeChapterSummary}
                 />
               </div>
             </>
@@ -1845,7 +2559,7 @@ const App: React.FC = () => {
         )}
 
         {/* 状态栏 */}
-        {!focusMode && (
+        {!focusMode && !(openTabs.length === 0 && !activeTab) && (
           <StatusBar
             content={editorContent}
             currentLine={cursorPosition.line}
@@ -1884,6 +2598,41 @@ const App: React.FC = () => {
             setUserInitials(name ? name.slice(0, 2) : 'U');
           }}
           onOpenShortcuts={() => setShowShortcuts(true)}
+        />
+
+        <ProjectWizardDialog
+          visible={showProjectWizard}
+          parentDir={projectWizardParentDir}
+          submitting={isCreatingProject}
+          onPickLocation={handlePickProjectLocation}
+          onClose={() => setShowProjectWizard(false)}
+          onSubmit={handleCreateProjectFromWizard}
+        />
+
+        <BatchChapterDialog
+          visible={showBatchChapterDialog}
+          nextChapterNumber={getNextChapterNumber(files)}
+          targetDirLabel={
+            findPreferredChapterDirectory(folderPath, files, activeTab) ||
+            folderPath ||
+            '当前作品目录'
+          }
+          submitting={isBatchCreatingChapters}
+          onClose={() => setShowBatchChapterDialog(false)}
+          onSubmit={handleBatchCreateChapters}
+        />
+
+        <ChapterDetailsDialog
+          visible={Boolean(editingChapter)}
+          chapterTitle={editingChapter?.title || '未命名'}
+          chapterNumber={editingChapter?.order || 1}
+          chapterPath={editingChapter?.path || ''}
+          metadata={(editingChapter && chapterMetadataMap[editingChapter.path]) || {}}
+          characterOptions={chapterReferenceOptions.characters}
+          loreOptions={chapterReferenceOptions.lore}
+          submitting={isSavingChapterDetails}
+          onClose={() => setEditingChapterPath(null)}
+          onSubmit={handleSaveChapterDetails}
         />
 
         <AIAssistantDialog

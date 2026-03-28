@@ -17,6 +17,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
   folderPath,
   dbReady,
   currentLine,
+  activeFilePath,
+  activeChapter,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('storyline');
 
@@ -68,6 +70,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
             folderPath={folderPath}
             dbReady={dbReady}
             currentLine={currentLine}
+            activeFilePath={activeFilePath}
+            activeChapter={activeChapter}
           />
         )}
         {activeTab === 'characters' && <CharactersView folderPath={folderPath} content={content} />}

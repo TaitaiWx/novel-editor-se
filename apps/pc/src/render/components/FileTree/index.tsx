@@ -4,6 +4,7 @@ import { DiJavascript1, DiReact, DiPython, DiHtml5, DiCss3 } from 'react-icons/d
 import { VscJson } from 'react-icons/vsc';
 import { AiOutlineFileMarkdown } from 'react-icons/ai';
 import type { FileNode, FileInfo } from '../../types';
+import { CHAPTER_STATUS_LABELS, type ChapterStatus } from '../../utils/chapterWorkspace';
 import styles from './styles.module.scss';
 
 export interface ContextMenuEvent {
@@ -25,6 +26,13 @@ interface FileTreeProps {
   onCancelCreate?: () => void;
   /** 需要自动展开到的文件路径（搜索定位时使用） */
   revealPath?: string | null;
+  chapterInfoMap?: Map<string, ChapterTreeInfo>;
+  onChapterReorder?: (sourcePath: string, targetPath: string) => void;
+}
+
+interface ChapterTreeInfo {
+  status: ChapterStatus;
+  tooltip?: string;
 }
 
 // 获取文件图标
@@ -146,6 +154,12 @@ const FileTreeItem: React.FC<{
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
   revealPath?: string | null;
+  chapterInfoMap?: Map<string, ChapterTreeInfo>;
+  onChapterReorder?: (sourcePath: string, targetPath: string) => void;
+  draggingChapterPath: string | null;
+  dropTargetPath: string | null;
+  setDraggingChapterPath: React.Dispatch<React.SetStateAction<string | null>>;
+  setDropTargetPath: React.Dispatch<React.SetStateAction<string | null>>;
 }> = React.memo(
   ({
     node,
@@ -159,10 +173,20 @@ const FileTreeItem: React.FC<{
     onInlineCreate,
     onCancelCreate,
     revealPath,
+    chapterInfoMap,
+    onChapterReorder,
+    draggingChapterPath,
+    dropTargetPath,
+    setDraggingChapterPath,
+    setDropTargetPath,
   }) => {
     const [isExpanded, setIsExpanded] = React.useState(false);
     const isSelected = selectedFile === node.path;
     const fileInfo = fileInfoMap?.get(node.path) ?? null;
+    const chapterInfo = chapterInfoMap?.get(node.path) ?? null;
+    const isChapterFile = node.type === 'file' && !!chapterInfo;
+    const isDropEnabled = Boolean(onChapterReorder) && (node.type === 'directory' || isChapterFile);
+    const isDropTarget = dropTargetPath === node.path && draggingChapterPath !== node.path;
 
     // Auto-expand directory if it's the creation target
     const isCreateTarget =
@@ -199,14 +223,52 @@ const FileTreeItem: React.FC<{
     return (
       <div className={styles.fileTreeItem}>
         <div
-          className={`${styles.itemHeader} ${styles[node.type]} ${isSelected ? styles.selected : ''}`}
+          className={`${styles.itemHeader} ${styles[node.type]} ${isSelected ? styles.selected : ''} ${
+            isChapterFile ? styles.chapterFile : ''
+          } ${isDropTarget ? styles.dropTarget : ''}`}
           onClick={handleClick}
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
             onContextMenu?.({ x: e.clientX, y: e.clientY, node });
           }}
+          title={chapterInfo?.tooltip}
           style={{ paddingLeft: `${8 + level * 16}px` }}
+          draggable={isChapterFile}
+          onDragStart={() => {
+            if (!isChapterFile) return;
+            setDraggingChapterPath(node.path);
+            setDropTargetPath(node.path);
+          }}
+          onDragOver={(e) => {
+            if (!draggingChapterPath || !isDropEnabled) return;
+            e.preventDefault();
+            if (dropTargetPath !== node.path) {
+              setDropTargetPath(node.path);
+            }
+            if (node.type === 'directory' && !effectiveExpanded) {
+              setIsExpanded(true);
+            }
+          }}
+          onDragLeave={() => {
+            if (dropTargetPath === node.path) {
+              setDropTargetPath(null);
+            }
+          }}
+          onDragEnd={() => {
+            setDraggingChapterPath(null);
+            setDropTargetPath(null);
+          }}
+          onDrop={(e) => {
+            if (!draggingChapterPath || !isDropEnabled) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (draggingChapterPath !== node.path) {
+              onChapterReorder?.(draggingChapterPath, node.path);
+            }
+            setDraggingChapterPath(null);
+            setDropTargetPath(null);
+          }}
         >
           <span
             className={`${styles.expandIcon} ${effectiveExpanded ? styles.expanded : ''} ${
@@ -217,7 +279,10 @@ const FileTreeItem: React.FC<{
           </span>
           <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
           <span className={styles.itemName}>{node.name}</span>
-          {node.type === 'file' && fileInfo && (
+          {chapterInfo && (
+            <span className={styles.chapterBadge}>{CHAPTER_STATUS_LABELS[chapterInfo.status]}</span>
+          )}
+          {node.type === 'file' && fileInfo && !chapterInfo && (
             <span className={styles.itemSize}>{formatFileSize(fileInfo.size)}</span>
           )}
         </div>
@@ -245,6 +310,12 @@ const FileTreeItem: React.FC<{
                 onInlineCreate={onInlineCreate}
                 onCancelCreate={onCancelCreate}
                 revealPath={revealPath}
+                chapterInfoMap={chapterInfoMap}
+                onChapterReorder={onChapterReorder}
+                draggingChapterPath={draggingChapterPath}
+                dropTargetPath={dropTargetPath}
+                setDraggingChapterPath={setDraggingChapterPath}
+                setDropTargetPath={setDropTargetPath}
               />
             ))}
           </div>
@@ -275,9 +346,13 @@ const FileTree: React.FC<FileTreeProps> = ({
   onCancelCreate,
   revealPath,
   onBackgroundContextMenu,
+  chapterInfoMap,
+  onChapterReorder,
 }) => {
   const sortedFiles = useMemo(() => sortNodes(files), [files]);
   const [fileInfoMap, setFileInfoMap] = useState<Map<string, FileInfo>>(new Map());
+  const [draggingChapterPath, setDraggingChapterPath] = useState<string | null>(null);
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
 
   // Show inline input at root only when target is root (createTargetPath === null)
   const showCreateAtRoot = !!creatingType && createTargetPath == null;
@@ -374,6 +449,12 @@ const FileTree: React.FC<FileTreeProps> = ({
             onInlineCreate={onInlineCreate}
             onCancelCreate={onCancelCreate}
             revealPath={revealPath}
+            chapterInfoMap={chapterInfoMap}
+            onChapterReorder={onChapterReorder}
+            draggingChapterPath={draggingChapterPath}
+            dropTargetPath={dropTargetPath}
+            setDraggingChapterPath={setDraggingChapterPath}
+            setDropTargetPath={setDropTargetPath}
           />
           {/* Render input after the selected root-level item */}
           {selectedRootPath === file.path && creatingType && onInlineCreate && onCancelCreate && (

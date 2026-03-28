@@ -439,14 +439,23 @@ const TextEditor: React.FC<TextEditorProps> = ({
       return;
     }
 
-    const anchor = Math.min(snapshot.anchor, contentLength);
-    const head = Math.min(snapshot.head, contentLength);
+    const documentLength = Math.max(0, Math.min(contentLength, view.state.doc.length));
+    const anchor = Number.isFinite(snapshot.anchor)
+      ? Math.max(0, Math.min(documentLength, Math.floor(snapshot.anchor)))
+      : 0;
+    const head = Number.isFinite(snapshot.head)
+      ? Math.max(0, Math.min(documentLength, Math.floor(snapshot.head)))
+      : anchor;
     view.dispatch({ selection: EditorSelection.range(anchor, head) });
     window.requestAnimationFrame(() => {
       const activeView = viewRef.current;
       if (!activeView) return;
-      activeView.scrollDOM.scrollTop = snapshot.scrollTop;
-      activeView.scrollDOM.scrollLeft = snapshot.scrollLeft;
+      activeView.scrollDOM.scrollTop = Number.isFinite(snapshot.scrollTop)
+        ? Math.max(0, snapshot.scrollTop)
+        : 0;
+      activeView.scrollDOM.scrollLeft = Number.isFinite(snapshot.scrollLeft)
+        ? Math.max(0, snapshot.scrollLeft)
+        : 0;
     });
   }, []);
 

@@ -153,6 +153,60 @@
   min-height: 0;
 }
 
+.storylineChapterCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.storylineChapterMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.storylineChapterEyebrow {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: #8e97a4;
+}
+
+.storylineChapterTitle {
+  margin: 0;
+  font-size: 13px;
+  color: #edf1f7;
+}
+
+.storylineChapterBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.storylineChapterBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(0, 122, 204, 0.14);
+  border: 1px solid rgba(86, 156, 214, 0.24);
+  color: #7dc3ff;
+  font-size: 11px;
+}
+
+.storylineChapterSummary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #9aa3b2;
+}
+
 .storylineToolbar {
   display: flex;
   gap: 4px;
@@ -849,7 +903,11 @@
   flex: 1;
   min-height: 14px;
   margin-top: 4px;
-  background: linear-gradient(to bottom, rgba(var(--rp-info-rgb), 0.3), rgba(var(--rp-info-rgb), 0.08));
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--rp-info-rgb), 0.3),
+    rgba(var(--rp-info-rgb), 0.08)
+  );
   border-radius: 1px;
 }
 
@@ -1103,7 +1161,6 @@
 }
 
 @keyframes outlineBadgePulse {
-
   0%,
   80%,
   100% {
@@ -1621,7 +1678,11 @@
 .actConnector {
   width: 2px;
   height: 14px;
-  background: linear-gradient(to bottom, rgba(var(--rp-info-rgb), 0.4), rgba(var(--rp-info-rgb), 0.1));
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--rp-info-rgb), 0.4),
+    rgba(var(--rp-info-rgb), 0.1)
+  );
   margin: 0 auto;
   border-radius: 1px;
 }
@@ -5207,7 +5268,6 @@
 }
 
 @media (max-width: 860px) {
-
   .storyIdeaFormGrid,
   .storyIdeaFilterRow {
     grid-template-columns: 1fr;

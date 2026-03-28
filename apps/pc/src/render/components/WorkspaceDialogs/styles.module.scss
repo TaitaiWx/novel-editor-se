@@ -1,0 +1,444 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.54);
+  backdrop-filter: blur(4px);
+}
+
+.dialog {
+  width: min(680px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #252526;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  box-shadow:
+    0 22px 56px rgba(0, 0, 0, 0.55),
+    0 6px 18px rgba(0, 0, 0, 0.34);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 0;
+}
+
+.titleWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #f2f3f5;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #9da3af;
+}
+
+.closeButton {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #aeb4c0;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f2f3f5;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 20px 0;
+  overflow: auto;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fieldFull {
+  grid-column: 1 / -1;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #d6dae1;
+  letter-spacing: 0.2px;
+}
+
+.hint {
+  font-size: 11px;
+  color: #7f8692;
+  line-height: 1.5;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid #3f4248;
+  background: #1f2023;
+  color: #eceef2;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+
+  &:focus {
+    border-color: rgba(86, 156, 214, 0.75);
+    box-shadow: 0 0 0 3px rgba(86, 156, 214, 0.14);
+    background: #202327;
+  }
+}
+
+.input {
+  min-height: 38px;
+  padding: 9px 12px;
+}
+
+.textarea {
+  min-height: 86px;
+  padding: 10px 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.inlineRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.locationButton,
+.secondaryButton,
+.ghostButton {
+  height: 38px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+.locationButton,
+.secondaryButton,
+.ghostButton {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #dbe1ea;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.locationButton {
+  flex-shrink: 0;
+  padding: 0 12px;
+}
+
+.radioGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.radioCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px 12px 40px;
+  border-radius: 9px;
+  border: 1px solid #3d4046;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.radioInput {
+  position: absolute;
+  top: 13px;
+  left: 13px;
+}
+
+.radioTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ecf0f7;
+}
+
+.radioDesc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #9299a6;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #d8dde7;
+}
+
+.infoCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.infoLabel {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: #8790a0;
+}
+
+.infoValue {
+  font-size: 13px;
+  color: #ecf0f7;
+  word-break: break-all;
+}
+
+.statusGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.statusButton {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #b9bfcb;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #edf1f7;
+  }
+}
+
+.statusButtonActive {
+  background: rgba(0, 122, 204, 0.18);
+  border-color: rgba(86, 156, 214, 0.4);
+  color: #7dc3ff;
+}
+
+.referenceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.referenceBox {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.referenceTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #dfe5ef;
+}
+
+.referenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+}
+
+.referenceItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #d0d6e1;
+  font-size: 12px;
+  line-height: 1.5;
+
+  > span {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+.referenceNameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.referenceTags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.referenceChip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+.referenceChipAuto {
+  background: rgba(86, 156, 214, 0.14);
+  border-color: rgba(86, 156, 214, 0.24);
+  color: #8dccff;
+}
+
+.referenceChipManual {
+  background: rgba(255, 201, 107, 0.12);
+  border-color: rgba(255, 201, 107, 0.18);
+  color: #f5cc87;
+}
+
+.referenceChipMuted {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #8d95a2;
+}
+
+.referenceMeta {
+  color: #858c99;
+}
+
+.referenceEmpty {
+  padding: 8px 0;
+  color: #7b8290;
+  font-size: 12px;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 20px 20px;
+}
+
+.primaryButton {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(86, 156, 214, 0.4);
+  background: rgba(0, 122, 204, 0.18);
+  color: #7dc3ff;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 122, 204, 0.26);
+    border-color: rgba(86, 156, 214, 0.55);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+@media (max-width: 760px) {
+  .dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .grid,
+  .radioGroup,
+  .referenceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .inlineRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

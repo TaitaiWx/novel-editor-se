@@ -1,18 +1,31 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
-  AiOutlineFile,
-  AiOutlineFolderAdd,
   AiOutlineReload,
   AiOutlineFolderOpen,
   AiOutlineSearch,
   AiOutlineImport,
+  AiOutlinePlus,
 } from 'react-icons/ai';
 import LoadingSpinner from '../LoadingSpinner';
 import EmptyState from '../EmptyState';
 import FileTree from '../FileTree';
 import type { ContextMenuEvent } from '../FileTree';
 import { FileNode } from '../../types';
+import type { ChapterStatus } from '../../utils/chapterWorkspace';
+import { CHAPTER_STATUS_LABELS, formatChapterIndex } from '../../utils/chapterWorkspace';
 import styles from './styles.module.scss';
+
+interface ChapterListItem {
+  path: string;
+  title: string;
+  order: number;
+  directoryLabel: string;
+  status: ChapterStatus;
+  summary?: string;
+  plotNote?: string;
+  linkedCharacters: number;
+  linkedLore: number;
+}
 
 interface FilePanelProps {
   files: FileNode[];
@@ -20,6 +33,7 @@ interface FilePanelProps {
   folderPath: string | null;
   isLoading: boolean;
   onFileSelect: (filePath: string) => void;
+  onCreateChapter?: () => void;
   onCreateFile: () => void;
   onCreateDirectory: () => void;
   onRefresh: () => void;
@@ -30,16 +44,16 @@ interface FilePanelProps {
   onBackgroundContextMenu?: (pos: { x: number; y: number }) => void;
   onCopyFile?: (path: string) => void;
   onPasteFiles?: (targetDir: string) => void;
-  /** 外部文件拖放到面板时触发（VS Code 风格拖放导入） */
   onDropFiles?: (filePaths: string[]) => void;
-  hasClipboard?: boolean;
   creatingType?: 'file' | 'directory' | null;
   createTargetPath?: string | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
+  chapters: ChapterListItem[];
+  onBatchCreateChapters?: () => void;
+  onChapterReorder?: (sourcePath: string, targetPath: string) => void;
 }
 
-/** 根据路径在树中查找节点 */
 function findNodeByPath(nodes: FileNode[], targetPath: string): FileNode | null {
   for (const node of nodes) {
     if (node.path === targetPath) return node;
@@ -51,12 +65,17 @@ function findNodeByPath(nodes: FileNode[], targetPath: string): FileNode | null 
   return null;
 }
 
-/** 递归过滤文件树，保留匹配节点及其父目录路径 */
-function filterTree(nodes: FileNode[], query: string): FileNode[] {
+function filterTree(
+  nodes: FileNode[],
+  query: string,
+  chapterInfoMap?: Map<string, { searchText?: string }>
+): FileNode[] {
   const lowerQuery = query.toLowerCase();
   return nodes.reduce<FileNode[]>((acc, node) => {
     if (node.type === 'directory') {
-      const filteredChildren = node.children ? filterTree(node.children, query) : [];
+      const filteredChildren = node.children
+        ? filterTree(node.children, query, chapterInfoMap)
+        : [];
       const nameMatches = node.name.toLowerCase().includes(lowerQuery);
       if (nameMatches || filteredChildren.length > 0) {
         acc.push({
@@ -65,12 +84,45 @@ function filterTree(nodes: FileNode[], query: string): FileNode[] {
         });
       }
     } else {
-      if (node.name.toLowerCase().includes(lowerQuery)) {
+      const chapterSearchText = chapterInfoMap?.get(node.path)?.searchText || '';
+      const haystack = `${node.name} ${chapterSearchText}`.toLowerCase();
+      if (haystack.includes(lowerQuery)) {
         acc.push(node);
       }
     }
     return acc;
   }, []);
+}
+
+function buildChapterTooltip(chapter: ChapterListItem): string {
+  const relationMeta = [
+    chapter.linkedCharacters > 0 ? `${chapter.linkedCharacters} 人物` : '',
+    chapter.linkedLore > 0 ? `${chapter.linkedLore} 设定` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return [
+    `第${formatChapterIndex(chapter.order)}章 ${chapter.title}`,
+    `状态：${CHAPTER_STATUS_LABELS[chapter.status]}`,
+    `目录：${chapter.directoryLabel}`,
+    relationMeta ? `关联：${relationMeta}` : '',
+    chapter.summary ? `摘要：${chapter.summary}` : '',
+    !chapter.summary && chapter.plotNote ? `备注：${chapter.plotNote}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildChapterSearchText(chapter: ChapterListItem): string {
+  return [
+    chapter.title,
+    chapter.directoryLabel,
+    CHAPTER_STATUS_LABELS[chapter.status],
+    chapter.summary || '',
+    chapter.plotNote || '',
+  ]
+    .join(' ')
+    .trim();
 }
 
 const FilePanel: React.FC<FilePanelProps> = React.memo(
@@ -80,6 +132,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     folderPath,
     isLoading,
     onFileSelect,
+    onCreateChapter,
     onCreateFile,
     onCreateDirectory,
     onRefresh,
@@ -91,20 +144,22 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onCopyFile,
     onPasteFiles,
     onDropFiles,
-    hasClipboard,
     creatingType,
     createTargetPath,
     onInlineCreate,
     onCancelCreate,
+    chapters,
+    onBatchCreateChapters,
+    onChapterReorder,
   }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
     const [revealPath, setRevealPath] = useState<string | null>(null);
-    const searchInputRef = useRef<HTMLInputElement>(null);
-
-    // ─── 拖放导入（VS Code 风格: Finder/Explorer → 文件面板） ─────────────
     const [isDragOver, setIsDragOver] = useState(false);
     const dragCounterRef = useRef(0);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const createMenuRef = useRef<HTMLDivElement>(null);
+    const [showCreateMenu, setShowCreateMenu] = useState(false);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
       e.preventDefault();
@@ -113,12 +168,12 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
 
     const handleDragEnter = useCallback((e: React.DragEvent) => {
       e.preventDefault();
-      dragCounterRef.current++;
+      dragCounterRef.current += 1;
       if (dragCounterRef.current === 1) setIsDragOver(true);
     }, []);
 
     const handleDragLeave = useCallback(() => {
-      dragCounterRef.current--;
+      dragCounterRef.current -= 1;
       if (dragCounterRef.current === 0) setIsDragOver(false);
     }, []);
 
@@ -129,7 +184,6 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
         setIsDragOver(false);
         const droppedFiles = e.dataTransfer.files;
         if (droppedFiles.length === 0) return;
-        // preload 在 capture 阶段已提取 File.path，直接取回
         const filePaths = window.electron?.getLastDroppedPaths() || [];
         if (filePaths.length > 0) onDropFiles?.(filePaths);
       },
@@ -144,10 +198,25 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       [folderPath]
     );
 
+    const chapterInfoMap = useMemo(
+      () =>
+        new Map(
+          chapters.map((chapter) => [
+            chapter.path,
+            {
+              status: chapter.status,
+              tooltip: buildChapterTooltip(chapter),
+              searchText: buildChapterSearchText(chapter),
+            },
+          ])
+        ),
+      [chapters]
+    );
+
     const filteredFiles = useMemo(() => {
       if (!searchQuery.trim()) return files;
-      return filterTree(files, searchQuery.trim());
-    }, [files, searchQuery]);
+      return filterTree(files, searchQuery.trim(), chapterInfoMap);
+    }, [files, searchQuery, chapterInfoMap]);
 
     const handleToggleSearch = useCallback(() => {
       setShowSearch((prev) => {
@@ -160,14 +229,12 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       });
     }, []);
 
-    // 搜索结果中选择文件时：关闭搜索、展开目录、选中文件
     const handleFileSelectFromSearch = useCallback(
       (filePath: string) => {
         if (searchQuery.trim()) {
           setSearchQuery('');
           setShowSearch(false);
           setRevealPath(filePath);
-          // revealPath 用完后清除，避免影响后续手动折叠
           setTimeout(() => setRevealPath(null), 300);
         }
         onFileSelect(filePath);
@@ -175,7 +242,6 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       [searchQuery, onFileSelect]
     );
 
-    // Cmd+P 快捷键打开搜索
     useEffect(() => {
       const onKeyDown = (e: KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
@@ -188,6 +254,16 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       return () => window.removeEventListener('keydown', onKeyDown);
     }, []);
 
+    useEffect(() => {
+      if (!showCreateMenu) return;
+      const handlePointerDown = (event: MouseEvent) => {
+        if (createMenuRef.current?.contains(event.target as Node)) return;
+        setShowCreateMenu(false);
+      };
+      document.addEventListener('mousedown', handlePointerDown);
+      return () => document.removeEventListener('mousedown', handlePointerDown);
+    }, [showCreateMenu]);
+
     const handlePanelKeyDown = useCallback(
       (e: React.KeyboardEvent) => {
         const mod = e.ctrlKey || e.metaKey;
@@ -199,7 +275,6 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
         } else if (e.key === 'v') {
           e.preventDefault();
           e.stopPropagation();
-          // Paste into parent dir for files, into dir itself for directories
           const node = findNodeByPath(files, selectedFile);
           const targetDir =
             node?.type === 'directory'
@@ -208,13 +283,13 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
           if (targetDir) onPasteFiles?.(targetDir);
         }
       },
-      [selectedFile, files, onCopyFile, onPasteFiles, hasClipboard]
+      [selectedFile, files, onCopyFile, onPasteFiles]
     );
 
     return (
       <div className={styles.filePanel} tabIndex={-1} onKeyDown={handlePanelKeyDown}>
         <div className={styles.explorerHeader}>
-          <span className={styles.explorerTitle}>资源管理器</span>
+          <span className={styles.explorerTitle}>作品目录</span>
           <div className={styles.headerActions}>
             <button
               className={styles.explorerAction}
@@ -228,7 +303,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
               <button
                 className={`${styles.explorerAction} ${showSearch ? styles.active : ''}`}
                 onClick={handleToggleSearch}
-                title="搜索文件 (Cmd+P)"
+                title="搜索目录、章节或文件 (Cmd+P)"
               >
                 <AiOutlineSearch />
               </button>
@@ -270,7 +345,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                         setShowSearch(false);
                       }
                     }}
-                    placeholder="搜索文件..."
+                    placeholder="搜索目录、章节或文件..."
                   />
                   {searchQuery && (
                     <button className={styles.searchClear} onClick={() => setSearchQuery('')}>
@@ -279,25 +354,90 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   )}
                 </div>
               )}
+
               <div className={styles.workspaceSection}>
-                <div className={styles.workspaceHeader}>
-                  <span className={styles.workspaceName}>{folderName?.toUpperCase()}</span>
-                  <div className={styles.workspaceActions}>
+                <div className={styles.workspaceBar}>
+                  <span className={styles.workspaceName} title={folderName || undefined}>
+                    {folderName}
+                  </span>
+                  <div className={styles.workspaceTools}>
+                    <div className={styles.createMenuWrap} ref={createMenuRef}>
+                      <button
+                        className={styles.workspaceAction}
+                        onClick={() => setShowCreateMenu((prev) => !prev)}
+                        title="新建"
+                        disabled={isLoading}
+                      >
+                        <AiOutlinePlus />
+                      </button>
+                      {showCreateMenu && (
+                        <div className={styles.createMenu}>
+                          {onCreateChapter && (
+                            <button
+                              className={styles.createMenuItem}
+                              type="button"
+                              onClick={() => {
+                                setShowCreateMenu(false);
+                                onCreateChapter();
+                              }}
+                            >
+                              新建章节
+                            </button>
+                          )}
+                          {onBatchCreateChapters && (
+                            <button
+                              className={styles.createMenuItem}
+                              type="button"
+                              onClick={() => {
+                                setShowCreateMenu(false);
+                                onBatchCreateChapters();
+                              }}
+                            >
+                              批量章节
+                            </button>
+                          )}
+                          <button
+                            className={styles.createMenuItem}
+                            type="button"
+                            onClick={() => {
+                              setShowCreateMenu(false);
+                              onCreateFile();
+                            }}
+                          >
+                            新建文件
+                          </button>
+                          <button
+                            className={styles.createMenuItem}
+                            type="button"
+                            onClick={() => {
+                              setShowCreateMenu(false);
+                              onCreateDirectory();
+                            }}
+                          >
+                            新建目录
+                          </button>
+                          {onImportFile && (
+                            <button
+                              className={styles.createMenuItem}
+                              type="button"
+                              onClick={() => {
+                                setShowCreateMenu(false);
+                                onImportFile();
+                              }}
+                            >
+                              导入文稿
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <button
                       className={styles.workspaceAction}
-                      onClick={onCreateFile}
-                      title="新建文件"
+                      onClick={onRefresh}
+                      title="刷新"
                       disabled={isLoading}
                     >
-                      <AiOutlineFile />
-                    </button>
-                    <button
-                      className={styles.workspaceAction}
-                      onClick={onCreateDirectory}
-                      title="新建目录"
-                      disabled={isLoading}
-                    >
-                      <AiOutlineFolderAdd />
+                      <AiOutlineReload />
                     </button>
                     {onImportFile && (
                       <button
@@ -309,16 +449,9 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                         <AiOutlineImport />
                       </button>
                     )}
-                    <button
-                      className={styles.workspaceAction}
-                      onClick={onRefresh}
-                      title="刷新"
-                      disabled={isLoading}
-                    >
-                      <AiOutlineReload />
-                    </button>
                   </div>
                 </div>
+
                 <FileTree
                   files={filteredFiles}
                   onFileSelect={handleFileSelectFromSearch}
@@ -330,11 +463,13 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   onInlineCreate={onInlineCreate}
                   onCancelCreate={onCancelCreate}
                   revealPath={revealPath}
+                  chapterInfoMap={chapterInfoMap}
+                  onChapterReorder={onChapterReorder}
                 />
               </div>
             </>
           ) : (
-            <EmptyState variant="folder" />
+            <EmptyState variant="folder" actionText="打开作品文件夹" onAction={onOpenFolder} />
           )}
         </div>
       </div>

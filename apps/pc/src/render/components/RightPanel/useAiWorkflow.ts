@@ -3,6 +3,7 @@ import type { HistoryRecord } from './useAiHistory';
 import { preciseReplaceWithReport, formatPreciseReplaceReport } from '../../utils/preciseReplace';
 import { isLargeText } from '../../utils/chapterSplitter';
 import { getOrBuildIndex, hybridRetrieve } from '../../utils/contentRetriever';
+import { extractChapterFiles } from '../../utils/chapterWorkspace';
 import { loadLoreEntriesByFolder } from './lore-data';
 
 type WorkflowKey = 'consistency' | 'lore' | 'characters' | 'plot';
@@ -183,6 +184,70 @@ interface UseAiWorkflowOptions {
   }) => void;
   /** 在编辑器中展示内联 diff 预览（fix 生成后立即标注修改区域） */
   onPreviewDiff?: (original: string, modified: string) => void;
+}
+
+async function buildChapterContextBundle(
+  ipc: NonNullable<typeof window.electron>['ipcRenderer'],
+  folderPath: string | null,
+  filePath: string | null | undefined,
+  content: string,
+  workflow: WorkflowKey,
+  prompt: string
+): Promise<string> {
+  if (!folderPath || !filePath || filePath.startsWith('__')) return '';
+
+  try {
+    const workspace = (await ipc.invoke('refresh-folder', folderPath)) as {
+      files: Array<{
+        name: string;
+        path: string;
+        type: 'file' | 'directory';
+        children?: any[];
+      }>;
+    };
+    const chapters = extractChapterFiles(workspace.files);
+    const currentIndex = chapters.findIndex((chapter) => chapter.path === filePath);
+    if (currentIndex < 0) return '';
+
+    const candidateIndexes = [currentIndex - 1, currentIndex, currentIndex + 1].filter(
+      (value, index, array) =>
+        value >= 0 && value < chapters.length && array.indexOf(value) === index
+    );
+
+    const sections = await Promise.all(
+      candidateIndexes.map(async (chapterIndex) => {
+        const chapter = chapters[chapterIndex];
+        const rawContent =
+          chapter.path === filePath
+            ? content
+            : ((await ipc.invoke('read-file', chapter.path)) as string);
+        const normalized = rawContent.trim();
+        if (!normalized) return '';
+
+        const label =
+          chapterIndex === currentIndex
+            ? '当前章节'
+            : chapterIndex < currentIndex
+              ? '上一章节'
+              : '下一章节';
+
+        const excerpt = isLargeText(normalized)
+          ? hybridRetrieve(
+              getOrBuildIndex(normalized),
+              `${prompt}\n${chapter.title}`,
+              3,
+              workflow === 'lore' ? 3600 : 2200
+            ).context
+          : normalized.slice(0, workflow === 'lore' ? 3600 : 1800);
+
+        return `${label} · 第${String(chapter.order).padStart(2, '0')}章 ${chapter.title}\n${excerpt}`;
+      })
+    );
+
+    return sections.filter(Boolean).join('\n\n');
+  } catch {
+    return '';
+  }
 }
 
 export function useAiWorkflow({
@@ -482,6 +547,14 @@ export function useAiWorkflow({
         }
 
         const contentSlice = workflow === 'lore' ? content.slice(0, 8000) : content.slice(0, 2000);
+        const chapterContext = await buildChapterContextBundle(
+          ipc,
+          folderPath,
+          filePath,
+          content,
+          workflow,
+          finalPrompt
+        );
 
         // 大文件混合检索：用章节索引 + 关键词匹配替代截断式上下文
         let contentContext: string;
@@ -495,6 +568,7 @@ export function useAiWorkflow({
         }
 
         const context = [
+          chapterContext ? `章节上下文:\n${chapterContext}` : '',
           content ? `正文片段:\n${contentContext}` : '',
           loreEntries.length > 0
             ? `设定集:\n${loreEntries.map((item) => `${item.title}: ${item.summary}`).join('\n')}`

@@ -38,6 +38,8 @@ export interface FileNode {
   children?: FileNode[];
 }
 
+type ProjectPreset = 'focused' | 'standard';
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function convertTreeFormat(node: dirTree.DirectoryTree): FileNode {
@@ -96,6 +98,17 @@ export function registerFileSystemHandlers(): void {
         path: folderPath,
         files: tree?.children ? tree?.children?.map(convertTreeFormat) : [],
       };
+    }
+    return null;
+  });
+
+  ipcMain.handle('select-directory', async (_event, title = '选择目录') => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory'],
+      title,
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+      return result.filePaths[0];
     }
     return null;
   });
@@ -226,6 +239,66 @@ export function registerFileSystemHandlers(): void {
       );
     }
   });
+
+  ipcMain.handle(
+    'create-project-workspace',
+    async (
+      _event,
+      input: {
+        parentDir: string;
+        projectName: string;
+        preset?: ProjectPreset;
+        createFirstChapter?: boolean;
+        firstChapterTitle?: string;
+      }
+    ) => {
+      try {
+        const projectName = input.projectName.trim();
+        if (!projectName) {
+          throw new Error('项目名称不能为空');
+        }
+
+        const preset = input.preset || 'focused';
+        const rootPath = path.join(input.parentDir, projectName);
+        if (existsSync(rootPath)) {
+          throw new Error('同名项目已存在');
+        }
+
+        const chapterTitle = (input.firstChapterTitle || '未命名').trim() || '未命名';
+        const chapterDirName = 'chapters';
+        const workspaceDirs =
+          preset === 'standard' ? [chapterDirName, 'notes', 'materials'] : [chapterDirName];
+
+        await mkdir(rootPath, { recursive: true });
+        await Promise.all(
+          workspaceDirs.map((dirName) => mkdir(path.join(rootPath, dirName), { recursive: true }))
+        );
+
+        let firstChapterPath: string | null = null;
+        if (input.createFirstChapter !== false) {
+          const chapterDir = path.join(rootPath, chapterDirName);
+          firstChapterPath = path.join(chapterDir, `第01章 ${chapterTitle}.md`);
+          await writeFile(firstChapterPath, `# 第01章 ${chapterTitle}\n\n`, 'utf-8');
+        }
+
+        addRecentFolder(rootPath);
+        const tree = dirTree(rootPath, {
+          exclude: DIR_EXCLUDE,
+          attributes: ['type'],
+        });
+
+        return {
+          path: rootPath,
+          files: tree?.children ? tree.children.map(convertTreeFormat) : [],
+          firstChapterPath,
+        };
+      } catch (error) {
+        throw new Error(
+          `Failed to create project workspace: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+  );
 
   ipcMain.handle('refresh-folder', async (_event, folderPath: string) => {
     try {

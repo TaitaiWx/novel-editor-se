@@ -109,6 +109,7 @@ export interface ElectronAPI {
   getLastDroppedPaths(): string[];
   ipcRenderer: {
     invoke(channel: 'open-local-folder'): Promise<OpenLocalResult | null>;
+    invoke(channel: 'select-directory', title?: string): Promise<string | null>;
     invoke(channel: 'read-file', filePath: string): Promise<string>;
     invoke(channel: 'read-file', filePath: string, encoding: string): Promise<string>;
     invoke(channel: 'write-file', filePath: string, content: string): Promise<{ success: boolean }>;
@@ -132,6 +133,16 @@ export interface ElectronAPI {
       folderPath: string,
       dirName: string
     ): Promise<{ success: boolean; dirPath: string }>;
+    invoke(
+      channel: 'create-project-workspace',
+      input: {
+        parentDir: string;
+        projectName: string;
+        preset?: 'focused' | 'standard';
+        createFirstChapter?: boolean;
+        firstChapterTitle?: string;
+      }
+    ): Promise<OpenLocalResult & { firstChapterPath: string | null }>;
     invoke(channel: 'refresh-folder', folderPath: string): Promise<OpenLocalResult>;
     invoke(channel: 'window-minimize'): Promise<void>;
     invoke(channel: 'window-maximize'): Promise<void>;
