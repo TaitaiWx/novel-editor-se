@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { isImeComposing } from '../../utils/ime';
 import styles from './styles.module.scss';
 
 type DialogMode = 'confirm' | 'prompt';
@@ -106,6 +107,7 @@ const DialogContent: React.FC<DialogContentProps> = ({ dialog, onClose }) => {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (isImeComposing(e)) return;
       if (e.key === 'Enter') {
         e.preventDefault();
         handleConfirm();

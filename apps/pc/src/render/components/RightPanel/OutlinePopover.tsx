@@ -1,9 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Popover from '../Popover';
 import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 import type { OutlineEntry, OutlinePopoverAnchor } from './types';
-import { OUTLINE_POPOVER_WIDTH, OUTLINE_POPOVER_ESTIMATED_HEIGHT } from './constants';
 
 const POPOVER_SHOW_DELAY = 150;
 
@@ -65,23 +64,20 @@ export const OutlinePopover: React.FC<OutlinePopoverProps> = React.memo(
       };
     }, [anchor, entry]);
 
-    if (!visible || !anchor || !entry) return null;
+    if (!anchor || !entry) return null;
 
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const left = Math.max(
-      12,
-      Math.min(anchor.rect.left + 20, viewportWidth - OUTLINE_POPOVER_WIDTH - 12)
-    );
-    const placeAbove = anchor.rect.bottom + OUTLINE_POPOVER_ESTIMATED_HEIGHT + 8 > viewportHeight;
-    const top = placeAbove
-      ? Math.max(12, anchor.rect.top - OUTLINE_POPOVER_ESTIMATED_HEIGHT - 8)
-      : anchor.rect.bottom + 8;
-
-    return createPortal(
-      <div
+    return (
+      <Popover
+        open={visible}
+        anchorRect={anchor.rect}
+        placement="bottom"
+        align="start"
+        offset={8}
+        crossOffset={20}
+        viewportPadding={12}
+        zIndex={10050}
         className={styles.outlinePopoverPortal}
-        style={{ left: `${left}px`, top: `${top}px` }}
+        role="dialog"
         onMouseEnter={onClearTimeout}
         onMouseLeave={onStartTimeout}
       >
@@ -144,8 +140,7 @@ export const OutlinePopover: React.FC<OutlinePopoverProps> = React.memo(
             <div className={styles.outlinePopoverSummary}>{summaryText}</div>
           </>
         )}
-      </div>,
-      document.body
+      </Popover>
     );
   }
 );

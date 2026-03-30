@@ -29,6 +29,7 @@ import { loadLoreEntriesByFolder } from './lore-data';
 import { CharacterCard } from './CharacterCard';
 import { CharacterGraphPanel } from './CharacterGraphPanel';
 import { VerticalSplit } from './VerticalSplit';
+import { isImeComposing } from '../../utils/ime';
 
 export const CharactersView: React.FC<{ folderPath: string | null; content: string }> = React.memo(
   ({ folderPath, content }) => {
@@ -306,6 +307,7 @@ export const CharactersView: React.FC<{ folderPath: string | null; content: stri
 
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (isImeComposing(e)) return;
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           handleAdd();

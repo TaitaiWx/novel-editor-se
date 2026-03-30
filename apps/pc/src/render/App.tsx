@@ -4,7 +4,6 @@ import type { FileNode } from './types';
 import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
-import RightPanel from './components/RightPanel';
 import { PanelResizer } from './components/PanelResizer';
 import { AIAssistantDialog } from './components/RightPanel/AIAssistantDialog';
 import { AiConfigProvider } from './components/RightPanel/useAiConfig';
@@ -12,7 +11,7 @@ import StatusBar from './components/StatusBar';
 import ContextMenu from './components/ContextMenu';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import AppSettingsCenter from './components/AppSettingsCenter';
-import type { SettingsTab, SettingsDraft } from './components/AppSettingsCenter';
+import type { SettingsTab } from './components/AppSettingsCenter';
 import { useToast } from './components/Toast';
 import { useDialog } from './components/Dialog';
 import type { ContextMenuEvent } from './components/FileTree';
@@ -38,15 +37,24 @@ import {
   parseAISessionSnapshot,
   type AISessionSnapshot,
 } from './state/aiSessionSnapshot';
+import { isImeComposing } from './utils/ime';
 import {
   reduceFixSession,
   initialFixSessionState,
   fixSessionSelectors,
   type FixDiffState,
 } from './state/fixSessionState';
+import {
+  type SettingsDraft,
+  DEFAULT_SETTINGS_DRAFT,
+  SETTINGS_STORAGE_KEY,
+  matchShortcutEvent,
+  mergeSettingsDraft,
+} from './utils/appSettings';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
+const RightPanel = lazy(() => import('./components/RightPanel'));
 
 type CreatingType = 'file' | 'directory' | null;
 
@@ -147,7 +155,9 @@ const App: React.FC = () => {
   >({});
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(
+    DEFAULT_SETTINGS_DRAFT.general.collapseRightPanelOnStartup
+  );
   const [rightPanelPoppedOut, setRightPanelPoppedOut] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [editorContent, setEditorContent] = useState('');
@@ -170,7 +180,7 @@ const App: React.FC = () => {
   const [showSettingsCenter, setShowSettingsCenter] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [settingsCenterTab, setSettingsCenterTab] = useState<SettingsTab>('general');
-  const [userInitials, setUserInitials] = useState('U');
+  const [appSettings, setAppSettings] = useState<SettingsDraft>(DEFAULT_SETTINGS_DRAFT);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [editorReloadToken, setEditorReloadToken] = useState(0);
   const [fixState, dispatchFixCommand] = useReducer(reduceFixSession, initialFixSessionState);
@@ -203,7 +213,10 @@ const App: React.FC = () => {
   const untitledCounterRef = useRef(0);
 
   // Store pre-focus-mode state to restore when exiting
-  const preFocusStateRef = useRef({ sidebarCollapsed: false, rightPanelCollapsed: false });
+  const preFocusStateRef = useRef({
+    sidebarCollapsed: false,
+    rightPanelCollapsed: DEFAULT_SETTINGS_DRAFT.general.collapseRightPanelOnStartup,
+  });
 
   const toast = useToast();
   const dialog = useDialog();
@@ -473,26 +486,6 @@ const App: React.FC = () => {
       }
     };
   }, [inlineDiff, pendingApplyQueue, aiSessionKey]);
-
-  React.useEffect(() => {
-    const loadUserSettings = async () => {
-      const ipc = window.electron?.ipcRenderer;
-      if (!ipc) return;
-      try {
-        const raw = await ipc.invoke('db-settings-get', 'novel-editor:settings-center');
-        if (!raw || typeof raw !== 'string') return;
-        const parsed = JSON.parse(raw) as { account?: { displayName?: string } };
-        const name = parsed.account?.displayName?.trim();
-        if (!name) return;
-        const initials = name.slice(0, 2);
-        setUserInitials(initials);
-      } catch {
-        // ignore
-      }
-    };
-
-    loadUserSettings();
-  }, []);
 
   // 侧边栏焦点跟踪（VS Code 风格：mousedown 判断是否在侧边栏区域内）
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -783,37 +776,55 @@ const App: React.FC = () => {
   const loadDefaultPath = useCallback(async () => {
     setIsLoading(true);
     try {
-      if (!window.electron?.ipcRenderer) {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) {
         console.warn('Electron IPC not available, skipping default path load');
         return;
       }
 
-      // 开箱即用：先初始化默认 SQLite 数据库，确保无论是否打开目录都可用
-      await window.electron.ipcRenderer.invoke('db-init-default');
+      // 启动期先并行初始化默认数据库和上次工作区，减少纯等待时间。
+      const [, lastFolder] = await Promise.all([
+        ipc.invoke('db-init-default'),
+        ipc.invoke('get-last-folder'),
+      ]);
       setDbReady(true);
 
+      let startupSettings = DEFAULT_SETTINGS_DRAFT;
+      try {
+        const rawSettings = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as
+          | string
+          | null;
+        const nextSettings = mergeSettingsDraft(rawSettings);
+        startupSettings = nextSettings;
+        setAppSettings(nextSettings);
+        setRightPanelCollapsed(nextSettings.general.collapseRightPanelOnStartup);
+      } catch {
+        setAppSettings(DEFAULT_SETTINGS_DRAFT);
+        setRightPanelCollapsed(DEFAULT_SETTINGS_DRAFT.general.collapseRightPanelOnStartup);
+      }
+
       // VS Code 风格：优先恢复上次打开的目录，首次安装打开 sample-data
-      const lastFolder = await window.electron.ipcRenderer.invoke('get-last-folder');
-      const targetPath =
-        lastFolder || (await window.electron.ipcRenderer.invoke('get-default-data-path'));
+      const targetPath = lastFolder || (await ipc.invoke('get-default-data-path'));
 
       await initializeProjectStore(targetPath);
-      await window.electron.ipcRenderer.invoke('add-recent-folder', targetPath);
-      const result = await window.electron.ipcRenderer.invoke('refresh-folder', targetPath);
+      const result = await ipc.invoke('refresh-folder', targetPath);
+      void ipc.invoke('add-recent-folder', targetPath);
       if (result) {
         setFolderPath(result.path);
         setFiles(result.files);
       }
 
-      // 更新后首次启动：自动打开更新日志
-      try {
-        const updateResult = await window.electron.ipcRenderer.invoke('check-just-updated');
-        if (updateResult.updated) {
-          openFileInTab('__changelog__:更新日志');
-        }
-      } catch {
-        // 忽略检查失败
-      }
+      // 更新检查不阻塞首屏渲染。
+      void ipc
+        .invoke('check-just-updated')
+        .then((updateResult) => {
+          if (updateResult.updated && startupSettings.general.openChangelogAfterUpdate) {
+            openFileInTab('__changelog__:更新日志');
+          }
+        })
+        .catch(() => {
+          // 忽略检查失败
+        });
     } catch (error) {
       console.error('Error loading default path:', error);
     } finally {
@@ -1070,16 +1081,23 @@ const App: React.FC = () => {
     [toast, refreshCurrentFolder]
   );
 
-  // Keyboard shortcuts
   React.useEffect(() => {
-    initKeyboardShortcuts();
     const timer = setTimeout(() => {
       loadDefaultPath();
     }, 100);
 
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [loadDefaultPath]);
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    initKeyboardShortcuts();
     const onNewFile = () => handleCreateFile();
     const onOpenFolder = () => handleOpenLocal();
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isImeComposing(e)) return;
       const mod = e.ctrlKey || e.metaKey;
       // Cmd+Q: 退出应用（渲染进程兜底，确保 Menu accelerator 失效时仍可退出）
       if (mod && e.key === 'q') {
@@ -1087,22 +1105,22 @@ const App: React.FC = () => {
         window.electron?.ipcRenderer?.invoke('app-quit');
         return;
       }
-      // Cmd+B: 切换侧边栏
-      if (mod && !e.shiftKey && e.key === 'b') {
+      if (matchShortcutEvent(e, appSettings.shortcuts.toggleSidebar)) {
         e.preventDefault();
         handleToggleSidebar();
+        return;
       }
-      // Cmd+Shift+F 或 F11: 切换专注模式
-      if (e.key === 'F11' || (mod && e.shiftKey && e.key === 'f')) {
+      if (e.key === 'F11' || matchShortcutEvent(e, appSettings.shortcuts.toggleFocusMode)) {
         e.preventDefault();
         toggleFocusMode();
+        return;
       }
-      // Cmd+W: 关闭当前标签（排除 Cmd+Shift+W 导出 Word）
-      if (mod && !e.shiftKey && e.key === 'w') {
+      if (matchShortcutEvent(e, appSettings.shortcuts.closeTab)) {
         e.preventDefault();
         if (activeTabRef.current) {
           closeTab(activeTabRef.current);
         }
+        return;
       }
       // Cmd+N: 新建标签
       if (mod && !e.shiftKey && e.key === 'n') {
@@ -1127,7 +1145,6 @@ const App: React.FC = () => {
     document.addEventListener('drop', preventDefaultDrag);
 
     return () => {
-      clearTimeout(timer);
       cleanupKeyboardShortcuts();
       window.removeEventListener('app:new-file', onNewFile);
       window.removeEventListener('app:open-folder', onOpenFolder);
@@ -1136,7 +1153,14 @@ const App: React.FC = () => {
       document.removeEventListener('dragover', preventDefaultDrag);
       document.removeEventListener('drop', preventDefaultDrag);
     };
-  }, []);
+  }, [
+    appSettings.shortcuts,
+    closeTab,
+    handleNewTab,
+    handleOpenLocal,
+    handleToggleSidebar,
+    toggleFocusMode,
+  ]);
 
   // 导出项目：将整个项目目录复制到用户选择的位置
   const handleExportProject = useCallback(async () => {
@@ -1414,6 +1438,7 @@ const App: React.FC = () => {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isImeComposing(e)) return;
       if (!sidebarFocusedRef.current) return;
       if (isEditingText()) return;
       const mod = e.ctrlKey || e.metaKey;
@@ -1678,16 +1703,15 @@ const App: React.FC = () => {
       <div className={`${styles.app} ${focusMode ? styles.focusMode : ''}`}>
         {!focusMode && (
           <TitleBar
-            title="小说编辑器"
             focusMode={focusMode}
-            userInitials={userInitials}
+            userInitials="U"
             onToggleFocusMode={toggleFocusMode}
             onOpenSettings={() => {
               setSettingsCenterTab('general');
               setShowSettingsCenter(true);
             }}
-            onOpenAccountSettings={() => {
-              setSettingsCenterTab('account');
+            onAvatarClick={() => {
+              setSettingsCenterTab('general');
               setShowSettingsCenter(true);
             }}
             onShowShortcuts={() => setShowShortcuts(true)}
@@ -1718,6 +1742,8 @@ const App: React.FC = () => {
                   files={files}
                   selectedFile={activeTab}
                   folderPath={folderPath}
+                  showFileSizes={appSettings.general.showFileSizes}
+                  quickOpenShortcut={appSettings.shortcuts.quickOpen}
                   isLoading={isLoading}
                   onFileSelect={handleFileSelect}
                   onCreateFile={handleCreateFile}
@@ -1808,17 +1834,31 @@ const App: React.FC = () => {
                     : { width: rightPanelWidth }
                 }
               >
-                <RightPanel
-                  content={editorContent}
-                  collapsed={rightPanelCollapsed}
-                  onToggle={handleToggleRightPanel}
-                  onPopOut={handlePopOutRightPanel}
-                  onScrollToLine={handleScrollToLine}
-                  onReplaceLineText={handleReplaceLineText}
-                  folderPath={folderPath}
-                  dbReady={dbReady}
-                  currentLine={cursorPosition.line}
-                />
+                {rightPanelCollapsed ? (
+                  <button
+                    className={styles.rightPanelToggle}
+                    onClick={handleToggleRightPanel}
+                    title="展开辅助面板"
+                  >
+                    ◀
+                  </button>
+                ) : (
+                  <Suspense
+                    fallback={<div className={styles.lazyFallback}>正在加载辅助面板...</div>}
+                  >
+                    <RightPanel
+                      content={editorContent}
+                      collapsed={rightPanelCollapsed}
+                      onToggle={handleToggleRightPanel}
+                      onPopOut={handlePopOutRightPanel}
+                      onScrollToLine={handleScrollToLine}
+                      onReplaceLineText={handleReplaceLineText}
+                      folderPath={folderPath}
+                      dbReady={dbReady}
+                      currentLine={cursorPosition.line}
+                    />
+                  </Suspense>
+                )}
               </div>
             </>
           )}
@@ -1845,7 +1885,7 @@ const App: React.FC = () => {
         )}
 
         {/* 状态栏 */}
-        {!focusMode && (
+        {!focusMode && appSettings.general.showStatusBar && (
           <StatusBar
             content={editorContent}
             currentLine={cursorPosition.line}
@@ -1879,10 +1919,7 @@ const App: React.FC = () => {
           visible={showSettingsCenter}
           onClose={() => setShowSettingsCenter(false)}
           initialTab={settingsCenterTab}
-          onSettingsChange={(next: SettingsDraft) => {
-            const name = next.account.displayName.trim();
-            setUserInitials(name ? name.slice(0, 2) : 'U');
-          }}
+          onSettingsChange={setAppSettings}
           onOpenShortcuts={() => setShowShortcuts(true)}
         />
 

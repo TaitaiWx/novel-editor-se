@@ -29,6 +29,7 @@ import {
   closeSearchPanel,
   getSearchQuery,
 } from '@codemirror/search';
+import { isImeComposing } from '../../utils/ime';
 
 const MAX_MATCHES = 10_000;
 
@@ -287,6 +288,7 @@ function createSearchPanel(view: EditorView): Panel {
 
   searchInput.addEventListener('input', dispatchQuery);
   searchInput.addEventListener('keydown', (e) => {
+    if (isImeComposing(e)) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       (e.shiftKey ? findPrevious : findNext)(view);
@@ -299,6 +301,7 @@ function createSearchPanel(view: EditorView): Panel {
 
   replaceInput.addEventListener('input', dispatchQuery);
   replaceInput.addEventListener('keydown', (e) => {
+    if (isImeComposing(e)) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       replaceNext(view);

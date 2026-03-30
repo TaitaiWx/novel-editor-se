@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('electron', {
         'read-xlsx-data',
         'write-file',
         'get-file-info',
+        'get-file-info-batch',
         'get-default-data-path',
         'get-recent-folders',
         'get-last-folder',

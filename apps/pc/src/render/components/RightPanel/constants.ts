@@ -13,8 +13,6 @@ export const OUTLINE_AI_MAX_CONCURRENCY = 3;
 export const OUTLINE_AI_PREFETCH_SIZE = 12;
 export const OUTLINE_SUMMARY_DEBOUNCE_MS = 400;
 export const OUTLINE_SUMMARY_MAX_CONCURRENCY = 2;
-export const OUTLINE_POPOVER_WIDTH = 300;
-export const OUTLINE_POPOVER_ESTIMATED_HEIGHT = 280;
 export const OUTLINE_POPOVER_HIDE_DELAY = 280;
 
 export const TAB_LABELS: Record<TabType, string> = {

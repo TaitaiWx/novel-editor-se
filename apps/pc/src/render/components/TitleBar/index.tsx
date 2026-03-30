@@ -6,28 +6,26 @@ import WindowControls from '../WindowControls';
 import styles from './styles.module.scss';
 
 interface TitleBarProps {
-  title?: string;
   showControls?: boolean;
   focusMode?: boolean;
   userInitials?: string;
   onToggleFocusMode?: () => void;
   onShowShortcuts?: () => void;
   onOpenSettings?: () => void;
-  onOpenAccountSettings?: () => void;
+  onAvatarClick?: () => void;
   onOpenSampleData?: () => void;
   onOpenAIAssistant?: () => void;
   onExportProject?: () => void;
 }
 
 const TitleBar: React.FC<TitleBarProps> = ({
-  title = '小说编辑器',
   showControls = true,
   focusMode = false,
   userInitials = 'U',
   onToggleFocusMode,
   onShowShortcuts,
   onOpenSettings,
-  onOpenAccountSettings,
+  onAvatarClick,
   onOpenSampleData,
   onOpenAIAssistant,
   onExportProject,
@@ -61,10 +59,9 @@ const TitleBar: React.FC<TitleBarProps> = ({
   return (
     <div className={`${styles.titleBar} ${platform ? styles[platform] : ''}`}>
       <div className={styles.titleBarContent}>
-        {/* 左侧：应用图标 + 标题 */}
+        {/* 左侧：应用图标 */}
         <div className={styles.titleSection}>
-          <img className={styles.appIcon} src={appMarkUrl} alt="Novel Editor" />
-          <span className={styles.appTitle}>{title}</span>
+          <img className={styles.appIcon} src={appMarkUrl} alt="Monica" />
         </div>
 
         {/* 中间：居中拖拽区 */}
@@ -90,9 +87,9 @@ const TitleBar: React.FC<TitleBarProps> = ({
         <div className={styles.toolSection}>
           <button
             className={styles.userButton}
-            onClick={onOpenAccountSettings}
-            title="用户设置"
-            aria-label="打开用户设置"
+            onClick={onAvatarClick}
+            title="打开设置中心"
+            aria-label="打开设置中心"
           >
             <span className={styles.userAvatar}>{userInitials.slice(0, 2).toUpperCase()}</span>
           </button>

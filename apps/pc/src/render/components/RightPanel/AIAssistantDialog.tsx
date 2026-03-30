@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AIView } from './AIView';
 import type { AISessionState } from './AIView';
 import Tooltip from '../Tooltip';
+import { isImeComposing } from '../../utils/ime';
 import styles from './styles.module.scss';
 
 export const AIAssistantDialog: React.FC<{
@@ -39,6 +40,7 @@ export const AIAssistantDialog: React.FC<{
     useEffect(() => {
       if (!visible) return;
       const handleKeyDown = (e: KeyboardEvent) => {
+        if (isImeComposing(e)) return;
         if (e.key === 'Escape') onClose();
       };
       document.addEventListener('keydown', handleKeyDown);

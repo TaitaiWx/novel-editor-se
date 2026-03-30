@@ -40,8 +40,8 @@
 .titleSection {
   display: flex;
   align-items: center;
-  padding: 0 12px;
-  gap: 8px;
+  justify-content: center;
+  width: 40px;
   flex-shrink: 0;
 
   // 标题区域不可拖拽，避免干扰点击
@@ -55,13 +55,6 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.appTitle {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ui-fg-primary);
-  white-space: nowrap;
 }
 
 .dragRegion {
@@ -269,12 +262,8 @@
 
 // 响应式调整
 @media (max-width: 768px) {
-  .appTitle {
-    display: none;
-  }
-
   .titleSection {
-    padding: 0 8px;
+    width: 36px;
   }
 }
 
@@ -283,9 +272,5 @@
   .titleBar {
     background: #000000;
     border-bottom-color: #ffffff;
-  }
-
-  .appTitle {
-    color: #ffffff;
   }
 }

@@ -150,6 +150,41 @@ export function registerFileSystemHandlers(): void {
     }
   });
 
+  ipcMain.handle('get-file-info-batch', async (_event, filePaths: string[]) => {
+    const results = await Promise.allSettled(
+      filePaths.map(async (filePath) => {
+        const stats = await stat(filePath);
+        return {
+          path: filePath,
+          info: {
+            size: stats.size,
+            created: stats.birthtime,
+            modified: stats.mtime,
+            isDirectory: stats.isDirectory(),
+            isFile: stats.isFile(),
+          },
+        };
+      })
+    );
+
+    return results
+      .filter(
+        (
+          result
+        ): result is PromiseFulfilledResult<{
+          path: string;
+          info: {
+            size: number;
+            created: Date;
+            modified: Date;
+            isDirectory: boolean;
+            isFile: boolean;
+          };
+        }> => result.status === 'fulfilled'
+      )
+      .map((result) => result.value);
+  });
+
   ipcMain.handle('open-in-system-app', async (_event, filePath: string) => {
     try {
       const errorMessage = await shell.openPath(filePath);

@@ -3,6 +3,7 @@ import {
   Compartment,
   EditorState,
   EditorSelection,
+  type Extension,
   Range,
   RangeSet,
   StateEffect,
@@ -16,29 +17,26 @@ import {
   ViewPlugin,
   ViewUpdate,
   gutter,
+  highlightActiveLineGutter,
   keymap,
   lineNumbers,
   highlightActiveLine,
   placeholder,
 } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { markdown } from '@codemirror/lang-markdown';
-import { json } from '@codemirror/lang-json';
-import { javascript } from '@codemirror/lang-javascript';
-import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { VscSave } from 'react-icons/vsc';
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
+import Tooltip from '../Tooltip';
 import { useToast } from '../Toast';
 import { writingDecorations } from './writing-decorations';
 import { inlineDiffField, inlineDiffTheme, setInlineDiffEffect } from './inline-diff';
 import type { InlineDiffRange } from './inline-diff';
-import { searchExtensions } from './search-panel';
 import styles from './styles.module.scss';
 
 /** Threshold: files larger than this show a performance warning */
 const LARGE_FILE_THRESHOLD = 500_000; // 500KB
+const DEFAULT_SHOW_LINE_NUMBERS = false;
 
 interface CursorPosition {
   line: number;
@@ -73,6 +71,7 @@ interface TextEditorProps {
   reloadToken?: number;
   focusMode?: boolean;
   wordWrap?: boolean;
+  showLineNumbers?: boolean;
   readOnly?: boolean;
   encoding?: string;
   characterNames?: string[];
@@ -162,19 +161,72 @@ const getLanguageFromPath = (path: string): string => {
   return languageMap[ext || ''] || 'text';
 };
 
-const getLanguageExtension = (lang: string) => {
-  switch (lang) {
-    case 'markdown':
-      return markdown();
-    case 'json':
-      return json();
-    case 'javascript':
-    case 'typescript':
-      return javascript({ typescript: lang === 'typescript' });
-    default:
-      return [];
+interface EditorRuntimeModules {
+  history: typeof import('@codemirror/commands').history;
+  defaultKeymap: typeof import('@codemirror/commands').defaultKeymap;
+  historyKeymap: typeof import('@codemirror/commands').historyKeymap;
+  searchKeymap: typeof import('@codemirror/search').searchKeymap;
+  highlightSelectionMatches: typeof import('@codemirror/search').highlightSelectionMatches;
+  searchExtensions: typeof import('./search-panel').searchExtensions;
+}
+
+let editorRuntimePromise: Promise<EditorRuntimeModules> | null = null;
+const languageExtensionCache = new Map<string, Promise<Extension>>();
+
+const loadEditorRuntime = () => {
+  if (!editorRuntimePromise) {
+    editorRuntimePromise = Promise.all([
+      import('@codemirror/commands'),
+      import('@codemirror/search'),
+      import('./search-panel'),
+    ]).then(([commands, search, searchPanel]) => ({
+      history: commands.history,
+      defaultKeymap: commands.defaultKeymap,
+      historyKeymap: commands.historyKeymap,
+      searchKeymap: search.searchKeymap,
+      highlightSelectionMatches: search.highlightSelectionMatches,
+      searchExtensions: searchPanel.searchExtensions,
+    }));
   }
+
+  return editorRuntimePromise;
 };
+
+const loadLanguageExtension = (lang: string): Promise<Extension> => {
+  const cached = languageExtensionCache.get(lang);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    switch (lang) {
+      case 'markdown': {
+        const module = await import('@codemirror/lang-markdown');
+        return module.markdown();
+      }
+      case 'json': {
+        const module = await import('@codemirror/lang-json');
+        return module.json();
+      }
+      case 'javascript':
+      case 'typescript': {
+        const module = await import('@codemirror/lang-javascript');
+        return module.javascript({ typescript: lang === 'typescript' });
+      }
+      default:
+        return [];
+    }
+  })();
+
+  languageExtensionCache.set(lang, promise);
+  return promise;
+};
+
+const createLineNumberExtension = (focusMode: boolean, showLineNumbers: boolean) =>
+  focusMode || !showLineNumbers ? [] : [lineNumbers(), appliedLineGutter];
+
+const createActiveLineExtensions = (showLineNumbers: boolean) => [
+  highlightActiveLine(),
+  ...(showLineNumbers ? [highlightActiveLineGutter()] : []),
+];
 
 /** Dark theme matching the existing editor style */
 const darkTheme = EditorView.theme(
@@ -330,7 +382,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
   filePath,
   reloadToken,
   focusMode = false,
-  wordWrap = false,
+  wordWrap = true,
+  showLineNumbers = DEFAULT_SHOW_LINE_NUMBERS,
   readOnly = false,
   encoding = 'UTF-8',
   characterNames = [],
@@ -353,6 +406,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const toast = useToast();
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [editorRuntime, setEditorRuntime] = useState<EditorRuntimeModules | null>(null);
+  const [editorInitError, setEditorInitError] = useState<string | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isLargeFile, setIsLargeFile] = useState(false);
@@ -369,6 +425,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const writingDecoCompartment = useRef(new Compartment());
   const focusModeCompartment = useRef(new Compartment());
   const lineNumberCompartment = useRef(new Compartment());
+  const activeLineCompartment = useRef(new Compartment());
 
   const currentFilePathRef = useRef<string | null>(null);
   const currentContentRef = useRef<string>('');
@@ -411,6 +468,25 @@ const TextEditor: React.FC<TextEditorProps> = ({
   useEffect(() => {
     viewportSnapshotsRef.current = new Map(Object.entries(viewportSnapshots || {}));
   }, [viewportSnapshots]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadEditorRuntime()
+      .then((runtime) => {
+        if (cancelled) return;
+        setEditorRuntime(runtime);
+        setEditorInitError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setEditorInitError(err instanceof Error ? err.message : '编辑器初始化失败');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const saveViewportSnapshot = useCallback((targetPath?: string | null) => {
     const view = viewRef.current;
@@ -532,20 +608,25 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
   // Create / destroy EditorView
   useEffect(() => {
-    if (!editorContainerRef.current) return;
+    if (!editorContainerRef.current || !editorRuntime) return;
+
+    setEditorReady(false);
 
     const view = new EditorView({
       state: EditorState.create({
         doc: '',
         extensions: [
-          lineNumberCompartment.current.of(focusMode ? [] : lineNumbers()),
+          lineNumberCompartment.current.of(createLineNumberExtension(focusMode, showLineNumbers)),
           appliedLineMarkerField,
-          appliedLineGutter,
-          highlightActiveLine(),
-          highlightSelectionMatches(),
-          history(),
-          ...searchExtensions(),
-          keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+          activeLineCompartment.current.of(createActiveLineExtensions(showLineNumbers)),
+          editorRuntime.highlightSelectionMatches(),
+          editorRuntime.history(),
+          ...editorRuntime.searchExtensions(),
+          keymap.of([
+            ...editorRuntime.defaultKeymap,
+            ...editorRuntime.historyKeymap,
+            ...editorRuntime.searchKeymap,
+          ]),
           transientLineHighlightField,
           darkTheme,
           inlineDiffField,
@@ -594,6 +675,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
     viewRef.current = view;
     if (editorViewRef) editorViewRef.current = view;
+    setEditorReady(true);
 
     const handleScroll = () => {
       saveViewportSnapshot();
@@ -601,13 +683,14 @@ const TextEditor: React.FC<TextEditorProps> = ({
     view.scrollDOM.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
+      setEditorReady(false);
       saveViewportSnapshot();
       view.scrollDOM.removeEventListener('scroll', handleScroll);
       view.destroy();
       viewRef.current = null;
       if (editorViewRef) editorViewRef.current = null;
     };
-  }, [editorViewRef, saveViewportSnapshot]);
+  }, [editorRuntime, editorViewRef, saveViewportSnapshot]);
 
   // Update readOnly
   useEffect(() => {
@@ -631,14 +714,36 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
   // Update language extension when filePath changes
   useEffect(() => {
-    const view = viewRef.current;
-    if (!view || !filePath) return;
-    const lang = isUntitled ? 'text' : getLanguageFromPath(filePath);
-    const langExt = getLanguageExtension(lang);
-    view.dispatch({
-      effects: languageCompartment.current.reconfigure(langExt),
+    if (!editorReady || !filePath) return;
+
+    let cancelled = false;
+
+    const applyLanguage = async () => {
+      const lang = isUntitled
+        ? 'text'
+        : isChangelogPath(filePath)
+          ? 'markdown'
+          : getLanguageFromPath(filePath);
+      const langExt = await loadLanguageExtension(lang);
+
+      if (cancelled) return;
+      const view = viewRef.current;
+      if (!view) return;
+
+      view.dispatch({
+        effects: languageCompartment.current.reconfigure(langExt),
+      });
+    };
+
+    applyLanguage().catch((err) => {
+      if (cancelled) return;
+      console.error('Failed to load language extension:', err);
     });
-  }, [filePath, isUntitled]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editorReady, filePath, isUntitled]);
 
   // Update writing decorations when character names change
   useEffect(() => {
@@ -656,10 +761,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
     view.dispatch({
       effects: [
         focusModeCompartment.current.reconfigure(focusLineDecorations(focusMode)),
-        lineNumberCompartment.current.reconfigure(focusMode ? [] : lineNumbers()),
+        lineNumberCompartment.current.reconfigure(
+          createLineNumberExtension(focusMode, showLineNumbers)
+        ),
+        activeLineCompartment.current.reconfigure(createActiveLineExtensions(showLineNumbers)),
       ],
     });
-  }, [focusMode]);
+  }, [focusMode, showLineNumbers]);
 
   // Save on unmount
   useEffect(() => {
@@ -691,6 +799,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
   // Load file content
   useEffect(() => {
+    if (!editorReady) return;
+
     const loadContent = async () => {
       const view = viewRef.current;
 
@@ -766,11 +876,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
           setIsLargeFile(false);
           setHasChanges(false);
           if (view) {
-            const langExt = getLanguageExtension('markdown');
             view.dispatch({
               changes: { from: 0, to: view.state.doc.length, insert: content },
               effects: [
-                languageCompartment.current.reconfigure(langExt),
                 readOnlyCompartment.current.reconfigure(EditorView.editable.of(false)),
                 wordWrapCompartment.current.reconfigure(EditorView.lineWrapping),
               ],
@@ -801,14 +909,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
         currentOriginalContentRef.current = fileContent;
 
         if (view) {
-          const lang = getLanguageFromPath(filePath);
-          const langExt = getLanguageExtension(lang);
-
           // Replace document content and reconfigure compartments
           view.dispatch({
             changes: { from: 0, to: view.state.doc.length, insert: fileContent },
             effects: [
-              languageCompartment.current.reconfigure(langExt),
               readOnlyCompartment.current.reconfigure(EditorView.editable.of(!readOnly)),
               wordWrapCompartment.current.reconfigure(wordWrap ? EditorView.lineWrapping : []),
             ],
@@ -834,6 +938,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
     loadContent();
   }, [
+    editorReady,
     filePath,
     encoding,
     reloadToken,
@@ -957,11 +1062,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
         : filePath.split('/').pop() || filePath.split('\\').pop() || ''
     : '';
 
+  const resolvedError = editorInitError ?? error;
+
   // Determine which overlay to show (if any)
   const showEmpty = !filePath;
-  const showLoading = !!filePath && loading;
-  const showError = !!filePath && !loading && !!error;
-  const showEditor = !!filePath && !loading && !error;
+  const showLoading = !!filePath && !resolvedError && (!editorReady || loading);
+  const showError = !!filePath && !showLoading && !!resolvedError;
+  const showEditor = !!filePath && editorReady && !loading && !resolvedError;
 
   return (
     <div className={`${styles.textEditor} ${focusMode ? styles.focusModeEditor : ''}`}>
@@ -989,14 +1096,16 @@ const TextEditor: React.FC<TextEditorProps> = ({
           </div>
           <div className={styles.fileActions}>
             {!readOnly && !isChangelog && (
-              <button
-                className={styles.saveButton}
-                onClick={handleManualSave}
-                disabled={autoSaving}
-                title="保存 (⌘S)"
-              >
-                <VscSave />
-              </button>
+              <Tooltip content="保存 (Cmd/Ctrl+S)" position="bottom">
+                <button
+                  className={styles.saveButton}
+                  onClick={handleManualSave}
+                  disabled={autoSaving}
+                  aria-label="保存"
+                >
+                  <VscSave />
+                </button>
+              </Tooltip>
             )}
             {settingsComponent}
           </div>
@@ -1027,9 +1136,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
         <div className={styles.overlay}>
           <ErrorState
             title="文件加载失败"
-            message={error!}
+            message={resolvedError!}
             size="medium"
             onRetry={() => {
+              if (editorInitError) {
+                window.location.reload();
+                return;
+              }
               setError(null);
               setLoading(false);
               if (filePath) {

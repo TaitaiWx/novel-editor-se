@@ -1,8 +1,5 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
-import { AIStandaloneApp } from './AIStandaloneApp';
-import { RightPanelStandaloneApp } from './RightPanelStandaloneApp';
 import { ToastProvider } from './components/Toast';
 import { DialogProvider } from './components/Dialog';
 
@@ -10,6 +7,14 @@ import { DialogProvider } from './components/Dialog';
 import './utils/messagePortChannel';
 
 import './styles/global.scss';
+
+const App = lazy(() => import('./App'));
+const AIStandaloneApp = lazy(async () => ({
+  default: (await import('./AIStandaloneApp')).AIStandaloneApp,
+}));
+const RightPanelStandaloneApp = lazy(async () => ({
+  default: (await import('./RightPanelStandaloneApp')).RightPanelStandaloneApp,
+}));
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Failed to find the root element');
@@ -29,7 +34,13 @@ const resolveApp = () => {
 root.render(
   <React.StrictMode>
     <ToastProvider>
-      <DialogProvider>{resolveApp()}</DialogProvider>
+      <DialogProvider>
+        <Suspense
+          fallback={<div style={{ padding: 24, color: 'rgba(255,255,255,0.62)' }}>正在加载...</div>}
+        >
+          {resolveApp()}
+        </Suspense>
+      </DialogProvider>
     </ToastProvider>
   </React.StrictMode>
 );

@@ -4,13 +4,15 @@
  */
 export const formatShortcutText = (accelerator: string): string => {
   const isMac = navigator.platform.startsWith('Mac');
+  const normalized = accelerator.replace(/CommandOrControl/g, isMac ? 'Cmd' : 'Ctrl');
   if (isMac) {
-    return accelerator
+    return normalized
+      .replace(/Mod/g, '⌘')
       .replace(/Cmd/g, '⌘')
       .replace(/Ctrl/g, '⌃')
       .replace(/Alt/g, '⌥')
       .replace(/Shift/g, '⇧')
       .replace(/\+/g, '');
   }
-  return accelerator.replace(/\+/g, ' + ');
+  return normalized.replace(/Mod/g, 'Ctrl').replace(/\+/g, ' + ');
 };

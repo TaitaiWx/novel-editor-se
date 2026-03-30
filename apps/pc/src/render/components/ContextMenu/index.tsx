@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useLayoutEffect, useRef, useCallback, useState } from 'react';
+import OverlayPortal from '../OverlayPortal';
 import styles from './styles.module.scss';
 
 interface MenuItem {
@@ -18,38 +19,37 @@ interface ContextMenuProps {
 
 const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }) => {
   const menuRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const [position, setPosition] = useState({ left: x, top: y });
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onCloseRef.current();
-      }
-    };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
-    };
+  const handleItemClick = useCallback(
+    (itemOnClick: () => void) => {
+      itemOnClick();
+      onClose();
+    },
+    [onClose]
+  );
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, []);
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
 
-  const handleItemClick = useCallback((itemOnClick: () => void) => {
-    itemOnClick();
-    onCloseRef.current();
-  }, []);
-
-  // Adjust position if menu would go off screen
-  const adjustedX = Math.min(x, window.innerWidth - 180);
-  const adjustedY = Math.min(y, window.innerHeight - items.length * 32 - 8);
+    const menuRect = menu.getBoundingClientRect();
+    const nextLeft = Math.max(8, Math.min(x, window.innerWidth - menuRect.width - 8));
+    const nextTop = Math.max(8, Math.min(y, window.innerHeight - menuRect.height - 8));
+    setPosition({ left: nextLeft, top: nextTop });
+  }, [items, x, y]);
 
   return (
-    <div ref={menuRef} className={styles.contextMenu} style={{ left: adjustedX, top: adjustedY }}>
+    <OverlayPortal
+      ref={menuRef}
+      open
+      className={styles.contextMenu}
+      style={{ left: position.left, top: position.top }}
+      role="menu"
+      onClose={onClose}
+      closeOnOutsideClick
+      closeOnEscape
+    >
       {items.map((item, i) =>
         item.separator ? (
           <div key={i} className={styles.separator} />
@@ -63,7 +63,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }) => {
           </button>
         )
       )}
-    </div>
+    </OverlayPortal>
   );
 };
 

@@ -13,12 +13,16 @@ import FileTree from '../FileTree';
 import Tooltip from '../Tooltip';
 import type { ContextMenuEvent } from '../FileTree';
 import { FileNode } from '../../types';
+import { formatShortcutLabel, matchShortcutEvent } from '../../utils/appSettings';
+import { isImeComposing } from '../../utils/ime';
 import styles from './styles.module.scss';
 
 interface FilePanelProps {
   files: FileNode[];
   selectedFile: string | null;
   folderPath: string | null;
+  showFileSizes?: boolean;
+  quickOpenShortcut?: string;
   isLoading: boolean;
   onFileSelect: (filePath: string) => void;
   onCreateFile: () => void;
@@ -79,6 +83,8 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     files,
     selectedFile,
     folderPath,
+    showFileSizes = true,
+    quickOpenShortcut = 'Mod+P',
     isLoading,
     onFileSelect,
     onCreateFile,
@@ -179,7 +185,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     // Cmd+P 快捷键打开搜索
     useEffect(() => {
       const onKeyDown = (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+        if (matchShortcutEvent(e, quickOpenShortcut)) {
           e.preventDefault();
           setShowSearch(true);
           setTimeout(() => searchInputRef.current?.focus(), 50);
@@ -187,10 +193,11 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       };
       window.addEventListener('keydown', onKeyDown);
       return () => window.removeEventListener('keydown', onKeyDown);
-    }, []);
+    }, [quickOpenShortcut]);
 
     const handlePanelKeyDown = useCallback(
       (e: React.KeyboardEvent) => {
+        if (isImeComposing(e)) return;
         const mod = e.ctrlKey || e.metaKey;
         if (!mod || !selectedFile) return;
         if (e.key === 'c') {
@@ -236,7 +243,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     return (
       <div className={styles.filePanel} tabIndex={-1} onKeyDown={handlePanelKeyDown}>
         <div className={styles.explorerHeader}>
-          <span className={styles.explorerTitle}>资源管理器</span>
+          <span className={styles.explorerTitle}>作品目录</span>
           <div className={styles.headerActions}>
             {renderIconButton(
               folderPath ? '更换文件夹' : '打开文件夹',
@@ -246,12 +253,15 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
               styles.explorerAction
             )}
             {folderPath && (
-              <Tooltip content="搜索文件 (Cmd+P)" position="bottom">
+              <Tooltip
+                content={`搜索文件 (${formatShortcutLabel(quickOpenShortcut)})`}
+                position="bottom"
+              >
                 <button
                   className={`${styles.explorerAction} ${showSearch ? styles.active : ''}`}
                   onClick={handleToggleSearch}
-                  title="搜索文件 (Cmd+P)"
-                  aria-label="搜索文件 (Cmd+P)"
+                  title={`搜索文件 (${formatShortcutLabel(quickOpenShortcut)})`}
+                  aria-label={`搜索文件 (${formatShortcutLabel(quickOpenShortcut)})`}
                   type="button"
                 >
                   <AiOutlineSearch />
@@ -298,6 +308,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => {
+                      if (isImeComposing(e)) return;
                       if (e.key === 'Escape') {
                         setSearchQuery('');
                         setShowSearch(false);
@@ -340,6 +351,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                 </div>
                 <FileTree
                   files={filteredFiles}
+                  showFileSizes={showFileSizes}
                   onFileSelect={handleFileSelectFromSearch}
                   selectedFile={selectedFile}
                   onContextMenu={onContextMenu}

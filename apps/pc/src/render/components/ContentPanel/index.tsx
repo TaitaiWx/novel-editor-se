@@ -1,21 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { AiOutlineEye } from 'react-icons/ai';
-import { VscCode } from 'react-icons/vsc';
-import { EditorView } from '@codemirror/view';
+import { VscCode, VscListOrdered } from 'react-icons/vsc';
+import type { EditorView } from '@codemirror/view';
 import TabBar from '../TabBar';
-import TextEditor from '../TextEditor';
 import type { EditorViewportSnapshot, InlineDiffRange } from '../TextEditor';
-import ChangelogViewer from '../ChangelogViewer';
 import SettingsButton from '../SettingsButton';
-import ResourceViewer, {
-  BinaryContentViewer,
-  isPreviewableResourcePath,
-  isTextBackedPreviewResourcePath,
-} from '../ResourceViewer';
-import SpreadsheetViewer, { isSpreadsheetPath } from '../SpreadsheetViewer';
-import PresentationViewer, { isPresentationPath } from '../PresentationViewer';
-import DocumentViewer, { isDocumentPath } from '../DocumentViewer';
+import LoadingSpinner from '../LoadingSpinner';
 import styles from './styles.module.scss';
+
+const TextEditor = lazy(() => import('../TextEditor'));
+const ChangelogViewer = lazy(() => import('../ChangelogViewer'));
+const ResourceViewer = lazy(() => import('../ResourceViewer'));
+const BinaryContentViewer = lazy(() =>
+  import('../ResourceViewer').then((module) => ({ default: module.BinaryContentViewer }))
+);
+const SpreadsheetViewer = lazy(() => import('../SpreadsheetViewer'));
+const PresentationViewer = lazy(() => import('../PresentationViewer'));
+const DocumentViewer = lazy(() => import('../DocumentViewer'));
 
 interface CursorPosition {
   line: number;
@@ -63,6 +64,55 @@ interface ContentPanelProps {
   onTransientHighlightProcessed?: () => void;
 }
 
+const PREVIEWABLE_EXTENSIONS = [
+  '.svg',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.pdf',
+  '.mp3',
+  '.wav',
+  '.ogg',
+  '.m4a',
+  '.aac',
+  '.flac',
+  '.mp4',
+  '.mov',
+];
+
+const endsWithAny = (filePath: string | null, extensions: string[]) => {
+  if (!filePath) return false;
+  const lower = filePath.toLowerCase();
+  return extensions.some((ext) => lower.endsWith(ext));
+};
+
+const isPreviewableResourcePath = (filePath: string | null) =>
+  Boolean(
+    filePath &&
+      !filePath.startsWith('__untitled__:') &&
+      endsWithAny(filePath, PREVIEWABLE_EXTENSIONS)
+  );
+
+const isTextBackedPreviewResourcePath = (filePath: string | null) =>
+  Boolean(filePath && filePath.toLowerCase().endsWith('.svg'));
+
+const isSpreadsheetPath = (filePath: string | null) =>
+  Boolean(filePath && endsWithAny(filePath, ['.xlsx', '.xls']));
+
+const isPresentationPath = (filePath: string | null) =>
+  Boolean(filePath && endsWithAny(filePath, ['.pptx', '.ppt']));
+
+const isDocumentPath = (filePath: string | null) =>
+  Boolean(filePath && endsWithAny(filePath, ['.docx', '.doc']));
+
+const contentFallback = (
+  <div className={styles.contentPanelContent}>
+    <LoadingSpinner />
+  </div>
+);
+
 const ContentPanel: React.FC<ContentPanelProps> = ({
   openTabs,
   activeTab,
@@ -87,7 +137,8 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   onScrollProcessed,
   onTransientHighlightProcessed,
 }) => {
-  const [wordWrap, setWordWrap] = useState(false);
+  const [wordWrap, setWordWrap] = useState(true);
+  const [showLineNumbers, setShowLineNumbers] = useState(false);
   const [viewMode, setViewMode] = useState<'preview' | 'content'>('content');
 
   const isChangelog = useMemo(
@@ -101,6 +152,27 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   const isTextBackedPreviewResource = useMemo(
     () => isTextBackedPreviewResourcePath(activeTab),
     [activeTab]
+  );
+  const supportsEditorDisplayControls = useMemo(
+    () =>
+      Boolean(
+        activeTab &&
+          !isChangelog &&
+          !isSpreadsheet &&
+          !isPresentation &&
+          !isDocument &&
+          (!isPreviewableResource || (isTextBackedPreviewResource && viewMode === 'content'))
+      ),
+    [
+      activeTab,
+      isChangelog,
+      isDocument,
+      isPresentation,
+      isPreviewableResource,
+      isSpreadsheet,
+      isTextBackedPreviewResource,
+      viewMode,
+    ]
   );
   const canWrapText =
     !isPreviewableResource || (viewMode === 'content' && isTextBackedPreviewResource);
@@ -135,8 +207,19 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
     <SettingsButton
       wordWrap={canWrapText ? wordWrap : undefined}
       onToggleWordWrap={canWrapText ? setWordWrap : undefined}
-      items={
-        isPreviewableResource
+      items={[
+        ...(supportsEditorDisplayControls
+          ? [
+              {
+                key: 'line-numbers',
+                label: '显示行号',
+                icon: <VscListOrdered />,
+                active: showLineNumbers,
+                onClick: () => setShowLineNumbers((current) => !current),
+              },
+            ]
+          : []),
+        ...(isPreviewableResource
           ? [
               {
                 key: 'view-mode',
@@ -147,8 +230,8 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
                   setViewMode((currentMode) => (currentMode === 'preview' ? 'content' : 'preview')),
               },
             ]
-          : []
-      }
+          : []),
+      ]}
     />
   );
 
@@ -166,42 +249,45 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
           onCloseAllAndSave={onCloseAllAndSave}
         />
       )}
-      <div className={styles.contentPanelContent}>
-        {isChangelog ? (
-          <ChangelogViewer />
-        ) : isSpreadsheet ? (
-          <SpreadsheetViewer filePath={activeTab} settingsComponent={settingsComponent} />
-        ) : isPresentation ? (
-          <PresentationViewer filePath={activeTab} settingsComponent={settingsComponent} />
-        ) : isDocument ? (
-          <DocumentViewer filePath={activeTab} settingsComponent={settingsComponent} />
-        ) : isPreviewableResource && viewMode === 'preview' ? (
-          <ResourceViewer filePath={activeTab} settingsComponent={settingsComponent} />
-        ) : isPreviewableResource && !isTextBackedPreviewResource ? (
-          <BinaryContentViewer filePath={activeTab} settingsComponent={settingsComponent} />
-        ) : (
-          <TextEditor
-            filePath={activeTab}
-            reloadToken={reloadToken}
-            focusMode={focusMode}
-            wordWrap={wordWrap}
-            encoding={encoding}
-            scrollToLine={scrollToLine}
-            transientHighlightLine={transientHighlightLine}
-            replaceLineRequest={replaceLineRequest}
-            inlineDiff={inlineDiff}
-            editorViewRef={editorViewRef}
-            viewportSnapshots={viewportSnapshots}
-            onViewportSnapshotChange={onViewportSnapshotChange}
-            onContentChange={onContentChange}
-            onCursorChange={onCursorChange}
-            onSaveUntitled={onSaveUntitled}
-            onScrollProcessed={onScrollProcessed}
-            onTransientHighlightProcessed={onTransientHighlightProcessed}
-            settingsComponent={settingsComponent}
-          />
-        )}
-      </div>
+      <Suspense fallback={contentFallback}>
+        <div className={styles.contentPanelContent}>
+          {isChangelog ? (
+            <ChangelogViewer />
+          ) : isSpreadsheet ? (
+            <SpreadsheetViewer filePath={activeTab} settingsComponent={settingsComponent} />
+          ) : isPresentation ? (
+            <PresentationViewer filePath={activeTab} settingsComponent={settingsComponent} />
+          ) : isDocument ? (
+            <DocumentViewer filePath={activeTab} settingsComponent={settingsComponent} />
+          ) : isPreviewableResource && viewMode === 'preview' ? (
+            <ResourceViewer filePath={activeTab} settingsComponent={settingsComponent} />
+          ) : isPreviewableResource && !isTextBackedPreviewResource ? (
+            <BinaryContentViewer filePath={activeTab} settingsComponent={settingsComponent} />
+          ) : (
+            <TextEditor
+              filePath={activeTab}
+              reloadToken={reloadToken}
+              focusMode={focusMode}
+              wordWrap={wordWrap}
+              showLineNumbers={showLineNumbers}
+              encoding={encoding}
+              scrollToLine={scrollToLine}
+              transientHighlightLine={transientHighlightLine}
+              replaceLineRequest={replaceLineRequest}
+              inlineDiff={inlineDiff}
+              editorViewRef={editorViewRef}
+              viewportSnapshots={viewportSnapshots}
+              onViewportSnapshotChange={onViewportSnapshotChange}
+              onContentChange={onContentChange}
+              onCursorChange={onCursorChange}
+              onSaveUntitled={onSaveUntitled}
+              onScrollProcessed={onScrollProcessed}
+              onTransientHighlightProcessed={onTransientHighlightProcessed}
+              settingsComponent={settingsComponent}
+            />
+          )}
+        </div>
+      </Suspense>
     </div>
   );
 };

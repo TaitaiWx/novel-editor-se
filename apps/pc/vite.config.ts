@@ -4,6 +4,28 @@ import { resolve } from 'path';
 import { builtinModules } from 'node:module';
 import { copyFileSync, mkdirSync } from 'node:fs';
 
+const MAIN_RUNTIME_EXTERNAL_PACKAGES = new Set([
+  'electron',
+  'better-sqlite3',
+  'bindings',
+  'file-uri-to-path',
+  'directory-tree',
+  'docx',
+  'exceljs',
+  'jszip',
+  'mammoth',
+  'pptxgenjs',
+  'electron-updater',
+]);
+
+function getPackageRoot(id: string) {
+  if (id.startsWith('@')) {
+    const [scope, name] = id.split('/');
+    return scope && name ? `${scope}/${name}` : id;
+  }
+  return id.split('/')[0];
+}
+
 export default defineConfig(({ mode }) => {
   const isElectronMain = process.env.VITE_ELECTRON_MAIN === 'true';
   const isPreload = process.env.VITE_PRELOAD === 'true';
@@ -62,17 +84,10 @@ export default defineConfig(({ mode }) => {
         },
         rollupOptions: {
           external: (id: string) => {
-            if (id === 'electron' || id === 'better-sqlite3') return true;
-            // bindings / file-uri-to-path 是 better-sqlite3 的运行时依赖，一并 external
-            if (id === 'bindings' || id === 'file-uri-to-path') return true;
-            // mammoth 必须 external：Vite 默认打包浏览器入口，其内部 JSZip 不兼容 Node Buffer
-            if (id === 'mammoth') return true;
-            // jszip 在主进程中直接使用，需要 external
-            if (id === 'jszip') return true;
-            // exceljs 依赖 fs.constants 等 Node API，必须 external
-            if (id === 'exceljs') return true;
+            const packageRoot = getPackageRoot(id);
+            if (MAIN_RUNTIME_EXTERNAL_PACKAGES.has(packageRoot)) return true;
             if (id.startsWith('node:')) return true;
-            return builtinModules.includes(id.split('/')[0]);
+            return builtinModules.includes(packageRoot);
           },
           output: {
             format: 'es',
@@ -110,10 +125,6 @@ export default defineConfig(({ mode }) => {
           manualChunks: (id) => {
             if (id.includes('pdfjs-dist')) {
               return 'vendor-pdf';
-            }
-
-            if (id.includes('@codemirror') || id.includes('@lezer/')) {
-              return 'vendor-editor';
             }
 
             if (id.includes('react-icons')) {

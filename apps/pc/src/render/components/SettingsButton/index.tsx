@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { AiOutlineSetting } from 'react-icons/ai';
 import { BsTextWrap } from 'react-icons/bs';
+import Popover from '../Popover';
+import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 
 export interface SettingsToggleItem {
@@ -23,23 +25,7 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
   items = [],
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   const toggleDropdown = () => {
     setIsOpen(!isOpen);
@@ -68,18 +54,40 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
   ];
 
   return (
-    <div className={styles.settingsButton} ref={dropdownRef}>
-      <button className={styles.settingsToggle} onClick={toggleDropdown} title="显示设置">
-        <AiOutlineSetting />
-      </button>
+    <div className={styles.settingsButton}>
+      <Tooltip content="显示设置" position="bottom">
+        <button
+          ref={buttonRef}
+          className={styles.settingsToggle}
+          onClick={toggleDropdown}
+          aria-label="显示设置"
+        >
+          <AiOutlineSetting />
+        </button>
+      </Tooltip>
 
-      {isOpen && settingItems.length > 0 && (
-        <div className={styles.settingsDropdown}>
+      <Popover
+        open={isOpen && settingItems.length > 0}
+        anchorRef={buttonRef}
+        placement="bottom"
+        align="end"
+        offset={8}
+        zIndex={1000}
+        className={styles.settingsDropdown}
+        role="dialog"
+        onClose={() => setIsOpen(false)}
+        closeOnOutsideClick
+        closeOnEscape
+      >
+        <div>
           {settingItems.map((item) => (
             <div key={item.key} className={styles.settingItem}>
               <button
                 className={`${styles.toggleButton} ${item.active ? styles.active : ''}`}
-                onClick={item.onClick}
+                onClick={() => {
+                  item.onClick();
+                  setIsOpen(false);
+                }}
               >
                 {item.icon}
                 <span>{item.label}</span>
@@ -90,7 +98,7 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
             </div>
           ))}
         </div>
-      )}
+      </Popover>
     </div>
   );
 };

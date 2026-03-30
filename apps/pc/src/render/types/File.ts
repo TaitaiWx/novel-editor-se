@@ -22,6 +22,11 @@ export interface FileInfo {
   isFile: boolean;
 }
 
+export interface FileInfoBatchEntry {
+  path: string;
+  info: FileInfo;
+}
+
 export interface ShortcutInfo {
   accelerator: string;
   description: string;

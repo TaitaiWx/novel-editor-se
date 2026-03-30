@@ -3,6 +3,12 @@ import type { ShortcutInfo } from '../../types';
 import styles from './styles.module.scss';
 import { getShortcutInfo } from './shortcuts/getShortcutInfo';
 import { formatShortcutText } from './shortcuts/formatShortcutText';
+import {
+  SETTINGS_STORAGE_KEY,
+  applyShortcutOverrides,
+  mergeSettingsDraft,
+} from '../../utils/appSettings';
+import { isImeComposing } from '../../utils/ime';
 
 interface ShortcutsHelpProps {
   visible: boolean;
@@ -19,14 +25,26 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose, onOpenS
     if (!visible) return;
     const loadShortcuts = async () => {
       const shortcutList = await getShortcutInfo();
-      setShortcuts(shortcutList);
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) {
+        setShortcuts(shortcutList);
+        return;
+      }
+      try {
+        const raw = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as string | null;
+        const settings = mergeSettingsDraft(raw);
+        setShortcuts(applyShortcutOverrides(shortcutList, settings.shortcuts));
+      } catch {
+        setShortcuts(shortcutList);
+      }
     };
-    loadShortcuts();
+    void loadShortcuts();
   }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isImeComposing(e)) return;
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', handleKeyDown);

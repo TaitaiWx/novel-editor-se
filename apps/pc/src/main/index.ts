@@ -6,6 +6,10 @@ import { registerAllShortcuts } from './shortcuts/registerAllShortcuts';
 import { unregisterAllShortcuts } from './shortcuts/unregisterAllShortcuts';
 import { setupAutoUpdater } from './auto-updater';
 
+if (process.env.NOVEL_EDITOR_DISABLE_HARDWARE_ACCELERATION === '1') {
+  app.disableHardwareAcceleration();
+}
+
 // 设置安全恢复状态支持
 if (process.platform === 'darwin') {
   (app as any).applicationSupportsSecureRestorableState = true;

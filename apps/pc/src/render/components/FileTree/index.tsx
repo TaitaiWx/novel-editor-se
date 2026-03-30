@@ -1,9 +1,10 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { AiFillFolder, AiOutlineFileText, AiOutlineCode, AiOutlineFile } from 'react-icons/ai';
 import { DiJavascript1, DiReact, DiPython, DiHtml5, DiCss3 } from 'react-icons/di';
 import { VscJson } from 'react-icons/vsc';
 import { AiOutlineFileMarkdown } from 'react-icons/ai';
-import type { FileNode, FileInfo } from '../../types';
+import type { FileNode, FileInfo, FileInfoBatchEntry } from '../../types';
+import { isImeComposing } from '../../utils/ime';
 import styles from './styles.module.scss';
 
 export interface ContextMenuEvent {
@@ -14,20 +15,18 @@ export interface ContextMenuEvent {
 
 interface FileTreeProps {
   files: FileNode[];
+  showFileSizes?: boolean;
   onFileSelect: (path: string) => void;
   selectedFile?: string | null;
   onContextMenu?: (event: ContextMenuEvent) => void;
-  /** 点击文件树空白处时触发（文件节点已 stopPropagation，因此只有空白区域会冒泡到此） */
   onBackgroundContextMenu?: (pos: { x: number; y: number }) => void;
   creatingType?: 'file' | 'directory' | null;
   createTargetPath?: string | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
-  /** 需要自动展开到的文件路径（搜索定位时使用） */
   revealPath?: string | null;
 }
 
-// 获取文件图标
 const getFileIcon = (name: string, type: 'file' | 'directory') => {
   if (type === 'directory') {
     return { icon: <AiFillFolder />, className: 'folder' };
@@ -60,7 +59,6 @@ const getFileIcon = (name: string, type: 'file' | 'directory') => {
   }
 };
 
-// 格式化文件大小
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -69,7 +67,6 @@ const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
-// 排序: 目录优先，然后按名称排序
 const sortNodes = (nodes: FileNode[]): FileNode[] => {
   return [...nodes].sort((a, b) => {
     if (a.type !== b.type) {
@@ -79,7 +76,40 @@ const sortNodes = (nodes: FileNode[]): FileNode[] => {
   });
 };
 
-// 内联创建输入框
+function findAncestorDirectoryPaths(
+  nodes: FileNode[],
+  targetPath: string,
+  ancestors: string[] = []
+): string[] {
+  for (const node of nodes) {
+    if (node.path === targetPath) {
+      return node.type === 'directory' ? [...ancestors, node.path] : ancestors;
+    }
+    if (node.type === 'directory' && node.children) {
+      const result = findAncestorDirectoryPaths(node.children, targetPath, [
+        ...ancestors,
+        node.path,
+      ]);
+      if (result.length > 0) return result;
+    }
+  }
+  return [];
+}
+
+function collectVisibleFilePaths(nodes: FileNode[], expandedDirs: Set<string>): string[] {
+  const paths: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      paths.push(node.path);
+      continue;
+    }
+    if (node.children && expandedDirs.has(node.path)) {
+      paths.push(...collectVisibleFilePaths(sortNodes(node.children), expandedDirs));
+    }
+  }
+  return paths;
+}
+
 const InlineCreateInput: React.FC<{
   type: 'file' | 'directory';
   onSubmit: (name: string) => void;
@@ -97,6 +127,7 @@ const InlineCreateInput: React.FC<{
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
+    if (isImeComposing(e)) return;
     if (e.key === 'Enter' && value.trim()) {
       submittedRef.current = true;
       onSubmit(value.trim());
@@ -141,11 +172,13 @@ const FileTreeItem: React.FC<{
   level?: number;
   onContextMenu?: (event: ContextMenuEvent) => void;
   fileInfoMap?: Map<string, FileInfo>;
+  showFileSizes: boolean;
+  expandedDirs: Set<string>;
+  onToggleDirectory: (path: string) => void;
   createTargetPath?: string | null;
   creatingType?: 'file' | 'directory' | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
-  revealPath?: string | null;
 }> = React.memo(
   ({
     node,
@@ -154,44 +187,31 @@ const FileTreeItem: React.FC<{
     level = 0,
     onContextMenu,
     fileInfoMap,
+    showFileSizes,
+    expandedDirs,
+    onToggleDirectory,
     createTargetPath,
     creatingType,
     onInlineCreate,
     onCancelCreate,
-    revealPath,
   }) => {
-    const [isExpanded, setIsExpanded] = React.useState(false);
     const isSelected = selectedFile === node.path;
     const fileInfo = fileInfoMap?.get(node.path) ?? null;
-
-    // Auto-expand directory if it's the creation target
     const isCreateTarget =
       !!creatingType && node.type === 'directory' && node.path === createTargetPath;
-
-    // Auto-expand directory if revealPath is a descendant
-    const isRevealAncestor =
-      !!revealPath &&
-      node.type === 'directory' &&
-      (revealPath.startsWith(node.path + '/') || revealPath.startsWith(node.path + '\\'));
-
-    React.useEffect(() => {
-      if (isRevealAncestor) setIsExpanded(true);
-    }, [isRevealAncestor]);
-
-    const effectiveExpanded = isExpanded || isCreateTarget;
+    const effectiveExpanded =
+      node.type === 'directory' && (expandedDirs.has(node.path) || isCreateTarget);
 
     const handleClick = () => {
       if (node.type === 'directory') {
-        setIsExpanded(!isExpanded);
+        onToggleDirectory(node.path);
       } else {
         onFileSelect(node.path);
       }
     };
 
     const { icon, className } = getFileIcon(node.name, node.type);
-
-    // Memoize sorted children to avoid re-sorting on every render
-    const sortedChildren = React.useMemo(
+    const sortedChildren = useMemo(
       () => (node.children ? sortNodes(node.children) : []),
       [node.children]
     );
@@ -217,7 +237,7 @@ const FileTreeItem: React.FC<{
           </span>
           <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
           <span className={styles.itemName}>{node.name}</span>
-          {node.type === 'file' && fileInfo && (
+          {showFileSizes && node.type === 'file' && fileInfo && (
             <span className={styles.itemSize}>{formatFileSize(fileInfo.size)}</span>
           )}
         </div>
@@ -240,11 +260,13 @@ const FileTreeItem: React.FC<{
                 level={level + 1}
                 onContextMenu={onContextMenu}
                 fileInfoMap={fileInfoMap}
+                showFileSizes={showFileSizes}
+                expandedDirs={expandedDirs}
+                onToggleDirectory={onToggleDirectory}
                 createTargetPath={createTargetPath}
                 creatingType={creatingType}
                 onInlineCreate={onInlineCreate}
                 onCancelCreate={onCancelCreate}
-                revealPath={revealPath}
               />
             ))}
           </div>
@@ -254,18 +276,9 @@ const FileTreeItem: React.FC<{
   }
 );
 
-// 递归收集所有文件路径
-function collectFilePaths(nodes: FileNode[]): string[] {
-  const paths: string[] = [];
-  for (const node of nodes) {
-    if (node.type === 'file') paths.push(node.path);
-    if (node.children) paths.push(...collectFilePaths(node.children));
-  }
-  return paths;
-}
-
 const FileTree: React.FC<FileTreeProps> = ({
   files,
+  showFileSizes = true,
   onFileSelect,
   selectedFile,
   onContextMenu,
@@ -278,82 +291,119 @@ const FileTree: React.FC<FileTreeProps> = ({
 }) => {
   const sortedFiles = useMemo(() => sortNodes(files), [files]);
   const [fileInfoMap, setFileInfoMap] = useState<Map<string, FileInfo>>(new Map());
+  const fileInfoMapRef = useRef(fileInfoMap);
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
 
-  // Show inline input at root only when target is root (createTargetPath === null)
   const showCreateAtRoot = !!creatingType && createTargetPath == null;
-
-  // If a root-level file is selected, render the input after it (VS Code behavior)
   const selectedRootPath =
     showCreateAtRoot && selectedFile
       ? (sortedFiles.find((n) => n.path === selectedFile)?.path ?? null)
       : null;
 
-  // 增量获取文件信息（仅请求新增路径，已有路径直接复用）
   useEffect(() => {
-    const paths = collectFilePaths(files);
-    if (paths.length === 0) {
-      setFileInfoMap(new Map());
+    if (!revealPath && !createTargetPath) return;
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      if (revealPath) {
+        findAncestorDirectoryPaths(sortedFiles, revealPath).forEach((path) => next.add(path));
+      }
+      if (createTargetPath) {
+        findAncestorDirectoryPaths(sortedFiles, createTargetPath).forEach((path) => next.add(path));
+      }
+      return next;
+    });
+  }, [createTargetPath, revealPath, sortedFiles]);
+
+  const visibleFilePaths = useMemo(
+    () => (showFileSizes ? collectVisibleFilePaths(sortedFiles, expandedDirs) : []),
+    [expandedDirs, showFileSizes, sortedFiles]
+  );
+
+  useEffect(() => {
+    fileInfoMapRef.current = fileInfoMap;
+  }, [fileInfoMap]);
+
+  useEffect(() => {
+    if (!showFileSizes) {
+      setFileInfoMap((prev) => (prev.size === 0 ? prev : new Map()));
+      return;
+    }
+
+    if (visibleFilePaths.length === 0) {
+      setFileInfoMap((prev) => (prev.size === 0 ? prev : new Map()));
       return;
     }
 
     let cancelled = false;
+    const pathsToFetch = visibleFilePaths.filter((path) => !fileInfoMapRef.current.has(path));
+    const visiblePathSet = new Set(visibleFilePaths);
 
-    // 找出尚未获取的路径
-    const pathsToFetch = paths.filter((p) => !fileInfoMap.has(p));
     if (pathsToFetch.length === 0) {
-      // 只需清理不存在的条目
-      const pathSet = new Set(paths);
       setFileInfoMap((prev) => {
+        let changed = false;
         const next = new Map<string, FileInfo>();
-        for (const [k, v] of prev) {
-          if (pathSet.has(k)) next.set(k, v);
+        for (const [key, value] of prev) {
+          if (visiblePathSet.has(key)) {
+            next.set(key, value);
+          } else {
+            changed = true;
+          }
         }
-        return next;
+        return changed ? next : prev;
       });
       return;
     }
 
-    Promise.allSettled(
-      pathsToFetch.map((p) =>
-        window.electron.ipcRenderer
-          .invoke('get-file-info', p)
-          .then((info: FileInfo) => ({ path: p, info }))
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      const pathSet = new Set(paths);
-      setFileInfoMap((prev) => {
-        const next = new Map<string, FileInfo>();
-        // 保留仍存在的旧条目
-        for (const [k, v] of prev) {
-          if (pathSet.has(k)) next.set(k, v);
-        }
-        // 合入新获取的条目
-        for (const r of results) {
-          if (r.status === 'fulfilled') {
-            next.set(r.value.path, r.value.info);
+    window.electron.ipcRenderer
+      .invoke('get-file-info-batch', pathsToFetch)
+      .then((entries: FileInfoBatchEntry[]) => {
+        if (cancelled) return;
+        setFileInfoMap((prev) => {
+          let changed = false;
+          const next = new Map<string, FileInfo>();
+          for (const [key, value] of prev) {
+            if (visiblePathSet.has(key)) {
+              next.set(key, value);
+            } else {
+              changed = true;
+            }
           }
-        }
-        return next;
+          for (const entry of entries) {
+            if (next.get(entry.path) !== entry.info) {
+              changed = true;
+            }
+            next.set(entry.path, entry.info);
+          }
+          return changed ? next : prev;
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
       });
-    });
 
     return () => {
       cancelled = true;
     };
-  }, [files]);
+  }, [showFileSizes, visibleFilePaths]);
+
+  const handleToggleDirectory = useCallback((path: string) => {
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
 
   return (
     <div
       className={styles.fileTree}
       onContextMenu={(e) => {
-        // FileTreeItem 会调用 stopPropagation，因此此处只在空白区域触发
         e.preventDefault();
         e.stopPropagation();
         onBackgroundContextMenu?.({ x: e.clientX, y: e.clientY });
       }}
     >
-      {/* Show at top only if no root-level item is selected */}
       {showCreateAtRoot && !selectedRootPath && onInlineCreate && onCancelCreate && (
         <InlineCreateInput
           type={creatingType}
@@ -369,13 +419,14 @@ const FileTree: React.FC<FileTreeProps> = ({
             selectedFile={selectedFile}
             onContextMenu={onContextMenu}
             fileInfoMap={fileInfoMap}
+            showFileSizes={showFileSizes}
+            expandedDirs={expandedDirs}
+            onToggleDirectory={handleToggleDirectory}
             createTargetPath={createTargetPath}
             creatingType={creatingType}
             onInlineCreate={onInlineCreate}
             onCancelCreate={onCancelCreate}
-            revealPath={revealPath}
           />
-          {/* Render input after the selected root-level item */}
           {selectedRootPath === file.path && creatingType && onInlineCreate && onCancelCreate && (
             <InlineCreateInput
               type={creatingType}

@@ -197,6 +197,25 @@
   gap: 8px;
 }
 
+.shortcutEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcutActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.shortcutHint {
+  color: #9ca3af;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .aiSaveRow {
   margin-top: 14px;
   display: flex;
@@ -379,6 +398,54 @@
   }
 }
 
+.secondaryButton {
+  border: 1px solid var(--ui-border-strong);
+  background: #252527;
+  color: var(--ui-fg-primary);
+  border-radius: 4px;
+  height: 30px;
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+
+  &:hover {
+    background: #2d2d30;
+    border-color: #4b4b50;
+  }
+}
+
+.readonlyShortcutList {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.readonlyShortcutItem {
+  border: 1px solid var(--ui-border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.readonlyShortcutMeta {
+  min-width: 0;
+}
+
+.readonlyShortcutValue {
+  flex-shrink: 0;
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  border: 1px solid var(--ui-border-strong);
+  background: #1f1f21;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
 .dataGrid {
   margin-top: 18px;
   display: flex;
@@ -521,6 +588,12 @@
   .statusCard {
     align-items: start;
     flex-direction: column;
+  }
+
+  .shortcutActions,
+  .readonlyShortcutItem {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .dataCardHeader {

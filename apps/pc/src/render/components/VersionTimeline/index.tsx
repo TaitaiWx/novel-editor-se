@@ -23,6 +23,7 @@ import {
 } from 'react-icons/vsc';
 import { useToast } from '../Toast';
 import { useDialog } from '../Dialog';
+import { isImeComposing } from '../../utils/ime';
 import styles from './styles.module.scss';
 
 type PdfJsModule = typeof import('pdfjs-dist');
@@ -709,6 +710,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
   useEffect(() => {
     if (!visible) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isImeComposing(e)) return;
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', handleKeyDown);

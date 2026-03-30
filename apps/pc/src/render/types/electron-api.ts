@@ -2,7 +2,7 @@
  * Electron API 类型定义
  */
 
-import type { FileInfo, OpenLocalResult, ShortcutInfo } from './File';
+import type { FileInfo, FileInfoBatchEntry, OpenLocalResult, ShortcutInfo } from './File';
 
 export type UpdateChannel = 'stable' | 'beta' | 'canary';
 
@@ -113,6 +113,7 @@ export interface ElectronAPI {
     invoke(channel: 'read-file', filePath: string, encoding: string): Promise<string>;
     invoke(channel: 'write-file', filePath: string, content: string): Promise<{ success: boolean }>;
     invoke(channel: 'get-file-info', filePath: string): Promise<FileInfo>;
+    invoke(channel: 'get-file-info-batch', filePaths: string[]): Promise<FileInfoBatchEntry[]>;
     invoke(channel: 'get-default-data-path'): Promise<string>;
     invoke(channel: 'get-recent-folders'): Promise<string[]>;
     invoke(channel: 'get-last-folder'): Promise<string | null>;
