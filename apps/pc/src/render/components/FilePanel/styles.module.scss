@@ -2,56 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #1e1e1e;
+  background-color: var(--ui-bg-elevated);
   outline: none;
-
-  .explorerHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    flex-shrink: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-
-    .explorerTitle {
-      font-size: 12px;
-      font-weight: 650;
-      color: #a6a6a6;
-      letter-spacing: 0.2px;
-    }
-
-    .headerActions {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-    }
-
-    .explorerAction {
-      background: none;
-      border: none;
-      color: #666;
-      cursor: pointer;
-      padding: 4px;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      transition:
-        background-color 0.15s,
-        color 0.15s;
-
-      &:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #e0e0e0;
-      }
-
-      &:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-      }
-    }
-  }
 
   .filePanelContent {
     flex: 1;
@@ -120,10 +72,6 @@
     }
   }
 
-  .explorerAction.active {
-    color: #007acc;
-  }
-
   .workspaceSection {
     display: flex;
     flex-direction: column;
@@ -131,23 +79,69 @@
     overflow: hidden;
 
     .workspaceHeader {
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 6px 14px;
+      min-height: 40px;
+      padding: 0 14px;
       flex-shrink: 0;
-      background-color: rgba(255, 255, 255, 0.03);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      background-color: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--ui-border-subtle);
+
+      .workspaceIdentity {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        flex: 1;
+      }
 
       .workspaceName {
         font-size: 12px;
-        font-weight: 800;
-        color: #e0e0e0;
-        letter-spacing: 0.5px;
+        font-weight: 700;
+        color: var(--ui-fg-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         flex: 1;
+      }
+
+      .workspaceStatus {
+        display: inline-flex;
+        align-items: center;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--ui-fg-muted);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        flex-shrink: 0;
+      }
+
+      .workspaceNameAction {
+        background: transparent;
+        border: none;
+        color: var(--ui-fg-muted);
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition:
+          color 0.15s,
+          background-color 0.15s;
+
+        &:hover {
+          color: var(--ui-fg-primary);
+          background: var(--ui-interaction-hover-bg);
+        }
       }
 
       .workspaceActions {
@@ -160,7 +154,7 @@
       .workspaceAction {
         background: none;
         border: none;
-        color: #7a7a7a;
+        color: var(--ui-fg-muted);
         cursor: pointer;
         padding: 3px;
         border-radius: 4px;
@@ -173,8 +167,8 @@
           color 0.15s;
 
         &:hover {
-          background-color: rgba(255, 255, 255, 0.1);
-          color: #e0e0e0;
+          background-color: var(--ui-interaction-hover-bg);
+          color: var(--ui-fg-primary);
         }
 
         &:disabled {
@@ -182,6 +176,590 @@
           cursor: not-allowed;
         }
       }
+
+      .workspaceActionActive {
+        background-color: var(--ui-interaction-accent-soft);
+        color: var(--ui-fg-primary);
+      }
+    }
+
+    .workspaceTree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 0 18px;
+    }
+
+    .objectSection {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 0 0 6px;
+    }
+
+    .objectSectionRow {
+      display: flex;
+      align-items: stretch;
+      gap: 2px;
+      margin-right: 10px;
+    }
+
+    .objectSectionHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 30px;
+      padding: 6px 14px 2px;
+      width: 100%;
+      border: none;
+      background: none;
+      cursor: pointer;
+      text-align: left;
+      transition: color 0.15s ease;
+
+      &:hover {
+        color: var(--ui-fg-primary);
+      }
+
+      &:hover .objectSectionTitle {
+        color: var(--ui-fg-primary);
+      }
+    }
+
+    .objectSectionTitle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 650;
+      color: var(--ui-fg-muted);
+      letter-spacing: 0.02em;
+    }
+
+    .sectionChevron {
+      width: 0.8rem;
+      font-size: 0.55rem;
+      color: var(--ui-fg-disabled);
+      transition: transform 0.15s ease;
+    }
+
+    .sectionChevronExpanded {
+      transform: rotate(90deg);
+    }
+
+    .storyTree {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .storyNode {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .storyNodeRow {
+      display: flex;
+      align-items: stretch;
+      gap: 2px;
+      margin-right: 10px;
+    }
+
+    .storyExpandButton {
+      width: 30px;
+      min-height: 32px;
+      padding: 0;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ui-fg-disabled);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition:
+        background-color 0.15s,
+        color 0.15s,
+        transform 0.15s;
+
+      &:hover {
+        background: var(--ui-interaction-hover-bg);
+        color: var(--ui-fg-primary);
+      }
+
+      &[aria-expanded='true'] {
+        color: var(--ui-fg-primary);
+      }
+    }
+
+    .storyNodeButton {
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      min-height: 32px;
+      padding: 5px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ui-fg-primary);
+      cursor: pointer;
+      transition:
+        background-color 0.15s,
+        color 0.15s,
+        box-shadow 0.15s;
+      flex: 1;
+      min-width: 0;
+      text-align: left;
+
+      &:hover {
+        background: var(--ui-interaction-hover-bg);
+      }
+
+      &[draggable='true'] {
+        cursor: grab;
+      }
+    }
+
+    .storyNodeButtonGroup {
+      color: rgba(255, 255, 255, 0.9);
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+    }
+
+    .storyNodeButtonLeaf {
+      &:hover {
+        background: rgba(0, 122, 204, 0.08);
+      }
+    }
+
+    .storyNodeButtonActive {
+      background: var(--ui-interaction-accent-soft);
+    }
+
+    .storyNodeButtonGroup.storyNodeButtonActive {
+      background: rgba(255, 255, 255, 0.035);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    }
+
+    .storyNodeButtonLeaf.storyNodeButtonActive {
+      background: var(--ui-interaction-accent-soft);
+      box-shadow: inset 0 0 0 1px rgba(0, 122, 204, 0.18);
+    }
+
+    .storyNodeDropTargetInside {
+      box-shadow:
+        inset 0 1px 0 rgba(0, 122, 204, 0.45),
+        inset 0 0 0 1px rgba(0, 122, 204, 0.24);
+      background: rgba(0, 122, 204, 0.12);
+    }
+
+    .storyNodeDropTargetBefore {
+      box-shadow: inset 0 2px 0 rgba(0, 122, 204, 0.55);
+    }
+
+    .storyNodeDropTargetAfter {
+      box-shadow: inset 0 -2px 0 rgba(0, 122, 204, 0.55);
+    }
+
+    .storyChevron {
+      width: 0.8rem;
+      font-size: 0.55rem;
+      color: var(--ui-fg-disabled);
+      transition: transform 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .storyChevronExpanded {
+      transform: rotate(90deg);
+    }
+
+    .storyNodeType {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 18px;
+      padding: 0 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.04);
+      color: #9ca3ad;
+    }
+
+    .storyNodeTypeVolume {
+      background: rgba(0, 122, 204, 0.1);
+      border-color: rgba(0, 122, 204, 0.16);
+      color: #84bde8;
+    }
+
+    .storyNodeTypeChapter {
+      background: rgba(125, 176, 95, 0.1);
+      border-color: rgba(125, 176, 95, 0.16);
+      color: #a8d18a;
+    }
+
+    .storyNodeTypeDraftFolder,
+    .storyNodeTypeDraft {
+      background: rgba(214, 168, 89, 0.1);
+      border-color: rgba(214, 168, 89, 0.16);
+      color: #d6b978;
+    }
+
+    .storyNodeTypeGroup {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.06);
+      color: #9ca3ad;
+    }
+
+    .storyNodeIcon {
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #88a9cb;
+
+      svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
+
+    .storyNodeTitle {
+      min-width: 0;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .storyNodePrimary {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .storyNodeTrailing {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .storyNodeAction {
+      width: 18px;
+      height: 18px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--ui-fg-disabled);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition:
+        background-color 0.15s,
+        color 0.15s;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--ui-fg-primary);
+      }
+    }
+
+    .storyNodeStats {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .storyNodeStatBadge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 18px;
+      padding: 0 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #88bde8;
+      background: rgba(0, 122, 204, 0.08);
+      border: 1px solid rgba(0, 122, 204, 0.14);
+    }
+
+    .storyNodeStatBadgeMuted {
+      color: #d6b978;
+      background: rgba(214, 168, 89, 0.08);
+      border-color: rgba(214, 168, 89, 0.14);
+    }
+
+    .objectEntry {
+      margin: 0 12px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      padding: 7px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+      color: #d8d8d8;
+      cursor: pointer;
+      transition:
+        background-color 0.15s,
+        border-color 0.15s;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+    }
+
+    .objectEntryActive {
+      background: rgba(0, 122, 204, 0.16);
+    }
+
+    .objectEntryLead {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+
+      svg {
+        font-size: 11px;
+        color: #7b7b7b;
+      }
+    }
+
+    .objectEntryLabel {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f0f0f0;
+      text-align: left;
+    }
+
+    .objectEntryHint {
+      font-size: 11px;
+      color: #9a9a9a;
+      text-align: left;
+    }
+
+    .objectNodeShell {
+      margin: 0 10px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 4px;
+      transition: background-color 0.15s;
+    }
+
+    .objectNodeShellActive {
+      background: rgba(0, 122, 204, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(0, 122, 204, 0.14);
+    }
+
+    .objectNode {
+      margin: 0;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d0d0d0;
+      cursor: pointer;
+      transition:
+        background-color 0.15s,
+        box-shadow 0.15s;
+      flex: 1;
+      min-width: 0;
+      text-align: left;
+
+      &:hover {
+        background: var(--ui-interaction-hover-bg);
+      }
+    }
+
+    .objectNodeActive {
+      background: var(--ui-interaction-accent-soft);
+    }
+
+    .objectNodeTitle {
+      min-width: 0;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: #efefef;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .objectNodePrimary {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .objectNodeMeta {
+      width: 100%;
+      text-align: left;
+      font-size: 11px;
+      color: #8a8a8a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .objectNodeMetaInline {
+      flex-shrink: 0;
+      font-size: 11px;
+      color: #8a8a8a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 38%;
+    }
+
+    .objectNodeMarker {
+      width: 14px;
+      height: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #7f9fc0;
+      flex-shrink: 0;
+
+      svg {
+        width: 13px;
+        height: 13px;
+      }
+    }
+
+    .objectNodeAction {
+      width: 24px;
+      height: 24px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--ui-fg-disabled);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition:
+        background-color 0.15s,
+        color 0.15s;
+
+      &:hover {
+        background: rgba(223, 94, 94, 0.12);
+        color: #d88080;
+      }
+    }
+
+    .objectEmpty {
+      margin: 0 12px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #7f7f7f;
+      line-height: 1.5;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .supportGroup {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .supportNode {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .supportNodeChildren {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .supportNodeCount {
+      flex-shrink: 0;
+      min-width: 22px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: #8d8d8d;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .supportMaterialsTree {
+      margin: 0 10px 0 14px;
     }
   }
+}
+
+.createMenuPopover {
+  min-width: 208px;
+}
+
+.createMenu {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border-radius: 10px;
+  background: #262626;
+  border: 1px solid var(--ui-border-strong);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+
+.createMenuItem {
+  min-height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+  }
+
+  &:disabled {
+    color: var(--ui-fg-disabled);
+    cursor: not-allowed;
+  }
+}
+
+.createMenuDivider {
+  height: 1px;
+  margin: 8px 4px 6px;
+  background: var(--ui-border-subtle);
 }

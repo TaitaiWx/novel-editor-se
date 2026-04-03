@@ -73,6 +73,8 @@ interface TextEditorProps {
   wordWrap?: boolean;
   showLineNumbers?: boolean;
   readOnly?: boolean;
+  hideHeader?: boolean;
+  virtualContent?: string | null;
   encoding?: string;
   characterNames?: string[];
   scrollToLine?: ScrollToLineRequest | null;
@@ -385,6 +387,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
   wordWrap = true,
   showLineNumbers = DEFAULT_SHOW_LINE_NUMBERS,
   readOnly = false,
+  hideHeader = false,
+  virtualContent,
   encoding = 'UTF-8',
   characterNames = [],
   scrollToLine,
@@ -574,8 +578,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
     const targetPath = currentFilePathRef.current;
     if (!targetPath || readOnlyRef.current) return;
 
-    if (isUntitledPath(targetPath) && onSaveUntitledRef.current) {
-      onSaveUntitledRef.current(targetPath, currentContentRef.current);
+    if (isUntitledPath(targetPath)) {
+      if (onSaveUntitledRef.current) {
+        onSaveUntitledRef.current(targetPath, currentContentRef.current);
+      }
       return;
     }
     if (isChangelogPath(targetPath)) return;
@@ -719,11 +725,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
     let cancelled = false;
 
     const applyLanguage = async () => {
-      const lang = isUntitled
-        ? 'text'
-        : isChangelogPath(filePath)
-          ? 'markdown'
-          : getLanguageFromPath(filePath);
+      const langTarget = isUntitledPath(filePath)
+        ? filePath.replace('__untitled__:', '')
+        : filePath;
+      const lang = isChangelogPath(filePath) ? 'markdown' : getLanguageFromPath(langTarget);
       const langExt = await loadLanguageExtension(lang);
 
       if (cancelled) return;
@@ -845,6 +850,35 @@ const TextEditor: React.FC<TextEditorProps> = ({
         return;
       }
 
+      if (virtualContent !== undefined) {
+        const nextContent = virtualContent ?? '';
+        currentFilePathRef.current = filePath;
+        currentContentRef.current = nextContent;
+        currentOriginalContentRef.current = nextContent;
+        setError(null);
+        setLoading(false);
+        setLastSaved(null);
+        setIsLargeFile(nextContent.length > LARGE_FILE_THRESHOLD);
+        setHasChanges(false);
+        if (view) {
+          if (view.state.doc.toString() !== nextContent) {
+            view.dispatch({
+              changes: { from: 0, to: view.state.doc.length, insert: nextContent },
+              effects: [
+                readOnlyCompartment.current.reconfigure(EditorView.editable.of(!readOnly)),
+                wordWrapCompartment.current.reconfigure(
+                  wordWrap || focusMode ? EditorView.lineWrapping : []
+                ),
+              ],
+            });
+          }
+          restoreViewportSnapshot(filePath, nextContent.length);
+          emitCursorPosition(view);
+        }
+        onContentChange?.(nextContent);
+        return;
+      }
+
       if (isUntitledPath(filePath)) {
         currentFilePathRef.current = filePath;
         currentContentRef.current = '';
@@ -942,6 +976,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
     filePath,
     encoding,
     reloadToken,
+    virtualContent,
     readOnly,
     wordWrap,
     emitCursorPosition,
@@ -1073,7 +1108,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   return (
     <div className={`${styles.textEditor} ${focusMode ? styles.focusModeEditor : ''}`}>
       {/* File header — only visible when a file is active */}
-      {showEditor && !focusMode && (
+      {showEditor && !focusMode && !hideHeader && (
         <div className={styles.fileHeader}>
           <div className={styles.fileInfo}>
             <span className={styles.fileName}>

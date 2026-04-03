@@ -72,11 +72,25 @@ export const FlowCollapsibleCard: React.FC<{
   tone = 'default',
   className,
 }) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onToggle();
+    }
+  };
+
   return (
     <section className={[styles.flowCard, getToneClass(tone), className].filter(Boolean).join(' ')}>
-      <button className={styles.flowCardCollapseToggle} onClick={onToggle} type="button">
+      <div
+        className={styles.flowCardCollapseToggle}
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={handleKeyDown}
+        aria-expanded={expanded}
+      >
         <FlowCardHeader title={title} subtitle={subtitle} meta={meta} />
-      </button>
+      </div>
       {summary && <div className={styles.flowCardSummary}>{summary}</div>}
       {expanded && children && <div className={styles.flowCardBody}>{children}</div>}
     </section>

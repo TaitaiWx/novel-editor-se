@@ -1,14 +1,18 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import styles from './styles.module.scss';
 import type { LoreEntry, LoreCategory } from './types';
 import { LORE_CATEGORY_LABELS } from './constants';
-import { VerticalSplit } from './VerticalSplit';
 import { parseLoreAuditSections, parseLoreDraftFromAuditItem } from './lore-data';
 import { useLoreEntries } from './useLoreEntries';
 import { parseLoreDraftsFromImport } from './lore-import';
 
-export const LoreView: React.FC<{ folderPath: string | null; content: string }> = React.memo(
-  ({ folderPath, content }) => {
+export const LoreView: React.FC<{
+  folderPath: string | null;
+  content: string;
+  initialEntryId?: number | null;
+  onEntriesChange?: (entries: LoreEntry[]) => void;
+}> = React.memo(
+  ({ folderPath, content, initialEntryId = null, onEntriesChange }) => {
     const contentRef = useRef(content);
     contentRef.current = content;
     const [category, setCategory] = useState<LoreCategory>('world');
@@ -113,7 +117,27 @@ export const LoreView: React.FC<{ folderPath: string | null; content: string }> 
       [entries]
     );
 
+    useEffect(() => {
+      if (loading) return;
+      onEntriesChange?.(entries);
+    }, [entries, loading, onEntriesChange]);
+
+    useEffect(() => {
+      if (!initialEntryId) return;
+      const target = entries.find((entry) => entry.id === initialEntryId);
+      if (!target) return;
+      setEditingEntryId(target.id);
+      setCategory(target.category);
+      setTitle(target.title);
+      setSummary(target.summary);
+    }, [entries, initialEntryId]);
+
     const auditSections = useMemo(() => parseLoreAuditSections(auditResult), [auditResult]);
+    const detailMode = initialEntryId !== null;
+    const focusedEntry =
+      entries.find((entry) => entry.id === editingEntryId) ||
+      entries.find((entry) => entry.id === initialEntryId) ||
+      null;
 
     const handleCopyAuditText = useCallback((key: string, text: string) => {
       const normalized = text.trim();
@@ -368,7 +392,123 @@ export const LoreView: React.FC<{ folderPath: string | null; content: string }> 
       </div>
     );
 
-    return <VerticalSplit top={topView} bottom={bottomView} initialTopHeight={310} />;
+    if (detailMode) {
+      const siblingEntries = focusedEntry
+        ? entries
+            .filter(
+              (entry) => entry.category === focusedEntry.category && entry.id !== focusedEntry.id
+            )
+            .slice(0, 8)
+        : [];
+
+      return (
+        <div className={styles.objectWorkspace}>
+          {focusedEntry ? (
+            <>
+              <section className={styles.workspaceHero}>
+                <div className={styles.workspaceEyebrow}>设定资料</div>
+                <h2 className={styles.workspaceTitle}>{focusedEntry.title}</h2>
+                <p className={styles.workspaceDesc}>
+                  {focusedEntry.summary || '这个设定条目还没有详细说明。'}
+                </p>
+                <div className={styles.workspaceMetaRow}>
+                  <span className={styles.workspaceChip}>
+                    分类 {LORE_CATEGORY_LABELS[focusedEntry.category]}
+                  </span>
+                  <span className={styles.workspaceChip}>
+                    更新时间 {new Date(focusedEntry.updatedAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </section>
+
+              <div className={styles.workspaceGrid}>
+                <section className={styles.workspaceCardShell}>
+                  <div className={styles.workspaceCardHeader}>
+                    <span className={styles.workspaceSectionTitle}>编辑条目</span>
+                    <span className={styles.workspaceListHint}>直接维护当前设定</span>
+                  </div>
+                  <input
+                    className={styles.formInput}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="设定条目标题"
+                  />
+                  <textarea
+                    className={styles.formTextarea}
+                    value={summary}
+                    onChange={(e) => setSummary(e.target.value)}
+                    rows={8}
+                    placeholder="记录规则、背景、约束、历史脉络、关键词等"
+                  />
+                  <div className={styles.inlineActions}>
+                    <button className={styles.submitButton} onClick={handleSave}>
+                      保存修改
+                    </button>
+                    <button
+                      className={styles.deleteInlineButton}
+                      onClick={() => void handleDelete(focusedEntry)}
+                    >
+                      删除条目
+                    </button>
+                  </div>
+                </section>
+
+                <section className={styles.workspaceCardShell}>
+                  <div className={styles.workspaceCardHeader}>
+                    <span className={styles.workspaceSectionTitle}>同类设定</span>
+                    <span className={styles.workspaceListHint}>
+                      {LORE_CATEGORY_LABELS[focusedEntry.category]}中的其他条目
+                    </span>
+                  </div>
+                  {siblingEntries.length > 0 ? (
+                    <div className={styles.workspaceList}>
+                      {siblingEntries.map((entry) => (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          className={styles.workspaceListButton}
+                          onClick={() => handleStartEdit(entry)}
+                        >
+                          <div className={styles.workspaceListTitle}>{entry.title}</div>
+                          <div className={styles.workspaceListDesc}>
+                            {entry.summary || '暂无说明'}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={styles.emptyHint}>这个分类里暂时没有其他条目。</div>
+                  )}
+                </section>
+              </div>
+            </>
+          ) : (
+            <div className={styles.emptyHint}>没有找到对应设定，可能已经被删除。</div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className={styles.objectWorkspace}>
+        <section className={styles.workspaceHero}>
+          <div className={styles.workspaceEyebrow}>设定中枢</div>
+          <h2 className={styles.workspaceTitle}>设定与规则</h2>
+          <p className={styles.workspaceDesc}>
+            这里负责整理世界观、规则、地点和势力，让章节、人物和 AI 都能引用同一套设定基础。
+          </p>
+          <div className={styles.workspaceMetaRow}>
+            <span className={styles.workspaceChip}>条目 {entries.length}</span>
+            <span className={styles.workspaceChip}>当前分类 {LORE_CATEGORY_LABELS[category]}</span>
+            <span className={styles.workspaceChip}>检索结果 {filteredEntries.length}</span>
+          </div>
+        </section>
+        <div className={styles.workspaceWideGrid}>
+          <section className={styles.workspaceCardShell}>{topView}</section>
+          <section className={styles.workspaceCardShell}>{bottomView}</section>
+        </div>
+      </div>
+    );
   },
-  (prev, next) => prev.folderPath === next.folderPath
+  (prev, next) => prev.folderPath === next.folderPath && prev.initialEntryId === next.initialEntryId
 );

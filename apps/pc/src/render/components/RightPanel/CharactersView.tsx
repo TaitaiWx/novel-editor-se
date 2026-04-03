@@ -28,15 +28,20 @@ import {
 import { loadLoreEntriesByFolder } from './lore-data';
 import { CharacterCard } from './CharacterCard';
 import { CharacterGraphPanel } from './CharacterGraphPanel';
-import { VerticalSplit } from './VerticalSplit';
 import { isImeComposing } from '../../utils/ime';
 
-export const CharactersView: React.FC<{ folderPath: string | null; content: string }> = React.memo(
-  ({ folderPath, content }) => {
+export const CharactersView: React.FC<{
+  folderPath: string | null;
+  content: string;
+  initialSelectedCharacterId?: number | null;
+  onCharactersChange?: (characters: Character[]) => void;
+}> = React.memo(
+  ({ folderPath, content, initialSelectedCharacterId = null, onCharactersChange }) => {
     const debouncedContent = useDebounce(content, 300);
     const [characters, setCharacters] = useState<Character[]>([]);
     const [relations, setRelations] = useState<CharacterRelation[]>([]);
     const [novelId, setNovelId] = useState<number | null>(null);
+    const [charactersLoaded, setCharactersLoaded] = useState(false);
     const [adding, setAdding] = useState(false);
     const [newName, setNewName] = useState('');
     const [newRole, setNewRole] = useState('');
@@ -114,9 +119,11 @@ export const CharactersView: React.FC<{ folderPath: string | null; content: stri
       if (!folderPath || !window.electron?.ipcRenderer) {
         setCharacters([]);
         setNovelId(null);
+        setCharactersLoaded(false);
         return;
       }
       let cancelled = false;
+      setCharactersLoaded(false);
       (async () => {
         const novel = (await window.electron.ipcRenderer.invoke(
           'db-novel-get-by-folder',
@@ -134,11 +141,17 @@ export const CharactersView: React.FC<{ folderPath: string | null; content: stri
         }>;
         if (cancelled) return;
         setCharacters(mapCharacterRows(rows));
+        setCharactersLoaded(true);
       })();
       return () => {
         cancelled = true;
       };
     }, [folderPath]);
+
+    useEffect(() => {
+      if (!charactersLoaded) return;
+      onCharactersChange?.(characters);
+    }, [characters, charactersLoaded, onCharactersChange]);
 
     useEffect(() => {
       const loadRelations = async () => {
@@ -589,6 +602,12 @@ export const CharactersView: React.FC<{ folderPath: string | null; content: stri
     }, [content, folderPath, novelId, persistRelations]);
 
     const selectedCharacter = characters.find((item) => item.id === selectedCharacterId) || null;
+
+    useEffect(() => {
+      if (!initialSelectedCharacterId) return;
+      if (!characters.some((item) => item.id === initialSelectedCharacterId)) return;
+      setSelectedCharacterId(initialSelectedCharacterId);
+    }, [characters, initialSelectedCharacterId]);
     const selectedRelations = selectedCharacter
       ? links.filter(
           (item) => item.sourceId === selectedCharacter.id || item.targetId === selectedCharacter.id
@@ -764,6 +783,100 @@ export const CharactersView: React.FC<{ folderPath: string | null; content: stri
       />
     );
 
-    return <VerticalSplit top={cardsView} bottom={graphView} initialTopHeight={280} />;
+    const detailMode = initialSelectedCharacterId !== null;
+    const focusedCharacter = selectedCharacter;
+    const focusedCamp = focusedCharacter ? inferCharacterCamp(focusedCharacter, relations) : null;
+    const focusedHeat = focusedCharacter
+      ? estimateAppearanceHeat(debouncedContent, focusedCharacter.name)
+      : 0;
+    const activeCampCount = Object.values(clusteredCharacters).filter(
+      (items) => items.length > 0
+    ).length;
+
+    if (detailMode) {
+      return (
+        <div className={styles.objectWorkspace}>
+          {focusedCharacter ? (
+            <>
+              <section className={styles.workspaceHero}>
+                <div className={styles.workspaceEyebrow}>人物资料</div>
+                <h2 className={styles.workspaceTitle}>{focusedCharacter.name}</h2>
+                <p className={styles.workspaceDesc}>
+                  {focusedCharacter.description || '这个人物还没有补充详细描述。'}
+                </p>
+                <div className={styles.workspaceMetaRow}>
+                  <span className={styles.workspaceChip}>
+                    角色定位 {focusedCharacter.role || '未填写'}
+                  </span>
+                  <span className={styles.workspaceChip}>阵营 {focusedCamp || 'support'}</span>
+                  <span className={styles.workspaceChip}>正文热度 {focusedHeat}</span>
+                  <span className={styles.workspaceChip}>关系 {selectedRelations.length}</span>
+                </div>
+              </section>
+
+              <section className={styles.workspaceCardShell}>
+                <div className={styles.workspaceCardHeader}>
+                  <span className={styles.workspaceSectionTitle}>人物关系</span>
+                  <span className={styles.workspaceListHint}>围绕当前人物的出场关系</span>
+                </div>
+                {selectedRelations.length > 0 ? (
+                  <div className={styles.workspaceList}>
+                    {selectedRelations.map((relation) => {
+                      const otherId =
+                        relation.sourceId === focusedCharacter.id
+                          ? relation.targetId
+                          : relation.sourceId;
+                      const otherCharacter = characters.find((item) => item.id === otherId);
+                      return (
+                        <div key={relation.id} className={styles.workspaceListItem}>
+                          <div className={styles.workspaceListTitle}>
+                            {otherCharacter?.name || '未匹配人物'}
+                          </div>
+                          <div className={styles.workspaceListDesc}>
+                            {relation.label}
+                            {relation.note ? ` · ${relation.note}` : ''}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className={styles.emptyHint}>这个人物还没有整理关系。</div>
+                )}
+              </section>
+
+              <section className={styles.workspaceCardShell}>
+                <div className={styles.workspaceCardHeader}>
+                  <span className={styles.workspaceSectionTitle}>人物网络</span>
+                  <span className={styles.workspaceListHint}>保留当前人物的关系编辑能力</span>
+                </div>
+                {graphView}
+              </section>
+            </>
+          ) : (
+            <div className={styles.emptyHint}>没有找到对应人物，可能已经被删除。</div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className={styles.objectWorkspace}>
+        <section className={styles.workspaceHero}>
+          <div className={styles.workspaceEyebrow}>人物中枢</div>
+          <h2 className={styles.workspaceTitle}>人物与关系</h2>
+          <p className={styles.workspaceDesc}>
+            在这里集中维护出场人物、阵营关系和正文热度，保证章节里的角色关系始终清楚。
+          </p>
+          <div className={styles.workspaceMetaRow}>
+            <span className={styles.workspaceChip}>人物 {characters.length}</span>
+            <span className={styles.workspaceChip}>关系 {links.length}</span>
+            <span className={styles.workspaceChip}>阵营 {activeCampCount}</span>
+          </div>
+        </section>
+        <section className={styles.workspaceCardShell}>{cardsView}</section>
+        <section className={styles.workspaceCardShell}>{graphView}</section>
+      </div>
+    );
   }
 );

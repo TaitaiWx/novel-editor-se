@@ -12,4 +12,10 @@
     flex-direction: column;
     min-width: 0;
   }
+
+  .specialContentHost {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
 }

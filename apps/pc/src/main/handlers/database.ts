@@ -22,6 +22,7 @@ import {
   exportAllData,
   importData,
   type ExportData,
+  type OutlineScope,
 } from '@novel-editor/store';
 import { getNativeBinding } from '../native-binding';
 
@@ -35,6 +36,10 @@ type OutlineTreeInput = {
 };
 
 type OutlineVersionSource = 'import' | 'rebuild' | 'ai' | 'manual';
+type OutlineScopeInput = {
+  kind?: 'project' | 'volume' | 'chapter';
+  path?: string | null;
+};
 type StoryIdeaCardSource = 'manual' | 'ai';
 type StoryIdeaCardStatus =
   | 'draft'
@@ -44,6 +49,16 @@ type StoryIdeaCardStatus =
   | 'promoted_to_outline'
   | 'archived';
 type StoryIdeaOutputType = 'logline' | 'scene_hook' | 'outline_direction';
+
+function normalizeOutlineScope(folderPath: string, scope?: OutlineScopeInput): OutlineScope {
+  if (scope?.kind === 'chapter' && scope.path) {
+    return { kind: 'chapter', path: scope.path };
+  }
+  if (scope?.kind === 'volume' && scope.path) {
+    return { kind: 'volume', path: scope.path };
+  }
+  return { kind: 'project', path: folderPath };
+}
 
 export function registerDatabaseHandlers(): void {
   // ─── Init / Close ──────────────────────────────────────────────────────────
@@ -109,31 +124,40 @@ export function registerDatabaseHandlers(): void {
   );
   ipcMain.handle('db-character-reorder', (_event, ids: number[]) => characterOps.reorder(ids));
   ipcMain.handle('db-character-delete', (_event, id: number) => characterOps.delete(id));
+  ipcMain.handle('db-character-clear-by-novel', (_event, novelId: number) =>
+    characterOps.clearByNovel(novelId)
+  );
 
   // ─── Outline CRUD ─────────────────────────────────────────────────────────
 
-  ipcMain.handle('db-outline-list-by-folder', (_event, folderPath: string) => {
-    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
-    if (!novel) return [];
-    return outlineOps.getByNovel(novel.id);
-  });
+  ipcMain.handle(
+    'db-outline-list-by-folder',
+    (_event, folderPath: string, scope?: OutlineScopeInput) => {
+      const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+      if (!novel) return [];
+      return outlineOps.getByScope(novel.id, normalizeOutlineScope(folderPath, scope));
+    }
+  );
 
   ipcMain.handle(
     'db-outline-replace-by-folder',
-    (_event, folderPath: string, entries: OutlineTreeInput[]) => {
+    (_event, folderPath: string, entries: OutlineTreeInput[], scope?: OutlineScopeInput) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
       if (!novel) {
         throw new Error('项目不存在，无法写入大纲');
       }
-      return outlineOps.replaceTree(novel.id, entries);
+      return outlineOps.replaceTree(novel.id, entries, normalizeOutlineScope(folderPath, scope));
     }
   );
 
-  ipcMain.handle('db-outline-clear-by-folder', (_event, folderPath: string) => {
-    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
-    if (!novel) return { changes: 0 };
-    return outlineOps.clearByNovel(novel.id);
-  });
+  ipcMain.handle(
+    'db-outline-clear-by-folder',
+    (_event, folderPath: string, scope?: OutlineScopeInput) => {
+      const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+      if (!novel) return { changes: 0 };
+      return outlineOps.clearByScope(novel.id, normalizeOutlineScope(folderPath, scope));
+    }
+  );
 
   ipcMain.handle('db-outline-reorder-by-folder', (_event, folderPath: string, ids: number[]) => {
     const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
@@ -144,11 +168,14 @@ export function registerDatabaseHandlers(): void {
     return { changes: ids.length };
   });
 
-  ipcMain.handle('db-outline-version-list-by-folder', (_event, folderPath: string) => {
-    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
-    if (!novel) return [];
-    return outlineVersionOps.listByNovel(novel.id);
-  });
+  ipcMain.handle(
+    'db-outline-version-list-by-folder',
+    (_event, folderPath: string, scope?: OutlineScopeInput) => {
+      const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+      if (!novel) return [];
+      return outlineVersionOps.listByScope(novel.id, normalizeOutlineScope(folderPath, scope));
+    }
+  );
 
   ipcMain.handle(
     'db-outline-version-create-by-folder',
@@ -162,7 +189,8 @@ export function registerDatabaseHandlers(): void {
         storyIdeaCardId?: number | null;
         storyIdeaSnapshotJson?: string;
         entries: OutlineTreeInput[];
-      }
+      },
+      scope?: OutlineScopeInput
     ) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
       if (!novel) {
@@ -175,6 +203,7 @@ export function registerDatabaseHandlers(): void {
         payload.note || '',
         payload.entries,
         {
+          scope: normalizeOutlineScope(folderPath, scope),
           storyIdeaCardId: payload.storyIdeaCardId,
           storyIdeaSnapshotJson: payload.storyIdeaSnapshotJson,
         }
@@ -184,16 +213,22 @@ export function registerDatabaseHandlers(): void {
 
   ipcMain.handle(
     'db-outline-version-apply-by-folder',
-    (_event, folderPath: string, versionId: number) => {
+    (_event, folderPath: string, versionId: number, scope?: OutlineScopeInput) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
       if (!novel) {
         throw new Error('项目不存在，无法应用大纲版本');
       }
       const version = outlineVersionOps.getById(versionId);
-      if (!version || version.novel_id !== novel.id) {
+      const normalizedScope = normalizeOutlineScope(folderPath, scope);
+      if (
+        !version ||
+        version.novel_id !== novel.id ||
+        version.scope_kind !== normalizedScope.kind ||
+        version.scope_path !== normalizedScope.path
+      ) {
         throw new Error('大纲版本不存在或不属于当前项目');
       }
-      return outlineOps.replaceTree(novel.id, version.tree);
+      return outlineOps.replaceTree(novel.id, version.tree, normalizedScope);
     }
   );
 
@@ -367,6 +402,11 @@ export function registerDatabaseHandlers(): void {
   );
 
   ipcMain.handle('db-world-setting-delete', (_event, id: number) => worldSettingOps.delete(id));
+  ipcMain.handle('db-world-setting-clear-by-folder', (_event, folderPath: string) => {
+    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+    if (!novel) return { changes: 0 };
+    return worldSettingOps.clearByNovel(novel.id);
+  });
 
   // ─── Writing Stats ────────────────────────────────────────────────────────
 
@@ -393,6 +433,18 @@ export function registerDatabaseHandlers(): void {
         win.webContents.send('settings-updated', key);
       }
     }
+  });
+  ipcMain.handle('db-settings-delete-prefixes', (_event, prefixes: string[]) => {
+    const normalized = prefixes.filter(
+      (item): item is string => typeof item === 'string' && item.trim().length > 0
+    );
+    const removed = settingsOps.deleteByPrefixes(normalized);
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        normalized.forEach((prefix) => win.webContents.send('settings-updated', prefix));
+      }
+    }
+    return { removed };
   });
   ipcMain.handle('db-settings-all', () => settingsOps.getAll());
 

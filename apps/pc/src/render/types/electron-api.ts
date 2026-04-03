@@ -25,6 +25,8 @@ export interface UpdateStatus {
 export interface PersistedOutlineRow {
   id: number;
   novel_id: number;
+  scope_kind: PersistedOutlineScopeKind;
+  scope_path: string;
   title: string;
   content: string;
   anchor_text: string;
@@ -45,6 +47,11 @@ export interface PersistedOutlineNodeInput {
 }
 
 export type OutlineVersionSource = 'import' | 'rebuild' | 'ai' | 'manual';
+export type PersistedOutlineScopeKind = 'project' | 'volume' | 'chapter';
+export interface PersistedOutlineScopeInput {
+  kind: PersistedOutlineScopeKind;
+  path: string;
+}
 
 export type StoryIdeaCardSource = 'manual' | 'ai';
 export type StoryIdeaCardStatus =
@@ -59,6 +66,8 @@ export type StoryIdeaOutputType = 'logline' | 'scene_hook' | 'outline_direction'
 export interface PersistedOutlineVersionRow {
   id: number;
   novel_id: number;
+  scope_kind: PersistedOutlineScopeKind;
+  scope_path: string;
   name: string;
   source: OutlineVersionSource;
   note: string;
@@ -138,6 +147,7 @@ export interface ElectronAPI {
     invoke(channel: 'window-maximize'): Promise<void>;
     invoke(channel: 'window-close'): Promise<void>;
     invoke(channel: 'window-is-maximized'): Promise<boolean>;
+    invoke(channel: 'app-renderer-ready'): Promise<{ success: boolean }>;
     invoke(channel: 'app-quit'): Promise<void>;
     invoke(channel: 'dev-tools-toggle'): Promise<void>;
     invoke(channel: 'window-toggle-fullscreen'): Promise<void>;
@@ -150,14 +160,20 @@ export interface ElectronAPI {
     invoke(channel: 'update-rollback'): Promise<{ version: string; installerPath: string }>;
     invoke(
       channel: 'db-outline-list-by-folder',
-      folderPath: string
+      folderPath: string,
+      scope?: PersistedOutlineScopeInput
     ): Promise<PersistedOutlineRow[]>;
     invoke(
       channel: 'db-outline-replace-by-folder',
       folderPath: string,
-      entries: PersistedOutlineNodeInput[]
+      entries: PersistedOutlineNodeInput[],
+      scope?: PersistedOutlineScopeInput
     ): Promise<{ changes: number }>;
-    invoke(channel: 'db-outline-clear-by-folder', folderPath: string): Promise<{ changes: number }>;
+    invoke(
+      channel: 'db-outline-clear-by-folder',
+      folderPath: string,
+      scope?: PersistedOutlineScopeInput
+    ): Promise<{ changes: number }>;
     invoke(
       channel: 'db-outline-reorder-by-folder',
       folderPath: string,
@@ -165,7 +181,8 @@ export interface ElectronAPI {
     ): Promise<{ changes: number }>;
     invoke(
       channel: 'db-outline-version-list-by-folder',
-      folderPath: string
+      folderPath: string,
+      scope?: PersistedOutlineScopeInput
     ): Promise<PersistedOutlineVersionRow[]>;
     invoke(
       channel: 'db-outline-version-create-by-folder',
@@ -177,12 +194,14 @@ export interface ElectronAPI {
         storyIdeaCardId?: number | null;
         storyIdeaSnapshotJson?: string;
         entries: PersistedOutlineNodeInput[];
-      }
+      },
+      scope?: PersistedOutlineScopeInput
     ): Promise<{ changes: number }>;
     invoke(
       channel: 'db-outline-version-apply-by-folder',
       folderPath: string,
-      versionId: number
+      versionId: number,
+      scope?: PersistedOutlineScopeInput
     ): Promise<{ changes: number }>;
     invoke(
       channel: 'db-outline-version-update',

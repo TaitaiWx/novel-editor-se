@@ -5,6 +5,7 @@ import styles from './styles.module.scss';
 export interface TabBarProps {
   tabs: string[];
   activeTab: string | null;
+  tabLabels?: Record<string, string>;
   focusMode?: boolean;
   onTabSelect: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
@@ -13,7 +14,11 @@ export interface TabBarProps {
   onCloseAllAndSave?: () => void;
 }
 
-function getFileName(filePath: string): string {
+function getFileName(filePath: string, tabLabels?: Record<string, string>): string {
+  const mappedLabel = tabLabels?.[filePath];
+  if (mappedLabel) {
+    return mappedLabel;
+  }
   if (filePath.startsWith('__untitled__:')) {
     return filePath.replace('__untitled__:', '');
   }
@@ -27,11 +32,12 @@ function getFileName(filePath: string): string {
 const TabItem: React.FC<{
   filePath: string;
   isActive: boolean;
+  tabLabels?: Record<string, string>;
   onSelect: (filePath: string) => void;
   onClose: (filePath: string) => void;
   onContextMenu: (filePath: string, x: number, y: number) => void;
-}> = React.memo(({ filePath, isActive, onSelect, onClose, onContextMenu }) => {
-  const fileName = useMemo(() => getFileName(filePath), [filePath]);
+}> = React.memo(({ filePath, isActive, tabLabels, onSelect, onClose, onContextMenu }) => {
+  const fileName = useMemo(() => getFileName(filePath, tabLabels), [filePath, tabLabels]);
   const tabClassName = isActive ? `${styles.tab} ${styles.active}` : styles.tab;
 
   const handleClick = useCallback(() => {
@@ -84,6 +90,7 @@ const TabItem: React.FC<{
 const TabBar: React.FC<TabBarProps> = ({
   tabs,
   activeTab,
+  tabLabels,
   focusMode = false,
   onTabSelect,
   onTabClose,
@@ -140,6 +147,7 @@ const TabBar: React.FC<TabBarProps> = ({
           key={filePath}
           filePath={filePath}
           isActive={filePath === activeTab}
+          tabLabels={tabLabels}
           onSelect={onTabSelect}
           onClose={onTabClose}
           onContextMenu={handleTabContextMenu}

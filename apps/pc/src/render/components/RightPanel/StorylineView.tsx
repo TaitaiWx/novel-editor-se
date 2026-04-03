@@ -5,8 +5,23 @@ import { OutlineView } from './OutlineView';
 import { ActsView } from './ActsView';
 import { AiCacheProvider } from './AiCacheContext';
 import { ThreeSignView } from './ThreeSignView';
+import type {
+  PersistedOutlineScopeInput,
+  PersistedOutlineScopeKind,
+} from '../../types/electron-api';
 
 const OPEN_STORYLINE_MODE_EVENT = 'open-storyline-mode';
+
+function getOutlineModeLabel(scopeKind: PersistedOutlineScopeKind): string {
+  switch (scopeKind) {
+    case 'chapter':
+      return '本章大纲';
+    case 'volume':
+      return '本卷大纲';
+    default:
+      return '作品大纲';
+  }
+}
 
 export const StorylineView: React.FC<{
   content: string;
@@ -15,8 +30,21 @@ export const StorylineView: React.FC<{
   folderPath: string | null;
   dbReady: boolean;
   currentLine?: number;
+  scopeKind?: PersistedOutlineScopeKind;
+  scopeLabel?: string;
+  outlineScope?: PersistedOutlineScopeInput | null;
 }> = React.memo(
-  ({ content, onScrollToLine, onReplaceLineText, folderPath, dbReady, currentLine }) => {
+  ({
+    content,
+    onScrollToLine,
+    onReplaceLineText,
+    folderPath,
+    dbReady,
+    currentLine,
+    scopeKind = 'project',
+    scopeLabel = '当前作品',
+    outlineScope = null,
+  }) => {
     const [viewMode, setViewMode] = useState<StorylineViewMode>('catalog');
 
     React.useEffect(() => {
@@ -47,19 +75,19 @@ export const StorylineView: React.FC<{
               className={`${styles.storylineToggle} ${viewMode === 'outline' ? styles.storylineToggleActive : ''}`}
               onClick={() => setViewMode('outline')}
             >
-              大纲
+              {getOutlineModeLabel(scopeKind)}
             </button>
             <button
               className={`${styles.storylineToggle} ${viewMode === 'acts' ? styles.storylineToggleActive : ''}`}
               onClick={() => setViewMode('acts')}
             >
-              情节板
+              卷规划
             </button>
             <button
               className={`${styles.storylineToggle} ${viewMode === 'ideas' ? styles.storylineToggleActive : ''}`}
               onClick={() => setViewMode('ideas')}
             >
-              三签法
+              三签卡
             </button>
           </div>
           {viewMode === 'catalog' ? (
@@ -68,6 +96,8 @@ export const StorylineView: React.FC<{
               content={content}
               folderPath={folderPath}
               dbReady={dbReady}
+              scope={outlineScope}
+              scopeLabel={scopeLabel}
               onScrollToLine={onScrollToLine}
               onReplaceLineText={onReplaceLineText}
             />
@@ -77,6 +107,8 @@ export const StorylineView: React.FC<{
               content={content}
               folderPath={folderPath}
               dbReady={dbReady}
+              scope={outlineScope}
+              scopeLabel={scopeLabel}
               onScrollToLine={onScrollToLine}
               onReplaceLineText={onReplaceLineText}
             />

@@ -137,6 +137,8 @@ function createTables(database: Database.Database): void {
     CREATE TABLE IF NOT EXISTS outlines (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       novel_id INTEGER NOT NULL,
+      scope_kind TEXT NOT NULL DEFAULT 'project' CHECK(scope_kind IN ('project', 'volume', 'chapter')),
+      scope_path TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL,
       content TEXT DEFAULT '',
       anchor_text TEXT DEFAULT '',
@@ -148,11 +150,15 @@ function createTables(database: Database.Database): void {
       FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
       FOREIGN KEY (parent_id) REFERENCES outlines(id) ON DELETE SET NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_outlines_novel_scope
+      ON outlines (novel_id, scope_kind, scope_path, sort_order, id);
 
     -- 大纲版本中心（独立资产快照，不影响当前大纲主表）
     CREATE TABLE IF NOT EXISTS outline_versions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       novel_id INTEGER NOT NULL,
+      scope_kind TEXT NOT NULL DEFAULT 'project' CHECK(scope_kind IN ('project', 'volume', 'chapter')),
+      scope_path TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
       source TEXT NOT NULL CHECK(source IN ('import', 'rebuild', 'ai', 'manual')),
       note TEXT DEFAULT '',
@@ -165,6 +171,8 @@ function createTables(database: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_outline_versions_novel_id_created_at
       ON outline_versions (novel_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_outline_versions_novel_scope_created_at
+      ON outline_versions (novel_id, scope_kind, scope_path, created_at DESC, id DESC);
 
     -- 三签创作法：创意卡
     CREATE TABLE IF NOT EXISTS story_idea_cards (
@@ -304,11 +312,23 @@ function hasColumn(database: Database.Database, tableName: string, columnName: s
 }
 
 function migrateTables(database: Database.Database): void {
+  if (!hasColumn(database, 'outlines', 'scope_kind')) {
+    database.exec(`ALTER TABLE outlines ADD COLUMN scope_kind TEXT DEFAULT 'project';`);
+  }
+  if (!hasColumn(database, 'outlines', 'scope_path')) {
+    database.exec(`ALTER TABLE outlines ADD COLUMN scope_path TEXT DEFAULT '';`);
+  }
   if (!hasColumn(database, 'outlines', 'anchor_text')) {
     database.exec(`ALTER TABLE outlines ADD COLUMN anchor_text TEXT DEFAULT '';`);
   }
   if (!hasColumn(database, 'outlines', 'line_hint')) {
     database.exec(`ALTER TABLE outlines ADD COLUMN line_hint INTEGER DEFAULT NULL;`);
+  }
+  if (!hasColumn(database, 'outline_versions', 'scope_kind')) {
+    database.exec(`ALTER TABLE outline_versions ADD COLUMN scope_kind TEXT DEFAULT 'project';`);
+  }
+  if (!hasColumn(database, 'outline_versions', 'scope_path')) {
+    database.exec(`ALTER TABLE outline_versions ADD COLUMN scope_path TEXT DEFAULT '';`);
   }
   if (!hasColumn(database, 'outline_versions', 'story_idea_card_id')) {
     database.exec(
@@ -320,6 +340,22 @@ function migrateTables(database: Database.Database): void {
       `ALTER TABLE outline_versions ADD COLUMN story_idea_snapshot_json TEXT DEFAULT '';`
     );
   }
+  database.exec(
+    `UPDATE outlines SET scope_kind = 'project'
+     WHERE scope_kind IS NULL OR scope_kind NOT IN ('project', 'volume', 'chapter');`
+  );
+  database.exec(
+    `UPDATE outline_versions SET scope_kind = 'project'
+     WHERE scope_kind IS NULL OR scope_kind NOT IN ('project', 'volume', 'chapter');`
+  );
+  database.exec(
+    `CREATE INDEX IF NOT EXISTS idx_outlines_novel_scope
+      ON outlines (novel_id, scope_kind, scope_path, sort_order, id);`
+  );
+  database.exec(
+    `CREATE INDEX IF NOT EXISTS idx_outline_versions_novel_scope_created_at
+      ON outline_versions (novel_id, scope_kind, scope_path, created_at DESC, id DESC);`
+  );
 }
 
 // ========== CRUD 操作 ==========
@@ -419,6 +455,10 @@ export const characterOps = {
   delete(id: number) {
     return getDatabase().prepare('DELETE FROM characters WHERE id = ?').run(id);
   },
+
+  clearByNovel(novelId: number) {
+    return getDatabase().prepare('DELETE FROM characters WHERE novel_id = ?').run(novelId);
+  },
 };
 
 /** 设定资料库 */
@@ -463,6 +503,10 @@ export const worldSettingOps = {
     return getDatabase().prepare('DELETE FROM world_settings WHERE id = ?').run(id);
   },
 
+  clearByNovel(novelId: number) {
+    return getDatabase().prepare('DELETE FROM world_settings WHERE novel_id = ?').run(novelId);
+  },
+
   bulkCreate(
     novelId: number,
     entries: Array<{ category: string; title: string; content?: string; tags?: string }>
@@ -493,6 +537,12 @@ type OutlineTreeNode = {
 };
 
 export type OutlineVersionSource = 'import' | 'rebuild' | 'ai' | 'manual';
+export type OutlineScopeKind = 'project' | 'volume' | 'chapter';
+
+export interface OutlineScope {
+  kind: OutlineScopeKind;
+  path: string;
+}
 
 export type StoryIdeaCardSource = 'manual' | 'ai';
 export type StoryIdeaCardStatus =
@@ -508,6 +558,8 @@ export type StoryIdeaOutputType = 'logline' | 'scene_hook' | 'outline_direction'
 export interface OutlineVersionRow {
   id: number;
   novel_id: number;
+  scope_kind: OutlineScopeKind;
+  scope_path: string;
   name: string;
   source: OutlineVersionSource;
   note: string;
@@ -580,20 +632,58 @@ function countOutlineNodes(entries: OutlineTreeNode[]): number {
   return total;
 }
 
+function normalizeOutlineScope(scope?: OutlineScope): OutlineScope {
+  return {
+    kind: scope?.kind || 'project',
+    path: scope?.path || '',
+  };
+}
+
+function buildOutlineScopeWhere(scope: OutlineScope): {
+  clause: string;
+  values: Array<string | number>;
+} {
+  if (scope.kind === 'project') {
+    return {
+      clause: "scope_kind = 'project' AND (scope_path = '' OR scope_path = ?)",
+      values: [scope.path],
+    };
+  }
+
+  return {
+    clause: 'scope_kind = ? AND scope_path = ?',
+    values: [scope.kind, scope.path],
+  };
+}
+
 /** 大纲树 */
 export const outlineOps = {
   getByNovel(novelId: number) {
+    return this.getByScope(novelId, { kind: 'project', path: '' });
+  },
+
+  getByScope(novelId: number, scope?: OutlineScope) {
+    const normalizedScope = normalizeOutlineScope(scope);
+    const { clause, values } = buildOutlineScopeWhere(normalizedScope);
     return getDatabase()
       .prepare(
         `SELECT * FROM outlines
-         WHERE novel_id = ?
+         WHERE novel_id = ? AND ${clause}
          ORDER BY COALESCE(parent_id, id), sort_order, id`
       )
-      .all(novelId);
+      .all(novelId, ...values);
   },
 
   clearByNovel(novelId: number) {
-    return getDatabase().prepare('DELETE FROM outlines WHERE novel_id = ?').run(novelId);
+    return this.clearByScope(novelId, { kind: 'project', path: '' });
+  },
+
+  clearByScope(novelId: number, scope?: OutlineScope) {
+    const normalizedScope = normalizeOutlineScope(scope);
+    const { clause, values } = buildOutlineScopeWhere(normalizedScope);
+    return getDatabase()
+      .prepare(`DELETE FROM outlines WHERE novel_id = ? AND ${clause}`)
+      .run(novelId, ...values);
   },
 
   reorder(ids: number[]) {
@@ -605,17 +695,21 @@ export const outlineOps = {
     transaction();
   },
 
-  replaceTree(novelId: number, entries: OutlineTreeNode[]) {
+  replaceTree(novelId: number, entries: OutlineTreeNode[], scope?: OutlineScope) {
     const database = getDatabase();
-    const deleteStmt = database.prepare('DELETE FROM outlines WHERE novel_id = ?');
+    const normalizedScope = normalizeOutlineScope(scope);
+    const { clause, values } = buildOutlineScopeWhere(normalizedScope);
+    const deleteStmt = database.prepare(`DELETE FROM outlines WHERE novel_id = ? AND ${clause}`);
     const insertStmt = database.prepare(
-      'INSERT INTO outlines (novel_id, title, content, anchor_text, line_hint, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO outlines (novel_id, scope_kind, scope_path, title, content, anchor_text, line_hint, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     const insertNodes = (nodes: OutlineTreeNode[], parentId: number | null) => {
       nodes.forEach((node, index) => {
         const result = insertStmt.run(
           novelId,
+          normalizedScope.kind,
+          normalizedScope.path,
           node.title,
           node.content || '',
           node.anchorText || '',
@@ -631,7 +725,7 @@ export const outlineOps = {
     };
 
     const transaction = database.transaction(() => {
-      deleteStmt.run(novelId);
+      deleteStmt.run(novelId, ...values);
       if (entries.length > 0) {
         insertNodes(entries, null);
       }
@@ -645,13 +739,19 @@ export const outlineOps = {
 /** 大纲版本中心 */
 export const outlineVersionOps = {
   listByNovel(novelId: number) {
+    return this.listByScope(novelId, { kind: 'project', path: '' });
+  },
+
+  listByScope(novelId: number, scope?: OutlineScope) {
+    const normalizedScope = normalizeOutlineScope(scope);
+    const { clause, values } = buildOutlineScopeWhere(normalizedScope);
     return getDatabase()
       .prepare(
         `SELECT * FROM outline_versions
-         WHERE novel_id = ?
+         WHERE novel_id = ? AND ${clause}
          ORDER BY created_at DESC, id DESC`
       )
-      .all(novelId) as OutlineVersionRow[];
+      .all(novelId, ...values) as OutlineVersionRow[];
   },
 
   create(
@@ -660,19 +760,26 @@ export const outlineVersionOps = {
     source: OutlineVersionSource,
     note = '',
     entries: OutlineTreeNode[],
-    options?: { storyIdeaCardId?: number | null; storyIdeaSnapshotJson?: string }
+    options?: {
+      scope?: OutlineScope;
+      storyIdeaCardId?: number | null;
+      storyIdeaSnapshotJson?: string;
+    }
   ) {
     if (!OUTLINE_VERSION_SOURCES.includes(source)) {
       throw new Error(`Unsupported outline version source: ${source}`);
     }
+    const normalizedScope = normalizeOutlineScope(options?.scope);
     return getDatabase()
       .prepare(
         `INSERT INTO outline_versions (
-          novel_id, name, source, note, story_idea_card_id, story_idea_snapshot_json, tree_json, total_nodes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          novel_id, scope_kind, scope_path, name, source, note, story_idea_card_id, story_idea_snapshot_json, tree_json, total_nodes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         novelId,
+        normalizedScope.kind,
+        normalizedScope.path,
         name,
         source,
         note,

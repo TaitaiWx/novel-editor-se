@@ -1,8 +1,20 @@
-import React, { Suspense, lazy, useState, useCallback, useRef, useMemo, useReducer } from 'react';
+import React, {
+  Suspense,
+  lazy,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useReducer,
+  useEffect,
+} from 'react';
 import { EditorView } from '@codemirror/view';
 import type { FileNode } from './types';
 import TitleBar from './components/TitleBar';
-import FilePanel from './components/FilePanel';
+import FilePanel, {
+  type ObjectContextMenuEvent,
+  type ObjectContextMenuTarget,
+} from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
 import { PanelResizer } from './components/PanelResizer';
 import { AIAssistantDialog } from './components/RightPanel/AIAssistantDialog';
@@ -30,14 +42,52 @@ import { throttle } from './utils/throttle';
 import type { ThrottledFunction } from './utils/throttle';
 import { PortChannel } from '../shared/portChannels';
 import type { EditorViewportSnapshot } from './components/TextEditor';
+import type { PersistedOutlineScopeInput } from './types/electron-api';
 import { setInlineDiffEffect } from './components/TextEditor/inline-diff';
-import { fnv1a32 } from './components/RightPanel/utils';
+import {
+  createGraphLayoutStorageKey,
+  createRelationStorageKey,
+  extractJsonBlock,
+  fnv1a32,
+  mapCharacterRows,
+  mergeCharacterGraphResults,
+  normalizePersonName,
+  parseCharacterAttributes,
+  parseCharacterGraphAIResult,
+  splitTextIntoChunks,
+} from './components/RightPanel/utils';
+import { buildLoreDedupKey, loadLoreEntriesByFolder } from './components/RightPanel/lore-data';
+import type { Character, LoreEntry, CharacterGraphAIResult } from './components/RightPanel/types';
 import {
   buildAISessionStorageKey,
   parseAISessionSnapshot,
   type AISessionSnapshot,
 } from './state/aiSessionSnapshot';
 import { isImeComposing } from './utils/ime';
+import {
+  createAssistantArtifactStorageKey,
+  createChapterMaterialsStorageKey,
+  createCharacterWorkspaceTab,
+  createLoreWorkspaceTab,
+  createStoryOrderStorageKey,
+  createVolumeWorkspaceTab,
+  findStoryParentPath,
+  flattenFileNodes,
+  isStoryFilePath,
+  isWorkspaceTab,
+  parseCharacterWorkspaceTab,
+  parseLoreWorkspaceTab,
+  parseVolumeWorkspaceTab,
+  resolveOrderedStoryChildren,
+  splitWorkspaceFiles,
+  shouldEnableChapterAssistant,
+  type AssistantScopeKind,
+  type StoryOrderMap,
+  WORKSPACE_TAB_CHARACTERS,
+  WORKSPACE_TAB_LABELS,
+  WORKSPACE_TAB_LORE,
+} from './utils/workspace';
+import { splitChapters } from './utils/chapterSplitter';
 import {
   reduceFixSession,
   initialFixSessionState,
@@ -55,8 +105,59 @@ import {
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
 const RightPanel = lazy(() => import('./components/RightPanel'));
+const CharactersView = lazy(() =>
+  import('./components/RightPanel/CharactersView').then((module) => ({
+    default: module.CharactersView,
+  }))
+);
+const LoreView = lazy(() =>
+  import('./components/RightPanel/LoreView').then((module) => ({ default: module.LoreView }))
+);
+const VolumeWorkspaceView = lazy(() => import('./components/VolumeWorkspaceView'));
 
 type CreatingType = 'file' | 'directory' | null;
+type StoryCreateKind = 'volume' | 'chapter' | 'draft-folder' | 'draft';
+type AIGenerationScope = 'current-content' | 'current-chapter' | 'whole-project';
+
+interface AssistantScopeTarget {
+  kind: AssistantScopeKind;
+  path: string;
+  label: string;
+}
+
+interface AssistantScopedCharacter {
+  name: string;
+  role: string;
+  description: string;
+}
+
+interface GeneratedLoreDraft {
+  category: LoreEntry['category'];
+  title: string;
+  summary: string;
+  tags: string[];
+}
+
+interface AssistantScopedLore {
+  category: LoreEntry['category'];
+  title: string;
+  summary: string;
+}
+
+interface GeneratedMaterialDraft {
+  title: string;
+  summary: string;
+  kind: 'reference' | 'scene' | 'character' | 'setting' | 'research';
+  relatedChapter?: string;
+  keywords: string[];
+}
+
+interface AssistantScopedMaterial {
+  title: string;
+  summary: string;
+  kind: GeneratedMaterialDraft['kind'];
+  relatedChapter?: string;
+}
 
 function findNodeInTree(nodes: FileNode[], path: string): FileNode | null {
   for (const node of nodes) {
@@ -69,16 +170,179 @@ function findNodeInTree(nodes: FileNode[], path: string): FileNode | null {
   return null;
 }
 
+function isDraftLikeName(name: string): boolean {
+  return /(draft|sample|test|outline|note|草稿|样稿|测试|片段|提纲|灵感)/i.test(name);
+}
+
+function isVolumeLikeName(name: string): boolean {
+  return /(^第[一二三四五六七八九十百千万零〇\d]+卷)|(^volume\s*\d+)|(^part\s*\d+)|(^act\s*\d+)|(^卷[\s_-]?\d+)/i.test(
+    name.replace(/\.[^.]+$/, '')
+  );
+}
+
+function isMaterialLikeName(name: string): boolean {
+  return /(资料|素材|media|material|materials|asset|assets|reference|references|research|image|images|doc|docs|pdf)/i.test(
+    name
+  );
+}
+
+function ensureMarkdownFileName(name: string): string {
+  return /\.[^./\\]+$/.test(name) ? name : `${name}.md`;
+}
+
+const INVALID_FILE_NAME_CHARACTERS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*']);
+
+function sanitizeBaseName(name: string): string {
+  // 逐字符清洗文件名，避免依赖复杂正则并兼容 Windows 非法文件名字符规则。
+  const sanitizedCharacters: string[] = [];
+
+  for (const character of name) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    const isControlCharacter = codePoint >= 0 && codePoint <= 0x1f;
+
+    sanitizedCharacters.push(
+      isControlCharacter || INVALID_FILE_NAME_CHARACTERS.has(character) ? ' ' : character
+    );
+  }
+
+  return sanitizedCharacters.join('').replace(/\s+/g, ' ').trim();
+}
+
+function buildUniqueMarkdownName(baseName: string, existingNames: Set<string>): string {
+  const normalizedBase = sanitizeBaseName(baseName) || '未命名';
+  let candidate = ensureMarkdownFileName(normalizedBase);
+  if (!existingNames.has(candidate)) {
+    existingNames.add(candidate);
+    return candidate;
+  }
+  let index = 2;
+  while (existingNames.has(ensureMarkdownFileName(`${normalizedBase}-${index}`))) {
+    index += 1;
+  }
+  candidate = ensureMarkdownFileName(`${normalizedBase}-${index}`);
+  existingNames.add(candidate);
+  return candidate;
+}
+
+function getAIGenerationScopeLabel(scope: AIGenerationScope): string {
+  switch (scope) {
+    case 'current-content':
+      return '当前内容';
+    case 'current-chapter':
+      return '当前章节';
+    case 'whole-project':
+      return '整部作品';
+    default:
+      return '当前内容';
+  }
+}
+
+function parseLoreGenerationResult(raw: string): GeneratedLoreDraft[] {
+  const json = extractJsonBlock(raw);
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json) as {
+      entries?: Array<{
+        category?: string;
+        title?: string;
+        summary?: string;
+        tags?: string[];
+      }>;
+    };
+    return (parsed.entries || [])
+      .map(
+        (item): GeneratedLoreDraft => ({
+          category:
+            item.category === 'world' ||
+            item.category === 'faction' ||
+            item.category === 'system' ||
+            item.category === 'term'
+              ? item.category
+              : 'world',
+          title: item.title?.trim() || '',
+          summary: item.summary?.trim() || '',
+          tags: Array.isArray(item.tags)
+            ? item.tags
+                .filter((tag): tag is string => typeof tag === 'string')
+                .map((tag) => tag.trim())
+            : [],
+        })
+      )
+      .filter((item) => item.title);
+  } catch {
+    return [];
+  }
+}
+
+function parseMaterialGenerationResult(raw: string): GeneratedMaterialDraft[] {
+  const json = extractJsonBlock(raw);
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json) as {
+      materials?: Array<{
+        title?: string;
+        summary?: string;
+        kind?: string;
+        relatedChapter?: string;
+        keywords?: string[];
+      }>;
+    };
+    return (parsed.materials || [])
+      .map(
+        (item): GeneratedMaterialDraft => ({
+          title: item.title?.trim() || '',
+          summary: item.summary?.trim() || '',
+          kind:
+            item.kind === 'scene' ||
+            item.kind === 'character' ||
+            item.kind === 'setting' ||
+            item.kind === 'research'
+              ? item.kind
+              : 'reference',
+          relatedChapter: item.relatedChapter?.trim() || '',
+          keywords: Array.isArray(item.keywords)
+            ? item.keywords
+                .filter((keyword): keyword is string => typeof keyword === 'string')
+                .map((keyword) => keyword.trim())
+                .filter(Boolean)
+            : [],
+        })
+      )
+      .filter((item) => item.title && item.summary);
+  } catch {
+    return [];
+  }
+}
+
+function getParentDirectory(path: string): string | null {
+  const normalized = path.replace(/\\/g, '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  return lastSlash > 0 ? normalized.slice(0, lastSlash) : null;
+}
+
+function getFileExtension(name: string): string {
+  const matched = name.match(/(\.[^./\\]+)$/);
+  return matched ? matched[1] : '';
+}
+
+function stripExtension(name: string): string {
+  return name.replace(/\.[^.]+$/, '');
+}
+
 interface CursorPosition {
   line: number;
   column: number;
 }
 
+type ContextMenuTargetState =
+  | { kind: 'background' }
+  | { kind: 'file'; node: FileNode }
+  | { kind: 'object'; target: ObjectContextMenuTarget };
+
 interface ContextMenuState {
   x: number;
   y: number;
-  /** null 表示点击了空白区域（背景右键菜单） */
-  node: FileNode | null;
+  target: ContextMenuTargetState;
 }
 
 interface PersistedEditorSession {
@@ -97,6 +361,245 @@ function isChangelogTabPath(path: string | null): boolean {
 
 function buildEditorSessionStorageKey(folderPath: string | null): string | null {
   return folderPath ? `novel-editor:editor-session:${folderPath}` : null;
+}
+
+const CHAPTER_MATERIALS_STORAGE_PREFIX = 'novel-editor:chapter-materials:';
+
+function parseAssistantScopedCharacters(raw: string | null): AssistantScopedCharacter[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as AssistantScopedCharacter[];
+    return Array.isArray(parsed)
+      ? parsed
+          .filter(
+            (item): item is AssistantScopedCharacter =>
+              Boolean(item) && typeof item.name === 'string' && item.name.trim().length > 0
+          )
+          .map((item) => ({
+            name: item.name.trim(),
+            role: item.role?.trim() || '',
+            description: item.description?.trim() || '',
+          }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseAssistantScopedLore(raw: string | null): AssistantScopedLore[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as AssistantScopedLore[];
+    return Array.isArray(parsed)
+      ? parsed
+          .filter(
+            (item): item is AssistantScopedLore =>
+              Boolean(item) && typeof item.title === 'string' && item.title.trim().length > 0
+          )
+          .map((item) => ({
+            category:
+              item.category === 'world' ||
+              item.category === 'faction' ||
+              item.category === 'system' ||
+              item.category === 'term'
+                ? item.category
+                : 'world',
+            title: item.title.trim(),
+            summary: item.summary?.trim() || '',
+          }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseAssistantScopedMaterials(raw: string | null): AssistantScopedMaterial[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as AssistantScopedMaterial[];
+    return Array.isArray(parsed)
+      ? parsed
+          .filter(
+            (item): item is AssistantScopedMaterial =>
+              Boolean(item) && typeof item.title === 'string' && item.title.trim().length > 0
+          )
+          .map((item) => ({
+            title: item.title.trim(),
+            summary: item.summary?.trim() || '',
+            kind:
+              item.kind === 'scene' ||
+              item.kind === 'character' ||
+              item.kind === 'setting' ||
+              item.kind === 'research'
+                ? item.kind
+                : 'reference',
+            relatedChapter: item.relatedChapter?.trim() || '',
+          }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeWorkspacePath(path: string): string {
+  return path.replace(/\\/g, '/').toLowerCase();
+}
+
+function isPathInWorkspace(path: string, folderPath: string): boolean {
+  const normalizedFolder = normalizeWorkspacePath(folderPath).replace(/\/+$/, '');
+  const normalizedPath = normalizeWorkspacePath(path);
+  return normalizedPath === normalizedFolder || normalizedPath.startsWith(`${normalizedFolder}/`);
+}
+
+function getNodeDisplayName(path: string): string {
+  const fileName = path.split('/').pop() || path.split('\\').pop() || path;
+  return fileName.replace(/\.[^.]+$/, '');
+}
+
+function formatMaterialUsageLabel(chapterNames: string[]): string {
+  const unique = Array.from(new Set(chapterNames.filter(Boolean)));
+  if (unique.length === 0) return '';
+  if (unique.length <= 2) {
+    return `用于 ${unique.join('、')}`;
+  }
+  return `用于 ${unique.slice(0, 2).join('、')} 等 ${unique.length} 章`;
+}
+
+function parseStoryOrderMap(raw: string | null): StoryOrderMap {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).map(([path, value]) => [
+        path,
+        Array.from(
+          new Set(
+            Array.isArray(value)
+              ? value.filter(
+                  (item): item is string => typeof item === 'string' && item.trim().length > 0
+                )
+              : []
+          )
+        ),
+      ])
+    );
+  } catch {
+    return {};
+  }
+}
+
+function replacePathPrefix(path: string, oldPath: string, newPath: string): string {
+  if (path === oldPath) return newPath;
+  if (path.startsWith(`${oldPath}/`) || path.startsWith(`${oldPath}\\`)) {
+    return `${newPath}${path.slice(oldPath.length)}`;
+  }
+  return path;
+}
+
+function remapWorkspaceTabPath(path: string, oldPath: string, newPath: string): string {
+  const volumePath = parseVolumeWorkspaceTab(path);
+  if (volumePath) {
+    const nextVolumePath = replacePathPrefix(volumePath, oldPath, newPath);
+    return nextVolumePath === volumePath ? path : createVolumeWorkspaceTab(nextVolumePath);
+  }
+  return replacePathPrefix(path, oldPath, newPath);
+}
+
+function isPathSameOrDescendant(path: string, parentPath: string): boolean {
+  return (
+    path === parentPath || path.startsWith(`${parentPath}/`) || path.startsWith(`${parentPath}\\`)
+  );
+}
+
+function buildUniqueMovedName(originalName: string, siblingNames: Set<string>): string {
+  if (!siblingNames.has(originalName)) return originalName;
+
+  const extension = getFileExtension(originalName);
+  const baseName = extension ? stripExtension(originalName) : originalName;
+  let index = 2;
+  let candidateName = `${baseName}-${index}${extension}`;
+
+  while (siblingNames.has(candidateName)) {
+    index += 1;
+    candidateName = `${baseName}-${index}${extension}`;
+  }
+
+  return candidateName;
+}
+
+function remapStoryOrderMapPaths(
+  storyOrderMap: StoryOrderMap,
+  oldPath: string,
+  newPath: string
+): StoryOrderMap {
+  return Object.fromEntries(
+    Object.entries(storyOrderMap).map(([parentPath, orderedPaths]) => [
+      replacePathPrefix(parentPath, oldPath, newPath),
+      Array.from(
+        new Set(orderedPaths.map((itemPath) => replacePathPrefix(itemPath, oldPath, newPath)))
+      ),
+    ])
+  );
+}
+
+function moveStoryPathRelative(
+  orderedPaths: string[],
+  sourcePath: string,
+  targetPath: string,
+  mode: 'before' | 'after'
+): string[] {
+  const nextPaths = [...orderedPaths];
+  const sourceIndex = nextPaths.indexOf(sourcePath);
+  const targetIndex = nextPaths.indexOf(targetPath);
+
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+    return orderedPaths;
+  }
+
+  const [movedPath] = nextPaths.splice(sourceIndex, 1);
+  const nextTargetIndex = nextPaths.indexOf(targetPath);
+  if (!movedPath || nextTargetIndex < 0) {
+    return orderedPaths;
+  }
+  nextPaths.splice(mode === 'after' ? nextTargetIndex + 1 : nextTargetIndex, 0, movedPath);
+  return nextPaths;
+}
+
+function areCharactersEqual(left: Character[], right: Character[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => {
+    const next = right[index];
+    return (
+      item.id === next.id &&
+      item.name === next.name &&
+      item.role === next.role &&
+      item.description === next.description &&
+      item.avatar === next.avatar
+    );
+  });
+}
+
+function areLoreEntriesEqual(left: LoreEntry[], right: LoreEntry[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => {
+    const next = right[index];
+    return (
+      item.id === next.id &&
+      item.title === next.title &&
+      item.summary === next.summary &&
+      item.category === next.category &&
+      item.createdAt === next.createdAt &&
+      item.updatedAt === next.updatedAt &&
+      item.tags.length === next.tags.length &&
+      item.tags.every((tag, tagIndex) => tag === next.tags[tagIndex])
+    );
+  });
 }
 
 function parseEditorSessionSnapshot(raw: string | null): PersistedEditorSession | null {
@@ -143,6 +646,7 @@ function sameViewportSnapshot(
 }
 
 const App: React.FC = () => {
+  const hasReportedRendererReadyRef = useRef(false);
   const [files, setFiles] = useState<FileNode[]>([]);
   const [folderPath, setFolderPath] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -181,6 +685,29 @@ const App: React.FC = () => {
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [settingsCenterTab, setSettingsCenterTab] = useState<SettingsTab>('general');
   const [appSettings, setAppSettings] = useState<SettingsDraft>(DEFAULT_SETTINGS_DRAFT);
+  const [workspaceCharacters, setWorkspaceCharacters] = useState<Character[]>([]);
+  const [workspaceLoreEntries, setWorkspaceLoreEntries] = useState<LoreEntry[]>([]);
+  const [workspaceProjectName, setWorkspaceProjectName] = useState<string | null>(null);
+  const [workspaceCharactersVersion, bumpWorkspaceCharactersVersion] = useReducer(
+    (count: number) => count + 1,
+    0
+  );
+  const [workspaceLoreVersion, bumpWorkspaceLoreVersion] = useReducer(
+    (count: number) => count + 1,
+    0
+  );
+  const [storyOrderMap, setStoryOrderMap] = useState<StoryOrderMap>({});
+  const [chapterMaterialPaths, setChapterMaterialPaths] = useState<string[]>([]);
+  const [materialUsageMap, setMaterialUsageMap] = useState<Record<string, string>>({});
+  const [assistantScopedCharacters, setAssistantScopedCharacters] = useState<
+    AssistantScopedCharacter[]
+  >([]);
+  const [assistantScopedLoreEntries, setAssistantScopedLoreEntries] = useState<
+    AssistantScopedLore[]
+  >([]);
+  const [assistantScopedMaterials, setAssistantScopedMaterials] = useState<
+    AssistantScopedMaterial[]
+  >([]);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [editorReloadToken, setEditorReloadToken] = useState(0);
   const [fixState, dispatchFixCommand] = useReducer(reduceFixSession, initialFixSessionState);
@@ -196,6 +723,7 @@ const App: React.FC = () => {
   const aiSessionRef = useRef<AISessionSnapshot | null>(null);
   const aiSessionKey = useMemo(() => buildAISessionStorageKey(folderPath), [folderPath]);
   const editorSessionKey = useMemo(() => buildEditorSessionStorageKey(folderPath), [folderPath]);
+  const storyOrderStorageKey = useMemo(() => createStoryOrderStorageKey(folderPath), [folderPath]);
 
   // Panel resize widths (VSCode-style draggable 3-pane layout)
   // Left/right panels have NO minimum — they auto-collapse when dragged below threshold (VSCode behavior)
@@ -221,6 +749,12 @@ const App: React.FC = () => {
   const toast = useToast();
   const dialog = useDialog();
 
+  useEffect(() => {
+    if (hasReportedRendererReadyRef.current) return;
+    hasReportedRendererReadyRef.current = true;
+    window.electron?.ipcRenderer?.invoke('app-renderer-ready').catch(() => undefined);
+  }, []);
+
   const folderPathRef = useRef(folderPath);
   folderPathRef.current = folderPath;
   const activeTabRef = useRef(activeTab);
@@ -229,12 +763,44 @@ const App: React.FC = () => {
   openTabsRef.current = openTabs;
   const filesRef = useRef(files);
   filesRef.current = files;
+  const storyOrderMapRef = useRef(storyOrderMap);
+  storyOrderMapRef.current = storyOrderMap;
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
   const editorViewportSnapshotsRef = useRef<Record<string, EditorViewportSnapshot>>({});
   const restoredEditorSessionKeyRef = useRef<string | null>(null);
   const editorSessionHydratedRef = useRef(false);
   const persistEditorSessionTimerRef = useRef<number | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const ipc = window.electron?.ipcRenderer;
+
+    if (!ipc || !storyOrderStorageKey) {
+      storyOrderMapRef.current = {};
+      setStoryOrderMap({});
+      return;
+    }
+
+    const loadStoryOrderMap = async () => {
+      try {
+        const raw = (await ipc.invoke('db-settings-get', storyOrderStorageKey)) as string | null;
+        if (cancelled) return;
+        const nextStoryOrderMap = parseStoryOrderMap(raw);
+        storyOrderMapRef.current = nextStoryOrderMap;
+        setStoryOrderMap(nextStoryOrderMap);
+      } catch {
+        if (cancelled) return;
+        storyOrderMapRef.current = {};
+        setStoryOrderMap({});
+      }
+    };
+
+    void loadStoryOrderMap();
+    return () => {
+      cancelled = true;
+    };
+  }, [storyOrderStorageKey]);
 
   const syncInitialViewportSnapshots = useCallback(
     (next: Record<string, EditorViewportSnapshot>) => {
@@ -282,6 +848,44 @@ const App: React.FC = () => {
       ipc.invoke('db-settings-set', editorSessionKey, JSON.stringify(nextSession)).catch(() => {});
     }, 180);
   }, [editorSessionKey, isPersistableTabPath]);
+
+  const persistStoryOrderMap = useCallback(async (nextStoryOrderMap: StoryOrderMap) => {
+    const ipc = window.electron?.ipcRenderer;
+    const storageKey = createStoryOrderStorageKey(folderPathRef.current);
+    if (!ipc || !storageKey) return;
+    await ipc.invoke('db-settings-set', storageKey, JSON.stringify(nextStoryOrderMap));
+  }, []);
+
+  const remapPathReferences = useCallback(
+    (oldPath: string, newPath: string) => {
+      if (oldPath === newPath) return;
+
+      setOpenTabs((prev) =>
+        Array.from(new Set(prev.map((tabPath) => remapWorkspaceTabPath(tabPath, oldPath, newPath))))
+      );
+
+      const nextActiveTab = remapWorkspaceTabPath(activeTabRef.current || '', oldPath, newPath);
+      if (activeTabRef.current && nextActiveTab !== activeTabRef.current) {
+        setActiveTab(nextActiveTab);
+      }
+
+      const currentSnapshots = editorViewportSnapshotsRef.current;
+      let changed = false;
+      const nextSnapshots = Object.fromEntries(
+        Object.entries(currentSnapshots).map(([path, snapshot]) => {
+          const nextPath = replacePathPrefix(path, oldPath, newPath);
+          if (nextPath !== path) changed = true;
+          return [nextPath, snapshot];
+        })
+      ) as Record<string, EditorViewportSnapshot>;
+
+      if (changed) {
+        syncInitialViewportSnapshots(nextSnapshots);
+        schedulePersistEditorSession();
+      }
+    },
+    [schedulePersistEditorSession, syncInitialViewportSnapshots]
+  );
 
   const moveViewportSnapshot = useCallback(
     (fromPath: string, toPath: string) => {
@@ -803,15 +1407,18 @@ const App: React.FC = () => {
         setRightPanelCollapsed(DEFAULT_SETTINGS_DRAFT.general.collapseRightPanelOnStartup);
       }
 
-      // VS Code 风格：优先恢复上次打开的目录，首次安装打开 sample-data
-      const targetPath = lastFolder || (await ipc.invoke('get-default-data-path'));
-
-      await initializeProjectStore(targetPath);
-      const result = await ipc.invoke('refresh-folder', targetPath);
-      void ipc.invoke('add-recent-folder', targetPath);
-      if (result) {
-        setFolderPath(result.path);
-        setFiles(result.files);
+      if (lastFolder) {
+        await initializeProjectStore(lastFolder);
+        const result = await ipc.invoke('refresh-folder', lastFolder);
+        void ipc.invoke('add-recent-folder', lastFolder);
+        if (result) {
+          setFolderPath(result.path);
+          setFiles(result.files);
+        }
+      } else {
+        setFolderPath(null);
+        setFiles([]);
+        setWorkspaceProjectName(null);
       }
 
       // 更新检查不阻塞首屏渲染。
@@ -845,6 +1452,7 @@ const App: React.FC = () => {
         await window.electron.ipcRenderer.invoke('add-recent-folder', result.path);
         setFolderPath(result.path);
         setFiles(result.files);
+        setWorkspaceProjectName(null);
         setOpenTabs([]);
         setActiveTab(null);
       }
@@ -867,6 +1475,7 @@ const App: React.FC = () => {
       if (result) {
         setFolderPath(result.path);
         setFiles(result.files);
+        setWorkspaceProjectName(null);
         setOpenTabs([]);
         setActiveTab(null);
       }
@@ -886,6 +1495,233 @@ const App: React.FC = () => {
     if (!folderPathRef.current) return;
     setCreatingType('directory');
   }, []);
+
+  const handleCreateMaterialDirectory = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const folder = folderPathRef.current;
+    if (!ipc || !folder) return;
+
+    const name = await dialog.prompt('新建资料目录', '请输入资料目录名称', '新资料');
+    if (!name?.trim()) return;
+
+    const defaultRoot =
+      filesRef.current.find((node) => node.type === 'directory' && isMaterialLikeName(node.name))
+        ?.path ?? null;
+
+    const targetRoot =
+      defaultRoot ||
+      (
+        (await ipc.invoke('create-directory', folder, '资料')) as {
+          success: boolean;
+          dirPath: string;
+        }
+      ).dirPath;
+
+    try {
+      await ipc.invoke('create-directory', targetRoot, name.trim());
+      await refreshCurrentFolder();
+      toast.success('资料目录创建成功');
+    } catch (error) {
+      toast.error(`新建资料目录失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [dialog, refreshCurrentFolder, toast]);
+
+  const getCurrentNovelId = useCallback(async (): Promise<number | null> => {
+    const ipc = window.electron?.ipcRenderer;
+    const folder = folderPathRef.current;
+    if (!ipc || !folder) return null;
+    const novel = (await ipc.invoke('db-novel-get-by-folder', folder)) as { id: number } | null;
+    return novel?.id ?? null;
+  }, []);
+
+  const handleCreateCharacter = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const novelId = await getCurrentNovelId();
+    if (!ipc || !novelId) return;
+
+    const name = await dialog.prompt('新建人物', '请输入人物名称', '新人物');
+    if (!name?.trim()) return;
+    const role = await dialog.prompt('人物定位', '请输入角色定位（可选）', '');
+
+    try {
+      const result = (await ipc.invoke(
+        'db-character-create',
+        novelId,
+        name.trim(),
+        role?.trim() || '',
+        '',
+        '{}'
+      )) as { lastInsertRowid?: number | bigint };
+      const nextRows = (await ipc.invoke('db-character-list', novelId)) as Array<{
+        id: number;
+        name: string;
+        role: string;
+        description: string;
+        attributes: string;
+      }>;
+      setWorkspaceCharacters(mapCharacterRows(nextRows));
+      const createdId = Number(result?.lastInsertRowid);
+      if (Number.isFinite(createdId) && createdId > 0) {
+        openFileInTab(createCharacterWorkspaceTab({ id: createdId }));
+      } else {
+        openFileInTab(WORKSPACE_TAB_CHARACTERS);
+      }
+      toast.success('人物创建成功');
+    } catch (error) {
+      toast.error(`新建人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [dialog, getCurrentNovelId, openFileInTab, toast]);
+
+  const handleCreateLoreEntry = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const folder = folderPathRef.current;
+    if (!ipc || !folder) return;
+
+    const title = await dialog.prompt('新建设定', '请输入设定名称', '新设定');
+    if (!title?.trim()) return;
+
+    try {
+      await ipc.invoke(
+        'db-world-setting-create-by-folder',
+        folder,
+        'world',
+        title.trim(),
+        '',
+        '[]'
+      );
+      const nextEntries = await loadLoreEntriesByFolder(folder);
+      setWorkspaceLoreEntries(nextEntries);
+      const createdEntry = nextEntries.find((entry) => entry.title === title.trim());
+      if (createdEntry) {
+        openFileInTab(createLoreWorkspaceTab({ id: createdEntry.id }));
+      } else {
+        openFileInTab(WORKSPACE_TAB_LORE);
+      }
+      toast.success('设定创建成功');
+    } catch (error) {
+      toast.error(`新建设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [dialog, openFileInTab, toast]);
+
+  const resolveStoryCreateTargetDir = useCallback((kind: StoryCreateKind): string | null => {
+    const folder = folderPathRef.current;
+    if (!folder) return null;
+    const currentTab = activeTabRef.current;
+    const activeVolumePath = parseVolumeWorkspaceTab(currentTab);
+    const selectedStoryNode = currentTab
+      ? findNodeInTree(splitWorkspaceFiles(filesRef.current).storyNodes, currentTab)
+      : null;
+
+    if (kind === 'volume') return folder;
+
+    if (kind === 'chapter') {
+      if (activeVolumePath) return activeVolumePath;
+      if (selectedStoryNode?.type === 'directory' && !isDraftLikeName(selectedStoryNode.name)) {
+        return selectedStoryNode.path;
+      }
+      if (selectedStoryNode?.type === 'file') {
+        const parentDir = getParentDirectory(selectedStoryNode.path);
+        if (parentDir) return parentDir;
+      }
+      return folder;
+    }
+
+    if (kind === 'draft-folder' || kind === 'draft') {
+      if (selectedStoryNode?.type === 'directory') return selectedStoryNode.path;
+      if (selectedStoryNode?.type === 'file') {
+        const parentDir = getParentDirectory(selectedStoryNode.path);
+        if (parentDir) return parentDir;
+      }
+      if (activeVolumePath) return activeVolumePath;
+      return folder;
+    }
+
+    return folder;
+  }, []);
+
+  const suggestStoryCreateName = useCallback((kind: StoryCreateKind, targetDir: string): string => {
+    const childNodes =
+      targetDir === folderPathRef.current
+        ? splitWorkspaceFiles(filesRef.current).storyNodes
+        : findNodeInTree(filesRef.current, targetDir)?.children || [];
+    if (kind === 'volume') {
+      const volumeCount = childNodes.filter(
+        (node) => node.type === 'directory' && !isDraftLikeName(node.name)
+      ).length;
+      return `第${volumeCount + 1}卷`;
+    }
+    if (kind === 'chapter') {
+      const chapterCount = childNodes.filter(
+        (node) =>
+          node.type === 'file' &&
+          (!isDraftLikeName(node.name) || /第.+[章节幕回篇集]/.test(node.name))
+      ).length;
+      return `第${chapterCount + 1}章 未命名`;
+    }
+    if (kind === 'draft-folder') {
+      const draftDirCount = childNodes.filter(
+        (node) => node.type === 'directory' && isDraftLikeName(node.name)
+      ).length;
+      return draftDirCount === 0 ? '样稿' : `样稿${draftDirCount + 1}`;
+    }
+    const draftCount = childNodes.filter(
+      (node) => node.type === 'file' && isDraftLikeName(node.name)
+    ).length;
+    return draftCount === 0 ? '样稿' : `样稿-${draftCount + 1}`;
+  }, []);
+
+  const handleCreateStoryItem = useCallback(
+    async (kind: StoryCreateKind) => {
+      const ipc = window.electron?.ipcRenderer;
+      const targetDir = resolveStoryCreateTargetDir(kind);
+      if (!ipc || !targetDir) return;
+      const defaultName = suggestStoryCreateName(kind, targetDir);
+      const labelMap: Record<StoryCreateKind, string> = {
+        volume: '新建卷',
+        chapter: '新建章节',
+        'draft-folder': '新建稿夹',
+        draft: '新建稿',
+      };
+      const name = await dialog.prompt(labelMap[kind], '请输入名称', defaultName);
+      if (!name?.trim()) return;
+
+      try {
+        if (kind === 'volume' || kind === 'draft-folder') {
+          const result = (await ipc.invoke('create-directory', targetDir, name.trim())) as {
+            success: boolean;
+            dirPath: string;
+          };
+          await refreshCurrentFolder();
+          if (kind === 'volume') {
+            openFileInTab(createVolumeWorkspaceTab(result.dirPath));
+          }
+          toast.success(`${labelMap[kind]}成功`);
+          return;
+        }
+
+        const fileName = ensureMarkdownFileName(name.trim());
+        const result = (await ipc.invoke('create-file', targetDir, fileName)) as {
+          success: boolean;
+          filePath: string;
+        };
+        await refreshCurrentFolder();
+        openFileInTab(result.filePath);
+        toast.success(`${labelMap[kind]}成功`);
+      } catch (error) {
+        toast.error(
+          `${labelMap[kind]}失败: ${error instanceof Error ? error.message : '未知错误'}`
+        );
+      }
+    },
+    [
+      dialog,
+      openFileInTab,
+      refreshCurrentFolder,
+      resolveStoryCreateTargetDir,
+      suggestStoryCreateName,
+      toast,
+    ]
+  );
 
   // Determine target directory for inline creation based on selection
   // null = root level, string = specific directory path
@@ -966,6 +1802,99 @@ const App: React.FC = () => {
     },
     [openFileInTab]
   );
+  const handleOpenCharacters = useCallback(() => {
+    openFileInTab(WORKSPACE_TAB_CHARACTERS);
+  }, [openFileInTab]);
+  const handleOpenLore = useCallback(() => {
+    openFileInTab(WORKSPACE_TAB_LORE);
+  }, [openFileInTab]);
+  const handleOpenCharacterNode = useCallback(
+    (characterId: number) => {
+      openFileInTab(createCharacterWorkspaceTab({ id: characterId }));
+    },
+    [openFileInTab]
+  );
+  const handleOpenLoreNode = useCallback(
+    (entryId: number) => {
+      openFileInTab(createLoreWorkspaceTab({ id: entryId }));
+    },
+    [openFileInTab]
+  );
+
+  const handleRenameProject = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const folder = folderPathRef.current;
+    if (!ipc || !folder) return;
+    const novel = (await ipc.invoke('db-novel-get-by-folder', folder)) as {
+      id: number;
+      name?: string | null;
+    } | null;
+    if (!novel?.id) return;
+    const currentName = (
+      workspaceProjectName ||
+      novel.name ||
+      folder.split('/').pop() ||
+      ''
+    ).trim();
+    const nextName = await dialog.prompt('修改作品名', '请输入新的作品名', currentName);
+    if (!nextName?.trim() || nextName.trim() === currentName) return;
+
+    try {
+      await ipc.invoke('db-novel-update', novel.id, { name: nextName.trim() });
+      setWorkspaceProjectName(nextName.trim());
+      toast.success('作品名已更新');
+    } catch (error) {
+      toast.error(`修改作品名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [dialog, toast, workspaceProjectName]);
+
+  const syncWorkspaceCharacters = useCallback((nextCharacters: Character[]) => {
+    setWorkspaceCharacters((prev) =>
+      areCharactersEqual(prev, nextCharacters) ? prev : nextCharacters
+    );
+  }, []);
+
+  const syncWorkspaceLoreEntries = useCallback((nextEntries: LoreEntry[]) => {
+    setWorkspaceLoreEntries((prev) =>
+      areLoreEntriesEqual(prev, nextEntries) ? prev : nextEntries
+    );
+  }, []);
+  const handleOpenVolumeNode = useCallback(
+    (volumePath: string) => {
+      openFileInTab(createVolumeWorkspaceTab(volumePath));
+    },
+    [openFileInTab]
+  );
+
+  const buildProjectAssistantScope = useCallback((): AssistantScopeTarget | null => {
+    const folder = folderPathRef.current;
+    if (!folder) return null;
+    return {
+      kind: 'project',
+      path: folder,
+      label: workspaceProjectName?.trim() || getNodeDisplayName(folder),
+    };
+  }, [workspaceProjectName]);
+
+  const buildVolumeAssistantScope = useCallback((volumePath: string): AssistantScopeTarget => {
+    const node = findNodeInTree(filesRef.current, volumePath) as FileNode | null;
+    return {
+      kind: 'volume',
+      path: volumePath,
+      label:
+        node?.name ||
+        (folderPathRef.current === volumePath ? '未分卷' : getNodeDisplayName(volumePath)),
+    };
+  }, []);
+
+  const buildChapterAssistantScope = useCallback(
+    (chapterPath: string): AssistantScopeTarget => ({
+      kind: 'chapter',
+      path: chapterPath,
+      label: getNodeDisplayName(chapterPath),
+    }),
+    []
+  );
 
   const handleDeleteFile = useCallback(
     async (filePath: string) => {
@@ -1012,29 +1941,283 @@ const App: React.FC = () => {
     [toast, dialog, refreshCurrentFolder]
   );
 
+  const handleDeleteVolumeNode = useCallback(
+    async (volumePath: string, isSynthetic = false) => {
+      if (isSynthetic) {
+        toast.info('未分卷用于承接未归档正文，不能直接删除');
+        return;
+      }
+      await handleDeleteDirectory(volumePath);
+    },
+    [handleDeleteDirectory, toast]
+  );
+
+  const handleDeleteCharacterNode = useCallback(
+    async (characterId: number) => {
+      const ipc = window.electron?.ipcRenderer;
+      const target = workspaceCharacters.find((item) => item.id === characterId);
+      if (!ipc || !target) return;
+      const confirmed = await dialog.confirm('删除人物', `确定要删除人物 "${target.name}" 吗？`);
+      if (!confirmed) return;
+
+      try {
+        await ipc.invoke('db-character-delete', characterId);
+        setWorkspaceCharacters((prev) => prev.filter((item) => item.id !== characterId));
+        const workspaceTab = createCharacterWorkspaceTab({ id: characterId });
+        setOpenTabs((prev) => prev.filter((tab) => tab !== workspaceTab));
+        if (activeTabRef.current === workspaceTab) {
+          setActiveTab(WORKSPACE_TAB_CHARACTERS);
+        }
+        toast.success(`已删除人物 "${target.name}"`);
+      } catch (error) {
+        toast.error(`删除人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, toast, workspaceCharacters]
+  );
+
+  const handleRenameCharacterNode = useCallback(
+    async (characterId: number) => {
+      const ipc = window.electron?.ipcRenderer;
+      const target = workspaceCharacters.find((item) => item.id === characterId);
+      if (!ipc || !target) return;
+      const nextName = await dialog.prompt('修改人物名', '请输入新的人物名', target.name);
+      const normalizedName = nextName?.trim();
+      if (!normalizedName || normalizedName === target.name) return;
+
+      try {
+        const novelId = await getCurrentNovelId();
+        const existingRows = novelId
+          ? ((await ipc.invoke('db-character-list', novelId)) as Array<{
+              id: number;
+              name: string;
+              role: string;
+              description: string;
+              attributes: string;
+            }>)
+          : [];
+        const matchedRow = existingRows.find((item) => item.id === characterId);
+        await ipc.invoke('db-character-update', characterId, {
+          name: normalizedName,
+          role: target.role,
+          description: target.description,
+          attributes:
+            matchedRow?.attributes ||
+            JSON.stringify(target.avatar ? { avatar: target.avatar } : {}),
+        });
+        setWorkspaceCharacters((prev) =>
+          prev.map((item) => (item.id === characterId ? { ...item, name: normalizedName } : item))
+        );
+        toast.success(`人物已更名为 "${normalizedName}"`);
+      } catch (error) {
+        toast.error(`修改人物名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, getCurrentNovelId, toast, workspaceCharacters]
+  );
+
+  const handleDeleteLoreNode = useCallback(
+    async (entryId: number) => {
+      const ipc = window.electron?.ipcRenderer;
+      const target = workspaceLoreEntries.find((item) => item.id === entryId);
+      if (!ipc || !target) return;
+      const confirmed = await dialog.confirm('删除设定', `确定要删除设定 "${target.title}" 吗？`);
+      if (!confirmed) return;
+
+      try {
+        await ipc.invoke('db-world-setting-delete', entryId);
+        setWorkspaceLoreEntries((prev) => prev.filter((item) => item.id !== entryId));
+        const workspaceTab = createLoreWorkspaceTab({ id: entryId });
+        setOpenTabs((prev) => prev.filter((tab) => tab !== workspaceTab));
+        if (activeTabRef.current === workspaceTab) {
+          setActiveTab(WORKSPACE_TAB_LORE);
+        }
+        toast.success(`已删除设定 "${target.title}"`);
+      } catch (error) {
+        toast.error(`删除设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, toast, workspaceLoreEntries]
+  );
+
+  const handleRenameLoreNode = useCallback(
+    async (entryId: number) => {
+      const ipc = window.electron?.ipcRenderer;
+      const target = workspaceLoreEntries.find((item) => item.id === entryId);
+      if (!ipc || !target) return;
+      const nextTitle = await dialog.prompt('修改设定名', '请输入新的设定名', target.title);
+      const normalizedTitle = nextTitle?.trim();
+      if (!normalizedTitle || normalizedTitle === target.title) return;
+
+      try {
+        await ipc.invoke('db-world-setting-update', entryId, {
+          title: normalizedTitle,
+          content: target.summary,
+          tags: JSON.stringify(target.tags),
+        });
+        setWorkspaceLoreEntries((prev) =>
+          prev.map((item) => (item.id === entryId ? { ...item, title: normalizedTitle } : item))
+        );
+        toast.success(`设定已更名为 "${normalizedTitle}"`);
+      } catch (error) {
+        toast.error(`修改设定名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, toast, workspaceLoreEntries]
+  );
+
   const handleRename = useCallback(
     async (oldPath: string) => {
-      if (!window.electron?.ipcRenderer) return;
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) return;
       const oldName = oldPath.split('/').pop() || oldPath;
-      const newName = await dialog.prompt('重命名', '请输入新名称', oldName);
-      if (!newName || newName === oldName) return;
+      const storyNode = findNodeInTree(splitWorkspaceFiles(filesRef.current).storyNodes, oldPath);
+      const isStoryDocument = storyNode?.type === 'file';
+      const oldExtension = isStoryDocument ? getFileExtension(oldName) : '';
+      const promptDefaultName = isStoryDocument ? stripExtension(oldName) : oldName;
+      const nextInputName = await dialog.prompt('重命名', '请输入新名称', promptDefaultName);
+      const normalizedInputName = nextInputName?.trim();
+      if (!normalizedInputName) return;
+
+      // 中文说明：正文文件统一保留原扩展名，避免用户关心文件类型。
+      const nextName = isStoryDocument
+        ? `${stripExtension(normalizedInputName)}${oldExtension}`
+        : normalizedInputName;
+
+      if (nextName === oldName) return;
       const parentDir = oldPath.substring(0, oldPath.lastIndexOf('/'));
-      const newPath = `${parentDir}/${newName}`;
+      const newPath = `${parentDir}/${nextName}`;
       try {
-        await window.electron.ipcRenderer.invoke('rename-file', oldPath, newPath);
-        // Update tabs
-        setOpenTabs((prev) => prev.map((t) => (t === oldPath ? newPath : t)));
-        moveViewportSnapshot(oldPath, newPath);
-        if (activeTabRef.current === oldPath) {
-          setActiveTab(newPath);
-        }
+        await ipc.invoke('rename-file', oldPath, newPath);
+        const nextStoryOrderMap = remapStoryOrderMapPaths(
+          storyOrderMapRef.current,
+          oldPath,
+          newPath
+        );
+        storyOrderMapRef.current = nextStoryOrderMap;
+        setStoryOrderMap(nextStoryOrderMap);
+        await persistStoryOrderMap(nextStoryOrderMap);
+        remapPathReferences(oldPath, newPath);
         await refreshCurrentFolder();
-        toast.success(`已重命名为 "${newName}"`);
+        toast.success(`已重命名为 "${isStoryDocument ? stripExtension(nextName) : nextName}"`);
       } catch (error) {
         toast.error(`重命名失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [toast, dialog, refreshCurrentFolder]
+    [toast, dialog, persistStoryOrderMap, refreshCurrentFolder, remapPathReferences]
+  );
+
+  const handleReorderStoryNode = useCallback(
+    async (sourcePath: string, targetPath: string, mode: 'before' | 'after' | 'inside') => {
+      const ipc = window.electron?.ipcRenderer;
+      const folder = folderPathRef.current;
+      if (!ipc || !folder || sourcePath === targetPath) return;
+
+      const storyNodes = splitWorkspaceFiles(filesRef.current).storyNodes;
+      const sourceNode = findNodeInTree(storyNodes, sourcePath);
+      const sourceParentPath = findStoryParentPath(storyNodes, folder, sourcePath);
+      if (!sourceNode || !sourceParentPath) return;
+      if (sourceNode.type === 'directory' && isPathSameOrDescendant(targetPath, sourcePath)) {
+        return;
+      }
+
+      const destinationParentPath =
+        mode === 'inside' ? targetPath : findStoryParentPath(storyNodes, folder, targetPath);
+      if (!destinationParentPath) return;
+
+      const sourceOrderedPaths = resolveOrderedStoryChildren(
+        storyNodes,
+        folder,
+        sourceParentPath,
+        storyOrderMapRef.current
+      ).map((node) => node.path);
+      const destinationOrderedPaths = resolveOrderedStoryChildren(
+        storyNodes,
+        folder,
+        destinationParentPath,
+        storyOrderMapRef.current
+      ).map((node) => node.path);
+
+      if (destinationParentPath === sourceParentPath) {
+        const nextOrderedPaths =
+          mode === 'inside'
+            ? [...sourceOrderedPaths.filter((path) => path !== sourcePath), sourcePath]
+            : moveStoryPathRelative(sourceOrderedPaths, sourcePath, targetPath, mode);
+
+        if (
+          nextOrderedPaths === sourceOrderedPaths ||
+          nextOrderedPaths.join('|') === sourceOrderedPaths.join('|')
+        ) {
+          return;
+        }
+
+        const previousStoryOrderMap = storyOrderMapRef.current;
+        const nextStoryOrderMap = {
+          ...previousStoryOrderMap,
+          [sourceParentPath]: nextOrderedPaths,
+        };
+
+        storyOrderMapRef.current = nextStoryOrderMap;
+        setStoryOrderMap(nextStoryOrderMap);
+
+        try {
+          await persistStoryOrderMap(nextStoryOrderMap);
+        } catch (error) {
+          storyOrderMapRef.current = previousStoryOrderMap;
+          setStoryOrderMap(previousStoryOrderMap);
+          toast.error(`调整顺序失败: ${error instanceof Error ? error.message : '未知错误'}`);
+        }
+        return;
+      }
+
+      const siblingNames = new Set(
+        destinationOrderedPaths
+          .filter((path) => path !== sourcePath)
+          .map((path) => findNodeInTree(storyNodes, path)?.name)
+          .filter((name): name is string => Boolean(name))
+      );
+      const nextName = buildUniqueMovedName(sourceNode.name, siblingNames);
+      const newPath = `${destinationParentPath}/${nextName}`;
+      if (newPath === sourcePath) return;
+
+      const previousStoryOrderMap = storyOrderMapRef.current;
+
+      try {
+        await ipc.invoke('rename-file', sourcePath, newPath);
+        let nextStoryOrderMap = remapStoryOrderMapPaths(previousStoryOrderMap, sourcePath, newPath);
+        const nextDestinationPaths = destinationOrderedPaths.filter((path) => path !== sourcePath);
+
+        if (mode === 'inside') {
+          nextDestinationPaths.push(newPath);
+        } else {
+          const targetIndex = nextDestinationPaths.indexOf(targetPath);
+          if (targetIndex < 0) {
+            nextDestinationPaths.push(newPath);
+          } else {
+            nextDestinationPaths.splice(
+              mode === 'after' ? targetIndex + 1 : targetIndex,
+              0,
+              newPath
+            );
+          }
+        }
+
+        nextStoryOrderMap = {
+          ...nextStoryOrderMap,
+          [sourceParentPath]: sourceOrderedPaths.filter((path) => path !== sourcePath),
+          [destinationParentPath]: Array.from(new Set(nextDestinationPaths)),
+        };
+
+        storyOrderMapRef.current = nextStoryOrderMap;
+        setStoryOrderMap(nextStoryOrderMap);
+        await persistStoryOrderMap(nextStoryOrderMap);
+        remapPathReferences(sourcePath, newPath);
+        await refreshCurrentFolder();
+      } catch (error) {
+        toast.error(`移动正文失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [persistStoryOrderMap, refreshCurrentFolder, remapPathReferences, toast]
   );
 
   const handleCopyFile = useCallback((filePath: string) => {
@@ -1473,80 +2656,16 @@ const App: React.FC = () => {
   }, [clipboard, handlePasteFiles]);
 
   const handleFileContextMenu = useCallback((event: ContextMenuEvent) => {
-    setContextMenu({ x: event.x, y: event.y, node: event.node });
+    setContextMenu({ x: event.x, y: event.y, target: { kind: 'file', node: event.node } });
+  }, []);
+
+  const handleObjectContextMenu = useCallback((event: ObjectContextMenuEvent) => {
+    setContextMenu({ x: event.x, y: event.y, target: { kind: 'object', target: event.target } });
   }, []);
 
   const handleBackgroundContextMenu = useCallback((pos: { x: number; y: number }) => {
-    setContextMenu({ x: pos.x, y: pos.y, node: null });
+    setContextMenu({ x: pos.x, y: pos.y, target: { kind: 'background' } });
   }, []);
-
-  const contextMenuItems = useMemo(() => {
-    if (!contextMenu) return [];
-    const { node } = contextMenu;
-
-    // ─── 空白处右键（背景菜单） ───────────────────────────────────────────
-    if (!node) {
-      const bgPasteDir = folderPath;
-      return [
-        { label: '新建文件', onClick: handleCreateFile },
-        { label: '新建文件夹', onClick: handleCreateDirectory },
-        { label: '', onClick: () => {}, separator: true },
-        {
-          label: '粘贴',
-          onClick: () => bgPasteDir && handlePasteFiles(bgPasteDir),
-          disabled: !folderPath,
-        },
-        { label: '', onClick: () => {}, separator: true },
-        { label: '刷新', onClick: refreshCurrentFolder },
-      ];
-    }
-
-    // ─── 文件/目录右键 ────────────────────────────────────────────────────
-    const pasteTargetDir =
-      node.type === 'directory' ? node.path : node.path.substring(0, node.path.lastIndexOf('/'));
-    const items: {
-      label: string;
-      onClick: () => void;
-      danger?: boolean;
-      disabled?: boolean;
-      separator?: boolean;
-    }[] = [
-      { label: '复制', onClick: () => handleCopyFile(node.path) },
-      {
-        label: '粘贴',
-        onClick: () => handlePasteFiles(pasteTargetDir),
-      },
-      { label: '', onClick: () => {}, separator: true },
-      { label: '重命名', onClick: () => handleRename(node.path) },
-      { label: '', onClick: () => {}, separator: true },
-    ];
-    if (node.type === 'file') {
-      items.push({
-        label: '删除文件',
-        onClick: () => handleDeleteFile(node.path),
-        danger: true,
-      });
-    } else {
-      items.push({
-        label: '删除文件夹',
-        onClick: () => handleDeleteDirectory(node.path),
-        danger: true,
-      });
-    }
-    return items;
-  }, [
-    contextMenu,
-    folderPath,
-    clipboard,
-    handleCreateFile,
-    handleCreateDirectory,
-    handleCopyFile,
-    handlePasteFiles,
-    handleRename,
-    handleDeleteFile,
-    handleDeleteDirectory,
-    refreshCurrentFolder,
-  ]);
 
   // Save untitled file: prompt for name, write to disk, replace tab
   const handleSaveUntitled = useCallback(
@@ -1675,6 +2794,1505 @@ const App: React.FC = () => {
     setActiveTab(null);
   }, []);
 
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !folderPath) {
+      setWorkspaceCharacters([]);
+      setWorkspaceLoreEntries([]);
+      setWorkspaceProjectName(null);
+      return;
+    }
+    let cancelled = false;
+    const loadWorkspaceEntities = async () => {
+      try {
+        const novel = (await ipc.invoke('db-novel-get-by-folder', folderPath)) as {
+          id: number;
+          name?: string | null;
+        } | null;
+        const [characterRows, loreEntries] = await Promise.all([
+          novel
+            ? (ipc.invoke('db-character-list', novel.id) as Promise<
+                Array<{
+                  id: number;
+                  name: string;
+                  role: string;
+                  description: string;
+                  attributes: string;
+                }>
+              >)
+            : Promise.resolve([]),
+          loadLoreEntriesByFolder(folderPath),
+        ]);
+        if (cancelled) return;
+        setWorkspaceProjectName(novel?.name || folderPath.split('/').pop() || null);
+        setWorkspaceCharacters(mapCharacterRows(characterRows));
+        setWorkspaceLoreEntries(loreEntries);
+      } catch {
+        if (cancelled) return;
+        setWorkspaceProjectName(folderPath.split('/').pop() || null);
+        setWorkspaceCharacters([]);
+        setWorkspaceLoreEntries([]);
+      }
+    };
+    void loadWorkspaceEntities();
+    return () => {
+      cancelled = true;
+    };
+  }, [folderPath]);
+
+  const activeWorkspaceTab = useMemo(
+    () => (isWorkspaceTab(activeTab) ? activeTab : null),
+    [activeTab]
+  );
+  const activeDocumentTab = useMemo(
+    () => (isWorkspaceTab(activeTab) ? null : activeTab),
+    [activeTab]
+  );
+  const chapterAssistantEnabled = useMemo(
+    () => shouldEnableChapterAssistant(activeDocumentTab),
+    [activeDocumentTab]
+  );
+  const selectedCharacterTabId = useMemo(
+    () => parseCharacterWorkspaceTab(activeWorkspaceTab),
+    [activeWorkspaceTab]
+  );
+  const selectedLoreEntryTabId = useMemo(
+    () => parseLoreWorkspaceTab(activeWorkspaceTab),
+    [activeWorkspaceTab]
+  );
+  const selectedVolumePath = useMemo(
+    () => parseVolumeWorkspaceTab(activeWorkspaceTab),
+    [activeWorkspaceTab]
+  );
+  const { storyNodes: workspaceStoryNodes, materialNodes: workspaceMaterialNodes } = useMemo(
+    () => splitWorkspaceFiles(files),
+    [files]
+  );
+  const materialFiles = useMemo(
+    () => flattenFileNodes(workspaceMaterialNodes),
+    [workspaceMaterialNodes]
+  );
+  const materialFileMap = useMemo(
+    () => new Map(materialFiles.map((item) => [item.path, item])),
+    [materialFiles]
+  );
+  const linkedMaterialFiles = useMemo(
+    () =>
+      chapterMaterialPaths.map((path) => materialFileMap.get(path)).filter(Boolean) as FileNode[],
+    [chapterMaterialPaths, materialFileMap]
+  );
+  const rootVolumeNode = useMemo(() => {
+    if (!folderPath) return null;
+    const looseNodes = workspaceStoryNodes.filter(
+      (node) => !(node.type === 'directory' && isVolumeLikeName(node.name))
+    );
+    if (looseNodes.length === 0) return null;
+    return {
+      name: '未分卷',
+      path: folderPath,
+      type: 'directory' as const,
+      children: looseNodes,
+    };
+  }, [folderPath, workspaceStoryNodes]);
+  const selectedVolumeNode = useMemo(() => {
+    if (!selectedVolumePath) return null;
+    const existingNode = findNodeInTree(files, selectedVolumePath);
+    if (existingNode?.type === 'directory') return existingNode;
+    if (rootVolumeNode && folderPath && selectedVolumePath === folderPath) {
+      return rootVolumeNode;
+    }
+    return null;
+  }, [files, folderPath, rootVolumeNode, selectedVolumePath]);
+  const currentAssistantScope = useMemo<AssistantScopeTarget | null>(() => {
+    if (activeDocumentTab && isStoryFilePath(activeDocumentTab)) {
+      return {
+        kind: 'chapter',
+        path: activeDocumentTab,
+        label: getNodeDisplayName(activeDocumentTab),
+      };
+    }
+    if (selectedVolumePath) {
+      const label = selectedVolumeNode?.name || getNodeDisplayName(selectedVolumePath);
+      return {
+        kind: 'volume',
+        path: selectedVolumePath,
+        label,
+      };
+    }
+    if (!folderPath) return null;
+    return {
+      kind: 'project',
+      path: folderPath,
+      label: workspaceProjectName?.trim() || getNodeDisplayName(folderPath),
+    };
+  }, [activeDocumentTab, folderPath, selectedVolumeNode, selectedVolumePath, workspaceProjectName]);
+  const currentOutlineScope = useMemo<PersistedOutlineScopeInput | null>(() => {
+    if (!currentAssistantScope) return null;
+    return {
+      kind: currentAssistantScope.kind,
+      path: currentAssistantScope.path,
+    };
+  }, [currentAssistantScope]);
+  const storyFileNodes = useMemo(
+    () =>
+      flattenFileNodes(workspaceStoryNodes).filter(
+        (node): node is FileNode & { type: 'file' } =>
+          node.type === 'file' && isStoryFilePath(node.path)
+      ),
+    [workspaceStoryNodes]
+  );
+
+  const getStoryFilesForScope = useCallback(
+    (scope: AssistantScopeTarget): Array<FileNode & { type: 'file' }> => {
+      if (scope.kind === 'chapter') {
+        const targetNode = findNodeInTree(filesRef.current, scope.path);
+        return targetNode?.type === 'file' && isStoryFilePath(targetNode.path)
+          ? [targetNode as FileNode & { type: 'file' }]
+          : [];
+      }
+
+      if (scope.kind === 'volume') {
+        const targetNode =
+          (findNodeInTree(filesRef.current, scope.path) as FileNode | null) ||
+          (rootVolumeNode && scope.path === rootVolumeNode.path ? rootVolumeNode : null);
+        if (!targetNode || targetNode.type !== 'directory') return [];
+        return flattenFileNodes(targetNode.children || []).filter(
+          (node): node is FileNode & { type: 'file' } =>
+            node.type === 'file' && isStoryFilePath(node.path)
+        );
+      }
+
+      return storyFileNodes;
+    },
+    [rootVolumeNode, storyFileNodes]
+  );
+
+  const readStoryDocumentText = useCallback(
+    async (filePath: string): Promise<string> => {
+      const ipc = window.electron?.ipcRenderer;
+      if (activeDocumentTab === filePath) {
+        return editorContentRef.current || '';
+      }
+      if (!ipc) {
+        throw new Error('Electron IPC 不可用');
+      }
+      return (await ipc.invoke('read-file', filePath)) as string;
+    },
+    [activeDocumentTab]
+  );
+
+  const resolveAIGenerationContext = useCallback(
+    async (scope: AIGenerationScope): Promise<{ content: string; label: string }> => {
+      if (scope === 'current-content') {
+        const currentContent = editorContentRef.current.trim();
+        if (!currentContent) {
+          throw new Error('当前没有可用于生成的打开内容');
+        }
+        return { content: currentContent, label: getAIGenerationScopeLabel(scope) };
+      }
+
+      if (scope === 'current-chapter') {
+        if (!activeDocumentTab || !isStoryFilePath(activeDocumentTab)) {
+          throw new Error('请先打开一个正文章节或样稿');
+        }
+        const chapterContent = (await readStoryDocumentText(activeDocumentTab)).trim();
+        if (!chapterContent) {
+          throw new Error('当前章节内容为空，无法生成');
+        }
+        return {
+          content: chapterContent,
+          label: `${getAIGenerationScopeLabel(scope)} · ${getNodeDisplayName(activeDocumentTab)}`,
+        };
+      }
+
+      if (storyFileNodes.length === 0) {
+        throw new Error('当前作品没有可用的正文内容');
+      }
+
+      const sections: string[] = [];
+      let totalLength = 0;
+      for (const node of storyFileNodes) {
+        const raw = (await readStoryDocumentText(node.path)).trim();
+        if (!raw) continue;
+        const section = `# ${getNodeDisplayName(node.path)}\n\n${raw}`;
+        if (totalLength + section.length > 120000 && sections.length > 0) break;
+        sections.push(section);
+        totalLength += section.length;
+      }
+
+      const merged = sections.join('\n\n');
+      if (!merged.trim()) {
+        throw new Error('整部作品当前没有可用于生成的正文内容');
+      }
+      return { content: merged, label: getAIGenerationScopeLabel(scope) };
+    },
+    [activeDocumentTab, readStoryDocumentText, storyFileNodes]
+  );
+
+  const resolveScopeTargetContext = useCallback(
+    async (scope: AssistantScopeTarget): Promise<{ content: string; label: string }> => {
+      if (scope.kind === 'chapter') {
+        const content = (await readStoryDocumentText(scope.path)).trim();
+        if (!content) {
+          throw new Error('当前章节内容为空，无法生成');
+        }
+        return {
+          content,
+          label: `当前章节 · ${scope.label}`,
+        };
+      }
+
+      const scopedFiles = getStoryFilesForScope(scope);
+      if (scopedFiles.length === 0) {
+        throw new Error(
+          scope.kind === 'volume' ? '当前卷没有可用的正文内容' : '当前作品没有可用的正文内容'
+        );
+      }
+
+      const sections: string[] = [];
+      let totalLength = 0;
+      for (const node of scopedFiles) {
+        const raw = (await readStoryDocumentText(node.path)).trim();
+        if (!raw) continue;
+        const section = `# ${getNodeDisplayName(node.path)}\n\n${raw}`;
+        if (totalLength + section.length > 120000 && sections.length > 0) break;
+        sections.push(section);
+        totalLength += section.length;
+      }
+
+      const content = sections.join('\n\n').trim();
+      if (!content) {
+        throw new Error(
+          scope.kind === 'volume' ? '当前卷没有可用于生成的内容' : '当前作品没有可用于生成的内容'
+        );
+      }
+      return {
+        content,
+        label: `${scope.kind === 'volume' ? '当前卷' : '当前作品'} · ${scope.label}`,
+      };
+    },
+    [getStoryFilesForScope, readStoryDocumentText]
+  );
+
+  const persistScopedAssistantArtifacts = useCallback(
+    async (
+      scope: AssistantScopeTarget,
+      payload: {
+        characters?: AssistantScopedCharacter[];
+        lore?: AssistantScopedLore[];
+        materials?: AssistantScopedMaterial[];
+      }
+    ) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) return;
+
+      const jobs: Promise<unknown>[] = [];
+      if (payload.characters) {
+        const key = createAssistantArtifactStorageKey('characters', scope.kind, scope.path);
+        if (key) {
+          jobs.push(ipc.invoke('db-settings-set', key, JSON.stringify(payload.characters)));
+        }
+      }
+      if (payload.lore) {
+        const key = createAssistantArtifactStorageKey('lore', scope.kind, scope.path);
+        if (key) {
+          jobs.push(ipc.invoke('db-settings-set', key, JSON.stringify(payload.lore)));
+        }
+      }
+      if (payload.materials) {
+        const key = createAssistantArtifactStorageKey('materials', scope.kind, scope.path);
+        if (key) {
+          jobs.push(ipc.invoke('db-settings-set', key, JSON.stringify(payload.materials)));
+        }
+      }
+      await Promise.all(jobs);
+    },
+    []
+  );
+
+  const closeTabsByPredicate = useCallback((predicate: (tab: string) => boolean) => {
+    setOpenTabs((prev) => prev.filter((tab) => !predicate(tab)));
+    if (activeTabRef.current && predicate(activeTabRef.current)) {
+      setActiveTab(null);
+    }
+  }, []);
+
+  const handleClearCharacters = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const novelId = await getCurrentNovelId();
+    const folder = folderPathRef.current;
+    if (!ipc || !novelId || !folder) return;
+    if (workspaceCharacters.length === 0) {
+      toast.info('当前作品没有可清空的人物');
+      return;
+    }
+    const confirmed = await dialog.confirm(
+      '清空人物',
+      `确定要清空当前作品的 ${workspaceCharacters.length} 个人物吗？这会同时清空人物关系图。`
+    );
+    if (!confirmed) return;
+
+    try {
+      await ipc.invoke('db-character-clear-by-novel', novelId);
+      const prefixes = [
+        createRelationStorageKey(folder),
+        createGraphLayoutStorageKey(folder),
+      ].filter((item): item is string => Boolean(item));
+      if (prefixes.length > 0) {
+        await ipc.invoke('db-settings-delete-prefixes', prefixes);
+      }
+      setWorkspaceCharacters([]);
+      bumpWorkspaceCharactersVersion();
+      closeTabsByPredicate((tab) => tab.startsWith('__workspace__:character:'));
+      toast.success('人物已清空');
+    } catch (error) {
+      toast.error(`清空人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [closeTabsByPredicate, dialog, getCurrentNovelId, toast, workspaceCharacters.length]);
+
+  const handleClearLoreEntries = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const folder = folderPathRef.current;
+    if (!ipc || !folder) return;
+    if (workspaceLoreEntries.length === 0) {
+      toast.info('当前作品没有可清空的设定');
+      return;
+    }
+    const confirmed = await dialog.confirm(
+      '清空设定',
+      `确定要清空当前作品的 ${workspaceLoreEntries.length} 条设定吗？`
+    );
+    if (!confirmed) return;
+
+    try {
+      await ipc.invoke('db-world-setting-clear-by-folder', folder);
+      setWorkspaceLoreEntries([]);
+      bumpWorkspaceLoreVersion();
+      closeTabsByPredicate((tab) => tab.startsWith('__workspace__:lore-entry:'));
+      toast.success('设定已清空');
+    } catch (error) {
+      toast.error(`清空设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [closeTabsByPredicate, dialog, toast, workspaceLoreEntries.length]);
+
+  const handleClearMaterials = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const folder = folderPathRef.current;
+    if (!ipc || !folder) return;
+    const targets = [...workspaceMaterialNodes];
+    if (targets.length === 0) {
+      toast.info('当前作品没有可清空的资料');
+      return;
+    }
+    const confirmed = await dialog.confirm(
+      '清空资料',
+      '确定要清空当前作品资料区中的所有文件与目录吗？该操作不会删除正文。'
+    );
+    if (!confirmed) return;
+
+    try {
+      for (const node of targets) {
+        if (node.type === 'directory') {
+          await ipc.invoke('delete-directory', node.path);
+        } else {
+          await ipc.invoke('delete-file', node.path);
+        }
+      }
+      const settingsRows = (await ipc.invoke('db-settings-all')) as Array<{
+        key: string;
+        value: string;
+      }>;
+      const materialSettingKeys = settingsRows
+        .map((row) => row.key)
+        .filter(
+          (key) =>
+            key.startsWith(CHAPTER_MATERIALS_STORAGE_PREFIX) &&
+            isPathInWorkspace(key.slice(CHAPTER_MATERIALS_STORAGE_PREFIX.length), folder)
+        );
+      if (materialSettingKeys.length > 0) {
+        await ipc.invoke('db-settings-delete-prefixes', materialSettingKeys);
+      }
+      setChapterMaterialPaths([]);
+      closeTabsByPredicate((tab) =>
+        targets.some((node) => tab === node.path || tab.startsWith(`${node.path}/`))
+      );
+      await refreshCurrentFolder();
+      toast.success('资料已清空');
+    } catch (error) {
+      toast.error(`清空资料失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [closeTabsByPredicate, dialog, refreshCurrentFolder, toast, workspaceMaterialNodes]);
+
+  const handleGenerateCharacters = useCallback(
+    async (scope: AIGenerationScope) => {
+      const ipc = window.electron?.ipcRenderer;
+      const folder = folderPathRef.current;
+      const novelId = await getCurrentNovelId();
+      if (!ipc || !folder || !novelId) return;
+      if (!appSettings.ai.enabled) {
+        toast.warning('请先在设置中心启用并配置 AI');
+        return;
+      }
+
+      try {
+        toast.info(`正在从${getAIGenerationScopeLabel(scope)}生成人物图谱...`, 1800);
+        const { content, label } = await resolveAIGenerationContext(scope);
+        const settingsRaw = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as
+          | string
+          | null;
+        const settings = settingsRaw
+          ? (JSON.parse(settingsRaw) as { ai?: { contextTokens?: number } })
+          : {};
+        const contextTokens = settings.ai?.contextTokens || 128000;
+        const approxChunkChars = Math.max(4000, Math.min(12000, Math.floor(contextTokens * 0.08)));
+        const chunks = splitTextIntoChunks(content, approxChunkChars).slice(0, 12);
+        const loreEntries = await loadLoreEntriesByFolder(folder);
+        const chunkResults = [];
+
+        for (let index = 0; index < chunks.length; index += 1) {
+          const response = (await ipc.invoke('ai-request', {
+            prompt:
+              '请从给定正文片段中抽取人物与关系。必须严格返回 JSON 对象，格式为 {"characters":[{"name":"","role":"","description":"","aliases":[]}],"relations":[{"source":"","target":"","label":"","tone":"ally|rival|family|mentor|other","note":""}],"summary":""}。没有内容也必须返回空数组，不要输出 Markdown，不要解释。',
+            systemPrompt:
+              '你是小说人物设计引擎。你的任务是稳定抽取人物图谱，输出必须可被 JSON.parse 直接解析。角色名要用正文里的实际称呼，关系只保留明确证据。',
+            context: [
+              `生成范围: ${label}`,
+              loreEntries.length > 0
+                ? `设定集参考:\n${loreEntries.map((item) => `${item.title}: ${item.summary}`).join('\n')}`
+                : '',
+              `正文片段 ${index + 1}/${chunks.length}:\n${chunks[index]}`,
+            ]
+              .filter(Boolean)
+              .join('\n\n'),
+          })) as { ok: boolean; text?: string; error?: string };
+          if (!response.ok) throw new Error(response.error || 'AI 生成人物失败');
+          const parsed = parseCharacterGraphAIResult(response.text || '');
+          if (parsed) {
+            chunkResults.push(parsed);
+          }
+        }
+
+        const merged = mergeCharacterGraphResults(chunkResults);
+        if (merged.characters.length === 0) {
+          toast.warning('AI 没有识别出足够明确的人物');
+          return;
+        }
+
+        const existingRows = (await ipc.invoke('db-character-list', novelId)) as Array<{
+          id: number;
+          name: string;
+          role: string;
+          description: string;
+          attributes: string;
+        }>;
+        const existingByName = new Map<string, (typeof existingRows)[number]>();
+        existingRows.forEach((row) => {
+          existingByName.set(normalizePersonName(row.name), row);
+          const attrs = parseCharacterAttributes(row.attributes);
+          (attrs.aliases || []).forEach((alias) =>
+            existingByName.set(normalizePersonName(alias), row)
+          );
+        });
+
+        const nameToId = new Map<string, number>();
+        let createdCount = 0;
+        let updatedCount = 0;
+        for (const character of merged.characters) {
+          const normalized = normalizePersonName(character.name);
+          const matched = existingByName.get(normalized);
+          const nextRole = character.role?.trim() || matched?.role || '';
+          const nextDescription = character.description?.trim() || matched?.description || '';
+          const nextAliases = Array.from(
+            new Set((character.aliases || []).map((item) => item.trim()).filter(Boolean))
+          );
+
+          if (matched) {
+            const prevAttrs = parseCharacterAttributes(matched.attributes);
+            await ipc.invoke('db-character-update', matched.id, {
+              name: matched.name,
+              role: nextRole,
+              description: nextDescription,
+              attributes: JSON.stringify({
+                ...prevAttrs,
+                aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
+              }),
+            });
+            updatedCount += 1;
+            nameToId.set(normalized, matched.id);
+            nextAliases.forEach((alias) => nameToId.set(normalizePersonName(alias), matched.id));
+          } else {
+            const created = (await ipc.invoke(
+              'db-character-create',
+              novelId,
+              character.name.trim(),
+              nextRole,
+              nextDescription,
+              JSON.stringify({ aliases: nextAliases })
+            )) as { lastInsertRowid: number | bigint };
+            const createdId = Number(created.lastInsertRowid);
+            createdCount += 1;
+            nameToId.set(normalized, createdId);
+            nextAliases.forEach((alias) => nameToId.set(normalizePersonName(alias), createdId));
+          }
+        }
+
+        const nextRelations = merged.relations
+          .map((relation, index) => {
+            const sourceId = nameToId.get(normalizePersonName(relation.source));
+            const targetId = nameToId.get(normalizePersonName(relation.target));
+            if (!sourceId || !targetId || sourceId === targetId) return null;
+            return {
+              id: `ai-${Date.now()}-${index}`,
+              sourceId,
+              targetId,
+              label: relation.label?.trim() || '关系',
+              tone:
+                relation.tone === 'ally' ||
+                relation.tone === 'rival' ||
+                relation.tone === 'family' ||
+                relation.tone === 'mentor'
+                  ? relation.tone
+                  : 'other',
+              note: relation.note?.trim() || '',
+            };
+          })
+          .filter(Boolean) as Array<{
+          id: string;
+          sourceId: number;
+          targetId: number;
+          label: string;
+          tone: 'ally' | 'rival' | 'family' | 'mentor' | 'other';
+          note: string;
+        }>;
+
+        const relationKey = createRelationStorageKey(folder);
+        if (relationKey) {
+          await ipc.invoke('db-settings-set', relationKey, JSON.stringify(nextRelations));
+        }
+        const refreshedRows = (await ipc.invoke('db-character-list', novelId)) as Array<{
+          id: number;
+          name: string;
+          role: string;
+          description: string;
+          attributes: string;
+        }>;
+        setWorkspaceCharacters(mapCharacterRows(refreshedRows));
+        bumpWorkspaceCharactersVersion();
+        toast.success(
+          `AI 已同步人物：新增 ${createdCount}，更新 ${updatedCount}，关系 ${nextRelations.length}`
+        );
+      } catch (error) {
+        toast.error(`AI 生成人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [appSettings.ai.enabled, getCurrentNovelId, resolveAIGenerationContext, toast]
+  );
+
+  const handleGenerateLoreEntries = useCallback(
+    async (scope: AIGenerationScope) => {
+      const ipc = window.electron?.ipcRenderer;
+      const folder = folderPathRef.current;
+      if (!ipc || !folder) return;
+      if (!appSettings.ai.enabled) {
+        toast.warning('请先在设置中心启用并配置 AI');
+        return;
+      }
+
+      try {
+        toast.info(`正在从${getAIGenerationScopeLabel(scope)}提炼设定...`, 1800);
+        const { content, label } = await resolveAIGenerationContext(scope);
+        const response = (await ipc.invoke('ai-request', {
+          prompt:
+            '请从给定内容中提炼可长期复用的设定条目。必须严格返回 JSON 对象，格式为 {"entries":[{"category":"world|faction|system|term","title":"","summary":"","tags":[""]}]}。只保留长期有效设定，不要输出章节剧情总结，不要 Markdown。',
+          systemPrompt:
+            '你是小说设定编辑。你需要从正文中抽取可复用的世界观、势力、规则、术语条目，并用简洁中文概括。',
+          context: `生成范围: ${label}\n\n作品内容:\n${content.slice(0, 90000)}`,
+        })) as { ok: boolean; text?: string; error?: string };
+        if (!response.ok) throw new Error(response.error || 'AI 生成设定失败');
+        const drafts = parseLoreGenerationResult(response.text || '');
+        if (drafts.length === 0) {
+          toast.warning('AI 没有生成可导入的设定条目');
+          return;
+        }
+
+        const existingEntries = await loadLoreEntriesByFolder(folder);
+        const existingByKey = new Map(
+          existingEntries.map((item) => [buildLoreDedupKey(item), item])
+        );
+        let createdCount = 0;
+        let updatedCount = 0;
+
+        for (const draft of drafts) {
+          const matched = existingByKey.get(buildLoreDedupKey(draft));
+          if (matched) {
+            if (!matched.summary.trim() && draft.summary.trim()) {
+              await ipc.invoke('db-world-setting-update', matched.id, {
+                content: draft.summary,
+                tags: JSON.stringify(draft.tags || []),
+              });
+              updatedCount += 1;
+            }
+            continue;
+          }
+          await ipc.invoke(
+            'db-world-setting-create-by-folder',
+            folder,
+            draft.category,
+            draft.title,
+            draft.summary,
+            JSON.stringify(draft.tags || [])
+          );
+          createdCount += 1;
+        }
+
+        const nextEntries = await loadLoreEntriesByFolder(folder);
+        setWorkspaceLoreEntries(nextEntries);
+        bumpWorkspaceLoreVersion();
+        toast.success(`AI 已提炼设定：新增 ${createdCount}，补全 ${updatedCount}`);
+      } catch (error) {
+        toast.error(`AI 生成设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [appSettings.ai.enabled, resolveAIGenerationContext, toast]
+  );
+
+  const handleGenerateMaterials = useCallback(
+    async (scope: AIGenerationScope) => {
+      const ipc = window.electron?.ipcRenderer;
+      const folder = folderPathRef.current;
+      if (!ipc || !folder) return;
+      if (!appSettings.ai.enabled) {
+        toast.warning('请先在设置中心启用并配置 AI');
+        return;
+      }
+
+      try {
+        toast.info(`正在从${getAIGenerationScopeLabel(scope)}生成资料条目...`, 1800);
+        const { content, label } = await resolveAIGenerationContext(scope);
+        const response = (await ipc.invoke('ai-request', {
+          prompt:
+            '请根据给定作品内容，生成适合沉淀到资料库的资料条目。必须严格返回 JSON 对象，格式为 {"materials":[{"title":"","summary":"","kind":"reference|scene|character|setting|research","relatedChapter":"","keywords":[""]}]}。资料条目应是可继续扩写的研究/参考笔记，不要输出 Markdown。',
+          systemPrompt:
+            '你是长篇创作资料编辑。你的任务是把作品内容中值得长期保留的参考资料、场景资料、人物资料、设定资料整理成短条目。',
+          context: `生成范围: ${label}\n\n作品内容:\n${content.slice(0, 90000)}`,
+        })) as { ok: boolean; text?: string; error?: string };
+        if (!response.ok) throw new Error(response.error || 'AI 生成资料失败');
+        const drafts = parseMaterialGenerationResult(response.text || '');
+        if (drafts.length === 0) {
+          toast.warning('AI 没有生成可落库的资料条目');
+          return;
+        }
+
+        const defaultMaterialRoot =
+          filesRef.current.find(
+            (node) => node.type === 'directory' && isMaterialLikeName(node.name)
+          )?.path ??
+          (
+            (await ipc.invoke('create-directory', folder, '资料')) as {
+              success: boolean;
+              dirPath: string;
+            }
+          ).dirPath;
+        const existingAiMaterialRoot = findNodeInTree(
+          filesRef.current,
+          `${defaultMaterialRoot.replace(/[\\/]+$/, '')}/AI资料`
+        );
+        const aiMaterialRoot =
+          existingAiMaterialRoot?.type === 'directory'
+            ? existingAiMaterialRoot.path
+            : (
+                (await ipc.invoke('create-directory', defaultMaterialRoot, 'AI资料')) as {
+                  success: boolean;
+                  dirPath: string;
+                }
+              ).dirPath;
+
+        const existingNames = new Set(
+          ((findNodeInTree(filesRef.current, aiMaterialRoot)?.children || []) as FileNode[])
+            .filter((node): node is FileNode & { type: 'file' } => node.type === 'file')
+            .map((node) => node.name)
+        );
+
+        for (const draft of drafts) {
+          const fileName = buildUniqueMarkdownName(draft.title, existingNames);
+          const created = (await ipc.invoke('create-file', aiMaterialRoot, fileName)) as {
+            success: boolean;
+            filePath: string;
+          };
+          const body = [
+            `# ${draft.title}`,
+            '',
+            `类型：${draft.kind}`,
+            draft.relatedChapter ? `关联章节：${draft.relatedChapter}` : '',
+            draft.keywords.length > 0 ? `关键词：${draft.keywords.join('、')}` : '',
+            '',
+            draft.summary,
+          ]
+            .filter(Boolean)
+            .join('\n');
+          await ipc.invoke('write-file', created.filePath, body);
+        }
+
+        await refreshCurrentFolder();
+        toast.success(`AI 已生成 ${drafts.length} 条资料笔记`);
+      } catch (error) {
+        toast.error(`AI 生成资料失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [appSettings.ai.enabled, resolveAIGenerationContext, refreshCurrentFolder, toast]
+  );
+
+  const handleGenerateScopedCharacters = useCallback(
+    async (scope: AssistantScopeTarget) => {
+      const ipc = window.electron?.ipcRenderer;
+      const folder = folderPathRef.current;
+      if (!ipc || !folder) return;
+      if (!appSettings.ai.enabled) {
+        toast.warning('请先在设置中心启用并配置 AI');
+        return;
+      }
+
+      try {
+        toast.info(`正在为${scope.label}生成人物上下文...`, 1800);
+        const { content, label } = await resolveScopeTargetContext(scope);
+        const settingsRaw = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as
+          | string
+          | null;
+        const settings = settingsRaw
+          ? (JSON.parse(settingsRaw) as { ai?: { contextTokens?: number } })
+          : {};
+        const contextTokens = settings.ai?.contextTokens || 128000;
+        const approxChunkChars = Math.max(4000, Math.min(12000, Math.floor(contextTokens * 0.08)));
+        const chunks = splitTextIntoChunks(content, approxChunkChars).slice(0, 12);
+        const loreEntries = await loadLoreEntriesByFolder(folder);
+        const chunkResults: CharacterGraphAIResult[] = [];
+
+        for (let index = 0; index < chunks.length; index += 1) {
+          const response = (await ipc.invoke('ai-request', {
+            prompt:
+              '请从给定正文片段中抽取当前作用域最重要的人物上下文。必须严格返回 JSON 对象，格式为 {"characters":[{"name":"","role":"","description":"","aliases":[]}],"relations":[{"source":"","target":"","label":"","tone":"ally|rival|family|mentor|other","note":""}],"summary":""}。没有内容也必须返回空数组，不要输出 Markdown，不要解释。',
+            systemPrompt:
+              '你是创作助手的人物上下文引擎。你只保留当前作用域里真正重要、可供继续写作引用的人物。',
+            context: [
+              `生成范围: ${label}`,
+              loreEntries.length > 0
+                ? `项目设定参考:\n${loreEntries.map((item) => `${item.title}: ${item.summary}`).join('\n')}`
+                : '',
+              `正文片段 ${index + 1}/${chunks.length}:\n${chunks[index]}`,
+            ]
+              .filter(Boolean)
+              .join('\n\n'),
+          })) as { ok: boolean; text?: string; error?: string };
+          if (!response.ok) throw new Error(response.error || 'AI 生成人物上下文失败');
+          const parsed = parseCharacterGraphAIResult(response.text || '');
+          if (parsed) {
+            chunkResults.push(parsed);
+          }
+        }
+
+        const merged = mergeCharacterGraphResults(chunkResults);
+        const nextCharacters = merged.characters
+          .map((item) => ({
+            name: item.name.trim(),
+            role: item.role?.trim() || '',
+            description: item.description?.trim() || '',
+          }))
+          .filter((item) => item.name);
+        await persistScopedAssistantArtifacts(scope, { characters: nextCharacters });
+        if (
+          currentAssistantScope &&
+          currentAssistantScope.kind === scope.kind &&
+          currentAssistantScope.path === scope.path
+        ) {
+          setAssistantScopedCharacters(nextCharacters);
+        }
+        toast.success(`已为${scope.label}生成人物上下文 ${nextCharacters.length} 项`);
+      } catch (error) {
+        toast.error(
+          `AI 生成人物上下文失败: ${error instanceof Error ? error.message : '未知错误'}`
+        );
+      }
+    },
+    [
+      appSettings.ai.enabled,
+      currentAssistantScope,
+      persistScopedAssistantArtifacts,
+      resolveScopeTargetContext,
+      toast,
+    ]
+  );
+
+  const handleGenerateScopedLore = useCallback(
+    async (scope: AssistantScopeTarget) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) return;
+      if (!appSettings.ai.enabled) {
+        toast.warning('请先在设置中心启用并配置 AI');
+        return;
+      }
+
+      try {
+        toast.info(`正在为${scope.label}生成设定上下文...`, 1800);
+        const { content, label } = await resolveScopeTargetContext(scope);
+        const response = (await ipc.invoke('ai-request', {
+          prompt:
+            '请从给定内容中提炼当前作用域可直接用于写作的设定上下文。必须严格返回 JSON 对象，格式为 {"entries":[{"category":"world|faction|system|term","title":"","summary":"","tags":[""]}]}。只保留对当前作用域真正有帮助的设定，不要输出 Markdown。',
+          systemPrompt:
+            '你是创作助手的设定编辑。你只输出当前作用域最关键的世界观、规则、势力和术语。',
+          context: `生成范围: ${label}\n\n作品内容:\n${content.slice(0, 90000)}`,
+        })) as { ok: boolean; text?: string; error?: string };
+        if (!response.ok) throw new Error(response.error || 'AI 生成设定上下文失败');
+        const nextLore = parseLoreGenerationResult(response.text || '').map((item) => ({
+          category: item.category,
+          title: item.title,
+          summary: item.summary,
+        }));
+        await persistScopedAssistantArtifacts(scope, { lore: nextLore });
+        if (
+          currentAssistantScope &&
+          currentAssistantScope.kind === scope.kind &&
+          currentAssistantScope.path === scope.path
+        ) {
+          setAssistantScopedLoreEntries(nextLore);
+        }
+        toast.success(`已为${scope.label}生成设定上下文 ${nextLore.length} 项`);
+      } catch (error) {
+        toast.error(
+          `AI 生成设定上下文失败: ${error instanceof Error ? error.message : '未知错误'}`
+        );
+      }
+    },
+    [
+      appSettings.ai.enabled,
+      currentAssistantScope,
+      persistScopedAssistantArtifacts,
+      resolveScopeTargetContext,
+      toast,
+    ]
+  );
+
+  const handleGenerateScopedMaterials = useCallback(
+    async (scope: AssistantScopeTarget) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) return;
+      if (!appSettings.ai.enabled) {
+        toast.warning('请先在设置中心启用并配置 AI');
+        return;
+      }
+
+      try {
+        toast.info(`正在为${scope.label}生成资料上下文...`, 1800);
+        const { content, label } = await resolveScopeTargetContext(scope);
+        const response = (await ipc.invoke('ai-request', {
+          prompt:
+            '请根据给定作品内容，生成当前作用域可直接使用的资料上下文。必须严格返回 JSON 对象，格式为 {"materials":[{"title":"","summary":"","kind":"reference|scene|character|setting|research","relatedChapter":"","keywords":[""]}]}。不要输出 Markdown。',
+          systemPrompt:
+            '你是创作助手的资料编辑。你只保留当前作用域最值得引用的参考资料、场景资料、人物资料和设定资料。',
+          context: `生成范围: ${label}\n\n作品内容:\n${content.slice(0, 90000)}`,
+        })) as { ok: boolean; text?: string; error?: string };
+        if (!response.ok) throw new Error(response.error || 'AI 生成资料上下文失败');
+        const nextMaterials = parseMaterialGenerationResult(response.text || '').map((item) => ({
+          title: item.title,
+          summary: item.summary,
+          kind: item.kind,
+          relatedChapter: item.relatedChapter || '',
+        }));
+        await persistScopedAssistantArtifacts(scope, { materials: nextMaterials });
+        if (
+          currentAssistantScope &&
+          currentAssistantScope.kind === scope.kind &&
+          currentAssistantScope.path === scope.path
+        ) {
+          setAssistantScopedMaterials(nextMaterials);
+        }
+        toast.success(`已为${scope.label}生成资料上下文 ${nextMaterials.length} 项`);
+      } catch (error) {
+        toast.error(
+          `AI 生成资料上下文失败: ${error instanceof Error ? error.message : '未知错误'}`
+        );
+      }
+    },
+    [
+      appSettings.ai.enabled,
+      currentAssistantScope,
+      persistScopedAssistantArtifacts,
+      resolveScopeTargetContext,
+      toast,
+    ]
+  );
+
+  const handleSplitStoryFile = useCallback(
+    async (filePath: string) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc || !isStoryFilePath(filePath)) return;
+
+      try {
+        const raw = await readStoryDocumentText(filePath);
+        const chapters = splitChapters(raw).filter(
+          (chapter) =>
+            chapter.title.trim() &&
+            chapter.title.trim() !== '全文' &&
+            (chapter.content.trim() || chapter.title.trim())
+        );
+        if (chapters.length < 2) {
+          toast.warning('当前文件未识别出可拆分的多个章节');
+          return;
+        }
+        const preview = chapters
+          .slice(0, 8)
+          .map((chapter, index) => `${index + 1}. ${chapter.title}`)
+          .join('\n');
+        const confirmed = await dialog.confirm(
+          '按章节拆分',
+          `识别到 ${chapters.length} 个章节，将在当前目录生成对应章节文件。\n\n${preview}${chapters.length > 8 ? '\n…' : ''}`
+        );
+        if (!confirmed) return;
+
+        const targetDir = getParentDirectory(filePath) || folderPathRef.current;
+        if (!targetDir) throw new Error('无法确定拆分目标目录');
+        const siblings = findNodeInTree(filesRef.current, targetDir)?.children || filesRef.current;
+        const existingNames = new Set(
+          siblings
+            .filter((node): node is FileNode & { type: 'file' } => node.type === 'file')
+            .map((node) => node.name)
+        );
+        const createdPaths: string[] = [];
+        for (const chapter of chapters) {
+          const fileName = buildUniqueMarkdownName(chapter.title, existingNames);
+          const result = (await ipc.invoke('create-file', targetDir, fileName)) as {
+            success: boolean;
+            filePath: string;
+          };
+          const nextContent = [`# ${chapter.title}`, '', chapter.content.trim()]
+            .filter(Boolean)
+            .join('\n');
+          await ipc.invoke('write-file', result.filePath, nextContent);
+          createdPaths.push(result.filePath);
+        }
+        await refreshCurrentFolder();
+        if (createdPaths[0]) {
+          openFileInTab(createdPaths[0]);
+        }
+        toast.success(`已拆分生成 ${createdPaths.length} 个章节文件`);
+      } catch (error) {
+        toast.error(`按章节拆分失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, openFileInTab, readStoryDocumentText, refreshCurrentFolder, toast]
+  );
+
+  const contextMenuItems = useMemo(() => {
+    if (!contextMenu) return [];
+    const menuItem = (
+      label: string,
+      onClick: () => void,
+      options?: { danger?: boolean; disabled?: boolean; separator?: boolean }
+    ) => ({
+      label,
+      onClick,
+      danger: options?.danger,
+      disabled: options?.disabled,
+      separator: options?.separator,
+    });
+
+    if (contextMenu.target.kind === 'background') {
+      const bgPasteDir = folderPath;
+      return [
+        ...(folderPath ? [menuItem('修改作品名', () => void handleRenameProject())] : []),
+        menuItem('', () => {}, { separator: true }),
+        menuItem('新建卷', () => void handleCreateStoryItem('volume')),
+        menuItem('新建章', () => void handleCreateStoryItem('chapter')),
+        menuItem('新建稿夹', () => void handleCreateStoryItem('draft-folder')),
+        menuItem('新建稿', () => void handleCreateStoryItem('draft')),
+        menuItem('', () => {}, { separator: true }),
+        menuItem('新建人物', () => void handleCreateCharacter()),
+        menuItem('新建设定', () => void handleCreateLoreEntry()),
+        menuItem('', () => {}, { separator: true }),
+        menuItem('新建资料目录', () => void handleCreateMaterialDirectory()),
+        menuItem('导入 Word / Excel 文稿', () => void handleImportFile?.(), {
+          disabled: !handleImportFile,
+        }),
+        menuItem('', () => {}, { separator: true }),
+        menuItem('粘贴', () => bgPasteDir && handlePasteFiles(bgPasteDir), {
+          disabled: !folderPath,
+        }),
+        menuItem('', () => {}, { separator: true }),
+        menuItem('刷新', refreshCurrentFolder),
+      ];
+    }
+
+    if (contextMenu.target.kind === 'object') {
+      const { target } = contextMenu.target;
+      switch (target.kind) {
+        case 'project-root': {
+          const scope = buildProjectAssistantScope();
+          if (!scope) return [];
+          return [
+            menuItem('修改作品名', () => void handleRenameProject()),
+            menuItem('', () => {}, { separator: true }),
+            menuItem('AI 生成人物', () => void handleGenerateScopedCharacters(scope)),
+            menuItem('AI 生成设定', () => void handleGenerateScopedLore(scope)),
+            menuItem('AI 生成资料', () => void handleGenerateScopedMaterials(scope)),
+          ];
+        }
+        case 'story-root':
+          return [
+            menuItem('新建卷', () => void handleCreateStoryItem('volume')),
+            menuItem('新建章', () => void handleCreateStoryItem('chapter')),
+            menuItem('新建稿夹', () => void handleCreateStoryItem('draft-folder')),
+            menuItem('新建稿', () => void handleCreateStoryItem('draft')),
+          ];
+        case 'volume-item': {
+          const scope = buildVolumeAssistantScope(target.volumePath);
+          return [
+            menuItem('查看详情', () => handleOpenVolumeNode(target.volumePath)),
+            menuItem('', () => {}, { separator: true }),
+            menuItem('AI 生成人物', () => void handleGenerateScopedCharacters(scope)),
+            menuItem('AI 生成设定', () => void handleGenerateScopedLore(scope)),
+            menuItem('AI 生成资料', () => void handleGenerateScopedMaterials(scope)),
+            menuItem('', () => {}, { separator: true }),
+            menuItem(
+              '删除卷',
+              () => void handleDeleteVolumeNode(target.volumePath, target.isSynthetic),
+              {
+                danger: true,
+                disabled: target.isSynthetic,
+              }
+            ),
+          ];
+        }
+        case 'characters-root':
+          return [
+            menuItem('查看详情', handleOpenCharacters),
+            menuItem('', () => {}, { separator: true }),
+            menuItem('新建人物', () => void handleCreateCharacter()),
+            menuItem('清空人物', () => void handleClearCharacters(), { danger: true }),
+          ];
+        case 'lore-root':
+          return [
+            menuItem('查看详情', handleOpenLore),
+            menuItem('', () => {}, { separator: true }),
+            menuItem('新建设定', () => void handleCreateLoreEntry()),
+            menuItem('清空设定', () => void handleClearLoreEntries(), { danger: true }),
+          ];
+        case 'materials-root':
+          return [
+            menuItem('新建资料目录', () => void handleCreateMaterialDirectory()),
+            menuItem('导入 Word / Excel 文稿', () => void handleImportFile?.(), {
+              disabled: !handleImportFile,
+            }),
+            menuItem('', () => {}, { separator: true }),
+            menuItem('刷新资料', refreshCurrentFolder),
+            menuItem('清空资料', () => void handleClearMaterials(), { danger: true }),
+          ];
+        case 'character-item': {
+          const targetCharacter = workspaceCharacters.find(
+            (item) => item.id === target.characterId
+          );
+          if (!targetCharacter) return [];
+          return [
+            menuItem('查看详情', () => handleOpenCharacterNode(target.characterId)),
+            menuItem('', () => {}, { separator: true }),
+            menuItem('删除人物', () => void handleDeleteCharacterNode(target.characterId), {
+              danger: true,
+            }),
+          ];
+        }
+        case 'lore-item': {
+          const targetEntry = workspaceLoreEntries.find((item) => item.id === target.entryId);
+          if (!targetEntry) return [];
+          return [
+            menuItem('查看详情', () => handleOpenLoreNode(target.entryId)),
+            menuItem('', () => {}, { separator: true }),
+            menuItem('删除设定', () => void handleDeleteLoreNode(target.entryId), {
+              danger: true,
+            }),
+          ];
+        }
+        default:
+          return [];
+      }
+    }
+
+    const node = contextMenu.target.node;
+    const pasteTargetDir =
+      node.type === 'directory' ? node.path : node.path.substring(0, node.path.lastIndexOf('/'));
+    const items = [
+      menuItem('复制', () => handleCopyFile(node.path)),
+      menuItem('粘贴', () => handlePasteFiles(pasteTargetDir)),
+      menuItem('', () => {}, { separator: true }),
+      ...(node.type === 'file' && isStoryFilePath(node.path)
+        ? [
+            menuItem(
+              'AI 生成人物',
+              () => void handleGenerateScopedCharacters(buildChapterAssistantScope(node.path))
+            ),
+            menuItem(
+              'AI 生成设定',
+              () => void handleGenerateScopedLore(buildChapterAssistantScope(node.path))
+            ),
+            menuItem(
+              'AI 生成资料',
+              () => void handleGenerateScopedMaterials(buildChapterAssistantScope(node.path))
+            ),
+            menuItem('', () => {}, { separator: true }),
+          ]
+        : []),
+      ...(node.type === 'file' && isStoryFilePath(node.path)
+        ? [menuItem('按章节拆分', () => void handleSplitStoryFile(node.path))]
+        : []),
+      ...(node.type === 'file' && isStoryFilePath(node.path)
+        ? [menuItem('', () => {}, { separator: true })]
+        : []),
+    ];
+    if (node.type === 'file') {
+      items.push(menuItem('删除文件', () => handleDeleteFile(node.path), { danger: true }));
+    } else {
+      items.push(menuItem('删除文件夹', () => handleDeleteDirectory(node.path), { danger: true }));
+    }
+    return items;
+  }, [
+    contextMenu,
+    buildChapterAssistantScope,
+    buildProjectAssistantScope,
+    buildVolumeAssistantScope,
+    folderPath,
+    handleClearCharacters,
+    handleClearLoreEntries,
+    handleClearMaterials,
+    handleCopyFile,
+    handleCreateCharacter,
+    handleCreateDirectory,
+    handleCreateFile,
+    handleCreateLoreEntry,
+    handleCreateMaterialDirectory,
+    handleCreateStoryItem,
+    handleDeleteCharacterNode,
+    handleDeleteDirectory,
+    handleDeleteFile,
+    handleDeleteLoreNode,
+    handleDeleteVolumeNode,
+    handleGenerateCharacters,
+    handleGenerateLoreEntries,
+    handleGenerateMaterials,
+    handleGenerateScopedCharacters,
+    handleGenerateScopedLore,
+    handleGenerateScopedMaterials,
+    handleImportFile,
+    handleOpenCharacterNode,
+    handleOpenCharacters,
+    handleOpenLore,
+    handleOpenLoreNode,
+    handleOpenVolumeNode,
+    handlePasteFiles,
+    handleRenameProject,
+    handleRename,
+    handleSplitStoryFile,
+    refreshCurrentFolder,
+    workspaceCharacters,
+    workspaceLoreEntries,
+  ]);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !folderPath) {
+      setMaterialUsageMap({});
+      return;
+    }
+    let cancelled = false;
+    const loadMaterialUsage = async () => {
+      try {
+        const rows = (await ipc.invoke('db-settings-all')) as Array<{ key: string; value: string }>;
+        if (cancelled) return;
+        const materialUsage = new Map<string, string[]>();
+        rows.forEach((row) => {
+          if (
+            !row ||
+            typeof row.key !== 'string' ||
+            !row.key.startsWith(CHAPTER_MATERIALS_STORAGE_PREFIX)
+          ) {
+            return;
+          }
+          const chapterPath = row.key.slice(CHAPTER_MATERIALS_STORAGE_PREFIX.length);
+          if (!chapterPath || !isPathInWorkspace(chapterPath, folderPath)) return;
+          let materialPaths: unknown;
+          try {
+            materialPaths = JSON.parse(row.value);
+          } catch {
+            return;
+          }
+          if (!Array.isArray(materialPaths)) return;
+          const chapterName = getNodeDisplayName(chapterPath);
+          materialPaths.forEach((materialPath) => {
+            if (typeof materialPath !== 'string' || !isPathInWorkspace(materialPath, folderPath)) {
+              return;
+            }
+            const next = materialUsage.get(materialPath) ?? [];
+            next.push(chapterName);
+            materialUsage.set(materialPath, next);
+          });
+        });
+        setMaterialUsageMap(
+          Object.fromEntries(
+            Array.from(materialUsage.entries()).map(([materialPath, chapterNames]) => [
+              materialPath,
+              formatMaterialUsageLabel(chapterNames),
+            ])
+          )
+        );
+      } catch {
+        if (!cancelled) {
+          setMaterialUsageMap({});
+        }
+      }
+    };
+    const dispose = ipc.on?.('settings-updated', (_event, key?: string) => {
+      if (
+        typeof key === 'string' &&
+        key.startsWith(CHAPTER_MATERIALS_STORAGE_PREFIX) &&
+        !cancelled
+      ) {
+        void loadMaterialUsage();
+      }
+    });
+    void loadMaterialUsage();
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, [folderPath]);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    const storageKey = createChapterMaterialsStorageKey(activeDocumentTab);
+    if (!ipc || !storageKey || !chapterAssistantEnabled) {
+      setChapterMaterialPaths([]);
+      return;
+    }
+    let cancelled = false;
+    const loadChapterMaterials = async () => {
+      try {
+        const raw = (await ipc.invoke('db-settings-get', storageKey)) as string | null;
+        if (cancelled) return;
+        const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+        setChapterMaterialPaths(
+          Array.isArray(parsed)
+            ? parsed.filter((item): item is string => typeof item === 'string')
+            : []
+        );
+      } catch {
+        if (!cancelled) setChapterMaterialPaths([]);
+      }
+    };
+    void loadChapterMaterials();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDocumentTab, chapterAssistantEnabled]);
+
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc || !currentAssistantScope) {
+      setAssistantScopedCharacters([]);
+      setAssistantScopedLoreEntries([]);
+      setAssistantScopedMaterials([]);
+      return;
+    }
+
+    const characterKey = createAssistantArtifactStorageKey(
+      'characters',
+      currentAssistantScope.kind,
+      currentAssistantScope.path
+    );
+    const loreKey = createAssistantArtifactStorageKey(
+      'lore',
+      currentAssistantScope.kind,
+      currentAssistantScope.path
+    );
+    const materialKey = createAssistantArtifactStorageKey(
+      'materials',
+      currentAssistantScope.kind,
+      currentAssistantScope.path
+    );
+    if (!characterKey || !loreKey || !materialKey) {
+      setAssistantScopedCharacters([]);
+      setAssistantScopedLoreEntries([]);
+      setAssistantScopedMaterials([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadScopedArtifacts = async () => {
+      try {
+        const [characterRaw, loreRaw, materialRaw] = (await Promise.all([
+          ipc.invoke('db-settings-get', characterKey),
+          ipc.invoke('db-settings-get', loreKey),
+          ipc.invoke('db-settings-get', materialKey),
+        ])) as [string | null, string | null, string | null];
+        if (cancelled) return;
+        setAssistantScopedCharacters(parseAssistantScopedCharacters(characterRaw));
+        setAssistantScopedLoreEntries(parseAssistantScopedLore(loreRaw));
+        setAssistantScopedMaterials(parseAssistantScopedMaterials(materialRaw));
+      } catch {
+        if (cancelled) return;
+        setAssistantScopedCharacters([]);
+        setAssistantScopedLoreEntries([]);
+        setAssistantScopedMaterials([]);
+      }
+    };
+
+    const watchedKeys = new Set([characterKey, loreKey, materialKey]);
+    const dispose = ipc.on?.('settings-updated', (_event, key?: string) => {
+      if (typeof key === 'string' && watchedKeys.has(key)) {
+        void loadScopedArtifacts();
+      }
+    });
+    void loadScopedArtifacts();
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, [currentAssistantScope]);
+
+  const persistChapterMaterials = useCallback(
+    async (nextPaths: string[]) => {
+      const ipc = window.electron?.ipcRenderer;
+      const storageKey = createChapterMaterialsStorageKey(activeDocumentTab);
+      if (!ipc || !storageKey) return;
+      await ipc.invoke('db-settings-set', storageKey, JSON.stringify(nextPaths));
+    },
+    [activeDocumentTab]
+  );
+
+  const handleAddChapterMaterial = useCallback(
+    (path: string) => {
+      setChapterMaterialPaths((prev) => {
+        if (prev.includes(path)) return prev;
+        const next = [...prev, path];
+        void persistChapterMaterials(next);
+        return next;
+      });
+    },
+    [persistChapterMaterials]
+  );
+
+  const handleRemoveChapterMaterial = useCallback(
+    (path: string) => {
+      setChapterMaterialPaths((prev) => {
+        const next = prev.filter((item) => item !== path);
+        void persistChapterMaterials(next);
+        return next;
+      });
+    },
+    [persistChapterMaterials]
+  );
+
+  const workspaceTabLabels = useMemo<Record<string, string>>(
+    () => ({
+      ...WORKSPACE_TAB_LABELS,
+      ...Object.fromEntries(
+        workspaceCharacters.map((item) => [createCharacterWorkspaceTab(item), item.name])
+      ),
+      ...Object.fromEntries(
+        workspaceLoreEntries.map((item) => [createLoreWorkspaceTab(item), item.title])
+      ),
+      ...Object.fromEntries(
+        openTabs
+          .map((tab) => parseVolumeWorkspaceTab(tab))
+          .filter((path): path is string => Boolean(path))
+          .map((volumePath) => {
+            const node = findNodeInTree(files, volumePath);
+            const label =
+              node?.name ||
+              (rootVolumeNode && folderPath && volumePath === folderPath
+                ? rootVolumeNode.name
+                : '卷规划');
+            return [createVolumeWorkspaceTab(volumePath), label];
+          })
+      ),
+    }),
+    [files, folderPath, openTabs, rootVolumeNode, workspaceCharacters, workspaceLoreEntries]
+  );
+
+  const specialTabContent = useMemo<Record<string, React.ReactNode>>(
+    () => ({
+      [WORKSPACE_TAB_CHARACTERS]: (
+        <CharactersView
+          key={`characters-root-${workspaceCharactersVersion}`}
+          folderPath={folderPath}
+          content={editorContent}
+          onCharactersChange={syncWorkspaceCharacters}
+        />
+      ),
+      [WORKSPACE_TAB_LORE]: (
+        <LoreView
+          key={`lore-root-${workspaceLoreVersion}`}
+          folderPath={folderPath}
+          content={editorContent}
+          onEntriesChange={syncWorkspaceLoreEntries}
+        />
+      ),
+      ...(selectedCharacterTabId
+        ? {
+            [activeWorkspaceTab as string]: (
+              <CharactersView
+                key={`character-${selectedCharacterTabId}-${workspaceCharactersVersion}`}
+                folderPath={folderPath}
+                content={editorContent}
+                initialSelectedCharacterId={selectedCharacterTabId}
+                onCharactersChange={syncWorkspaceCharacters}
+              />
+            ),
+          }
+        : {}),
+      ...(selectedLoreEntryTabId
+        ? {
+            [activeWorkspaceTab as string]: (
+              <LoreView
+                key={`lore-${selectedLoreEntryTabId}-${workspaceLoreVersion}`}
+                folderPath={folderPath}
+                content={editorContent}
+                initialEntryId={selectedLoreEntryTabId}
+                onEntriesChange={syncWorkspaceLoreEntries}
+              />
+            ),
+          }
+        : {}),
+      ...(selectedVolumePath && selectedVolumeNode?.type === 'directory'
+        ? {
+            [activeWorkspaceTab as string]: (
+              <VolumeWorkspaceView
+                volumePath={selectedVolumePath}
+                volumeName={selectedVolumeNode.name}
+                volumeNode={selectedVolumeNode}
+                storyOrderMap={storyOrderMap}
+                onOpenFile={openFileInTab}
+                onCreateChapter={() => void handleCreateStoryItem('chapter')}
+                onCreateDraftFolder={() => void handleCreateStoryItem('draft-folder')}
+                onCreateDraft={() => void handleCreateStoryItem('draft')}
+              />
+            ),
+          }
+        : {}),
+    }),
+    [
+      activeWorkspaceTab,
+      editorContent,
+      folderPath,
+      openFileInTab,
+      handleCreateStoryItem,
+      selectedCharacterTabId,
+      selectedLoreEntryTabId,
+      selectedVolumeNode,
+      selectedVolumePath,
+      syncWorkspaceCharacters,
+      syncWorkspaceLoreEntries,
+      storyOrderMap,
+      workspaceCharactersVersion,
+      workspaceLoreVersion,
+    ]
+  );
+
   const handleCloseAllAndSave = useCallback(() => {
     // 先触发保存当前文件
     document.dispatchEvent(
@@ -1740,19 +4358,42 @@ const App: React.FC = () => {
               ) : (
                 <FilePanel
                   files={files}
-                  selectedFile={activeTab}
+                  characters={workspaceCharacters}
+                  loreEntries={workspaceLoreEntries}
+                  materialUsageMap={materialUsageMap}
+                  projectName={workspaceProjectName}
+                  selectedFile={activeDocumentTab}
+                  activeWorkspaceTab={activeWorkspaceTab}
                   folderPath={folderPath}
                   showFileSizes={appSettings.general.showFileSizes}
                   quickOpenShortcut={appSettings.shortcuts.quickOpen}
                   isLoading={isLoading}
                   onFileSelect={handleFileSelect}
-                  onCreateFile={handleCreateFile}
-                  onCreateDirectory={handleCreateDirectory}
+                  onOpenCharacterNode={handleOpenCharacterNode}
+                  onOpenLoreNode={handleOpenLoreNode}
+                  onDeleteCharacterNode={handleDeleteCharacterNode}
+                  onDeleteLoreNode={handleDeleteLoreNode}
+                  onRenameCharacterNode={handleRenameCharacterNode}
+                  onRenameLoreNode={handleRenameLoreNode}
+                  onRenameNode={handleRename}
+                  storyOrderMap={storyOrderMap}
+                  onReorderStoryNode={(sourcePath, targetPath, mode) =>
+                    void handleReorderStoryNode(sourcePath, targetPath, mode)
+                  }
+                  onCreateVolume={() => void handleCreateStoryItem('volume')}
+                  onCreateChapter={() => void handleCreateStoryItem('chapter')}
+                  onCreateDraftFolder={() => void handleCreateStoryItem('draft-folder')}
+                  onCreateDraft={() => void handleCreateStoryItem('draft')}
+                  onCreateCharacter={() => void handleCreateCharacter()}
+                  onCreateLoreEntry={() => void handleCreateLoreEntry()}
+                  onCreateMaterialDirectory={() => void handleCreateMaterialDirectory()}
                   onRefresh={refreshCurrentFolder}
                   onOpenFolder={handleOpenLocal}
+                  onRenameProject={() => void handleRenameProject()}
                   onImportFile={handleImportFile}
                   onCollapse={handleCollapseSidebar}
                   onContextMenu={handleFileContextMenu}
+                  onObjectContextMenu={handleObjectContextMenu}
                   onBackgroundContextMenu={handleBackgroundContextMenu}
                   onCopyFile={handleCopyFile}
                   onPasteFiles={handlePasteFiles}
@@ -1789,6 +4430,8 @@ const App: React.FC = () => {
               <ContentPanel
                 openTabs={openTabs}
                 activeTab={activeTab}
+                tabLabels={workspaceTabLabels}
+                specialTabContent={specialTabContent}
                 focusMode={focusMode}
                 reloadToken={editorReloadToken}
                 encoding={encoding}
@@ -1847,10 +4490,25 @@ const App: React.FC = () => {
                     fallback={<div className={styles.lazyFallback}>正在加载辅助面板...</div>}
                   >
                     <RightPanel
-                      content={editorContent}
+                      content={activeDocumentTab ? editorContent : ''}
                       collapsed={rightPanelCollapsed}
+                      enabled={Boolean(folderPath)}
+                      scopeKind={currentAssistantScope?.kind}
+                      scopeLabel={currentAssistantScope?.label}
+                      outlineScope={currentOutlineScope}
+                      materialFiles={materialFiles.map((item) => ({
+                        path: item.path,
+                        name: item.name,
+                      }))}
+                      linkedMaterialPaths={linkedMaterialFiles.map((item) => item.path)}
+                      scopedCharacters={assistantScopedCharacters}
+                      scopedLoreEntries={assistantScopedLoreEntries}
+                      scopedMaterials={assistantScopedMaterials}
                       onToggle={handleToggleRightPanel}
                       onPopOut={handlePopOutRightPanel}
+                      onOpenMaterial={openFileInTab}
+                      onAddMaterial={handleAddChapterMaterial}
+                      onRemoveMaterial={handleRemoveChapterMaterial}
                       onScrollToLine={handleScrollToLine}
                       onReplaceLineText={handleReplaceLineText}
                       folderPath={folderPath}
@@ -1877,7 +4535,7 @@ const App: React.FC = () => {
               visible={showVersionHistory}
               onClose={() => setShowVersionHistory(false)}
               folderPath={folderPath}
-              filePath={activeTab}
+              filePath={activeDocumentTab}
               onDiffRequest={handleDiffRequest}
               onRestoreFile={handleVersionRestore}
             />
@@ -1890,7 +4548,7 @@ const App: React.FC = () => {
             content={editorContent}
             currentLine={cursorPosition.line}
             currentColumn={cursorPosition.column}
-            filePath={activeTab}
+            filePath={activeDocumentTab}
             encoding={encoding}
             onEncodingChange={setEncoding}
             folderPath={folderPath}
@@ -1928,7 +4586,7 @@ const App: React.FC = () => {
           onClose={() => setShowAIAssistant(false)}
           folderPath={folderPath}
           content={editorContent}
-          filePath={activeTab}
+          filePath={activeDocumentTab}
           onApplyFix={async (
             original: string,
             modified: string,

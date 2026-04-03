@@ -19,6 +19,8 @@ export { versionOps } from './versioning';
 
 export type { ExportData } from './database';
 export type {
+  OutlineScope,
+  OutlineScopeKind,
   OutlineVersionRow,
   OutlineVersionSource,
   StoryIdeaCardRow,

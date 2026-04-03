@@ -4,9 +4,30 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { closeSplashWindow } from './static/splash/splash-window';
+import { isRendererDevServerEnabled, loadRendererPage } from './renderer-entry';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+let mainWindowRef: BrowserWindow | null = null;
+let mainWindowReadyToShow = false;
+let mainWindowRendererReady = false;
+
+function revealMainWindowIfReady() {
+  if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+  if (!mainWindowReadyToShow || !mainWindowRendererReady) return;
+
+  if (!mainWindowRef.isVisible()) {
+    mainWindowRef.show();
+  }
+  closeSplashWindow();
+
+  if (
+    (isRendererDevServerEnabled() || process.env.NODE_ENV === 'development') &&
+    !mainWindowRef.webContents.isDevToolsOpened()
+  ) {
+    mainWindowRef.webContents.openDevTools();
+  }
+}
 
 function resolveBrandingIconPath() {
   const candidatePaths = [
@@ -65,6 +86,9 @@ function getWindowConfig() {
 export function createMainWindow(): BrowserWindow {
   const windowConfig = getWindowConfig();
   const mainWindow = new BrowserWindow(windowConfig);
+  mainWindowRef = mainWindow;
+  mainWindowReadyToShow = false;
+  mainWindowRendererReady = false;
   const iconPath = resolveBrandingIconPath();
 
   if (process.platform === 'darwin' && iconPath) {
@@ -75,16 +99,19 @@ export function createMainWindow(): BrowserWindow {
   }
 
   // 加载应用页面
-  mainWindow.loadFile(join(__dirname, 'index.html'));
+  void loadRendererPage(mainWindow, __dirname);
 
-  // 窗口准备好后显示，并关闭 splash
+  // 窗口准备好后，等待渲染进程显式 ready 再显示，避免与 splash 同时出现
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    closeSplashWindow();
+    mainWindowReadyToShow = true;
+    revealMainWindowIfReady();
+  });
 
-    // 只在开发模式下打开开发者工具
-    if (process.env.NODE_ENV === 'development') {
-      mainWindow.webContents.openDevTools();
+  mainWindow.on('closed', () => {
+    if (mainWindowRef === mainWindow) {
+      mainWindowRef = null;
+      mainWindowReadyToShow = false;
+      mainWindowRendererReady = false;
     }
   });
 
@@ -108,4 +135,9 @@ export function createMainWindow(): BrowserWindow {
 // 设置应用级别的窗口事件
 export function setupWindowEvents() {
   // 可以在这里添加全局窗口事件处理
+}
+
+export function notifyMainWindowRendererReady() {
+  mainWindowRendererReady = true;
+  revealMainWindowIfReady();
 }

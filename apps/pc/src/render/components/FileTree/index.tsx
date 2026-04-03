@@ -1,5 +1,11 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { AiFillFolder, AiOutlineFileText, AiOutlineCode, AiOutlineFile } from 'react-icons/ai';
+import {
+  AiFillFolder,
+  AiOutlineFileText,
+  AiOutlineCode,
+  AiOutlineFile,
+  AiOutlineEdit,
+} from 'react-icons/ai';
 import { DiJavascript1, DiReact, DiPython, DiHtml5, DiCss3 } from 'react-icons/di';
 import { VscJson } from 'react-icons/vsc';
 import { AiOutlineFileMarkdown } from 'react-icons/ai';
@@ -15,11 +21,16 @@ export interface ContextMenuEvent {
 
 interface FileTreeProps {
   files: FileNode[];
+  fill?: boolean;
   showFileSizes?: boolean;
+  showExpandIcon?: boolean;
+  baseIndent?: number;
+  itemMetaMap?: Record<string, string>;
   onFileSelect: (path: string) => void;
   selectedFile?: string | null;
   onContextMenu?: (event: ContextMenuEvent) => void;
   onBackgroundContextMenu?: (pos: { x: number; y: number }) => void;
+  onRenameNode?: (path: string) => void;
   creatingType?: 'file' | 'directory' | null;
   createTargetPath?: string | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
@@ -115,7 +126,9 @@ const InlineCreateInput: React.FC<{
   onSubmit: (name: string) => void;
   onCancel: () => void;
   level?: number;
-}> = ({ type, onSubmit, onCancel, level = 0 }) => {
+  baseIndent?: number;
+  showExpandIcon?: boolean;
+}> = ({ type, onSubmit, onCancel, level = 0, baseIndent = 8, showExpandIcon = true }) => {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const submittedRef = useRef(false);
@@ -148,8 +161,10 @@ const InlineCreateInput: React.FC<{
 
   return (
     <div className={styles.fileTreeItem}>
-      <div className={styles.itemHeader} style={{ paddingLeft: `${8 + level * 16}px` }}>
-        <span className={`${styles.expandIcon} ${styles.hidden}`}>&#9654;</span>
+      <div className={styles.itemHeader} style={{ paddingLeft: `${baseIndent + level * 16}px` }}>
+        {showExpandIcon ? (
+          <span className={`${styles.expandIcon} ${styles.hidden}`}>&#9654;</span>
+        ) : null}
         <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
         <input
           ref={inputRef}
@@ -171,10 +186,14 @@ const FileTreeItem: React.FC<{
   selectedFile?: string | null;
   level?: number;
   onContextMenu?: (event: ContextMenuEvent) => void;
+  onRenameNode?: (path: string) => void;
   fileInfoMap?: Map<string, FileInfo>;
   showFileSizes: boolean;
+  itemMetaMap?: Record<string, string>;
   expandedDirs: Set<string>;
   onToggleDirectory: (path: string) => void;
+  showExpandIcon: boolean;
+  baseIndent: number;
   createTargetPath?: string | null;
   creatingType?: 'file' | 'directory' | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
@@ -186,10 +205,14 @@ const FileTreeItem: React.FC<{
     selectedFile,
     level = 0,
     onContextMenu,
+    onRenameNode,
     fileInfoMap,
     showFileSizes,
+    itemMetaMap,
     expandedDirs,
     onToggleDirectory,
+    showExpandIcon,
+    baseIndent,
     createTargetPath,
     creatingType,
     onInlineCreate,
@@ -215,6 +238,7 @@ const FileTreeItem: React.FC<{
       () => (node.children ? sortNodes(node.children) : []),
       [node.children]
     );
+    const itemMeta = itemMetaMap?.[node.path];
 
     return (
       <div className={styles.fileTreeItem}>
@@ -226,17 +250,36 @@ const FileTreeItem: React.FC<{
             e.stopPropagation();
             onContextMenu?.({ x: e.clientX, y: e.clientY, node });
           }}
-          style={{ paddingLeft: `${8 + level * 16}px` }}
+          style={{ paddingLeft: `${baseIndent + level * 16}px` }}
         >
-          <span
-            className={`${styles.expandIcon} ${effectiveExpanded ? styles.expanded : ''} ${
-              node.type === 'file' ? styles.hidden : ''
-            }`}
-          >
-            &#9654;
-          </span>
+          {showExpandIcon ? (
+            <span
+              className={`${styles.expandIcon} ${effectiveExpanded ? styles.expanded : ''} ${
+                node.type === 'file' ? styles.hidden : ''
+              }`}
+            >
+              &#9654;
+            </span>
+          ) : null}
           <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
-          <span className={styles.itemName}>{node.name}</span>
+          <span className={styles.itemText}>
+            <span className={styles.itemName}>{node.name}</span>
+            {itemMeta && <span className={styles.itemMeta}>{itemMeta}</span>}
+          </span>
+          {onRenameNode && (
+            <button
+              type="button"
+              className={styles.itemAction}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRenameNode(node.path);
+              }}
+              aria-label={`修改 ${node.name}`}
+              title={`修改 ${node.name}`}
+            >
+              <AiOutlineEdit />
+            </button>
+          )}
           {showFileSizes && node.type === 'file' && fileInfo && (
             <span className={styles.itemSize}>{formatFileSize(fileInfo.size)}</span>
           )}
@@ -249,6 +292,8 @@ const FileTreeItem: React.FC<{
                 onSubmit={(name) => onInlineCreate(creatingType, name)}
                 onCancel={onCancelCreate}
                 level={level + 1}
+                baseIndent={baseIndent}
+                showExpandIcon={showExpandIcon}
               />
             )}
             {sortedChildren.map((child) => (
@@ -259,10 +304,14 @@ const FileTreeItem: React.FC<{
                 selectedFile={selectedFile}
                 level={level + 1}
                 onContextMenu={onContextMenu}
+                onRenameNode={onRenameNode}
                 fileInfoMap={fileInfoMap}
                 showFileSizes={showFileSizes}
+                itemMetaMap={itemMetaMap}
                 expandedDirs={expandedDirs}
                 onToggleDirectory={onToggleDirectory}
+                showExpandIcon={showExpandIcon}
+                baseIndent={baseIndent}
                 createTargetPath={createTargetPath}
                 creatingType={creatingType}
                 onInlineCreate={onInlineCreate}
@@ -278,7 +327,11 @@ const FileTreeItem: React.FC<{
 
 const FileTree: React.FC<FileTreeProps> = ({
   files,
+  fill = true,
   showFileSizes = true,
+  showExpandIcon = true,
+  baseIndent = 8,
+  itemMetaMap,
   onFileSelect,
   selectedFile,
   onContextMenu,
@@ -288,6 +341,7 @@ const FileTree: React.FC<FileTreeProps> = ({
   onCancelCreate,
   revealPath,
   onBackgroundContextMenu,
+  onRenameNode,
 }) => {
   const sortedFiles = useMemo(() => sortNodes(files), [files]);
   const [fileInfoMap, setFileInfoMap] = useState<Map<string, FileInfo>>(new Map());
@@ -397,7 +451,7 @@ const FileTree: React.FC<FileTreeProps> = ({
 
   return (
     <div
-      className={styles.fileTree}
+      className={`${styles.fileTree} ${fill ? styles.fill : ''}`}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -409,6 +463,8 @@ const FileTree: React.FC<FileTreeProps> = ({
           type={creatingType}
           onSubmit={(name) => onInlineCreate(creatingType, name)}
           onCancel={onCancelCreate}
+          baseIndent={baseIndent}
+          showExpandIcon={showExpandIcon}
         />
       )}
       {sortedFiles.map((file) => (
@@ -418,10 +474,14 @@ const FileTree: React.FC<FileTreeProps> = ({
             onFileSelect={onFileSelect}
             selectedFile={selectedFile}
             onContextMenu={onContextMenu}
+            onRenameNode={onRenameNode}
             fileInfoMap={fileInfoMap}
             showFileSizes={showFileSizes}
+            itemMetaMap={itemMetaMap}
             expandedDirs={expandedDirs}
             onToggleDirectory={handleToggleDirectory}
+            showExpandIcon={showExpandIcon}
+            baseIndent={baseIndent}
             createTargetPath={createTargetPath}
             creatingType={creatingType}
             onInlineCreate={onInlineCreate}
@@ -432,6 +492,8 @@ const FileTree: React.FC<FileTreeProps> = ({
               type={creatingType}
               onSubmit={(name) => onInlineCreate(creatingType, name)}
               onCancel={onCancelCreate}
+              baseIndent={baseIndent}
+              showExpandIcon={showExpandIcon}
             />
           )}
         </React.Fragment>

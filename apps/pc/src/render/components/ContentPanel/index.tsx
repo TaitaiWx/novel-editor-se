@@ -42,6 +42,8 @@ interface TransientHighlightLineRequest {
 interface ContentPanelProps {
   openTabs: string[];
   activeTab: string | null;
+  tabLabels?: Record<string, string>;
+  specialTabContent?: Record<string, React.ReactNode>;
   focusMode?: boolean;
   reloadToken?: number;
   encoding?: string;
@@ -116,6 +118,8 @@ const contentFallback = (
 const ContentPanel: React.FC<ContentPanelProps> = ({
   openTabs,
   activeTab,
+  tabLabels,
+  specialTabContent,
   focusMode = false,
   reloadToken,
   encoding,
@@ -140,6 +144,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   const [wordWrap, setWordWrap] = useState(true);
   const [showLineNumbers, setShowLineNumbers] = useState(false);
   const [viewMode, setViewMode] = useState<'preview' | 'content'>('content');
+  const specialContent = activeTab ? (specialTabContent?.[activeTab] ?? null) : null;
 
   const isChangelog = useMemo(
     () => activeTab !== null && activeTab.startsWith('__changelog__:'),
@@ -157,6 +162,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
     () =>
       Boolean(
         activeTab &&
+          !specialContent &&
           !isChangelog &&
           !isSpreadsheet &&
           !isPresentation &&
@@ -165,6 +171,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
       ),
     [
       activeTab,
+      specialContent,
       isChangelog,
       isDocument,
       isPresentation,
@@ -184,6 +191,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   useEffect(() => {
     if (
       !activeTab ||
+      specialContent ||
       (isPreviewableResource && viewMode === 'preview') ||
       isSpreadsheet ||
       isPresentation ||
@@ -194,6 +202,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
     }
   }, [
     activeTab,
+    specialContent,
     isPreviewableResource,
     isSpreadsheet,
     isPresentation,
@@ -241,6 +250,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
         <TabBar
           tabs={openTabs}
           activeTab={activeTab}
+          tabLabels={tabLabels}
           focusMode={focusMode}
           onTabSelect={onTabSelect}
           onTabClose={onTabClose}
@@ -251,7 +261,9 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
       )}
       <Suspense fallback={contentFallback}>
         <div className={styles.contentPanelContent}>
-          {isChangelog ? (
+          {specialContent ? (
+            <div className={styles.specialContentHost}>{specialContent}</div>
+          ) : isChangelog ? (
             <ChangelogViewer />
           ) : isSpreadsheet ? (
             <SpreadsheetViewer filePath={activeTab} settingsComponent={settingsComponent} />

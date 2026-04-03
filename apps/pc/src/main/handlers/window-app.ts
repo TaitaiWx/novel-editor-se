@@ -24,6 +24,7 @@ import {
 } from '../auto-updater';
 import type { UpdateChannel } from '../auto-updater';
 import { settingsOps } from '@novel-editor/store';
+import { notifyMainWindowRendererReady } from '../window';
 
 const DOCUMENT_CACHE_PREFIXES = [
   'novel-editor:lore:',
@@ -73,6 +74,11 @@ export function registerWindowAppHandlers(): void {
   ipcMain.handle('window-toggle-fullscreen', () => {
     const window = BrowserWindow.getFocusedWindow();
     if (window) window.setFullScreen(!window.isFullScreen());
+  });
+
+  ipcMain.handle('app-renderer-ready', () => {
+    notifyMainWindowRendererReady();
+    return { success: true };
   });
 
   // ─── App Info ─────────────────────────────────────────────────────────────

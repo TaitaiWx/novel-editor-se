@@ -217,9 +217,9 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
     const ipc = window.electron?.ipcRenderer;
     try {
       if (scope === 'document' || scope === 'all') {
-        const result = (await ipc?.invoke('app-cache-clear', 'document-data')) as
+        await (ipc?.invoke('app-cache-clear', 'document-data') as
           | { removedSettingRows?: number; clearedRecentFolders?: number }
-          | undefined;
+          | undefined);
         if (scope === 'document') {
           setClearConfirmScope(null);
           toast.success('已清理本地缓存与最近项目记录');

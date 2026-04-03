@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   OutlineVersionSource,
   PersistedOutlineNodeInput,
+  PersistedOutlineScopeInput,
   PersistedOutlineRow,
   PersistedOutlineVersionRow,
 } from '@/render/types/electron-api';
@@ -189,15 +190,25 @@ function buildEntriesFromRows(rows: PersistedOutlineRow[], content: string): Out
   return flattened;
 }
 
-async function writeOutlineTree(folderPath: string, entries: PersistedOutlineNodeInput[]) {
-  return window.electron.ipcRenderer.invoke('db-outline-replace-by-folder', folderPath, entries);
+async function writeOutlineTree(
+  folderPath: string,
+  entries: PersistedOutlineNodeInput[],
+  scope?: PersistedOutlineScopeInput | null
+) {
+  return window.electron.ipcRenderer.invoke(
+    'db-outline-replace-by-folder',
+    folderPath,
+    entries,
+    scope ?? undefined
+  );
 }
 
 export function useOutlineEntries(
   folderPath: string | null,
   content: string,
   dbReady: boolean,
-  aiReady: boolean
+  aiReady: boolean,
+  scope?: PersistedOutlineScopeInput | null
 ) {
   // Debounce content changes for liveEntries (300ms) to avoid re-parsing on every keystroke
   const debouncedContent = useDebounce(content, 300);
@@ -233,7 +244,8 @@ export function useOutlineEntries(
     try {
       const rows = await window.electron.ipcRenderer.invoke(
         'db-outline-list-by-folder',
-        folderPath
+        folderPath,
+        scope ?? undefined
       );
       setPersistedRows(rows);
       setStatusMessage('');
@@ -243,7 +255,7 @@ export function useOutlineEntries(
     } finally {
       setLoading(false);
     }
-  }, [dbReady, folderPath]);
+  }, [dbReady, folderPath, scope?.kind, scope?.path]);
 
   useEffect(() => {
     void loadPersisted();
@@ -257,13 +269,14 @@ export function useOutlineEntries(
     try {
       const rows = await window.electron.ipcRenderer.invoke(
         'db-outline-version-list-by-folder',
-        folderPath
+        folderPath,
+        scope ?? undefined
       );
       setVersions(rows);
     } catch {
       setVersions([]);
     }
-  }, [dbReady, folderPath]);
+  }, [dbReady, folderPath, scope?.kind, scope?.path]);
 
   useEffect(() => {
     void loadVersions();
@@ -282,17 +295,22 @@ export function useOutlineEntries(
         return false;
       }
 
-      await window.electron.ipcRenderer.invoke('db-outline-version-create-by-folder', folderPath, {
-        name,
-        source,
-        note,
-        entries: targetEntries,
-      });
+      await window.electron.ipcRenderer.invoke(
+        'db-outline-version-create-by-folder',
+        folderPath,
+        {
+          name,
+          source,
+          note,
+          entries: targetEntries,
+        },
+        scope ?? undefined
+      );
       await loadVersions();
       if (!silentStatus) setStatusMessage(`已保存大纲版本：${name}`);
       return true;
     },
-    [dbReady, folderPath, loadVersions, persistedTree]
+    [dbReady, folderPath, loadVersions, persistedTree, scope?.kind, scope?.path]
   );
 
   const importOutline = useCallback(async () => {
@@ -315,7 +333,7 @@ export function useOutlineEntries(
         return;
       }
 
-      await writeOutlineTree(folderPath, tree);
+      await writeOutlineTree(folderPath, tree, scope);
       await loadPersisted();
       let versionSaved = false;
       try {
@@ -339,7 +357,7 @@ export function useOutlineEntries(
     } finally {
       setImporting(false);
     }
-  }, [aiReady, dbReady, folderPath, loadPersisted, saveOutlineVersion]);
+  }, [aiReady, dbReady, folderPath, loadPersisted, saveOutlineVersion, scope?.kind, scope?.path]);
 
   const rebuildFromContent = useCallback(async () => {
     if (!folderPath || !dbReady) {
@@ -355,7 +373,7 @@ export function useOutlineEntries(
 
     setImporting(true);
     try {
-      await writeOutlineTree(folderPath, tree);
+      await writeOutlineTree(folderPath, tree, scope);
       await loadPersisted();
       let versionSaved = false;
       try {
@@ -377,7 +395,16 @@ export function useOutlineEntries(
     } finally {
       setImporting(false);
     }
-  }, [aiReady, content, dbReady, folderPath, loadPersisted, saveOutlineVersion]);
+  }, [
+    aiReady,
+    content,
+    dbReady,
+    folderPath,
+    loadPersisted,
+    saveOutlineVersion,
+    scope?.kind,
+    scope?.path,
+  ]);
 
   const clearPersisted = useCallback(async () => {
     if (!folderPath || !dbReady) {
@@ -387,7 +414,11 @@ export function useOutlineEntries(
 
     setImporting(true);
     try {
-      await window.electron.ipcRenderer.invoke('db-outline-clear-by-folder', folderPath);
+      await window.electron.ipcRenderer.invoke(
+        'db-outline-clear-by-folder',
+        folderPath,
+        scope ?? undefined
+      );
       setPersistedRows([]);
       setStatusMessage('已清空已入库大纲，目录将回退为正文实时解析');
     } catch (error) {
@@ -395,7 +426,7 @@ export function useOutlineEntries(
     } finally {
       setImporting(false);
     }
-  }, [dbReady, folderPath]);
+  }, [dbReady, folderPath, scope?.kind, scope?.path]);
 
   const applyOutlineVersion = useCallback(
     async (versionId: number) => {
@@ -408,7 +439,8 @@ export function useOutlineEntries(
         await window.electron.ipcRenderer.invoke(
           'db-outline-version-apply-by-folder',
           folderPath,
-          versionId
+          versionId,
+          scope ?? undefined
         );
         await loadPersisted();
         await loadVersions();
@@ -419,7 +451,7 @@ export function useOutlineEntries(
         setImporting(false);
       }
     },
-    [dbReady, folderPath, loadPersisted, loadVersions]
+    [dbReady, folderPath, loadPersisted, loadVersions, scope?.kind, scope?.path]
   );
 
   const updateOutlineVersion = useCallback(
@@ -485,7 +517,7 @@ export function useOutlineEntries(
           return;
         }
 
-        await writeOutlineTree(folderPath, tree);
+        await writeOutlineTree(folderPath, tree, scope);
         await loadPersisted();
         let versionSaved = false;
         const optionsSummary = options
@@ -511,7 +543,16 @@ export function useOutlineEntries(
         setImporting(false);
       }
     },
-    [aiReady, content, dbReady, folderPath, loadPersisted, saveOutlineVersion]
+    [
+      aiReady,
+      content,
+      dbReady,
+      folderPath,
+      loadPersisted,
+      saveOutlineVersion,
+      scope?.kind,
+      scope?.path,
+    ]
   );
 
   const reorderEntries = useCallback(

@@ -1,3 +1,5 @@
+import type { PersistedOutlineScopeInput } from '../../types/electron-api';
+
 export type TabType = 'storyline' | 'characters' | 'lore';
 
 export type StorylineViewMode = 'catalog' | 'outline' | 'acts' | 'ideas';
@@ -115,8 +117,25 @@ export interface OutlinePopoverAnchor {
 export interface RightPanelProps {
   content: string;
   collapsed: boolean;
+  enabled?: boolean;
+  scopeKind?: 'project' | 'volume' | 'chapter';
+  scopeLabel?: string;
+  outlineScope?: PersistedOutlineScopeInput | null;
+  materialFiles?: Array<{ path: string; name: string }>;
+  linkedMaterialPaths?: string[];
+  scopedCharacters?: Array<{ name: string; role?: string; description?: string }>;
+  scopedLoreEntries?: Array<{ title: string; category?: string; summary?: string }>;
+  scopedMaterials?: Array<{
+    title: string;
+    kind?: string;
+    summary?: string;
+    relatedChapter?: string;
+  }>;
   onToggle: () => void;
   onPopOut?: () => void;
+  onOpenMaterial?: (path: string) => void;
+  onAddMaterial?: (path: string) => void;
+  onRemoveMaterial?: (path: string) => void;
   onScrollToLine?: (line: number, contentKey?: string) => void;
   onReplaceLineText?: (line: number, text: string) => void;
   folderPath: string | null;

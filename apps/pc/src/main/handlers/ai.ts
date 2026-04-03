@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { settingsOps } from '@novel-editor/store';
 import { establishPortChannel } from '../message-port-bridge';
 import { PortChannel } from '../../shared/portChannels';
+import { isRendererDevServerEnabled, loadRendererPage } from '../renderer-entry';
 
 const __handler_filename = fileURLToPath(import.meta.url);
 const __handler_dirname = path.dirname(__handler_filename);
@@ -162,15 +163,15 @@ export function registerAIHandlers(): void {
       frame: false,
     });
 
-    const indexPath = path.join(__dist_dir, 'index.html');
-    void aiWindow.loadFile(indexPath, {
-      query: { mode: 'ai-assistant', folderPath: folderPath || '' },
+    void loadRendererPage(aiWindow, __dist_dir, {
+      mode: 'ai-assistant',
+      folderPath: folderPath || '',
     });
 
     aiWindow.once('ready-to-show', () => {
       aiWindow.show();
       // 开发模式下打开 DevTools
-      if (process.env.NODE_ENV === 'development') {
+      if (isRendererDevServerEnabled() || process.env.NODE_ENV === 'development') {
         aiWindow.webContents.openDevTools();
       }
     });
@@ -231,13 +232,10 @@ export function registerAIHandlers(): void {
         frame: false,
       });
 
-      const indexPath = path.join(__dist_dir, 'index.html');
-      void panelWindow.loadFile(indexPath, {
-        query: {
-          mode: 'right-panel',
-          folderPath: folderPath || '',
-          hasActiveTab: hasActiveTab ? '1' : '0',
-        },
+      void loadRendererPage(panelWindow, __dist_dir, {
+        mode: 'right-panel',
+        folderPath: folderPath || '',
+        hasActiveTab: hasActiveTab ? '1' : '0',
       });
 
       panelWindow.once('ready-to-show', () => {
@@ -248,7 +246,7 @@ export function registerAIHandlers(): void {
           establishPortChannel(mainWin, panelWindow, PortChannel.ContentSync);
           establishPortChannel(mainWin, panelWindow, PortChannel.CrdtOps);
         }
-        if (process.env.NODE_ENV === 'development') {
+        if (isRendererDevServerEnabled() || process.env.NODE_ENV === 'development') {
           panelWindow.webContents.openDevTools();
         }
       });
