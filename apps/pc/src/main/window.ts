@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { closeSplashWindow } from './static/splash/splash-window';
 import { isRendererDevServerEnabled, loadRendererPage } from './renderer-entry';
+import { getCurrentRuntimeDistDir } from './runtime-context';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,6 +44,7 @@ function resolveBrandingIconPath() {
 // 根据平台获取窗口配置
 function getWindowConfig() {
   const iconPath = resolveBrandingIconPath();
+  const runtimeDistDir = getCurrentRuntimeDistDir();
   const baseConfig = {
     width: 1400,
     height: 900,
@@ -51,7 +53,7 @@ function getWindowConfig() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: join(__dirname, 'preload.js'),
+      preload: join(runtimeDistDir, 'preload.js'),
       webSecurity: true,
     },
     show: false, // 等待页面加载完成后再显示
@@ -99,7 +101,7 @@ export function createMainWindow(): BrowserWindow {
   }
 
   // 加载应用页面
-  void loadRendererPage(mainWindow, __dirname);
+  void loadRendererPage(mainWindow, getCurrentRuntimeDistDir());
 
   // 窗口准备好后，等待渲染进程显式 ready 再显示，避免与 splash 同时出现
   mainWindow.once('ready-to-show', () => {
@@ -140,4 +142,8 @@ export function setupWindowEvents() {
 export function notifyMainWindowRendererReady() {
   mainWindowRendererReady = true;
   revealMainWindowIfReady();
+}
+
+export function getMainWindow() {
+  return mainWindowRef;
 }

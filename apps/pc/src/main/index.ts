@@ -1,10 +1,14 @@
 import { app, BrowserWindow } from 'electron';
-import { createMainWindow, setupWindowEvents } from './window';
 import { createSplashWindow } from './static/splash/splash-window';
-import { setupIPC } from './ipc-handlers';
-import { registerAllShortcuts } from './shortcuts/registerAllShortcuts';
-import { unregisterAllShortcuts } from './shortcuts/unregisterAllShortcuts';
-import { setupAutoUpdater } from './auto-updater';
+import { pathToFileURL } from 'url';
+import { join } from 'path';
+import {
+  buildAutoRecoveryLaunchArgs,
+  handleRuntimeStartupFailure,
+  hasAutoRecoveryAttemptFlag,
+  prepareRuntimeLaunch,
+} from './runtime-slots';
+import { setCurrentRuntimeDescriptor } from './runtime-context';
 
 if (process.env.NOVEL_EDITOR_DISABLE_HARDWARE_ACCELERATION === '1') {
   app.disableHardwareAcceleration();
@@ -17,31 +21,39 @@ if (process.platform === 'darwin') {
 
 // 应用准备就绪时创建窗口
 app.whenReady().then(() => {
-  // 设置 IPC 通信
-  setupIPC();
-
-  // 设置窗口事件
-  setupWindowEvents();
-
-  // 注册快捷键（通过 Menu accelerator，仅在应用聚焦时生效）
-  registerAllShortcuts();
-
   // 创建 splash 窗口（即时显示加载画面）
   createSplashWindow();
 
-  // 创建主窗口（ready-to-show 时自动关闭 splash）
-  createMainWindow();
+  void (async () => {
+    const runtimeDescriptor = await prepareRuntimeLaunch();
+    setCurrentRuntimeDescriptor(runtimeDescriptor);
 
-  // 生产环境下检查自动更新
-  if (process.env.NODE_ENV !== 'development') {
-    setupAutoUpdater();
-  }
-
-  // macOS 上点击 dock 图标时重新创建窗口
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+    const runtimeModuleUrl =
+      pathToFileURL(join(runtimeDescriptor.distDir, 'main-runtime.mjs')).href +
+      `?runtime=${encodeURIComponent(runtimeDescriptor.version)}`;
+    const runtimeModule = (await import(runtimeModuleUrl)) as {
+      bootAppRuntime?: () => Promise<void> | void;
+    };
+    if (typeof runtimeModule.bootAppRuntime !== 'function') {
+      throw new Error('运行时入口缺少 bootAppRuntime');
     }
+    await runtimeModule.bootAppRuntime();
+  })().catch((error) => {
+    console.error('启动运行时失败:', error);
+    const message = error instanceof Error ? error.message : String(error || '未知错误');
+    void handleRuntimeStartupFailure(`运行时启动失败：${message}`)
+      .then((resolution) => {
+        if (resolution.shouldRelaunch && !hasAutoRecoveryAttemptFlag()) {
+          app.relaunch({ args: buildAutoRecoveryLaunchArgs() });
+          app.exit(0);
+          return;
+        }
+        app.exit(1);
+      })
+      .catch((recoveryError) => {
+        console.error('处理运行时启动失败时又发生异常:', recoveryError);
+        app.exit(1);
+      });
   });
 });
 
@@ -53,12 +65,6 @@ app.on('window-all-closed', () => {
 });
 
 // 应用即将退出时的清理工作
-app.on('before-quit', () => {
-  // 注销所有快捷键
-  unregisterAllShortcuts();
-});
-
-// 防止多个实例
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {

@@ -7,6 +7,7 @@
 - [ ] 当前要发布的代码已经合并到主分支
 - [ ] 本次发布范围已经确认：Canary / Beta / Stable
 - [ ] 关键改动已经完成自测：启动、打开项目、编辑、保存、版本历史、自动更新入口可见
+- [ ] 已执行 `pnpm preflight:release`，并确认双运行副本预检通过
 - [ ] 当前版本号策略已确认，不会覆盖重发同一版本
 - [ ] 如果本次包含高风险改动，已决定灰度比例是否需要调整
 
@@ -83,12 +84,17 @@ pnpm release:stable
 - [ ] macOS 安装包已上传
 - [ ] Linux 安装包已上传
 - [ ] 当前通道对应的 yml 文件已上传
+- [ ] 当前通道对应的运行包清单已上传
+- [ ] 当前通道对应的运行包压缩包已上传
 
 通道对应关系：
 
 - [ ] Stable 对应 `latest*.yml`
 - [ ] Beta 对应 `beta*.yml`
 - [ ] Canary 对应 `alpha*.yml`
+- [ ] Stable 对应 `slot-latest-{platform}-{arch}.json`
+- [ ] Beta 对应 `slot-beta-{platform}-{arch}.json`
+- [ ] Canary 对应 `slot-alpha-{platform}-{arch}.json`
 
 ## F. 发布后验证
 
@@ -99,6 +105,8 @@ pnpm release:stable
 - [ ] Canary 客户端能检查到 Canary / Beta / Stable 更新
 - [ ] 下载进度能正常显示
 - [ ] 下载完成后能看到“重启以更新”
+- [ ] 重启后新版本进入非活动运行副本并被切为当前版本
+- [ ] 人为制造坏运行副本时，launcher 会自动回退到旧副本
 
 ## G. 异常处理
 

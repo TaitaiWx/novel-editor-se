@@ -15,10 +15,10 @@ export interface UpdateStatus {
   availableVersion: string | null;
   downloadedVersion: string | null;
   downloadPercent: number | null;
-  rollbackAvailable: boolean;
-  rollbackVersion: string | null;
-  /** 下载完成后正在预缓存当前版本安装包（用于回滚） */
-  preCaching: boolean;
+  previousVersionAvailable: boolean;
+  previousVersion: string | null;
+  /** 下载完成后正在安装到非活动运行副本 */
+  preparingCopy: boolean;
   lastError: string | null;
 }
 
@@ -157,7 +157,9 @@ export interface ElectronAPI {
     invoke(channel: 'update-status'): Promise<UpdateStatus>;
     invoke(channel: 'update-install'): Promise<void>;
     invoke(channel: 'update-set-channel', updateChannel: UpdateChannel): Promise<UpdateStatus>;
-    invoke(channel: 'update-rollback'): Promise<{ version: string; installerPath: string }>;
+    invoke(
+      channel: 'update-restore-previous-version'
+    ): Promise<{ version: string; copyName: string }>;
     invoke(
       channel: 'db-outline-list-by-folder',
       folderPath: string,

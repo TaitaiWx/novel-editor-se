@@ -2,11 +2,11 @@
 
 本文档描述小说编辑器当前采用的正式发布流程。目标是保持以下原则：
 
-- 使用 Electron Builder + Electron Updater 官方通道机制
+- 安装器仍使用 Electron Builder 官方产物
 - 使用 GitHub Releases 作为唯一发布源
-- 使用官方更新元数据文件作为版本指针
-- 使用 `stagingPercentage` 做灰度，而不是自定义更新协议
-- 保留 GitHub-only 条件下可落地的基础回退能力
+- 运行时更新使用独立的“运行包清单 + 运行包压缩包”
+- 使用稳定 launcher + 双运行副本指针，坏版本自动回退到旧副本
+- 灰度比例继续沿用 `stagingPercentage` 语义，但写入运行包清单
 
 ## 当前发布模型
 
@@ -20,13 +20,18 @@
 
 ### 版本指针
 
-版本指针不是单独维护的 JSON 文件，而是 Electron Builder 自动生成的官方更新元数据文件：
+当前有两套元数据：
 
-- Stable: `latest.yml` / `latest-mac.yml` / `latest-linux.yml`
-- Beta: `beta.yml` / `beta-mac.yml` / `beta-linux.yml`
-- Canary: `alpha.yml` / `alpha-mac.yml` / `alpha-linux.yml`
+1. 安装器元数据，继续由 Electron Builder 生成：
+   - Stable: `latest.yml` / `latest-mac.yml` / `latest-linux.yml`
+   - Beta: `beta.yml` / `beta-mac.yml` / `beta-linux.yml`
+   - Canary: `alpha.yml` / `alpha-mac.yml` / `alpha-linux.yml`
+2. 运行时元数据，新增独立运行包清单：
+   - Stable: `slot-latest-{platform}-{arch}.json`
+   - Beta: `slot-beta-{platform}-{arch}.json`
+   - Canary: `slot-alpha-{platform}-{arch}.json`
 
-应用检查更新时，直接读取当前通道对应的官方元数据文件。
+真正的运行时版本指针保存在客户端本地 `runtime-slot-state.json`。这个文件名为了兼容历史版本保留不变，但内部字段已经切成 `stableCopy / pendingCopy`，launcher 启动时只从这个根状态读取版本指针，不会从组件 state 推断当前版本。
 
 ### 灰度比例
 
@@ -42,7 +47,10 @@
 - Beta 先放量 25%
 - Canary 先放量 10%
 
-这些值由 [prepare-update-metadata.mjs](../apps/pc/scripts/prepare-update-metadata.mjs) 写入官方更新元数据中的 `stagingPercentage` 字段。
+这些值会同时影响：
+
+- 官方安装器 `.yml` 中的 `stagingPercentage`
+- 运行包清单中的 `stagingPercentage`
 
 ## 发布前要改什么
 
@@ -53,6 +61,7 @@
 1. 代码和版本已经准备好
 2. 当前准备发布到哪个通道
 3. 当前通道是否需要调整灰度比例
+4. 发布前先执行一次 `pnpm preflight:release`
 
 如果要调整灰度比例，只改 [release.yml](../.github/workflows/release.yml) 顶层 `env` 即可，不需要改主进程更新逻辑。
 
@@ -70,6 +79,7 @@ pnpm release:canary:minor
 
 - 版本会变成 `x.y.z-alpha.0`
 - 推送 tag 后，CI 以 `alpha` 通道发布
+- 生成 `slot-alpha-{platform}-{arch}.json` 和对应运行包压缩包
 - 默认灰度比例 10%
 
 继续发布同一条 Canary 线：
@@ -82,6 +92,7 @@ pnpm release:canary
 
 - 版本递增为 `x.y.z-alpha.N`
 - 继续写入 `alpha*.yml`
+- 继续写入 `slot-alpha-{platform}-{arch}.json`
 
 ### Beta
 
@@ -95,6 +106,7 @@ pnpm release:minor
 
 - 版本会变成 `x.y.z-beta.0`
 - 推送 tag 后，CI 以 `beta` 通道发布
+- 生成 `slot-beta-{platform}-{arch}.json` 和对应运行包压缩包
 - 默认灰度比例 25%
 
 继续发布同一条 Beta 线：
@@ -107,6 +119,7 @@ pnpm release:beta
 
 - 版本递增为 `x.y.z-beta.N`
 - 继续写入 `beta*.yml`
+- 继续写入 `slot-beta-{platform}-{arch}.json`
 
 ### Stable
 
@@ -120,6 +133,7 @@ pnpm release:stable
 
 - 去掉预发布标记，生成正式版本号
 - 推送 tag 后，CI 以 `latest` 通道发布
+- 生成 `slot-latest-{platform}-{arch}.json` 和对应运行包压缩包
 - 默认灰度比例 100%
 
 ## 成熟发布流程建议
@@ -149,25 +163,29 @@ pnpm release:stable
 2. 提升版本号
 3. 重新发布到同一通道
 
-这是 Electron Updater 官方推荐方式，因为部分用户可能已经拿到坏版本，原地覆盖同版本不能稳定纠正所有客户端状态。
+双运行副本模式下也一样：不要覆盖坏版本的运行包压缩包，同版本重发会让本地版本指针和缓存状态变得不可验证。
 
 ### 需要回退
 
-当前项目实现的是 GitHub Releases 条件下可落地的基础回退：
+当前项目实现的是稳定 launcher + A/B 双运行副本运行时：
 
-- 下载新版本时记录当前可回退版本
-- 新版本连续异常启动时，应用保留回退入口
-- 用户可以重新拉起旧版本安装包进行回退
+- 新版本只会下载到非活动运行副本
+- launcher 只在新副本健康启动后才提交版本指针
+- 若新副本启动失败，launcher 下次启动会自动回退到旧副本
+- 用户也可以手动触发恢复，直接把版本指针切回上一可用版本
 
-这不是双分区 A/B 原子切换。
+安装器升级和运行时升级现在是两条链路：
 
-如果未来需要真正的 A/B 原子回滚，需要额外引入更重的安装器、分区切换或企业级分发体系。对于当前 GitHub-only 开源分发模式，不建议伪造这种能力。
+- 安装器升级：面向 launcher 自身升级或首次安装
+- 运行时升级：面向日常版本迭代，走运行包压缩包，不直接覆盖当前可用版本
 
 ## 与代码的对应关系
 
 - 主进程更新逻辑：[apps/pc/src/main/auto-updater.ts](../apps/pc/src/main/auto-updater.ts)
+- 运行副本状态与版本指针：[apps/pc/src/main/runtime-slots.ts](../apps/pc/src/main/runtime-slots.ts)
 - Electron Builder 配置：[apps/pc/electron-builder.yml](../apps/pc/electron-builder.yml)
 - 灰度元数据构建钩子：[apps/pc/scripts/prepare-update-metadata.mjs](../apps/pc/scripts/prepare-update-metadata.mjs)
+- 运行包构建脚本：[apps/pc/scripts/build-runtime-package-assets.mjs](../apps/pc/scripts/build-runtime-package-assets.mjs)
 - 发布流水线：[.github/workflows/release.yml](../.github/workflows/release.yml)
 
 ## 最小操作清单
@@ -179,7 +197,7 @@ pnpm release:stable
 3. 如需调整灰度，修改 [release.yml](../.github/workflows/release.yml) 顶层 `env`
 4. 执行对应发布命令
 5. 等待 GitHub Actions 完成打包和发布
-6. 在 GitHub Release 中确认安装包和对应通道 `.yml` 文件都已上传
-7. 在已安装客户端中验证该通道是否能正确检查到更新
+6. 在 GitHub Release 中确认安装包、对应通道 `.yml`、运行包清单、运行包压缩包都已上传
+7. 在已安装客户端中验证该通道是否能正确下载到非活动运行副本并完成切换
 
 运营执行勾选版见 [docs/release-checklist.md](release-checklist.md)。

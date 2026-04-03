@@ -4,19 +4,7 @@ import { resolve } from 'path';
 import { builtinModules } from 'node:module';
 import { copyFileSync, mkdirSync } from 'node:fs';
 
-const MAIN_RUNTIME_EXTERNAL_PACKAGES = new Set([
-  'electron',
-  'better-sqlite3',
-  'bindings',
-  'file-uri-to-path',
-  'directory-tree',
-  'docx',
-  'exceljs',
-  'jszip',
-  'mammoth',
-  'pptxgenjs',
-  'electron-updater',
-]);
+const MAIN_RUNTIME_EXTERNAL_PACKAGES = new Set(['electron', 'better-sqlite3']);
 
 function getPackageRoot(id: string) {
   if (id.startsWith('@')) {
@@ -24,6 +12,14 @@ function getPackageRoot(id: string) {
     return scope && name ? `${scope}/${name}` : id;
   }
   return id.split('/')[0];
+}
+
+function isKnownSafeEvalWarning(warning: { code?: string; id?: string; message?: string }) {
+  return (
+    warning.code === 'EVAL' &&
+    typeof warning.id === 'string' &&
+    warning.id.includes('bluebird/js/release/util.js')
+  );
 }
 
 export default defineConfig(({ mode }) => {
@@ -78,9 +74,13 @@ export default defineConfig(({ mode }) => {
         outDir: './dist',
         emptyOutDir: false,
         lib: {
-          entry: resolve(__dirname, 'src/main/index.ts'),
+          entry: {
+            main: resolve(__dirname, 'src/main/index.ts'),
+            'main-runtime': resolve(__dirname, 'src/main/runtime-app.ts'),
+          },
           formats: ['es'],
-          fileName: () => 'main.mjs',
+          fileName: (_format, entryName) =>
+            entryName === 'main-runtime' ? 'main-runtime.mjs' : 'main.mjs',
         },
         rollupOptions: {
           external: (id: string) => {
@@ -89,9 +89,18 @@ export default defineConfig(({ mode }) => {
             if (id.startsWith('node:')) return true;
             return builtinModules.includes(packageRoot);
           },
+          onwarn(warning, warn) {
+            // bluebird 的内部 util 仍使用 eval；这是上游实现细节，
+            // 不影响我们当前 Electron 主进程构建，开发期不必反复提示。
+            if (isKnownSafeEvalWarning(warning)) {
+              return;
+            }
+            warn(warning);
+          },
           output: {
             format: 'es',
-            entryFileNames: 'main.mjs',
+            entryFileNames: ({ name }) =>
+              name === 'main-runtime' ? 'main-runtime.mjs' : 'main.mjs',
           },
         },
       },
@@ -110,6 +119,10 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       hmr: true,
+      watch: {
+        // main/preload 构建会持续写 dist；这些都是生成物，不应触发 renderer 热刷新。
+        ignored: ['**/dist/**', '**/build/**'],
+      },
     },
     build: {
       outDir: './dist',
