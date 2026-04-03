@@ -201,3 +201,5 @@ pnpm release:stable
 7. 在已安装客户端中验证该通道是否能正确下载到非活动运行副本并完成切换
 
 运营执行勾选版见 [docs/release-checklist.md](release-checklist.md)。
+
+兼容层退出节奏见 [docs/runtime-compat-removal-plan.md](runtime-compat-removal-plan.md)。
