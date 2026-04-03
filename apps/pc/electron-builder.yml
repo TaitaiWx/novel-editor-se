@@ -21,13 +21,14 @@ asarUnpack:
 files:
   - dist/**/*
   - package.json
+  - node_modules/**/*
   - resources/branding/**/*
 
 extraResources:
   - from: sample-data
     to: sample-data
     filter:
-      - "**/*"
+      - '**/*'
   - from: release-notes.json
     to: release-notes.json
 
@@ -74,7 +75,6 @@ publish:
   provider: github
   owner: TaitaiWx
   repo: novel-editor-se
-
 # Auto-update configuration
 # electron-updater reads this to check for updates on GitHub Releases
 # owner/repo are auto-detected from GITHUB_REPOSITORY env var in CI
