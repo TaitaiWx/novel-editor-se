@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyRuntimeStartupFailure } from '../../src/main/runtime-slot-state';
+import { applyRuntimeStartupFailure } from '../../src/main/runtime-copy-state';
 import type { RuntimeCopyBootState } from '../../src/main/update-types';
 
 function createBaseState(): RuntimeCopyBootState {

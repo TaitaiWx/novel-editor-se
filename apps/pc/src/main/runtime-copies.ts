@@ -13,7 +13,7 @@ import type {
   RuntimePackageManifest,
   UpdateChannel,
 } from './update-types';
-import { applyRuntimeStartupFailure } from './runtime-slot-state';
+import { applyRuntimeStartupFailure } from './runtime-copy-state';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -85,18 +85,15 @@ export function getRuntimePackageManifestFileName(
   platform: NodeJS.Platform = process.platform,
   arch = process.arch
 ) {
-  // 线上产物文件名继续沿用 slot 前缀，避免破坏现有发布源兼容性。
-  return `slot-${mapUpdateChannel(channel)}-${platform}-${arch}.json`;
+  return `runtime-package-${mapUpdateChannel(channel)}-${platform}-${arch}.json`;
 }
 
 export function getRuntimeCopyStatePath() {
-  // 本地状态文件名暂时保留旧前缀，避免破坏已发布版本的升级链路。
-  return join(app.getPath('userData'), 'runtime-slot-state.json');
+  return join(app.getPath('userData'), 'runtime-copy-state.json');
 }
 
 export function getRuntimeCopiesRootDir() {
-  // 运行副本目录先沿用旧目录名，保证历史版本下载的 A/B 运行副本仍可复用。
-  return join(app.getPath('userData'), 'runtime-slots');
+  return join(app.getPath('userData'), 'runtime-copies');
 }
 
 export function getRuntimeCopyRootDir(copyName: RuntimeCopyName) {
@@ -108,8 +105,7 @@ export function getRuntimeCopyDistDir(copyName: RuntimeCopyName) {
 }
 
 export function getRuntimeCopyCacheDir() {
-  // 缓存目录继续复用旧路径，避免重新下载已有运行包。
-  return join(app.getPath('userData'), 'runtime-slot-cache');
+  return join(app.getPath('userData'), 'runtime-package-cache');
 }
 
 async function pathExists(targetPath: string) {
@@ -159,58 +155,35 @@ export async function loadRuntimeCopyState() {
   const initialState = createInitialRuntimeState();
   try {
     const content = await readFile(getRuntimeCopyStatePath(), 'utf8');
-    // 兼容历史版本落盘的 slot 字段，启动后会按新的运行副本字段重新持久化。
-    const parsed = JSON.parse(content) as Partial<RuntimeCopyBootState> & {
-      stableSlot?: RuntimeCopyName | null;
-      pendingSlot?: RuntimeCopyName | null;
-      currentSlot?: RuntimeCopyName | null;
-      slots?: Record<
-        RuntimeCopyName,
-        Partial<RuntimeCopyRecord> & {
-          slotName?: RuntimeCopyName;
-        }
-      >;
-      bootSession?: Partial<RuntimeCopyBootState['bootSession']> & {
-        slotName?: RuntimeCopyName;
-      };
-    };
-    const {
-      stableSlot: legacyStableCopy,
-      pendingSlot: legacyPendingCopy,
-      currentSlot: legacyCurrentCopy,
-      slots: legacyCopies,
-      bootSession: parsedBootSession,
-      ...restParsed
-    } = parsed;
-    const parsedCopies = parsed.copies ?? legacyCopies;
+    const parsed = JSON.parse(content) as Partial<RuntimeCopyBootState>;
     runtimeCopyState = {
       ...initialState,
-      ...restParsed,
+      ...parsed,
       launcherVersion: app.getVersion(),
       channel: parsed.channel ?? initialState.channel,
-      stableCopy: parsed.stableCopy ?? legacyStableCopy ?? initialState.stableCopy,
-      pendingCopy: parsed.pendingCopy ?? legacyPendingCopy ?? initialState.pendingCopy,
-      currentCopy: parsed.currentCopy ?? legacyCurrentCopy ?? initialState.currentCopy,
+      stableCopy: parsed.stableCopy ?? initialState.stableCopy,
+      pendingCopy: parsed.pendingCopy ?? initialState.pendingCopy,
+      currentCopy: parsed.currentCopy ?? initialState.currentCopy,
       copies: {
         a: {
           ...createEmptyCopyRecord('a'),
-          ...(parsedCopies?.a ?? {}),
+          ...(parsed.copies?.a ?? {}),
           copyName: 'a',
         },
         b: {
           ...createEmptyCopyRecord('b'),
-          ...(parsedCopies?.b ?? {}),
+          ...(parsed.copies?.b ?? {}),
           copyName: 'b',
         },
       },
-      bootSession: parsedBootSession
+      bootSession: parsed.bootSession
         ? {
-            ...parsedBootSession,
-            copyName: parsedBootSession.copyName ?? parsedBootSession.slotName ?? 'a',
-            version: parsedBootSession.version ?? '',
-            startedAt: parsedBootSession.startedAt ?? new Date().toISOString(),
-            healthyAt: parsedBootSession.healthyAt ?? null,
-            gracefulExitRequestedAt: parsedBootSession.gracefulExitRequestedAt ?? null,
+            ...parsed.bootSession,
+            copyName: parsed.bootSession.copyName ?? 'a',
+            version: parsed.bootSession.version ?? '',
+            startedAt: parsed.bootSession.startedAt ?? new Date().toISOString(),
+            healthyAt: parsed.bootSession.healthyAt ?? null,
+            gracefulExitRequestedAt: parsed.bootSession.gracefulExitRequestedAt ?? null,
           }
         : null,
     };

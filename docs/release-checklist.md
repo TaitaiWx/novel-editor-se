@@ -10,6 +10,7 @@
 - [ ] 已执行 `pnpm preflight:release`，并确认双运行副本预检通过
 - [ ] 当前版本号策略已确认，不会覆盖重发同一版本
 - [ ] 如果本次包含高风险改动，已决定灰度比例是否需要调整
+- [ ] 如果本次版本 `>= 1.1.0-beta.26`，已准备手动通知旧 beta 用户重新下载安装
 
 ## B. 灰度配置确认
 
@@ -92,9 +93,9 @@ pnpm release:stable
 - [ ] Stable 对应 `latest*.yml`
 - [ ] Beta 对应 `beta*.yml`
 - [ ] Canary 对应 `alpha*.yml`
-- [ ] Stable 对应 `slot-latest-{platform}-{arch}.json`
-- [ ] Beta 对应 `slot-beta-{platform}-{arch}.json`
-- [ ] Canary 对应 `slot-alpha-{platform}-{arch}.json`
+- [ ] Stable 对应 `runtime-package-latest-{platform}-{arch}.json`
+- [ ] Beta 对应 `runtime-package-beta-{platform}-{arch}.json`
+- [ ] Canary 对应 `runtime-package-alpha-{platform}-{arch}.json`
 
 ## F. 发布后验证
 
@@ -107,6 +108,7 @@ pnpm release:stable
 - [ ] 下载完成后能看到“重启以更新”
 - [ ] 重启后新版本进入非活动运行副本并被切为当前版本
 - [ ] 人为制造坏运行副本时，launcher 会自动回退到旧副本
+- [ ] 如果当前版本 `>= 1.1.0-beta.26`，已验证旧 beta 客户端不会再被视为自动升级兼容范围
 
 ## G. 异常处理
 

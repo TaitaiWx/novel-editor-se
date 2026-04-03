@@ -142,8 +142,8 @@ jobs:
             apps/pc/build/*.deb
             apps/pc/build/*.rpm
             apps/pc/build/*.yml
-            apps/pc/build/slot-*.zip
-            apps/pc/build/slot-*.json
+            apps/pc/build/runtime-package-*.zip
+            apps/pc/build/runtime-package-*.json
           if-no-files-found: ignore
 
   publish:

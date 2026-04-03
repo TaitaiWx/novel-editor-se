@@ -61,7 +61,7 @@ async function main() {
   const channelKey = process.env.NOVEL_EDITOR_RELEASE_CHANNEL ?? inferChannel(version);
   const platform = process.env.NOVEL_EDITOR_BUILD_PLATFORM ?? process.platform;
   const arch = process.env.NOVEL_EDITOR_BUILD_ARCH ?? process.arch;
-  const manifestPath = join(buildDir, `slot-${channelKey}-${platform}-${arch}.json`);
+  const manifestPath = join(buildDir, `runtime-package-${channelKey}-${platform}-${arch}.json`);
 
   // 预检必须直接覆盖真实构建链，避免只验证缓存产物。
   await run(pnpmCommand, ['build'], appDir);

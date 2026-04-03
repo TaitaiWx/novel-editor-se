@@ -7,7 +7,7 @@ import { unregisterAllShortcuts } from './shortcuts/unregisterAllShortcuts';
 import { createMainWindow, setupWindowEvents } from './window';
 import { setupAutoUpdater } from './auto-updater';
 import { getNativeBinding } from './native-binding';
-import { markRuntimeGracefulExit } from './runtime-slots';
+import { markRuntimeGracefulExit } from './runtime-copies';
 
 let runtimeBooted = false;
 

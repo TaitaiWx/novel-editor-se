@@ -134,9 +134,9 @@ async function main() {
   const arch = process.env.NOVEL_EDITOR_BUILD_ARCH ?? process.arch;
   const stagingPercentage = getRolloutPercentage(channelKey);
   const stagingDir = join(buildDir, `.runtime-package-staging-${platform}-${arch}`);
-  const bundleFile = `slot-${channelKey}-${platform}-${arch}-${version}.zip`;
+  const bundleFile = `runtime-package-${channelKey}-${platform}-${arch}-${version}.zip`;
   const bundlePath = join(buildDir, bundleFile);
-  const manifestPath = join(buildDir, `slot-${channelKey}-${platform}-${arch}.json`);
+  const manifestPath = join(buildDir, `runtime-package-${channelKey}-${platform}-${arch}.json`);
 
   await rm(stagingDir, { recursive: true, force: true });
   await rm(bundlePath, { force: true });

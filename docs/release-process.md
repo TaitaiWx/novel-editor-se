@@ -27,11 +27,11 @@
    - Beta: `beta.yml` / `beta-mac.yml` / `beta-linux.yml`
    - Canary: `alpha.yml` / `alpha-mac.yml` / `alpha-linux.yml`
 2. 运行时元数据，新增独立运行包清单：
-   - Stable: `slot-latest-{platform}-{arch}.json`
-   - Beta: `slot-beta-{platform}-{arch}.json`
-   - Canary: `slot-alpha-{platform}-{arch}.json`
+   - Stable: `runtime-package-latest-{platform}-{arch}.json`
+   - Beta: `runtime-package-beta-{platform}-{arch}.json`
+   - Canary: `runtime-package-alpha-{platform}-{arch}.json`
 
-真正的运行时版本指针保存在客户端本地 `runtime-slot-state.json`。这个文件名为了兼容历史版本保留不变，但内部字段已经切成 `stableCopy / pendingCopy`，launcher 启动时只从这个根状态读取版本指针，不会从组件 state 推断当前版本。
+真正的运行时版本指针保存在客户端本地 `runtime-copy-state.json`，launcher 启动时只从这个根状态读取 `stableCopy / pendingCopy`，不会从组件 state 推断当前版本。
 
 ### 灰度比例
 
@@ -79,7 +79,7 @@ pnpm release:canary:minor
 
 - 版本会变成 `x.y.z-alpha.0`
 - 推送 tag 后，CI 以 `alpha` 通道发布
-- 生成 `slot-alpha-{platform}-{arch}.json` 和对应运行包压缩包
+- 生成 `runtime-package-alpha-{platform}-{arch}.json` 和对应运行包压缩包
 - 默认灰度比例 10%
 
 继续发布同一条 Canary 线：
@@ -92,7 +92,7 @@ pnpm release:canary
 
 - 版本递增为 `x.y.z-alpha.N`
 - 继续写入 `alpha*.yml`
-- 继续写入 `slot-alpha-{platform}-{arch}.json`
+- 继续写入 `runtime-package-alpha-{platform}-{arch}.json`
 
 ### Beta
 
@@ -106,7 +106,7 @@ pnpm release:minor
 
 - 版本会变成 `x.y.z-beta.0`
 - 推送 tag 后，CI 以 `beta` 通道发布
-- 生成 `slot-beta-{platform}-{arch}.json` 和对应运行包压缩包
+- 生成 `runtime-package-beta-{platform}-{arch}.json` 和对应运行包压缩包
 - 默认灰度比例 25%
 
 继续发布同一条 Beta 线：
@@ -119,7 +119,7 @@ pnpm release:beta
 
 - 版本递增为 `x.y.z-beta.N`
 - 继续写入 `beta*.yml`
-- 继续写入 `slot-beta-{platform}-{arch}.json`
+- 继续写入 `runtime-package-beta-{platform}-{arch}.json`
 
 ### Stable
 
@@ -133,7 +133,7 @@ pnpm release:stable
 
 - 去掉预发布标记，生成正式版本号
 - 推送 tag 后，CI 以 `latest` 通道发布
-- 生成 `slot-latest-{platform}-{arch}.json` 和对应运行包压缩包
+- 生成 `runtime-package-latest-{platform}-{arch}.json` 和对应运行包压缩包
 - 默认灰度比例 100%
 
 ## 成熟发布流程建议
@@ -167,7 +167,15 @@ pnpm release:stable
 
 ### 需要回退
 
-当前项目实现的是稳定 launcher + A/B 双运行副本运行时：
+当前项目实现的是稳定 launcher + A/B 双运行副本运行时。
+
+注意：
+
+- 从 `1.1.0-beta.26` 开始，这条线已经选择硬切
+- `<= 1.1.0-beta.25` 的旧 beta 版本不再保证可自动升级
+- 旧 beta 用户需要手动重新下载安装
+
+运行时逻辑本身仍然是：
 
 - 新版本只会下载到非活动运行副本
 - launcher 只在新副本健康启动后才提交版本指针
@@ -182,7 +190,7 @@ pnpm release:stable
 ## 与代码的对应关系
 
 - 主进程更新逻辑：[apps/pc/src/main/auto-updater.ts](../apps/pc/src/main/auto-updater.ts)
-- 运行副本状态与版本指针：[apps/pc/src/main/runtime-slots.ts](../apps/pc/src/main/runtime-slots.ts)
+- 运行副本状态与版本指针：[apps/pc/src/main/runtime-copies.ts](../apps/pc/src/main/runtime-copies.ts)
 - Electron Builder 配置：[apps/pc/electron-builder.yml](../apps/pc/electron-builder.yml)
 - 灰度元数据构建钩子：[apps/pc/scripts/prepare-update-metadata.mjs](../apps/pc/scripts/prepare-update-metadata.mjs)
 - 运行包构建脚本：[apps/pc/scripts/build-runtime-package-assets.mjs](../apps/pc/scripts/build-runtime-package-assets.mjs)

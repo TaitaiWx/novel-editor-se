@@ -1,196 +1,65 @@
-# 运行时兼容层移除计划
+# 运行时兼容层移除方案
 
-这份文档用于管理“`slot` 旧命名兼容层”的退出策略，避免因为过早删除兼容逻辑而破坏：
+## 当前决定
 
-- 已安装老版本客户端的自动升级
-- 已存在用户数据目录中的本地版本指针
-- 已缓存的历史运行包和运行副本
+从 `1.1.0-beta.26` 开始，项目不再走“保留旧兼容层逐步淘汰”的路线，改为直接硬切。
 
-## 基准版本
+这意味着：
 
-本计划以首个正式携带“运行副本”新命名的 Stable 版本作为 `S0`。
+- `<= 1.1.0-beta.25` 的旧版本客户端，不再保证可以通过自动更新平滑升级
+- 这部分用户需要手动重新下载安装 `1.1.0-beta.26` 或更新版本
+- 从 `1.1.0-beta.26` 开始，运行时协议、本地状态文件名和本地目录名统一切到新命名
 
-当前代码线对应的 `S0` 预计是 `1.1.0`。
+## 本次硬切范围
 
-如果最终首个 Stable 版本号不是 `1.1.0`，则把下文的 `1.1.0 / 1.2.0 / 1.3.0 / 2.0.0` 整体顺延到实际的 Stable 节点。
+`1.1.0-beta.26` 起，直接移除下面三类兼容层：
 
-版本窗口约定：
+1. 旧状态字段兼容
+   - 删除对 `stableSlot / pendingSlot / currentSlot / slots / slotName` 的读取
+2. 旧本地路径兼容
+   - 不再使用 `runtime-slot-state.json`
+   - 不再使用 `runtime-slots`
+   - 不再使用 `runtime-slot-cache`
+3. 旧发布文件名兼容
+   - 不再发布 `slot-*.json`
+   - 不再发布 `slot-*.zip`
 
-- `S0 = 1.1.0`
-- `S1 = 1.2.0`
-- `S2 = 1.3.0`
-- `M0 = 2.0.0`
+## 新命名
 
-## 兼容层清单
+硬切后的统一命名如下：
 
-当前仍保留的兼容层分三类：
+- 本地状态文件：`runtime-copy-state.json`
+- 运行副本目录：`runtime-copies`
+- 运行包缓存目录：`runtime-package-cache`
+- 运行包清单：`runtime-package-{channel}-{platform}-{arch}.json`
+- 运行包压缩包：`runtime-package-{channel}-{platform}-{arch}-{version}.zip`
 
-1. 本地状态字段兼容
-   - 旧字段：`stableSlot / pendingSlot / currentSlot / slots / slotName`
-   - 新字段：`stableCopy / pendingCopy / currentCopy / copies / copyName`
-2. 本地文件与目录路径兼容
-   - `runtime-slot-state.json`
-   - `runtime-slots`
-   - `runtime-slot-cache`
-3. 发布协议文件名兼容
-   - `slot-latest-{platform}-{arch}.json`
-   - `slot-beta-{platform}-{arch}.json`
-   - `slot-alpha-{platform}-{arch}.json`
-   - `slot-*.zip`
+## 影响
 
-## 一览表
+这次硬切会带来下面这些已知影响：
 
-| 兼容项 | 当前为什么不能删 | 最早建议删除版本 | 必须满足的前置条件 |
-| --- | --- | --- | --- |
-| 旧状态字段读取 | 用户本地可能还保留旧结构的 `runtime-slot-state.json` | `1.3.0` | 至少经历 `1.1.0` 和 `1.2.0` 两个 Stable；并且明确不再支持从 `<1.1.0` 直接升级 |
-| 旧本地路径名 | 启动器、缓存、运行副本目录都依赖这些路径，直接改名风险高 | `2.0.0` | 先完成双路径迁移；至少经历两个 Stable 周期验证；并且不再支持回退到旧路径布局 |
-| 旧发布文件名 `slot-*` | 已发布客户端当前就是按这个名字拉清单和运行包 | `2.0.0` | 服务端先双发新旧文件名至少两个 Stable 周期；客户端先支持新名字再移除旧名字 |
+1. 老版本自动更新链路会断
+   - 因为老版本仍然按旧文件名请求运行包清单
+2. 老版本用户本地的旧运行副本缓存不会被新版本继续复用
+   - 新版本会在新目录下重新建立运行副本
+3. 旧版本落盘的启动状态不会被新版本继续读取
+   - 新版本只认新结构
 
-## 详细计划
+这些影响是本次决策明确接受的，不再做向后兼容。
 
-### 1. 旧状态字段读取
+## 发版要求
 
-对应代码：
+如果发布 `1.1.0-beta.26` 或后续基于这条线的版本，必须同时做到：
 
-- [runtime-slots.ts](../apps/pc/src/main/runtime-slots.ts)
+1. 手动通知现有测试用户重新下载安装
+2. 在发版说明里写明“旧 beta 版本需要手动重装，自动更新不保证可用”
+3. 不再把“旧 beta 可无缝自动升级”作为验收条件
+4. 预检和 CI 只校验新命名产物
 
-当前行为：
+## 与代码对应
 
-- 启动时兼容读取 `stableSlot / pendingSlot / currentSlot / slots / slotName`
-- 读入后转换成 `stableCopy / pendingCopy / currentCopy / copies / copyName`
-- 后续再按新结构持久化
-
-为什么现在不能删：
-
-- 用户可能从一个更老的安装包直接升级到未来版本，而不是逐个小版本升级
-- 只要存在这种直升路径，新版本就必须认得旧状态文件结构
-
-最早建议删除版本：
-
-- `1.3.0`
-
-删除前必须全部满足：
-
-1. `1.1.0` Stable 已发布，且包含旧字段兼容读取
-2. `1.2.0` Stable 已发布，且继续保留旧字段兼容读取
-3. 发布策略已明确声明：`<1.1.0` 不再属于受支持升级源
-4. 官方下载入口、灰度入口、内部发版说明都不再要求支持从 `<1.1.0` 直接升级
-
-删除动作：
-
-1. 删掉 `loadRuntimeCopyState()` 中对 `stableSlot / pendingSlot / currentSlot / slots / slotName` 的读取映射
-2. 删掉对应的兼容注释
-3. 保留新字段结构不变
-
-如果以上 4 条有任何一条做不到，就不要删。
-
-### 2. 旧本地路径名
-
-对应代码：
-
-- [runtime-slots.ts](../apps/pc/src/main/runtime-slots.ts)
-
-当前保留的旧路径：
-
-- `runtime-slot-state.json`
-- `runtime-slots`
-- `runtime-slot-cache`
-
-为什么现在不能删：
-
-- 这不是简单字段迁移，而是磁盘路径迁移
-- 一旦路径改掉，启动器、运行副本目录、缓存目录、恢复逻辑都要一起迁移
-- 如果中途失败，会直接影响启动和自动恢复
-
-最早建议删除版本：
-
-- `2.0.0`
-
-删除前必须全部满足：
-
-1. 在 `1.2.0` 先实现“双路径迁移”
-   - 新路径优先
-   - 旧路径兜底
-   - 首次启动时自动搬迁
-2. `1.2.x` 和 `1.3.x` 两个 Stable 周期都已在线运行
-3. 已确认不再需要与旧路径布局做双向兼容
-4. 已确认自动恢复、手动恢复、缓存命中都能在新路径下稳定工作
-
-推荐迁移目标名：
-
-- `runtime-copy-state.json`
-- `runtime-copies`
-- `runtime-package-cache`
-
-删除动作应分两步：
-
-1. `1.2.0`
-   - 先引入新路径
-   - 启动时自动把旧路径搬到新路径
-   - 代码同时支持新旧路径
-2. `2.0.0`
-   - 删除旧路径兜底读取
-   - 删除旧路径清理逻辑
-   - 文档统一切到新路径
-
-这部分不要在 `1.1.x` 做硬切。
-
-### 3. 旧发布文件名 `slot-*`
-
-对应代码与脚本：
-
-- [runtime-slots.ts](../apps/pc/src/main/runtime-slots.ts)
-- [build-runtime-package-assets.mjs](../apps/pc/scripts/build-runtime-package-assets.mjs)
-- [preflight-release.mjs](../apps/pc/scripts/preflight-release.mjs)
-
-为什么现在不能删：
-
-- 已发布客户端当前就是按 `slot-*.json` / `slot-*.zip` 去拉运行包
-- 如果服务端直接改文件名，老客户端会在更新时 404
-
-最早建议删除版本：
-
-- `2.0.0`
-
-删除前必须全部满足：
-
-1. 从 `1.2.0` 开始，发布流水线双发两套名字
-   - 旧名字：`slot-*`
-   - 新名字：例如 `runtime-package-*`
-2. 从 `1.2.0` 开始，客户端先尝试新名字，失败后再回退旧名字
-3. `1.2.x` 和 `1.3.x` 两个 Stable 周期都已包含“新名字优先 + 旧名字兜底”
-4. 已明确不再支持 `<1.2.0` 的客户端继续通过旧文件名自动更新
-
-删除动作应分两步：
-
-1. `1.2.0`
-   - 服务端双发
-   - 客户端双读
-2. `2.0.0`
-   - 停止发布 `slot-*`
-   - 删除客户端对旧文件名的回退逻辑
-
-如果短期不打算做服务端双发，这一层就继续保留，不要硬删。
-
-## 当前建议
-
-按当前代码和发布状态，建议这样执行：
-
-1. `1.1.x` 只保留并标注兼容层，不删除任何协议兼容
-2. `1.2.0` 如需继续清理，优先做“双路径迁移”和“双文件名双发”
-3. `1.3.0` 才考虑删“旧状态字段读取”
-4. `2.0.0` 才考虑删“旧路径名”和“旧发布文件名”
-
-也就是说：
-
-- 现在可以删的是“内部术语和 UI 文案”
-- 现在不该删的是“升级协议兼容”和“本地状态迁移兼容”
-
-## 删除前最后确认
-
-每次真正删除兼容层前，至少补做下面 4 件事：
-
-1. 在发布说明里明确本次开始不再支持的旧版本范围
-2. 在预检脚本里加入对应的迁移断言
-3. 用一个真实旧版本安装包验证升级到目标版本的路径
-4. 用一个带旧 `runtime-slot-state.json` 的用户目录验证启动和恢复
+- 运行时状态与路径：[apps/pc/src/main/runtime-copies.ts](../apps/pc/src/main/runtime-copies.ts)
+- 自动更新协议：[apps/pc/src/main/auto-updater.ts](../apps/pc/src/main/auto-updater.ts)
+- 运行包构建脚本：[apps/pc/scripts/build-runtime-package-assets.mjs](../apps/pc/scripts/build-runtime-package-assets.mjs)
+- 发版预检脚本：[apps/pc/scripts/preflight-release.mjs](../apps/pc/scripts/preflight-release.mjs)
+- 发布流水线：[.github/workflows/release.yml](../.github/workflows/release.yml)

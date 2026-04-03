@@ -7,7 +7,7 @@ import {
   handleRuntimeStartupFailure,
   hasAutoRecoveryAttemptFlag,
   prepareRuntimeLaunch,
-} from './runtime-slots';
+} from './runtime-copies';
 import { setCurrentRuntimeDescriptor } from './runtime-context';
 
 if (process.env.NOVEL_EDITOR_DISABLE_HARDWARE_ACCELERATION === '1') {

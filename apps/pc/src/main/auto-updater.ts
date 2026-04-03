@@ -18,7 +18,7 @@ import {
   markCurrentRuntimeHealthy,
   setRuntimeUpdateChannel,
   switchToPreviousHealthyCopy,
-} from './runtime-slots';
+} from './runtime-copies';
 import { getCurrentRuntimeChannel, getCurrentRuntimeVersion } from './runtime-context';
 import { getMainWindow } from './window';
 import type { RuntimePackageManifest, UpdateChannel } from './update-types';
