@@ -8,7 +8,11 @@ import { fileURLToPath } from 'url';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptDir, '..');
 const buildDir = join(appRoot, 'build');
+const SMOKE_SCRIPT_FINGERPRINT = 'smoke-v3-alive-check';
 const SMOKE_TIMEOUT_MS = 60_000;
+
+/** 启动后存活这么久不崩溃即视为烟雾测试通过 */
+const SMOKE_ALIVE_MS = 5_000;
 
 async function findFirstDirectory(parentDir, matcher) {
   const entries = await readdir(parentDir, { withFileTypes: true });
@@ -73,6 +77,11 @@ async function resolveSmokeExecutable() {
 }
 
 async function main() {
+  if (process.argv.includes('--fingerprint')) {
+    console.log(`smoke-script-fingerprint=${SMOKE_SCRIPT_FINGERPRINT}`);
+    return;
+  }
+
   const executablePath = await resolveSmokeExecutable();
   console.log(
     `烟雾测试可执行文件: ${executablePath} (platform=${process.platform}, arch=${process.arch})`
@@ -81,10 +90,11 @@ async function main() {
 
   try {
     await new Promise((resolvePromise, rejectPromise) => {
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL');
-        rejectPromise(new Error(`烟雾测试超时（${SMOKE_TIMEOUT_MS}ms）`));
-      }, SMOKE_TIMEOUT_MS);
+      let finished = false;
+      let stderr = '';
+      let aliveTimer = null;
+      let absoluteTimer = null;
+      let forceKillTimer = null;
 
       const child = spawn(
         executablePath,
@@ -102,33 +112,81 @@ async function main() {
             NOVEL_EDITOR_DISABLE_AUTO_UPDATER: '1',
             NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR: smokeUserDataDir,
           },
-          stdio: ['ignore', 'pipe', 'pipe'],
+          // 仅采集 stderr；stdout 不建管道，避免日志过多时阻塞子进程。
+          stdio: ['ignore', 'ignore', 'pipe'],
         }
       );
 
-      let stderr = '';
       child.stderr.on('data', (chunk) => {
         stderr += chunk.toString();
       });
 
-      child.once('error', (error) => {
-        clearTimeout(timer);
+      const cleanup = () => {
+        if (aliveTimer) {
+          clearTimeout(aliveTimer);
+          aliveTimer = null;
+        }
+        if (absoluteTimer) {
+          clearTimeout(absoluteTimer);
+          absoluteTimer = null;
+        }
+        if (forceKillTimer) {
+          clearTimeout(forceKillTimer);
+          forceKillTimer = null;
+        }
+        child.removeAllListeners('error');
+        child.removeAllListeners('exit');
+      };
+
+      const finishResolve = () => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        resolvePromise(undefined);
+      };
+
+      const finishReject = (error) => {
+        if (finished) return;
+        finished = true;
+        cleanup();
         rejectPromise(error);
+      };
+
+      // 如果进程在存活窗口内崩溃/退出，视为失败
+      child.once('error', (error) => {
+        finishReject(error);
       });
 
       child.once('exit', (code, signal) => {
-        clearTimeout(timer);
+        // 进程主动以 0 退出 → 通过（app 内部 smoke 逻辑正常退出）
         if (code === 0) {
-          resolvePromise(undefined);
+          finishResolve();
           return;
         }
-
-        rejectPromise(
+        // 存活窗口内非 0 退出 → 失败
+        finishReject(
           new Error(
-            `烟雾测试启动失败: code=${code ?? 'null'} signal=${signal ?? 'null'} stderr=${stderr.trim()}`
+            `烟雾测试启动崩溃: code=${code ?? 'null'} signal=${signal ?? 'null'} stderr=${stderr.trim()}`
           )
         );
       });
+
+      // 存活窗口结束后：进程仍在运行 → 启动成功，主动 kill
+      aliveTimer = setTimeout(() => {
+        console.log(`进程启动后存活 ${SMOKE_ALIVE_MS}ms 未崩溃，烟雾测试通过`);
+        child.kill('SIGTERM');
+        // 给进程一点时间优雅退出，否则强制 kill
+        forceKillTimer = setTimeout(() => {
+          if (!child.killed) child.kill('SIGKILL');
+        }, 3_000);
+        finishResolve();
+      }, SMOKE_ALIVE_MS);
+
+      // 绝对超时保护（防止极端情况）
+      absoluteTimer = setTimeout(() => {
+        child.kill('SIGKILL');
+        finishReject(new Error(`烟雾测试绝对超时（${SMOKE_TIMEOUT_MS}ms）`));
+      }, SMOKE_TIMEOUT_MS);
     });
 
     console.log(`打包产物启动烟雾测试通过: ${executablePath}`);

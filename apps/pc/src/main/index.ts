@@ -5,7 +5,7 @@ import { setupIPC } from './ipc-handlers';
 import { registerAllShortcuts } from './shortcuts/registerAllShortcuts';
 import { unregisterAllShortcuts } from './shortcuts/unregisterAllShortcuts';
 import { setupAutoUpdater } from './auto-updater';
-import { applySmokeTestPaths, isAutoUpdaterDisabled, isSmokeTestMode } from './launch-mode';
+import { applySmokeTestPaths, isAutoUpdaterDisabled } from './launch-mode';
 
 applySmokeTestPaths();
 
@@ -34,14 +34,6 @@ app.whenReady().then(() => {
 
   // 创建主窗口（ready-to-show 时自动关闭 splash）
   createMainWindow();
-
-  // 烟雾测试模式：如果 renderer 长时间未就绪，兜底退出（视为启动成功）
-  if (isSmokeTestMode()) {
-    setTimeout(() => {
-      console.log('烟雾测试：主进程已就绪，renderer 未在预期时间内响应，兜底退出');
-      app.exit(0);
-    }, 15_000);
-  }
 
   // 生产环境下检查自动更新
   if (process.env.NODE_ENV !== 'development' && !isAutoUpdaterDisabled()) {

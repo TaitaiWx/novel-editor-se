@@ -125,6 +125,10 @@ jobs:
         run: node ./scripts/prepare-update-metadata.mjs ./build ${{ steps.release_channel.outputs.publish_channel }}
         working-directory: apps/pc
 
+      - name: Print smoke script fingerprint
+        run: node ./scripts/run-packaged-smoke-test.mjs --fingerprint
+        working-directory: apps/pc
+
       - name: Smoke test packaged app (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a node ./scripts/run-packaged-smoke-test.mjs
