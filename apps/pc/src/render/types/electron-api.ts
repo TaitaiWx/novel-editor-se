@@ -15,10 +15,10 @@ export interface UpdateStatus {
   availableVersion: string | null;
   downloadedVersion: string | null;
   downloadPercent: number | null;
-  previousVersionAvailable: boolean;
-  previousVersion: string | null;
-  /** 下载完成后正在安装到非活动运行副本 */
-  preparingCopy: boolean;
+  rollbackAvailable: boolean;
+  rollbackVersion: string | null;
+  /** 下载完成后正在预缓存当前版本安装包（用于回滚） */
+  preCaching: boolean;
   lastError: string | null;
 }
 
@@ -148,6 +148,7 @@ export interface ElectronAPI {
     invoke(channel: 'window-close'): Promise<void>;
     invoke(channel: 'window-is-maximized'): Promise<boolean>;
     invoke(channel: 'app-renderer-ready'): Promise<{ success: boolean }>;
+    invoke(channel: 'app-renderer-health-ready'): Promise<{ success: boolean }>;
     invoke(channel: 'app-quit'): Promise<void>;
     invoke(channel: 'dev-tools-toggle'): Promise<void>;
     invoke(channel: 'window-toggle-fullscreen'): Promise<void>;
@@ -157,9 +158,7 @@ export interface ElectronAPI {
     invoke(channel: 'update-status'): Promise<UpdateStatus>;
     invoke(channel: 'update-install'): Promise<void>;
     invoke(channel: 'update-set-channel', updateChannel: UpdateChannel): Promise<UpdateStatus>;
-    invoke(
-      channel: 'update-restore-previous-version'
-    ): Promise<{ version: string; copyName: string }>;
+    invoke(channel: 'update-rollback'): Promise<{ version: string; installerPath: string }>;
     invoke(
       channel: 'db-outline-list-by-folder',
       folderPath: string,

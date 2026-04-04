@@ -11,10 +11,12 @@ import { settingsOps } from '@novel-editor/store';
 import { establishPortChannel } from '../message-port-bridge';
 import { PortChannel } from '../../shared/portChannels';
 import { isRendererDevServerEnabled, loadRendererPage } from '../renderer-entry';
-import { getCurrentRuntimeDistDir } from '../runtime-context';
 
 const __handler_filename = fileURLToPath(import.meta.url);
 const __handler_dirname = path.dirname(__handler_filename);
+// After Vite bundling, all code lives in dist/main.mjs,
+// so __handler_dirname already points to dist/. No need to go up a level.
+const __dist_dir = __handler_dirname;
 
 interface AIRequestPayload {
   prompt: string;
@@ -131,7 +133,6 @@ export function registerAIHandlers(): void {
   );
 
   ipcMain.handle('open-ai-assistant-window', (_event, folderPath: string) => {
-    const runtimeDistDir = getCurrentRuntimeDistDir();
     const existing = BrowserWindow.getAllWindows().find(
       (w) => !w.isDestroyed() && w.webContents.getURL().includes('mode=ai-assistant')
     );
@@ -153,7 +154,7 @@ export function registerAIHandlers(): void {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: path.join(runtimeDistDir, 'preload.js'),
+        preload: path.join(__dist_dir, 'preload.js'),
         webSecurity: true,
       },
       backgroundColor: '#1e1e1e',
@@ -162,7 +163,7 @@ export function registerAIHandlers(): void {
       frame: false,
     });
 
-    void loadRendererPage(aiWindow, runtimeDistDir, {
+    void loadRendererPage(aiWindow, __dist_dir, {
       mode: 'ai-assistant',
       folderPath: folderPath || '',
     });
@@ -184,7 +185,6 @@ export function registerAIHandlers(): void {
   ipcMain.handle(
     'open-right-panel-window',
     (_event, folderPath: string, _content?: string, hasActiveTab?: boolean) => {
-      const runtimeDistDir = getCurrentRuntimeDistDir();
       const existing = BrowserWindow.getAllWindows().find(
         (w) => !w.isDestroyed() && w.webContents.getURL().includes('mode=right-panel')
       );
@@ -223,7 +223,7 @@ export function registerAIHandlers(): void {
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
-          preload: path.join(runtimeDistDir, 'preload.js'),
+          preload: path.join(__dist_dir, 'preload.js'),
           webSecurity: true,
         },
         backgroundColor: '#1e1e1e',
@@ -232,7 +232,7 @@ export function registerAIHandlers(): void {
         frame: false,
       });
 
-      void loadRendererPage(panelWindow, runtimeDistDir, {
+      void loadRendererPage(panelWindow, __dist_dir, {
         mode: 'right-panel',
         folderPath: folderPath || '',
         hasActiveTab: hasActiveTab ? '1' : '0',

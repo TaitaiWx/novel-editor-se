@@ -4,7 +4,19 @@ import { resolve } from 'path';
 import { builtinModules } from 'node:module';
 import { copyFileSync, mkdirSync } from 'node:fs';
 
-const MAIN_RUNTIME_EXTERNAL_PACKAGES = new Set(['electron', 'better-sqlite3']);
+const MAIN_RUNTIME_EXTERNAL_PACKAGES = new Set([
+  'electron',
+  'better-sqlite3',
+  'bindings',
+  'file-uri-to-path',
+  'directory-tree',
+  'docx',
+  'exceljs',
+  'jszip',
+  'mammoth',
+  'pptxgenjs',
+  'electron-updater',
+]);
 
 function getPackageRoot(id: string) {
   if (id.startsWith('@')) {
@@ -74,13 +86,9 @@ export default defineConfig(({ mode }) => {
         outDir: './dist',
         emptyOutDir: false,
         lib: {
-          entry: {
-            main: resolve(__dirname, 'src/main/index.ts'),
-            'main-runtime': resolve(__dirname, 'src/main/runtime-app.ts'),
-          },
+          entry: resolve(__dirname, 'src/main/index.ts'),
           formats: ['es'],
-          fileName: (_format, entryName) =>
-            entryName === 'main-runtime' ? 'main-runtime.mjs' : 'main.mjs',
+          fileName: () => 'main.mjs',
         },
         rollupOptions: {
           external: (id: string) => {
@@ -99,8 +107,7 @@ export default defineConfig(({ mode }) => {
           },
           output: {
             format: 'es',
-            entryFileNames: ({ name }) =>
-              name === 'main-runtime' ? 'main-runtime.mjs' : 'main.mjs',
+            entryFileNames: 'main.mjs',
           },
         },
       },

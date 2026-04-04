@@ -4,7 +4,7 @@
  * Handles: window controls, shortcuts, app version, updates, recent folders, cache
  */
 import { ipcMain, BrowserWindow, app } from 'electron';
-import { access, readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import path from 'path';
 import { getAllShortcuts } from '../shortcuts/getAllShortcuts';
 import { getDeviceId } from '../device-id';
@@ -19,13 +19,15 @@ import {
   downloadUpdate,
   getUpdateStatus,
   installUpdate,
-  restorePreviousHealthyVersion,
+  noteUpdaterRendererHealthy,
+  noteUpdaterRendererReady,
+  rollbackToPreviousVersion,
   setUpdateChannel,
 } from '../auto-updater';
-import type { UpdateChannel } from '../update-types';
+import type { UpdateChannel } from '../auto-updater';
 import { settingsOps } from '@novel-editor/store';
 import { notifyMainWindowRendererReady } from '../window';
-import { getCurrentRuntimeRootDir, getCurrentRuntimeVersion } from '../runtime-context';
+import { isSmokeTestMode } from '../launch-mode';
 
 const DOCUMENT_CACHE_PREFIXES = [
   'novel-editor:lore:',
@@ -79,13 +81,22 @@ export function registerWindowAppHandlers(): void {
 
   ipcMain.handle('app-renderer-ready', () => {
     notifyMainWindowRendererReady();
+    noteUpdaterRendererReady();
+    return { success: true };
+  });
+
+  ipcMain.handle('app-renderer-health-ready', () => {
+    noteUpdaterRendererHealthy();
+    if (isSmokeTestMode()) {
+      setTimeout(() => app.exit(0), 300);
+    }
     return { success: true };
   });
 
   // ─── App Info ─────────────────────────────────────────────────────────────
 
   ipcMain.handle('get-shortcuts', () => getAllShortcuts());
-  ipcMain.handle('get-app-version', () => getCurrentRuntimeVersion());
+  ipcMain.handle('get-app-version', () => app.getVersion());
   ipcMain.handle('get-device-id', () => getDeviceId());
 
   // ─── Updates ──────────────────────────────────────────────────────────────
@@ -97,7 +108,7 @@ export function registerWindowAppHandlers(): void {
   ipcMain.handle('update-set-channel', (_event, channel: UpdateChannel) =>
     setUpdateChannel(channel)
   );
-  ipcMain.handle('update-restore-previous-version', () => restorePreviousHealthyVersion());
+  ipcMain.handle('update-rollback', () => rollbackToPreviousVersion());
 
   // ─── Recent Folders ───────────────────────────────────────────────────────
 
@@ -122,17 +133,13 @@ export function registerWindowAppHandlers(): void {
   // ─── Changelog ────────────────────────────────────────────────────────────
 
   ipcMain.handle('get-changelog', async () => {
-    const runtimeReleaseNotesPath = path.join(getCurrentRuntimeRootDir(), 'release-notes.json');
     const baseDir = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), '..');
     const releaseNotesPath = path.join(baseDir, 'release-notes.json');
     const normalizeVersion = (v: string) => v.trim().replace(/^v/i, '').toLowerCase();
 
     try {
-      const currentVersion = getCurrentRuntimeVersion();
-      const notesPath = await access(runtimeReleaseNotesPath)
-        .then(() => runtimeReleaseNotesPath)
-        .catch(() => releaseNotesPath);
-      const raw = await readFile(notesPath, 'utf-8');
+      const currentVersion = app.getVersion();
+      const raw = await readFile(releaseNotesPath, 'utf-8');
       const parsed = JSON.parse(raw) as {
         versions?: Record<string, { markdown: string }>;
       };
@@ -149,7 +156,7 @@ export function registerWindowAppHandlers(): void {
 
   ipcMain.handle('check-just-updated', async () => {
     const versionFilePath = path.join(app.getPath('userData'), 'changelog-last-seen-version');
-    const currentVersion = getCurrentRuntimeVersion();
+    const currentVersion = app.getVersion();
     let previousVersion: string | null = null;
     try {
       previousVersion = (await readFile(versionFilePath, 'utf-8')).trim();

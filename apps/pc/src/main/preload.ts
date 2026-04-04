@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('electron', {
         'window-close',
         'window-is-maximized',
         'app-renderer-ready',
+        'app-renderer-health-ready',
         'app-quit',
         'dev-tools-toggle',
         'window-toggle-fullscreen',
@@ -71,7 +72,7 @@ contextBridge.exposeInMainWorld('electron', {
         'update-download',
         'update-install',
         'update-set-channel',
-        'update-restore-previous-version',
+        'update-rollback',
         'delete-file',
         'delete-directory',
         'rename-file',
@@ -192,7 +193,7 @@ contextBridge.exposeInMainWorld('electron', {
         'update-download-progress',
         'update-downloaded',
         'update-state-changed',
-        'update-previous-version-available',
+        'update-rollback-available',
         'file-changed',
         'open-file-from-ai',
         'open-settings-from-ai',
@@ -222,7 +223,7 @@ contextBridge.exposeInMainWorld('electron', {
         'update-download-progress',
         'update-downloaded',
         'update-state-changed',
-        'update-previous-version-available',
+        'update-rollback-available',
         'file-changed',
       ];
       if (validChannels.includes(channel)) {
@@ -244,7 +245,7 @@ contextBridge.exposeInMainWorld('electron', {
         'update-download-progress',
         'update-downloaded',
         'update-state-changed',
-        'update-previous-version-available',
+        'update-rollback-available',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.removeAllListeners(channel);

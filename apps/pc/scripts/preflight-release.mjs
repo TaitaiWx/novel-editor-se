@@ -1,120 +1,131 @@
-import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
-import JSZip from 'jszip';
+import { spawnSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import { mkdir, readdir, rm } from 'fs/promises';
+import { dirname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const appDir = resolve(__dirname, '..');
-const buildDir = join(appDir, 'build');
-const distDir = join(appDir, 'dist');
-const packageJsonPath = join(appDir, 'package.json');
-const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const appRoot = resolve(scriptDir, '..');
+const repoRoot = resolve(appRoot, '..', '..');
+const buildDir = join(appRoot, 'build');
+const distDir = join(appRoot, 'dist');
 
-function inferChannel(version) {
-  const lowerVersion = version.toLowerCase();
-  if (lowerVersion.includes('-alpha.') || lowerVersion.includes('-canary.')) {
-    return 'alpha';
+function getPreflightPackageArgs() {
+  // 预检只做“最轻量但能生成更新元数据”的目标，避免本机环境被 dmg 等重目标拖垮。
+  if (process.platform === 'darwin') {
+    return ['--mac', 'zip'];
   }
-  if (lowerVersion.includes('-beta.')) {
-    return 'beta';
+
+  if (process.platform === 'win32') {
+    return ['--win', 'nsis'];
   }
-  return 'latest';
+
+  return ['--linux', 'AppImage'];
 }
 
-async function run(command, args, cwd) {
-  await new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(command, args, {
-      cwd,
-      stdio: 'inherit',
-    });
-    child.once('error', rejectPromise);
-    child.once('exit', (code) => {
-      if (code === 0) {
-        resolvePromise();
-        return;
-      }
-      rejectPromise(
-        new Error(`${command} ${args.join(' ')} exited with code ${code ?? 'unknown'}`)
-      );
-    });
+function runCommand(command, args, extraEnv = {}) {
+  const result = spawnSync(command, args, {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      ...extraEnv,
+    },
   });
+
+  if (result.status !== 0) {
+    throw new Error(`命令执行失败: ${command} ${args.join(' ')}`);
+  }
 }
 
-async function sha256(filePath) {
-  const hash = createHash('sha256');
-  hash.update(await readFile(filePath));
-  return hash.digest('hex');
+async function ensureFileExists(filePath, description) {
+  if (!existsSync(filePath)) {
+    throw new Error(`缺少${description}: ${filePath}`);
+  }
 }
 
-async function assertPathExists(filePath, message) {
-  assert.ok(existsSync(filePath), `${message}: ${filePath}`);
+async function collectFiles(dir, predicate, collected = []) {
+  if (!existsSync(dir)) {
+    return collected;
+  }
+
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await collectFiles(fullPath, predicate, collected);
+      continue;
+    }
+
+    if (predicate(fullPath, entry.name)) {
+      collected.push(fullPath);
+    }
+  }
+
+  return collected;
 }
 
 async function main() {
-  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
-  const version = packageJson.version;
-  const channelKey = process.env.NOVEL_EDITOR_RELEASE_CHANNEL ?? inferChannel(version);
-  const platform = process.env.NOVEL_EDITOR_BUILD_PLATFORM ?? process.platform;
-  const arch = process.env.NOVEL_EDITOR_BUILD_ARCH ?? process.arch;
-  const manifestPath = join(buildDir, `runtime-package-${channelKey}-${platform}-${arch}.json`);
+  await rm(buildDir, { recursive: true, force: true });
+  await rm(distDir, { recursive: true, force: true });
+  await mkdir(buildDir, { recursive: true });
 
-  // 预检必须直接覆盖真实构建链，避免只验证缓存产物。
-  await run(pnpmCommand, ['build'], appDir);
-  await run(pnpmCommand, ['bundle:runtime-package'], appDir);
-
-  for (const requiredDistFile of [
-    join(distDir, 'main.mjs'),
-    join(distDir, 'main-runtime.mjs'),
-    join(distDir, 'preload.js'),
-    join(distDir, 'index.html'),
-    join(distDir, 'splash', 'splash.html'),
-  ]) {
-    await assertPathExists(requiredDistFile, '缺少运行时构建产物');
-  }
-
-  await assertPathExists(manifestPath, '缺少运行包清单');
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-  const bundlePath = join(buildDir, manifest.bundleFile);
-  await assertPathExists(bundlePath, '缺少运行包压缩包');
-
-  assert.equal(manifest.version, version, '运行包清单版本号与 package.json 不一致');
-  assert.equal(manifest.platform, platform, '运行包清单 platform 不一致');
-  assert.equal(manifest.arch, arch, '运行包清单 arch 不一致');
-  assert.ok(manifest.runtimeApiVersion >= 1, '运行包清单 runtimeApiVersion 非法');
-
-  const bundleStat = await stat(bundlePath);
-  assert.equal(manifest.size, bundleStat.size, '运行包清单 size 与压缩包实际大小不一致');
-  assert.equal(manifest.sha256, await sha256(bundlePath), '运行包清单 sha256 校验失败');
-
-  const zip = await JSZip.loadAsync(await readFile(bundlePath));
-  const entries = Object.keys(zip.files);
-  const requiredZipEntries = [
-    'dist/main-runtime.mjs',
-    'dist/preload.js',
-    'dist/index.html',
-    'dist/splash/splash.html',
-  ];
-  for (const requiredEntry of requiredZipEntries) {
-    assert.ok(entries.includes(requiredEntry), `运行包压缩包缺少关键文件: ${requiredEntry}`);
-  }
-  assert.ok(
-    entries.some((entry) => entry.startsWith('node_modules/better-sqlite3/')),
-    '运行包压缩包缺少 better-sqlite3 运行时依赖'
+  runCommand('pnpm', ['test:pc-updater']);
+  runCommand('pnpm', ['--filter', '@novel-editor/pc', 'typecheck']);
+  runCommand('pnpm', ['--filter', '@novel-editor/pc', 'build']);
+  runCommand(
+    'pnpm',
+    [
+      '--filter',
+      '@novel-editor/pc',
+      'exec',
+      'electron-builder',
+      ...getPreflightPackageArgs(),
+      '--publish',
+      'never',
+    ],
+    {
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+    }
   );
+  runCommand('node', [join(appRoot, 'scripts', 'prepare-update-metadata.mjs'), buildDir]);
 
-  console.log('Preflight passed');
-  console.log(`Version: ${version}`);
-  console.log(`Channel: ${channelKey}`);
-  console.log(`Manifest: ${manifestPath}`);
-  console.log(`Bundle: ${bundlePath}`);
+  await ensureFileExists(join(distDir, 'main.mjs'), '主进程构建产物');
+  await ensureFileExists(join(distDir, 'preload.js'), 'preload 构建产物');
+  await ensureFileExists(join(distDir, 'index.html'), 'renderer 构建产物');
+
+  const updateMetadataFiles = await collectFiles(buildDir, (_fullPath, fileName) =>
+    /^(latest|beta|alpha)(-mac|-linux)?\.yml$/u.test(fileName)
+  );
+  if (updateMetadataFiles.length === 0) {
+    throw new Error('未生成自动更新元数据文件');
+  }
+
+  const metadataContent = readFileSync(updateMetadataFiles[0], 'utf8');
+  if (!metadataContent.includes('stagingPercentage:')) {
+    throw new Error(`更新元数据缺少 stagingPercentage: ${updateMetadataFiles[0]}`);
+  }
+
+  const asarFiles = await collectFiles(buildDir, (_fullPath, fileName) => fileName === 'app.asar');
+  if (asarFiles.length === 0) {
+    throw new Error('目录打包产物中未找到 app.asar');
+  }
+
+  const sqliteBindings = await collectFiles(
+    buildDir,
+    (fullPath, fileName) =>
+      fileName === 'better_sqlite3.node' && fullPath.includes('app.asar.unpacked')
+  );
+  if (sqliteBindings.length === 0) {
+    throw new Error('目录打包产物中未找到解包后的 better-sqlite3 原生模块');
+  }
+
+  runCommand('node', [join(appRoot, 'scripts', 'run-packaged-smoke-test.mjs')]);
+
+  console.log('发布前预检通过');
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error('发布前预检失败:', error);
   process.exit(1);
 });

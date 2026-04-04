@@ -1,5 +1,9 @@
 import { readFile, readdir, writeFile } from 'fs/promises';
-import { join } from 'path';
+import { dirname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const appRoot = resolve(scriptDir, '..');
 
 function getRolloutPercentage(channel) {
   const envMap = {
@@ -20,10 +24,11 @@ function getRolloutPercentage(channel) {
   return 100;
 }
 
-export default async function afterAllArtifactBuild(context) {
-  const channel = process.env.NOVEL_EDITOR_RELEASE_CHANNEL ?? 'latest';
+export async function applyUpdateMetadata(
+  outputDir,
+  channel = process.env.NOVEL_EDITOR_RELEASE_CHANNEL ?? 'latest'
+) {
   const rolloutPercentage = getRolloutPercentage(channel);
-  const outputDir = context.outDir;
   const entries = await readdir(outputDir, { withFileTypes: true });
   const targetPrefix = channel === 'latest' ? 'latest' : channel;
   const modifiedFiles = [];
@@ -36,7 +41,10 @@ export default async function afterAllArtifactBuild(context) {
     const filePath = join(outputDir, entry.name);
     const currentContent = await readFile(filePath, 'utf8');
     const nextContent = currentContent.includes('stagingPercentage:')
-      ? currentContent.replace(/stagingPercentage:\s*\d+/u, `stagingPercentage: ${rolloutPercentage}`)
+      ? currentContent.replace(
+          /stagingPercentage:\s*\d+/u,
+          `stagingPercentage: ${rolloutPercentage}`
+        )
       : `${currentContent.trimEnd()}\nstagingPercentage: ${rolloutPercentage}\n`;
 
     await writeFile(filePath, nextContent, 'utf8');
@@ -44,4 +52,19 @@ export default async function afterAllArtifactBuild(context) {
   }
 
   return modifiedFiles;
+}
+
+export default async function afterAllArtifactBuild(context) {
+  return applyUpdateMetadata(context.outDir);
+}
+
+// 允许在 CI 和本地预检里显式执行，避免只依赖 electron-builder hook。
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const outputDir = process.argv[2] ? resolve(process.argv[2]) : join(appRoot, 'build');
+  const channel = process.argv[3] ?? process.env.NOVEL_EDITOR_RELEASE_CHANNEL ?? 'latest';
+
+  applyUpdateMetadata(outputDir, channel).catch((error) => {
+    console.error('更新元数据处理失败:', error);
+    process.exit(1);
+  });
 }
