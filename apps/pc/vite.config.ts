@@ -9,13 +9,6 @@ const MAIN_RUNTIME_EXTERNAL_PACKAGES = new Set([
   'better-sqlite3',
   'bindings',
   'file-uri-to-path',
-  'directory-tree',
-  'docx',
-  'exceljs',
-  'jszip',
-  'mammoth',
-  'pptxgenjs',
-  'electron-updater',
 ]);
 
 function getPackageRoot(id: string) {
