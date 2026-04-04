@@ -52,7 +52,11 @@ async function resolveSmokeExecutable() {
     if (!executable) {
       throw new Error('未找到 Windows 可执行文件');
     }
-    return join(unpackedDir, executable.name);
+    const exePath = join(unpackedDir, executable.name);
+    if (!existsSync(exePath)) {
+      throw new Error(`Windows 可执行文件不存在: ${exePath}`);
+    }
+    return exePath;
   }
 
   const unpackedDir = await findFirstDirectory(buildDir, (name) => name.endsWith('unpacked'));
@@ -70,6 +74,9 @@ async function resolveSmokeExecutable() {
 
 async function main() {
   const executablePath = await resolveSmokeExecutable();
+  console.log(
+    `烟雾测试可执行文件: ${executablePath} (platform=${process.platform}, arch=${process.arch})`
+  );
   const smokeUserDataDir = await mkdtemp(join(tmpdir(), 'novel-editor-smoke-'));
 
   try {

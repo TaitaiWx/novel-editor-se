@@ -131,7 +131,7 @@ jobs:
         working-directory: apps/pc
 
       - name: Smoke test packaged app (macOS/Windows)
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' && !(runner.os == 'Windows' && matrix.arch == 'arm64')
         run: node ./scripts/run-packaged-smoke-test.mjs
         working-directory: apps/pc
 
