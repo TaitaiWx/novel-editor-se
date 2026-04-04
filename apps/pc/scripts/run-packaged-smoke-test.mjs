@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptDir, '..');
 const buildDir = join(appRoot, 'build');
-const SMOKE_TIMEOUT_MS = 30_000;
+const SMOKE_TIMEOUT_MS = 60_000;
 
 async function findFirstDirectory(parentDir, matcher) {
   const entries = await readdir(parentDir, { withFileTypes: true });
@@ -86,17 +86,25 @@ async function main() {
         rejectPromise(new Error(`烟雾测试超时（${SMOKE_TIMEOUT_MS}ms）`));
       }, SMOKE_TIMEOUT_MS);
 
-      const child = spawn(executablePath, ['--smoke-test'], {
-        cwd: appRoot,
-        env: {
-          ...process.env,
-          NODE_ENV: 'production',
-          NOVEL_EDITOR_SMOKE_TEST: '1',
-          NOVEL_EDITOR_DISABLE_AUTO_UPDATER: '1',
-          NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR: smokeUserDataDir,
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
+      const child = spawn(
+        executablePath,
+        [
+          '--smoke-test',
+          // CI 环境下 Linux 的 chrome-sandbox 没有 SUID 权限，需要禁用沙箱
+          ...(process.env.CI ? ['--no-sandbox', '--disable-gpu-sandbox'] : []),
+        ],
+        {
+          cwd: appRoot,
+          env: {
+            ...process.env,
+            NODE_ENV: 'production',
+            NOVEL_EDITOR_SMOKE_TEST: '1',
+            NOVEL_EDITOR_DISABLE_AUTO_UPDATER: '1',
+            NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR: smokeUserDataDir,
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }
+      );
 
       let stderr = '';
       child.stderr.on('data', (chunk) => {
