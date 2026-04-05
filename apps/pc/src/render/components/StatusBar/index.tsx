@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { VscHistory, VscSync, VscError, VscCheck } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
 import type { UpdateStatus } from '@/render/types/electron-api';
+import { analyzeContentStats } from '../../utils/contentStats';
 import Tooltip from '../Tooltip';
 import CopyTooltip from '../CopyTooltip';
 import styles from './styles.module.scss';
@@ -137,19 +138,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
   const encodingMenuRef = useRef<HTMLDivElement>(null);
   const updatePanelRef = useRef<HTMLDivElement>(null);
 
-  // O(n) single-pass line+char count — avoids split() and replace() allocations
-  const { lineCount, charCount } = useMemo(() => {
-    if (!content) return { lineCount: 0, charCount: 0 };
-    let lines = 1;
-    let chars = 0;
-    for (let i = 0; i < content.length; i++) {
-      const c = content.charCodeAt(i);
-      if (c === 10)
-        lines++; // \n
-      else if (c !== 13 && c !== 9 && c !== 32) chars++; // skip \r \t space
-    }
-    return { lineCount: lines, charCount: chars };
-  }, [content]);
+  const { lineCount, charCount } = useMemo(() => analyzeContentStats(content), [content]);
 
   useEffect(() => {
     const updateNetworkStatus = () => {

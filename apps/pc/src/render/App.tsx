@@ -9,6 +9,7 @@ import React, {
   useEffect,
 } from 'react';
 import { EditorView } from '@codemirror/view';
+import { EditorSelection } from '@codemirror/state';
 import type { FileNode } from './types';
 import TitleBar from './components/TitleBar';
 import FilePanel, {
@@ -45,6 +46,8 @@ import type { EditorViewportSnapshot } from './components/TextEditor';
 import type { PersistedOutlineScopeInput } from './types/electron-api';
 import { setInlineDiffEffect } from './components/TextEditor/inline-diff';
 import {
+  DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+  DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
   createGraphLayoutStorageKey,
   createRelationStorageKey,
   extractJsonBlock,
@@ -55,6 +58,7 @@ import {
   parseCharacterAttributes,
   parseCharacterGraphAIResult,
   splitTextIntoChunks,
+  stringifyCharacterAttributes,
 } from './components/RightPanel/utils';
 import { buildLoreDedupKey, loadLoreEntriesByFolder } from './components/RightPanel/lore-data';
 import type { Character, LoreEntry, CharacterGraphAIResult } from './components/RightPanel/types';
@@ -64,6 +68,11 @@ import {
   type AISessionSnapshot,
 } from './state/aiSessionSnapshot';
 import { isImeComposing } from './utils/ime';
+import {
+  createAssistantGenerationStatusStorageKey,
+  parseAssistantArtifactGenerationStatus,
+  type AssistantArtifactGenerationStatus,
+} from './utils/assistantGeneration';
 import {
   createAssistantArtifactStorageKey,
   createChapterMaterialsStorageKey,
@@ -88,6 +97,7 @@ import {
   WORKSPACE_TAB_LORE,
 } from './utils/workspace';
 import { splitChapters } from './utils/chapterSplitter';
+import { formatChapterContent } from './utils/chapterFormatter';
 import {
   reduceFixSession,
   initialFixSessionState,
@@ -98,6 +108,8 @@ import {
   type SettingsDraft,
   DEFAULT_SETTINGS_DRAFT,
   SETTINGS_STORAGE_KEY,
+  getAIConfigMissingMessage,
+  getAIConfigStatus,
   matchShortcutEvent,
   mergeSettingsDraft,
 } from './utils/appSettings';
@@ -317,7 +329,21 @@ function parseMaterialGenerationResult(raw: string): GeneratedMaterialDraft[] {
 function getParentDirectory(path: string): string | null {
   const normalized = path.replace(/\\/g, '/');
   const lastSlash = normalized.lastIndexOf('/');
-  return lastSlash > 0 ? normalized.slice(0, lastSlash) : null;
+  if (lastSlash <= 0) return null;
+  const parent = normalized.slice(0, lastSlash);
+  // 中文说明：保留原路径使用的分隔符风格，避免 Windows 下拿“/”路径去匹配“\”树节点。
+  return path.includes('\\') && !path.includes('/') ? parent.replace(/\//g, '\\') : parent;
+}
+
+function getPathBaseName(path: string): string {
+  const normalized = path.replace(/\\/g, '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  return lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized;
+}
+
+function joinSiblingPath(parentDir: string, name: string, originalPath: string): string {
+  const separator = originalPath.includes('\\') && !originalPath.includes('/') ? '\\' : '/';
+  return `${parentDir}${separator}${name}`;
 }
 
 function getFileExtension(name: string): string {
@@ -579,7 +605,10 @@ function areCharactersEqual(left: Character[], right: Character[]): boolean {
       item.name === next.name &&
       item.role === next.role &&
       item.description === next.description &&
-      item.avatar === next.avatar
+      item.avatar === next.avatar &&
+      item.highlightColor === next.highlightColor &&
+      item.highlightFirstMentionOnly === next.highlightFirstMentionOnly &&
+      (item.aliases || []).join('\u0000') === (next.aliases || []).join('\u0000')
     );
   });
 }
@@ -703,6 +732,8 @@ const App: React.FC = () => {
   const [assistantScopedCharacters, setAssistantScopedCharacters] = useState<
     AssistantScopedCharacter[]
   >([]);
+  const [assistantCharacterGenerationStatus, setAssistantCharacterGenerationStatus] =
+    useState<AssistantArtifactGenerationStatus | null>(null);
   const [assistantScopedLoreEntries, setAssistantScopedLoreEntries] = useState<
     AssistantScopedLore[]
   >([]);
@@ -799,6 +830,8 @@ const App: React.FC = () => {
 
   const folderPathRef = useRef(folderPath);
   folderPathRef.current = folderPath;
+  const appSettingsRef = useRef(appSettings);
+  appSettingsRef.current = appSettings;
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
   const openTabsRef = useRef(openTabs);
@@ -1419,6 +1452,42 @@ const App: React.FC = () => {
     }
   }, [toast]);
 
+  const loadPersistedSettingsDraft = useCallback(async (): Promise<SettingsDraft> => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return DEFAULT_SETTINGS_DRAFT;
+    const rawSettings = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as string | null;
+    return mergeSettingsDraft(rawSettings);
+  }, []);
+
+  const persistSettingsDraft = useCallback(async (settings: SettingsDraft) => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    await ipc.invoke('db-settings-set', SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  }, []);
+
+  const handleAppSettingsChange = useCallback((settings: SettingsDraft) => {
+    appSettingsRef.current = settings;
+    setAppSettings(settings);
+  }, []);
+
+  const updateAppSettings = useCallback(
+    (updater: (current: SettingsDraft) => SettingsDraft) => {
+      const nextSettings = updater(appSettingsRef.current);
+      appSettingsRef.current = nextSettings;
+      setAppSettings(nextSettings);
+      void persistSettingsDraft(nextSettings);
+    },
+    [persistSettingsDraft]
+  );
+
+  const ensurePersistedAiReady = useCallback(async (): Promise<SettingsDraft | null> => {
+    const persistedSettings = await loadPersistedSettingsDraft();
+    const aiStatus = getAIConfigStatus(persistedSettings);
+    if (aiStatus.ready) return persistedSettings;
+    toast.warning(getAIConfigMissingMessage(aiStatus) || '请先在设置中心启用并配置 AI');
+    return null;
+  }, [loadPersistedSettingsDraft, toast]);
+
   const loadDefaultPath = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -1442,9 +1511,11 @@ const App: React.FC = () => {
           | null;
         const nextSettings = mergeSettingsDraft(rawSettings);
         startupSettings = nextSettings;
+        appSettingsRef.current = nextSettings;
         setAppSettings(nextSettings);
         setRightPanelCollapsed(nextSettings.general.collapseRightPanelOnStartup);
       } catch {
+        appSettingsRef.current = DEFAULT_SETTINGS_DRAFT;
         setAppSettings(DEFAULT_SETTINGS_DRAFT);
         setRightPanelCollapsed(DEFAULT_SETTINGS_DRAFT.general.collapseRightPanelOnStartup);
       }
@@ -1480,6 +1551,54 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   }, [initializeProjectStore]);
+
+  const handleToggleThousandCharMarkers = useCallback(() => {
+    updateAppSettings((current) => ({
+      ...current,
+      general: {
+        ...current.general,
+        showThousandCharMarkers: !current.general.showThousandCharMarkers,
+      },
+    }));
+  }, [updateAppSettings]);
+
+  const handleFormatCurrentChapter = useCallback(() => {
+    const view = editorViewRef.current;
+    if (!view || !activeTabRef.current) {
+      toast.warning('当前没有可格式化的章节');
+      return;
+    }
+
+    const currentContent = view.state.doc.toString();
+    const result = formatChapterContent(currentContent);
+    if (!result.changed) {
+      toast.info('当前章节已是规范格式');
+      return;
+    }
+
+    const previousSelection = view.state.selection.main;
+    const previousScrollTop = view.scrollDOM.scrollTop;
+    const previousScrollLeft = view.scrollDOM.scrollLeft;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: result.content },
+      selection: EditorSelection.range(
+        Math.min(previousSelection.anchor, result.content.length),
+        Math.min(previousSelection.head, result.content.length)
+      ),
+    });
+
+    window.requestAnimationFrame(() => {
+      const activeView = editorViewRef.current;
+      if (!activeView) return;
+      activeView.scrollDOM.scrollTop = previousScrollTop;
+      activeView.scrollDOM.scrollLeft = previousScrollLeft;
+    });
+
+    view.focus();
+    toast.success(
+      `已格式化当前章节：整理 ${result.paragraphCount} 段，合并 ${result.mergedLineCount} 处换行`
+    );
+  }, [toast]);
 
   const handleOpenLocal = useCallback(async () => {
     setIsLoading(true);
@@ -1592,7 +1711,10 @@ const App: React.FC = () => {
         name.trim(),
         role?.trim() || '',
         '',
-        '{}'
+        stringifyCharacterAttributes({
+          highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+          highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+        })
       )) as { lastInsertRowid?: number | bigint };
       const nextRows = (await ipc.invoke('db-character-list', novelId)) as Array<{
         id: number;
@@ -1791,8 +1913,9 @@ const App: React.FC = () => {
       }
       try {
         if (type === 'file') {
-          await window.electron.ipcRenderer.invoke('create-file', targetDir, name);
-          toast.success(`文件 "${name}" 创建成功`);
+          const fileName = ensureMarkdownFileName(name.trim());
+          await window.electron.ipcRenderer.invoke('create-file', targetDir, fileName);
+          toast.success(`文件 "${stripExtension(fileName)}" 创建成功`);
         } else {
           await window.electron.ipcRenderer.invoke('create-directory', targetDir, name);
           toast.success(`目录 "${name}" 创建成功`);
@@ -2045,7 +2168,12 @@ const App: React.FC = () => {
           description: target.description,
           attributes:
             matchedRow?.attributes ||
-            JSON.stringify(target.avatar ? { avatar: target.avatar } : {}),
+            stringifyCharacterAttributes({
+              avatar: target.avatar,
+              aliases: target.aliases,
+              highlightColor: target.highlightColor,
+              highlightFirstMentionOnly: target.highlightFirstMentionOnly,
+            }),
         });
         setWorkspaceCharacters((prev) =>
           prev.map((item) => (item.id === characterId ? { ...item, name: normalizedName } : item))
@@ -2112,7 +2240,7 @@ const App: React.FC = () => {
     async (oldPath: string) => {
       const ipc = window.electron?.ipcRenderer;
       if (!ipc) return;
-      const oldName = oldPath.split('/').pop() || oldPath;
+      const oldName = getPathBaseName(oldPath);
       const storyNode = findNodeInTree(splitWorkspaceFiles(filesRef.current).storyNodes, oldPath);
       const isStoryDocument = storyNode?.type === 'file';
       const oldExtension = isStoryDocument ? getFileExtension(oldName) : '';
@@ -2127,8 +2255,12 @@ const App: React.FC = () => {
         : normalizedInputName;
 
       if (nextName === oldName) return;
-      const parentDir = oldPath.substring(0, oldPath.lastIndexOf('/'));
-      const newPath = `${parentDir}/${nextName}`;
+      const parentDir = getParentDirectory(oldPath);
+      if (!parentDir) {
+        toast.error('重命名失败: 无法解析父目录');
+        return;
+      }
+      const newPath = joinSiblingPath(parentDir, nextName, oldPath);
       try {
         await ipc.invoke('rename-file', oldPath, newPath);
         const nextStoryOrderMap = remapStoryOrderMapPaths(
@@ -2347,6 +2479,11 @@ const App: React.FC = () => {
         }
         return;
       }
+      if (matchShortcutEvent(e, appSettings.shortcuts.formatChapter)) {
+        e.preventDefault();
+        handleFormatCurrentChapter();
+        return;
+      }
       // Cmd+N: 新建标签
       if (mod && !e.shiftKey && e.key === 'n') {
         e.preventDefault();
@@ -2381,6 +2518,7 @@ const App: React.FC = () => {
   }, [
     appSettings.shortcuts,
     closeTab,
+    handleFormatCurrentChapter,
     handleNewTab,
     handleOpenLocal,
     handleToggleSidebar,
@@ -3152,6 +3290,51 @@ const App: React.FC = () => {
     []
   );
 
+  const persistScopedAssistantGenerationStatus = useCallback(
+    async (
+      scope: AssistantScopeTarget,
+      artifact: 'characters' | 'lore' | 'materials',
+      payload: Omit<AssistantArtifactGenerationStatus, 'artifact' | 'scopeKind' | 'scopePath'>
+    ) => {
+      const ipc = window.electron?.ipcRenderer;
+      const key = createAssistantGenerationStatusStorageKey(artifact, scope.kind, scope.path);
+      if (!ipc || !key) return;
+
+      const totalSteps = Math.max(0, Math.floor(payload.totalSteps));
+      const completedSteps = Math.min(
+        Math.max(0, Math.floor(payload.completedSteps)),
+        totalSteps || 0
+      );
+      const nextStatus = {
+        ...payload,
+        artifact,
+        scopeKind: scope.kind,
+        scopePath: scope.path,
+        scopeLabel: payload.scopeLabel || scope.label,
+        totalSteps,
+        completedSteps,
+        resultCount: Math.max(0, Math.floor(payload.resultCount)),
+        libraryCount: Math.max(0, Math.floor(payload.libraryCount)),
+        createdCount: Math.max(0, Math.floor(payload.createdCount)),
+        updatedCount: Math.max(0, Math.floor(payload.updatedCount)),
+        startedAt: payload.startedAt,
+        finishedAt: payload.finishedAt ?? null,
+      } satisfies AssistantArtifactGenerationStatus;
+
+      if (
+        artifact === 'characters' &&
+        currentAssistantScope &&
+        currentAssistantScope.kind === scope.kind &&
+        currentAssistantScope.path === scope.path
+      ) {
+        setAssistantCharacterGenerationStatus(nextStatus);
+      }
+
+      await ipc.invoke('db-settings-set', key, JSON.stringify(nextStatus));
+    },
+    [currentAssistantScope]
+  );
+
   const closeTabsByPredicate = useCallback((predicate: (tab: string) => boolean) => {
     setOpenTabs((prev) => prev.filter((tab) => !predicate(tab)));
     if (activeTabRef.current && predicate(activeTabRef.current)) {
@@ -3269,23 +3452,16 @@ const App: React.FC = () => {
     async (scope: AIGenerationScope) => {
       const ipc = window.electron?.ipcRenderer;
       const folder = folderPathRef.current;
+      if (!ipc || !folder) return;
+      const persistedSettings = await ensurePersistedAiReady();
+      if (!persistedSettings) return;
       const novelId = await getCurrentNovelId();
-      if (!ipc || !folder || !novelId) return;
-      if (!appSettings.ai.enabled) {
-        toast.warning('请先在设置中心启用并配置 AI');
-        return;
-      }
+      if (!novelId) return;
 
       try {
         toast.info(`正在从${getAIGenerationScopeLabel(scope)}生成人物图谱...`, 1800);
         const { content, label } = await resolveAIGenerationContext(scope);
-        const settingsRaw = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as
-          | string
-          | null;
-        const settings = settingsRaw
-          ? (JSON.parse(settingsRaw) as { ai?: { contextTokens?: number } })
-          : {};
-        const contextTokens = settings.ai?.contextTokens || 128000;
+        const contextTokens = persistedSettings.ai.contextTokens || 128000;
         const approxChunkChars = Math.max(4000, Math.min(12000, Math.floor(contextTokens * 0.08)));
         const chunks = splitTextIntoChunks(content, approxChunkChars).slice(0, 12);
         const loreEntries = await loadLoreEntriesByFolder(folder);
@@ -3354,7 +3530,7 @@ const App: React.FC = () => {
               name: matched.name,
               role: nextRole,
               description: nextDescription,
-              attributes: JSON.stringify({
+              attributes: stringifyCharacterAttributes({
                 ...prevAttrs,
                 aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
               }),
@@ -3369,7 +3545,11 @@ const App: React.FC = () => {
               character.name.trim(),
               nextRole,
               nextDescription,
-              JSON.stringify({ aliases: nextAliases })
+              stringifyCharacterAttributes({
+                aliases: nextAliases,
+                highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+                highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+              })
             )) as { lastInsertRowid: number | bigint };
             const createdId = Number(created.lastInsertRowid);
             createdCount += 1;
@@ -3427,7 +3607,7 @@ const App: React.FC = () => {
         toast.error(`AI 生成人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [appSettings.ai.enabled, getCurrentNovelId, resolveAIGenerationContext, toast]
+    [ensurePersistedAiReady, getCurrentNovelId, resolveAIGenerationContext, toast]
   );
 
   const handleGenerateLoreEntries = useCallback(
@@ -3435,10 +3615,8 @@ const App: React.FC = () => {
       const ipc = window.electron?.ipcRenderer;
       const folder = folderPathRef.current;
       if (!ipc || !folder) return;
-      if (!appSettings.ai.enabled) {
-        toast.warning('请先在设置中心启用并配置 AI');
-        return;
-      }
+      const persistedSettings = await ensurePersistedAiReady();
+      if (!persistedSettings) return;
 
       try {
         toast.info(`正在从${getAIGenerationScopeLabel(scope)}提炼设定...`, 1800);
@@ -3495,7 +3673,7 @@ const App: React.FC = () => {
         toast.error(`AI 生成设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [appSettings.ai.enabled, resolveAIGenerationContext, toast]
+    [ensurePersistedAiReady, resolveAIGenerationContext, toast]
   );
 
   const handleGenerateMaterials = useCallback(
@@ -3503,10 +3681,8 @@ const App: React.FC = () => {
       const ipc = window.electron?.ipcRenderer;
       const folder = folderPathRef.current;
       if (!ipc || !folder) return;
-      if (!appSettings.ai.enabled) {
-        toast.warning('请先在设置中心启用并配置 AI');
-        return;
-      }
+      const persistedSettings = await ensurePersistedAiReady();
+      if (!persistedSettings) return;
 
       try {
         toast.info(`正在从${getAIGenerationScopeLabel(scope)}生成资料条目...`, 1800);
@@ -3581,7 +3757,7 @@ const App: React.FC = () => {
         toast.error(`AI 生成资料失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [appSettings.ai.enabled, resolveAIGenerationContext, refreshCurrentFolder, toast]
+    [ensurePersistedAiReady, resolveAIGenerationContext, refreshCurrentFolder, toast]
   );
 
   const handleGenerateScopedCharacters = useCallback(
@@ -3589,25 +3765,37 @@ const App: React.FC = () => {
       const ipc = window.electron?.ipcRenderer;
       const folder = folderPathRef.current;
       if (!ipc || !folder) return;
-      if (!appSettings.ai.enabled) {
-        toast.warning('请先在设置中心启用并配置 AI');
-        return;
-      }
+      const persistedSettings = await ensurePersistedAiReady();
+      if (!persistedSettings) return;
+      const startedAt = new Date().toISOString();
 
       try {
         toast.info(`正在为${scope.label}生成人物上下文...`, 1800);
         const { content, label } = await resolveScopeTargetContext(scope);
-        const settingsRaw = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as
-          | string
-          | null;
-        const settings = settingsRaw
-          ? (JSON.parse(settingsRaw) as { ai?: { contextTokens?: number } })
-          : {};
-        const contextTokens = settings.ai?.contextTokens || 128000;
+        const novelId = await getCurrentNovelId();
+        const contextTokens = persistedSettings.ai.contextTokens || 128000;
         const approxChunkChars = Math.max(4000, Math.min(12000, Math.floor(contextTokens * 0.08)));
         const chunks = splitTextIntoChunks(content, approxChunkChars).slice(0, 12);
         const loreEntries = await loadLoreEntriesByFolder(folder);
         const chunkResults: CharacterGraphAIResult[] = [];
+        const totalSteps = chunks.length + 2;
+
+        await persistScopedAssistantGenerationStatus(scope, 'characters', {
+          state: 'running',
+          scopeLabel: scope.label,
+          message:
+            chunks.length > 0
+              ? `正在分析 ${scope.label}，共 ${chunks.length} 段正文`
+              : `正在分析 ${scope.label}`,
+          totalSteps,
+          completedSteps: 0,
+          resultCount: 0,
+          libraryCount: 0,
+          createdCount: 0,
+          updatedCount: 0,
+          startedAt,
+          finishedAt: null,
+        });
 
         for (let index = 0; index < chunks.length; index += 1) {
           const response = (await ipc.invoke('ai-request', {
@@ -3630,9 +3818,36 @@ const App: React.FC = () => {
           if (parsed) {
             chunkResults.push(parsed);
           }
+
+          await persistScopedAssistantGenerationStatus(scope, 'characters', {
+            state: 'running',
+            scopeLabel: scope.label,
+            message:
+              index + 1 < chunks.length
+                ? `正在分析 ${scope.label} · 第 ${index + 1}/${chunks.length} 段`
+                : `正在整理 ${scope.label} 的人物结果`,
+            totalSteps,
+            completedSteps: index + 1,
+            resultCount: 0,
+            libraryCount: 0,
+            createdCount: 0,
+            updatedCount: 0,
+            startedAt,
+            finishedAt: null,
+          });
         }
 
         const merged = mergeCharacterGraphResults(chunkResults);
+        const normalizedCharacters = merged.characters
+          .map((item) => ({
+            name: item.name.trim(),
+            role: item.role?.trim() || '',
+            description: item.description?.trim() || '',
+            aliases: Array.from(
+              new Set((item.aliases || []).map((alias) => alias.trim()).filter(Boolean))
+            ),
+          }))
+          .filter((item) => item.name);
         const nextCharacters = merged.characters
           .map((item) => ({
             name: item.name.trim(),
@@ -3640,6 +3855,87 @@ const App: React.FC = () => {
             description: item.description?.trim() || '',
           }))
           .filter((item) => item.name);
+        let createdCount = 0;
+        let updatedCount = 0;
+        let libraryCount = 0;
+
+        if (novelId) {
+          await persistScopedAssistantGenerationStatus(scope, 'characters', {
+            state: 'running',
+            scopeLabel: scope.label,
+            message: `正在把 ${scope.label} 的人物结果同步到角色库`,
+            totalSteps,
+            completedSteps: Math.max(0, totalSteps - 1),
+            resultCount: nextCharacters.length,
+            libraryCount: 0,
+            createdCount: 0,
+            updatedCount: 0,
+            startedAt,
+            finishedAt: null,
+          });
+
+          const existingRows = (await ipc.invoke('db-character-list', novelId)) as Array<{
+            id: number;
+            name: string;
+            role: string;
+            description: string;
+            attributes: string;
+          }>;
+          const existingByName = new Map<string, (typeof existingRows)[number]>();
+          existingRows.forEach((row) => {
+            existingByName.set(normalizePersonName(row.name), row);
+            const attrs = parseCharacterAttributes(row.attributes);
+            (attrs.aliases || []).forEach((alias) =>
+              existingByName.set(normalizePersonName(alias), row)
+            );
+          });
+
+          for (const character of normalizedCharacters) {
+            const normalizedName = normalizePersonName(character.name);
+            const matched = existingByName.get(normalizedName);
+            if (matched) {
+              const prevAttrs = parseCharacterAttributes(matched.attributes);
+              await ipc.invoke('db-character-update', matched.id, {
+                name: matched.name,
+                role: character.role || matched.role || '',
+                description: character.description || matched.description || '',
+                attributes: stringifyCharacterAttributes({
+                  ...prevAttrs,
+                  aliases: Array.from(
+                    new Set([...(prevAttrs.aliases || []), ...(character.aliases || [])])
+                  ),
+                }),
+              });
+              updatedCount += 1;
+            } else {
+              await ipc.invoke(
+                'db-character-create',
+                novelId,
+                character.name,
+                character.role,
+                character.description,
+                stringifyCharacterAttributes({
+                  aliases: character.aliases,
+                  highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+                  highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+                })
+              );
+              createdCount += 1;
+            }
+          }
+
+          const refreshedRows = (await ipc.invoke('db-character-list', novelId)) as Array<{
+            id: number;
+            name: string;
+            role: string;
+            description: string;
+            attributes: string;
+          }>;
+          libraryCount = refreshedRows.length;
+          setWorkspaceCharacters(mapCharacterRows(refreshedRows));
+          bumpWorkspaceCharactersVersion();
+        }
+
         await persistScopedAssistantArtifacts(scope, { characters: nextCharacters });
         if (
           currentAssistantScope &&
@@ -3648,17 +3944,72 @@ const App: React.FC = () => {
         ) {
           setAssistantScopedCharacters(nextCharacters);
         }
-        toast.success(`已为${scope.label}生成人物上下文 ${nextCharacters.length} 项`);
+
+        const finishedAt = new Date().toISOString();
+        const generationState = nextCharacters.length > 0 ? 'success' : 'empty';
+        const generationMessage = novelId
+          ? nextCharacters.length > 0
+            ? `已为 ${scope.label} 提取 ${nextCharacters.length} 项人物上下文，并同步到角色库`
+            : `已分析 ${scope.label}，但没有识别到可用人物`
+          : nextCharacters.length > 0
+            ? `已为 ${scope.label} 提取 ${nextCharacters.length} 项人物上下文，但当前项目未关联角色库`
+            : `已分析 ${scope.label}，但没有识别到可用人物`;
+
+        await persistScopedAssistantGenerationStatus(scope, 'characters', {
+          state: generationState,
+          scopeLabel: scope.label,
+          message: generationMessage,
+          totalSteps,
+          completedSteps: totalSteps,
+          resultCount: nextCharacters.length,
+          libraryCount,
+          createdCount,
+          updatedCount,
+          startedAt,
+          finishedAt,
+        });
+
+        if (nextCharacters.length > 0) {
+          if (novelId) {
+            toast.success(
+              `已为${scope.label}生成人物上下文：识别 ${nextCharacters.length} 项，角色库现有 ${libraryCount} 人`
+            );
+          } else {
+            toast.warning(
+              `已为${scope.label}生成人物上下文 ${nextCharacters.length} 项，但当前项目未关联角色库`
+            );
+          }
+        } else {
+          toast.warning(`已分析${scope.label}，但没有识别到可用人物`);
+        }
       } catch (error) {
+        await persistScopedAssistantGenerationStatus(scope, 'characters', {
+          state: 'error',
+          scopeLabel: scope.label,
+          message:
+            error instanceof Error
+              ? `为 ${scope.label} 生成人物上下文失败：${error.message}`
+              : `为 ${scope.label} 生成人物上下文失败`,
+          totalSteps: 0,
+          completedSteps: 0,
+          resultCount: 0,
+          libraryCount: 0,
+          createdCount: 0,
+          updatedCount: 0,
+          startedAt,
+          finishedAt: new Date().toISOString(),
+        });
         toast.error(
           `AI 生成人物上下文失败: ${error instanceof Error ? error.message : '未知错误'}`
         );
       }
     },
     [
-      appSettings.ai.enabled,
       currentAssistantScope,
+      ensurePersistedAiReady,
+      getCurrentNovelId,
       persistScopedAssistantArtifacts,
+      persistScopedAssistantGenerationStatus,
       resolveScopeTargetContext,
       toast,
     ]
@@ -3668,10 +4019,8 @@ const App: React.FC = () => {
     async (scope: AssistantScopeTarget) => {
       const ipc = window.electron?.ipcRenderer;
       if (!ipc) return;
-      if (!appSettings.ai.enabled) {
-        toast.warning('请先在设置中心启用并配置 AI');
-        return;
-      }
+      const persistedSettings = await ensurePersistedAiReady();
+      if (!persistedSettings) return;
 
       try {
         toast.info(`正在为${scope.label}生成设定上下文...`, 1800);
@@ -3705,8 +4054,8 @@ const App: React.FC = () => {
       }
     },
     [
-      appSettings.ai.enabled,
       currentAssistantScope,
+      ensurePersistedAiReady,
       persistScopedAssistantArtifacts,
       resolveScopeTargetContext,
       toast,
@@ -3717,10 +4066,8 @@ const App: React.FC = () => {
     async (scope: AssistantScopeTarget) => {
       const ipc = window.electron?.ipcRenderer;
       if (!ipc) return;
-      if (!appSettings.ai.enabled) {
-        toast.warning('请先在设置中心启用并配置 AI');
-        return;
-      }
+      const persistedSettings = await ensurePersistedAiReady();
+      if (!persistedSettings) return;
 
       try {
         toast.info(`正在为${scope.label}生成资料上下文...`, 1800);
@@ -3755,8 +4102,8 @@ const App: React.FC = () => {
       }
     },
     [
-      appSettings.ai.enabled,
       currentAssistantScope,
+      ensurePersistedAiReady,
       persistScopedAssistantArtifacts,
       resolveScopeTargetContext,
       toast,
@@ -4136,6 +4483,7 @@ const App: React.FC = () => {
     const ipc = window.electron?.ipcRenderer;
     if (!ipc || !currentAssistantScope) {
       setAssistantScopedCharacters([]);
+      setAssistantCharacterGenerationStatus(null);
       setAssistantScopedLoreEntries([]);
       setAssistantScopedMaterials([]);
       return;
@@ -4156,8 +4504,14 @@ const App: React.FC = () => {
       currentAssistantScope.kind,
       currentAssistantScope.path
     );
-    if (!characterKey || !loreKey || !materialKey) {
+    const characterStatusKey = createAssistantGenerationStatusStorageKey(
+      'characters',
+      currentAssistantScope.kind,
+      currentAssistantScope.path
+    );
+    if (!characterKey || !loreKey || !materialKey || !characterStatusKey) {
       setAssistantScopedCharacters([]);
+      setAssistantCharacterGenerationStatus(null);
       setAssistantScopedLoreEntries([]);
       setAssistantScopedMaterials([]);
       return;
@@ -4166,24 +4520,29 @@ const App: React.FC = () => {
     let cancelled = false;
     const loadScopedArtifacts = async () => {
       try {
-        const [characterRaw, loreRaw, materialRaw] = (await Promise.all([
+        const [characterRaw, characterStatusRaw, loreRaw, materialRaw] = (await Promise.all([
           ipc.invoke('db-settings-get', characterKey),
+          ipc.invoke('db-settings-get', characterStatusKey),
           ipc.invoke('db-settings-get', loreKey),
           ipc.invoke('db-settings-get', materialKey),
-        ])) as [string | null, string | null, string | null];
+        ])) as [string | null, string | null, string | null, string | null];
         if (cancelled) return;
         setAssistantScopedCharacters(parseAssistantScopedCharacters(characterRaw));
+        setAssistantCharacterGenerationStatus(
+          parseAssistantArtifactGenerationStatus(characterStatusRaw)
+        );
         setAssistantScopedLoreEntries(parseAssistantScopedLore(loreRaw));
         setAssistantScopedMaterials(parseAssistantScopedMaterials(materialRaw));
       } catch {
         if (cancelled) return;
         setAssistantScopedCharacters([]);
+        setAssistantCharacterGenerationStatus(null);
         setAssistantScopedLoreEntries([]);
         setAssistantScopedMaterials([]);
       }
     };
 
-    const watchedKeys = new Set([characterKey, loreKey, materialKey]);
+    const watchedKeys = new Set([characterKey, characterStatusKey, loreKey, materialKey]);
     const dispose = ipc.on?.('settings-updated', (_event, key?: string) => {
       if (typeof key === 'string' && watchedKeys.has(key)) {
         void loadScopedArtifacts();
@@ -4254,6 +4613,20 @@ const App: React.FC = () => {
       ),
     }),
     [files, folderPath, openTabs, rootVolumeNode, workspaceCharacters, workspaceLoreEntries]
+  );
+
+  const editorCharacterHighlights = useMemo(
+    () =>
+      workspaceCharacters
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          aliases: item.aliases || [],
+          color: item.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+          highlightFirstMentionOnly: item.highlightFirstMentionOnly !== false,
+        }))
+        .filter((item) => item.name.trim()),
+    [workspaceCharacters]
   );
 
   const specialTabContent = useMemo<Record<string, React.ReactNode>>(
@@ -4401,6 +4774,7 @@ const App: React.FC = () => {
                 <FilePanel
                   files={files}
                   characters={workspaceCharacters}
+                  characterGenerationStatus={assistantCharacterGenerationStatus}
                   loreEntries={workspaceLoreEntries}
                   materialUsageMap={materialUsageMap}
                   projectName={workspaceProjectName}
@@ -4477,6 +4851,10 @@ const App: React.FC = () => {
                 focusMode={focusMode}
                 reloadToken={editorReloadToken}
                 encoding={encoding}
+                showThousandCharMarkers={appSettings.general.showThousandCharMarkers}
+                thousandCharMarkerStep={appSettings.general.thousandCharMarkerStep}
+                formatChapterShortcut={appSettings.shortcuts.formatChapter}
+                characterHighlights={editorCharacterHighlights}
                 scrollToLine={scrollToLine}
                 transientHighlightLine={transientHighlightLine}
                 replaceLineRequest={replaceLineRequest}
@@ -4486,6 +4864,8 @@ const App: React.FC = () => {
                 onViewportSnapshotChange={handleViewportSnapshotChange}
                 onTabSelect={setActiveTab}
                 onTabClose={closeTab}
+                onToggleThousandCharMarkers={handleToggleThousandCharMarkers}
+                onFormatCurrentChapter={handleFormatCurrentChapter}
                 onCloseOtherTabs={handleCloseOtherTabs}
                 onCloseAllTabs={handleCloseAllTabs}
                 onCloseAllAndSave={handleCloseAllAndSave}
@@ -4543,6 +4923,7 @@ const App: React.FC = () => {
                         name: item.name,
                       }))}
                       linkedMaterialPaths={linkedMaterialFiles.map((item) => item.path)}
+                      scopedCharacterGenerationStatus={assistantCharacterGenerationStatus}
                       scopedCharacters={assistantScopedCharacters}
                       scopedLoreEntries={assistantScopedLoreEntries}
                       scopedMaterials={assistantScopedMaterials}
@@ -4619,7 +5000,7 @@ const App: React.FC = () => {
           visible={showSettingsCenter}
           onClose={() => setShowSettingsCenter(false)}
           initialTab={settingsCenterTab}
-          onSettingsChange={setAppSettings}
+          onSettingsChange={handleAppSettingsChange}
           onOpenShortcuts={() => setShowShortcuts(true)}
         />
 

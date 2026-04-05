@@ -17,7 +17,7 @@ export const OUTLINE_POPOVER_HIDE_DELAY = 280;
 
 export const TAB_LABELS: Record<TabType, string> = {
   storyline: '故事线',
-  characters: '人物',
+  characters: '角色',
   lore: '设定',
 };
 

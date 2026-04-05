@@ -1,20 +1,15 @@
 import React, { useState, useEffect, useCallback, useContext, createContext } from 'react';
 import type { ReactNode } from 'react';
 import { SETTINGS_STORAGE_KEY } from './constants';
+import {
+  getAIConfigStatus,
+  mergeSettingsDraft,
+  type AIConfigStatus as PersistedAIConfigStatus,
+} from '../../utils/appSettings';
 
-export interface AiConfigStatus {
+export interface AiConfigStatus extends PersistedAIConfigStatus {
   /** 是否已从 DB 完成加载 */
   loaded: boolean;
-  /** AI 功能总开关是否启用 */
-  enabled: boolean;
-  /** API Key 是否已填写 */
-  hasApiKey: boolean;
-  /** Base URL 是否已填写 */
-  hasBaseUrl: boolean;
-  /** 模型名是否已填写 */
-  hasModel: boolean;
-  /** AI 是否可用（enabled + apiKey + baseUrl + model 全部就绪） */
-  ready: boolean;
 }
 
 const EMPTY_STATUS: AiConfigStatus = {
@@ -44,25 +39,10 @@ export function AiConfigProvider({ children }: { children: ReactNode }) {
     }
     try {
       const raw = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as string | null;
-      if (!raw) {
-        setStatus({ ...EMPTY_STATUS, loaded: true });
-        return;
-      }
-      const parsed = JSON.parse(raw) as {
-        ai?: { enabled?: boolean; apiKey?: string; baseUrl?: string; model?: string };
-      };
-      const ai = parsed.ai || {};
-      const enabled = !!ai.enabled;
-      const hasApiKey = !!ai.apiKey?.trim();
-      const hasBaseUrl = !!ai.baseUrl?.trim();
-      const hasModel = !!ai.model?.trim();
+      const nextStatus = getAIConfigStatus(mergeSettingsDraft(raw));
       setStatus({
         loaded: true,
-        enabled,
-        hasApiKey,
-        hasBaseUrl,
-        hasModel,
-        ready: enabled && hasApiKey && hasBaseUrl && hasModel,
+        ...nextStatus,
       });
     } catch {
       setStatus({ ...EMPTY_STATUS, loaded: true });

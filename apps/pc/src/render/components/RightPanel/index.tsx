@@ -3,6 +3,10 @@ import { VscMultipleWindows } from 'react-icons/vsc';
 import styles from './styles.module.scss';
 import type { RightPanelProps } from './types';
 import { StorylineView } from './StorylineView';
+import {
+  formatAssistantGenerationMetrics,
+  formatAssistantGenerationProgress,
+} from '../../utils/assistantGeneration';
 
 const RightPanel: React.FC<RightPanelProps> = ({
   content,
@@ -20,6 +24,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
   outlineScope = null,
   materialFiles = [],
   linkedMaterialPaths = [],
+  scopedCharacterGenerationStatus = null,
   scopedCharacters = [],
   scopedLoreEntries = [],
   scopedMaterials = [],
@@ -38,6 +43,28 @@ const RightPanel: React.FC<RightPanelProps> = ({
       : scopeKind === 'volume'
         ? `当前卷：${scopeLabel}`
         : `当前作品：${scopeLabel}`;
+  const characterGenerationProgress = useMemo(
+    () => formatAssistantGenerationProgress(scopedCharacterGenerationStatus),
+    [scopedCharacterGenerationStatus]
+  );
+  const characterGenerationMetrics = useMemo(
+    () => formatAssistantGenerationMetrics(scopedCharacterGenerationStatus),
+    [scopedCharacterGenerationStatus]
+  );
+  const characterProgressPercent =
+    scopedCharacterGenerationStatus?.state === 'running' && scopedCharacterGenerationStatus.totalSteps > 0
+      ? Math.max(
+          6,
+          Math.min(
+            100,
+            Math.round(
+              (scopedCharacterGenerationStatus.completedSteps /
+                scopedCharacterGenerationStatus.totalSteps) *
+                100
+            )
+          )
+        )
+      : 0;
 
   if (collapsed) {
     return (
@@ -78,6 +105,38 @@ const RightPanel: React.FC<RightPanelProps> = ({
                   <span>{scopeKind === 'chapter' ? '当前章人物' : 'AI 人物上下文'}</span>
                   <span className={styles.chapterMaterialsCount}>{scopedCharacters.length} 项</span>
                 </div>
+                {scopedCharacterGenerationStatus && (
+                  <div
+                    className={`${styles.scopeGenerationStatus} ${
+                      scopedCharacterGenerationStatus.state === 'running'
+                        ? styles.scopeGenerationStatusRunning
+                        : scopedCharacterGenerationStatus.state === 'error'
+                          ? styles.scopeGenerationStatusError
+                          : scopedCharacterGenerationStatus.state === 'empty'
+                            ? styles.scopeGenerationStatusEmpty
+                            : styles.scopeGenerationStatusSuccess
+                    }`}
+                  >
+                    <div className={styles.scopeGenerationStatusMessage}>
+                      {scopedCharacterGenerationStatus.message}
+                    </div>
+                    {(characterGenerationProgress || characterGenerationMetrics) && (
+                      <div className={styles.scopeGenerationStatusMeta}>
+                        {[characterGenerationProgress, characterGenerationMetrics]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </div>
+                    )}
+                    {scopedCharacterGenerationStatus.state === 'running' && (
+                      <div className={styles.scopeGenerationProgressTrack}>
+                        <div
+                          className={styles.scopeGenerationProgressBar}
+                          style={{ width: `${characterProgressPercent}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
                 {scopedCharacters.length > 0 ? (
                   <div className={styles.scopeContextList}>
                     {scopedCharacters.map((item, index) => (

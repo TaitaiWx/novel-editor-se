@@ -123,6 +123,19 @@ export interface RightPanelProps {
   outlineScope?: PersistedOutlineScopeInput | null;
   materialFiles?: Array<{ path: string; name: string }>;
   linkedMaterialPaths?: string[];
+  scopedCharacterGenerationStatus?: {
+    state: 'running' | 'success' | 'empty' | 'error';
+    message: string;
+    totalSteps: number;
+    completedSteps: number;
+    resultCount: number;
+    libraryCount: number;
+    createdCount: number;
+    updatedCount: number;
+    startedAt: string;
+    finishedAt: string | null;
+    scopeLabel: string;
+  } | null;
   scopedCharacters?: Array<{ name: string; role?: string; description?: string }>;
   scopedLoreEntries?: Array<{ title: string; category?: string; summary?: string }>;
   scopedMaterials?: Array<{
@@ -149,6 +162,9 @@ export interface Character {
   role: string;
   description: string;
   avatar?: string;
+  aliases?: string[];
+  highlightColor?: string;
+  highlightFirstMentionOnly?: boolean;
 }
 
 export interface CharacterLink {

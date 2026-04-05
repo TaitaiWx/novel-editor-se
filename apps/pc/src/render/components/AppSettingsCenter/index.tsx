@@ -13,6 +13,7 @@ import {
   READONLY_SHORTCUTS,
   SETTINGS_STORAGE_KEY,
   SHORTCUT_FIELD_DEFINITIONS,
+  THOUSAND_CHAR_MARKER_STEP_OPTIONS,
   formatShortcutLabel,
   mergeSettingsDraft,
   normalizeShortcutInput,
@@ -334,6 +335,48 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
 
                   <div className={styles.formRow}>
                     <div className={styles.formMeta}>
+                      <div className={styles.formLabel}>显示千字进度标记</div>
+                      <div className={styles.formDesc}>
+                        在编辑器正文左侧贴边显示每千字进度，不额外占用行号栏宽度。
+                      </div>
+                    </div>
+                    <button
+                      className={`${styles.switchButton} ${settings.general.showThousandCharMarkers ? styles.enabled : ''}`}
+                      onClick={() =>
+                        setGeneral(
+                          'showThousandCharMarkers',
+                          !settings.general.showThousandCharMarkers
+                        )
+                      }
+                    >
+                      <span className={styles.switchThumb} />
+                    </button>
+                  </div>
+
+                  <div className={styles.formRowTopAligned}>
+                    <div className={styles.formMeta}>
+                      <div className={styles.formLabel}>千字进度标记阈值</div>
+                      <div className={styles.formDesc}>
+                        控制正文里每隔多少字显示一个进度标记。推荐 1000，长章节可调到 2000。
+                      </div>
+                    </div>
+                    <select
+                      className={styles.select}
+                      value={settings.general.thousandCharMarkerStep}
+                      onChange={(e) =>
+                        setGeneral('thousandCharMarkerStep', Number(e.target.value))
+                      }
+                    >
+                      {THOUSAND_CHAR_MARKER_STEP_OPTIONS.map((value) => (
+                        <option key={value} value={value}>
+                          每 {value} 字显示一个标记
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.formRow}>
+                    <div className={styles.formMeta}>
                       <div className={styles.formLabel}>显示文件大小</div>
                       <div className={styles.formDesc}>
                         在资源树中显示文件大小。关闭后可减轻大目录的加载压力。
@@ -593,7 +636,16 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
                     </div>
                     <button
                       className={`${styles.switchButton} ${aiSettings.enabled ? styles.enabled : ''}`}
-                      onClick={() => setAI('enabled', !aiSettings.enabled)}
+                      onClick={() =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          ai: {
+                            ...prev.ai,
+                            enabled: !prev.ai.enabled,
+                            enabledExplicitlySet: true,
+                          },
+                        }))
+                      }
                     >
                       <span className={styles.switchThumb} />
                     </button>

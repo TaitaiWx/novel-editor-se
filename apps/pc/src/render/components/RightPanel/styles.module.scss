@@ -162,6 +162,61 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.scopeGenerationStatus {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.scopeGenerationStatusRunning {
+  border-color: rgba(0, 122, 204, 0.2);
+  background: rgba(0, 122, 204, 0.08);
+}
+
+.scopeGenerationStatusSuccess {
+  border-color: rgba(33, 150, 83, 0.18);
+  background: rgba(33, 150, 83, 0.08);
+}
+
+.scopeGenerationStatusEmpty {
+  border-color: rgba(214, 168, 89, 0.18);
+  background: rgba(214, 168, 89, 0.08);
+}
+
+.scopeGenerationStatusError {
+  border-color: rgba(223, 94, 94, 0.22);
+  background: rgba(223, 94, 94, 0.1);
+}
+
+.scopeGenerationStatusMessage {
+  color: #efefef;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.scopeGenerationStatusMeta {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.scopeGenerationProgressTrack {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.scopeGenerationProgressBar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5ca5e6 0%, #6fd1b8 100%);
+}
+
 .scopeContextList {
   display: flex;
   flex-direction: column;
@@ -1389,6 +1444,59 @@
   }
 }
 
+.highlightConfigRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.highlightColorField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.highlightFieldLabel {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+}
+
+.highlightColorControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.colorInput {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.highlightColorValue {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  letter-spacing: 0.4px;
+}
+
+.highlightToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+
+  input {
+    accent-color: rgba(var(--rp-info-rgb), 0.95);
+  }
+}
+
 .cardsContainer {
   display: flex;
   flex-direction: column;
@@ -1572,6 +1680,14 @@
   font-size: 14px;
   font-weight: 700;
   color: #e4eef8;
+}
+
+.characterHighlightSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
 }
 
 .cardRole {
@@ -5721,6 +5837,15 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+}
+
+.highlightConfigPanel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 2px;
 }
 
 .workspaceSectionTitle {

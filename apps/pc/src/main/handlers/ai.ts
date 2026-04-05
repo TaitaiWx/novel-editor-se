@@ -28,6 +28,7 @@ interface AIRequestPayload {
 
 interface PersistedAISettings {
   enabled?: boolean;
+  enabledExplicitlySet?: boolean;
   baseUrl?: string;
   model?: string;
   apiKey?: string;
@@ -35,10 +36,45 @@ interface PersistedAISettings {
   maxTokens?: number;
 }
 
+interface ParsedPersistedAISettings {
+  ai?: PersistedAISettings;
+  enabled?: boolean;
+  enabledExplicitlySet?: boolean;
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+function normalizePersistedAISettings(rawSettings: string | null | undefined): PersistedAISettings {
+  const parsed = rawSettings ? (JSON.parse(rawSettings) as ParsedPersistedAISettings) : {};
+  const nestedAi =
+    parsed.ai && typeof parsed.ai === 'object' ? parsed.ai : ({} as PersistedAISettings);
+  const mergedAi: PersistedAISettings = {
+    enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : nestedAi.enabled,
+    enabledExplicitlySet:
+      typeof parsed.enabledExplicitlySet === 'boolean'
+        ? parsed.enabledExplicitlySet
+        : nestedAi.enabledExplicitlySet,
+    baseUrl: parsed.baseUrl ?? nestedAi.baseUrl,
+    model: parsed.model ?? nestedAi.model,
+    apiKey: parsed.apiKey ?? nestedAi.apiKey,
+    temperature: parsed.temperature ?? nestedAi.temperature,
+    maxTokens: parsed.maxTokens ?? nestedAi.maxTokens,
+  };
+  const enabledExplicitlySet = mergedAi.enabledExplicitlySet === true;
+  const hasStoredCredential = Boolean(mergedAi.apiKey?.trim());
+  return {
+    ...mergedAi,
+    enabled: enabledExplicitlySet ? Boolean(mergedAi.enabled) : Boolean(mergedAi.enabled) || hasStoredCredential,
+    enabledExplicitlySet,
+  };
+}
+
 async function invokeConfiguredAI(payload: AIRequestPayload) {
   const rawSettings = settingsOps.get('novel-editor:settings-center');
-  const parsed = rawSettings ? (JSON.parse(rawSettings) as { ai?: PersistedAISettings }) : {};
-  const ai = parsed.ai || {};
+  const ai = normalizePersistedAISettings(rawSettings);
 
   if (!ai.enabled) {
     return { ok: false, error: 'AI 功能未启用，请先在设置中心开启' };

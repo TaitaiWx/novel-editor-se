@@ -42,6 +42,7 @@ export const getAllShortcuts = (): ShortcutDisplay[] => {
     { accelerator: `${mod}+Shift+Z`, description: '重做', category: '编辑' },
     { accelerator: `${mod}+F`, description: '查找', category: '编辑' },
     { accelerator: `${mod}+H`, description: '查找替换', category: '编辑' },
+    { accelerator: `${mod}+Alt+L`, description: '格式化当前章节', category: '编辑' },
     // 视图
     { accelerator: `${mod}+B`, description: '切换侧边栏', category: '视图' },
     { accelerator: `${mod}+Shift+F`, description: '切换专注模式', category: '视图' },

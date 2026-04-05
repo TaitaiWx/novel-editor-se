@@ -714,6 +714,47 @@
       justify-content: center;
     }
 
+    .sectionStatusHint {
+      margin: 0 12px 4px 26px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .sectionStatusRunning {
+      border-color: rgba(0, 122, 204, 0.18);
+      background: rgba(0, 122, 204, 0.08);
+    }
+
+    .sectionStatusSuccess {
+      border-color: rgba(33, 150, 83, 0.18);
+      background: rgba(33, 150, 83, 0.08);
+    }
+
+    .sectionStatusEmpty {
+      border-color: rgba(214, 168, 89, 0.18);
+      background: rgba(214, 168, 89, 0.08);
+    }
+
+    .sectionStatusError {
+      border-color: rgba(223, 94, 94, 0.2);
+      background: rgba(223, 94, 94, 0.1);
+    }
+
+    .sectionStatusText {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #d7d7d7;
+    }
+
+    .sectionStatusMeta {
+      margin-top: 4px;
+      font-size: 10px;
+      color: #9aa7b4;
+      line-height: 1.4;
+    }
+
     .supportMaterialsTree {
       margin: 0 10px 0 14px;
     }

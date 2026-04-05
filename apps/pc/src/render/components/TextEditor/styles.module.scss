@@ -155,6 +155,25 @@
     user-select: none;
     pointer-events: none;
   }
+
+  :global(.cm-thousand-char-marker-inline) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    margin-right: 10px;
+    font-size: 10px;
+    line-height: 1;
+    letter-spacing: 0.2px;
+    color: rgba(164, 174, 190, 0.68);
+    background: rgba(164, 174, 190, 0.08);
+    border: 1px solid rgba(164, 174, 190, 0.12);
+    border-radius: 999px;
+    padding: 2px 6px;
+    user-select: none;
+    pointer-events: none;
+    white-space: nowrap;
+  }
 }
 
 @keyframes cmTransientLineFlash {

@@ -16,6 +16,7 @@ import {
   GutterMarker,
   ViewPlugin,
   ViewUpdate,
+  WidgetType,
   gutter,
   highlightActiveLineGutter,
   keymap,
@@ -30,8 +31,10 @@ import EmptyState from '../EmptyState';
 import Tooltip from '../Tooltip';
 import { useToast } from '../Toast';
 import { writingDecorations } from './writing-decorations';
+import type { CharacterHighlightPattern } from './writing-decorations';
 import { inlineDiffField, inlineDiffTheme, setInlineDiffEffect } from './inline-diff';
 import type { InlineDiffRange } from './inline-diff';
+import { buildThousandCharMarkers } from '../../utils/contentStats';
 import styles from './styles.module.scss';
 
 /** Threshold: files larger than this show a performance warning */
@@ -72,11 +75,13 @@ interface TextEditorProps {
   focusMode?: boolean;
   wordWrap?: boolean;
   showLineNumbers?: boolean;
+  showThousandCharMarkers?: boolean;
+  thousandCharMarkerStep?: number;
   readOnly?: boolean;
   hideHeader?: boolean;
   virtualContent?: string | null;
   encoding?: string;
-  characterNames?: string[];
+  characterHighlights?: CharacterHighlightPattern[];
   scrollToLine?: ScrollToLineRequest | null;
   transientHighlightLine?: TransientHighlightLineRequest | null;
   replaceLineRequest?: ReplaceLineRequest | null;
@@ -95,6 +100,7 @@ interface TextEditorProps {
 }
 
 export type { InlineDiffRange };
+export type { CharacterHighlightPattern };
 
 const FOCUS_VISIBLE_RADIUS = 0;
 
@@ -223,7 +229,7 @@ const loadLanguageExtension = (lang: string): Promise<Extension> => {
 };
 
 const createLineNumberExtension = (focusMode: boolean, showLineNumbers: boolean) =>
-  focusMode || !showLineNumbers ? [] : [lineNumbers(), appliedLineGutter];
+  focusMode ? [] : showLineNumbers ? [lineNumbers(), appliedLineGutter] : [];
 
 const createActiveLineExtensions = (showLineNumbers: boolean) => [
   highlightActiveLine(),
@@ -357,6 +363,59 @@ class AppliedLineMarker extends GutterMarker {
 
 const appliedLineMarker = new AppliedLineMarker();
 
+class ThousandCharMarkerWidget extends WidgetType {
+  constructor(private readonly charCount: number) {
+    super();
+  }
+
+  eq(other: ThousandCharMarkerWidget) {
+    return other.charCount === this.charCount;
+  }
+
+  toDOM() {
+    const span = document.createElement('span');
+    span.className = 'cm-thousand-char-marker-inline';
+    span.textContent = `${this.charCount}字`;
+    span.setAttribute('aria-hidden', 'true');
+    return span;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+function buildThousandCharDecorationSet(state: EditorState, milestoneStep: number): DecorationSet {
+  const markers = buildThousandCharMarkers(state.doc.toString(), milestoneStep);
+  if (markers.length === 0) return Decoration.none;
+
+  return Decoration.set(
+    markers.map((item) => {
+      const line = state.doc.line(Math.min(item.lineNumber, state.doc.lines));
+      return Decoration.widget({
+        widget: new ThousandCharMarkerWidget(item.charCount),
+        side: -1,
+      }).range(line.from);
+    }),
+    true
+  );
+}
+
+function createThousandCharMarkerExtension(
+  enabled: boolean,
+  focusMode: boolean,
+  milestoneStep: number
+): Extension {
+  if (!enabled || focusMode) return [];
+
+  return StateField.define<DecorationSet>({
+    create: (state) => buildThousandCharDecorationSet(state, milestoneStep),
+    update: (deco, tr) =>
+      tr.docChanged ? buildThousandCharDecorationSet(tr.state, milestoneStep) : deco.map(tr.changes),
+    provide: (field) => EditorView.decorations.from(field),
+  });
+}
+
 const appliedLineMarkerField = StateField.define<RangeSet<GutterMarker>>({
   create: () => RangeSet.empty,
   update: (set, tr) => {
@@ -386,11 +445,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
   focusMode = false,
   wordWrap = true,
   showLineNumbers = DEFAULT_SHOW_LINE_NUMBERS,
+  showThousandCharMarkers = true,
+  thousandCharMarkerStep = 1000,
   readOnly = false,
   hideHeader = false,
   virtualContent,
   encoding = 'UTF-8',
-  characterNames = [],
+  characterHighlights = [],
   scrollToLine,
   transientHighlightLine,
   replaceLineRequest,
@@ -430,6 +491,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const focusModeCompartment = useRef(new Compartment());
   const lineNumberCompartment = useRef(new Compartment());
   const activeLineCompartment = useRef(new Compartment());
+  const thousandCharMarkerCompartment = useRef(new Compartment());
 
   const currentFilePathRef = useRef<string | null>(null);
   const currentContentRef = useRef<string>('');
@@ -625,6 +687,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
           lineNumberCompartment.current.of(createLineNumberExtension(focusMode, showLineNumbers)),
           appliedLineMarkerField,
           activeLineCompartment.current.of(createActiveLineExtensions(showLineNumbers)),
+          thousandCharMarkerCompartment.current.of(
+            createThousandCharMarkerExtension(showThousandCharMarkers, focusMode, thousandCharMarkerStep)
+          ),
           editorRuntime.highlightSelectionMatches(),
           editorRuntime.history(),
           ...editorRuntime.searchExtensions(),
@@ -641,7 +706,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
           readOnlyCompartment.current.of(EditorView.editable.of(!readOnly)),
           wordWrapCompartment.current.of(wordWrap || focusMode ? EditorView.lineWrapping : []),
           languageCompartment.current.of([]),
-          writingDecoCompartment.current.of(writingDecorations(characterNames)),
+          writingDecoCompartment.current.of(writingDecorations(characterHighlights)),
           focusModeCompartment.current.of(focusLineDecorations(focusMode)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
@@ -750,16 +815,17 @@ const TextEditor: React.FC<TextEditorProps> = ({
     };
   }, [editorReady, filePath, isUntitled]);
 
-  // Update writing decorations when character names change
+  // Update writing decorations when character highlight rules change
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({
-      effects: writingDecoCompartment.current.reconfigure(writingDecorations(characterNames)),
+      effects: writingDecoCompartment.current.reconfigure(writingDecorations(characterHighlights)),
     });
-  }, [characterNames]);
+  }, [characterHighlights]);
 
-  // Update focus mode line-fading extension
+  // 中文说明：这里统一重配与编辑器展示相关的动态扩展，
+  // 保证千字标记、行号和专注模式都直接由根配置驱动。
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -770,9 +836,12 @@ const TextEditor: React.FC<TextEditorProps> = ({
           createLineNumberExtension(focusMode, showLineNumbers)
         ),
         activeLineCompartment.current.reconfigure(createActiveLineExtensions(showLineNumbers)),
+        thousandCharMarkerCompartment.current.reconfigure(
+          createThousandCharMarkerExtension(showThousandCharMarkers, focusMode, thousandCharMarkerStep)
+        ),
       ],
     });
-  }, [focusMode, showLineNumbers]);
+  }, [focusMode, showLineNumbers, showThousandCharMarkers, thousandCharMarkerStep]);
 
   // Save on unmount
   useEffect(() => {

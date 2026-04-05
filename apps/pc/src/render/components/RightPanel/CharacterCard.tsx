@@ -58,6 +58,13 @@ export const CharacterCard: React.FC<{
               <div className={styles.cardHeader}>
                 <span className={styles.dragHandle}>⠿</span>
                 <span className={styles.cardName}>{c.name}</span>
+                {c.highlightColor && (
+                  <span
+                    className={styles.characterHighlightSwatch}
+                    style={{ backgroundColor: c.highlightColor }}
+                    title={`正文高亮色 ${c.highlightColor}`}
+                  />
+                )}
                 {roleColor && (
                   <span
                     className={styles.cardRole}

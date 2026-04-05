@@ -5,18 +5,20 @@ import Popover from '../Popover';
 import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 
-export interface SettingsToggleItem {
+export interface SettingsMenuItem {
   key: string;
   label: string;
   icon?: React.ReactNode;
   active?: boolean;
+  kind?: 'toggle' | 'action';
+  hint?: string;
   onClick: () => void;
 }
 
 interface SettingsButtonProps {
   wordWrap?: boolean;
   onToggleWordWrap?: (wrap: boolean) => void;
-  items?: SettingsToggleItem[];
+  items?: SettingsMenuItem[];
 }
 
 const SettingsButton: React.FC<SettingsButtonProps> = ({
@@ -38,7 +40,7 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
     onToggleWordWrap(!wordWrap);
   };
 
-  const settingItems = [
+  const settingItems: SettingsMenuItem[] = [
     ...(typeof wordWrap === 'boolean' && onToggleWordWrap
       ? [
           {
@@ -46,6 +48,7 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
             label: '自动换行',
             icon: <BsTextWrap />,
             active: wordWrap,
+            kind: 'toggle' as const,
             onClick: handleToggleWordWrap,
           },
         ]
@@ -82,19 +85,38 @@ const SettingsButton: React.FC<SettingsButtonProps> = ({
         <div>
           {settingItems.map((item) => (
             <div key={item.key} className={styles.settingItem}>
-              <button
-                className={`${styles.toggleButton} ${item.active ? styles.active : ''}`}
-                onClick={() => {
-                  item.onClick();
-                  setIsOpen(false);
-                }}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-                <div className={styles.toggle}>
-                  <div className={styles.toggleSlider}></div>
-                </div>
-              </button>
+              {item.kind === 'action' ? (
+                <button
+                  className={styles.actionButton}
+                  onClick={() => {
+                    item.onClick();
+                    setIsOpen(false);
+                  }}
+                >
+                  {item.icon}
+                  <span className={styles.itemText}>
+                    <span className={styles.itemLabel}>{item.label}</span>
+                    {item.hint ? <span className={styles.itemHint}>{item.hint}</span> : null}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  className={`${styles.toggleButton} ${item.active ? styles.active : ''}`}
+                  onClick={() => {
+                    item.onClick();
+                    setIsOpen(false);
+                  }}
+                >
+                  {item.icon}
+                  <span className={styles.itemText}>
+                    <span className={styles.itemLabel}>{item.label}</span>
+                    {item.hint ? <span className={styles.itemHint}>{item.hint}</span> : null}
+                  </span>
+                  <div className={styles.toggle}>
+                    <div className={styles.toggleSlider}></div>
+                  </div>
+                </button>
+              )}
             </div>
           ))}
         </div>

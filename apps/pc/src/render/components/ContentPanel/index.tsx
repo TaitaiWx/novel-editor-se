@@ -1,9 +1,14 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { AiOutlineEye } from 'react-icons/ai';
+import { AiOutlineAlignLeft, AiOutlineEye } from 'react-icons/ai';
 import { VscCode, VscListOrdered } from 'react-icons/vsc';
 import type { EditorView } from '@codemirror/view';
 import TabBar from '../TabBar';
-import type { EditorViewportSnapshot, InlineDiffRange } from '../TextEditor';
+import { formatShortcutLabel } from '../../utils/appSettings';
+import type {
+  CharacterHighlightPattern,
+  EditorViewportSnapshot,
+  InlineDiffRange,
+} from '../TextEditor';
 import SettingsButton from '../SettingsButton';
 import LoadingSpinner from '../LoadingSpinner';
 import styles from './styles.module.scss';
@@ -47,6 +52,10 @@ interface ContentPanelProps {
   focusMode?: boolean;
   reloadToken?: number;
   encoding?: string;
+  showThousandCharMarkers?: boolean;
+  thousandCharMarkerStep?: number;
+  formatChapterShortcut?: string;
+  characterHighlights?: CharacterHighlightPattern[];
   scrollToLine?: ScrollToLineRequest | null;
   transientHighlightLine?: TransientHighlightLineRequest | null;
   replaceLineRequest?: ReplaceLineRequest | null;
@@ -56,6 +65,8 @@ interface ContentPanelProps {
   onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onTabSelect: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
+  onToggleThousandCharMarkers?: () => void;
+  onFormatCurrentChapter?: () => void;
   onCloseOtherTabs?: (filePath: string) => void;
   onCloseAllTabs?: () => void;
   onCloseAllAndSave?: () => void;
@@ -123,6 +134,10 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   focusMode = false,
   reloadToken,
   encoding,
+  showThousandCharMarkers = true,
+  thousandCharMarkerStep = 1000,
+  formatChapterShortcut,
+  characterHighlights = [],
   scrollToLine,
   transientHighlightLine,
   replaceLineRequest,
@@ -132,6 +147,8 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   onViewportSnapshotChange,
   onTabSelect,
   onTabClose,
+  onToggleThousandCharMarkers,
+  onFormatCurrentChapter,
   onCloseOtherTabs,
   onCloseAllTabs,
   onCloseAllAndSave,
@@ -181,6 +198,27 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
       viewMode,
     ]
   );
+  const canFormatCurrentChapter = useMemo(
+    () =>
+      Boolean(
+        activeTab &&
+          !specialContent &&
+          !isChangelog &&
+          !isSpreadsheet &&
+          !isPresentation &&
+          !isDocument &&
+          !isPreviewableResource
+      ),
+    [
+      activeTab,
+      specialContent,
+      isChangelog,
+      isDocument,
+      isPresentation,
+      isPreviewableResource,
+      isSpreadsheet,
+    ]
+  );
   const canWrapText =
     !isPreviewableResource || (viewMode === 'content' && isTextBackedPreviewResource);
 
@@ -224,7 +262,27 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
                 label: '显示行号',
                 icon: <VscListOrdered />,
                 active: showLineNumbers,
+                kind: 'toggle' as const,
                 onClick: () => setShowLineNumbers((current) => !current),
+              },
+              {
+                key: 'thousand-char-markers',
+                label: '显示千字进度标记',
+                active: showThousandCharMarkers,
+                kind: 'toggle' as const,
+                onClick: () => onToggleThousandCharMarkers?.(),
+              },
+            ]
+          : []),
+        ...(canFormatCurrentChapter && onFormatCurrentChapter
+          ? [
+              {
+                key: 'format-current-chapter',
+                label: '格式化当前章节',
+                icon: <AiOutlineAlignLeft />,
+                kind: 'action' as const,
+                hint: formatChapterShortcut ? formatShortcutLabel(formatChapterShortcut) : undefined,
+                onClick: onFormatCurrentChapter,
               },
             ]
           : []),
@@ -235,6 +293,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
                 label: viewMode === 'preview' ? '展示内容' : '展示预览',
                 icon: viewMode === 'preview' ? <VscCode /> : <AiOutlineEye />,
                 active: viewMode === 'content',
+                kind: 'toggle' as const,
                 onClick: () =>
                   setViewMode((currentMode) => (currentMode === 'preview' ? 'content' : 'preview')),
               },
@@ -282,7 +341,10 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
               focusMode={focusMode}
               wordWrap={wordWrap}
               showLineNumbers={showLineNumbers}
+              showThousandCharMarkers={showThousandCharMarkers}
+              thousandCharMarkerStep={thousandCharMarkerStep}
               encoding={encoding}
+              characterHighlights={characterHighlights}
               scrollToLine={scrollToLine}
               transientHighlightLine={transientHighlightLine}
               replaceLineRequest={replaceLineRequest}

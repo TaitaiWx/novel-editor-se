@@ -11,6 +11,8 @@ import type {
 } from './types';
 import { SETTINGS_STORAGE_KEY, RELATION_TONE_LABELS } from './constants';
 import {
+  DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+  DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
   createRelationStorageKey,
   createGraphLayoutStorageKey,
   normalizePersonName,
@@ -20,6 +22,7 @@ import {
   mergeCharacterGraphResults,
   parseCharacterAttributes,
   mapCharacterRows,
+  stringifyCharacterAttributes,
   buildCharacterLinks,
   estimateAppearanceHeat,
   inferCharacterCamp,
@@ -47,6 +50,10 @@ export const CharactersView: React.FC<{
     const [newRole, setNewRole] = useState('');
     const [newDesc, setNewDesc] = useState('');
     const [newAvatar, setNewAvatar] = useState('');
+    const [newHighlightColor, setNewHighlightColor] = useState(DEFAULT_CHARACTER_HIGHLIGHT_COLOR);
+    const [newHighlightFirstMentionOnly, setNewHighlightFirstMentionOnly] = useState(
+      DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY
+    );
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [dropIndex, setDropIndex] = useState<number | null>(null);
     const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(null);
@@ -115,6 +122,25 @@ export const CharactersView: React.FC<{
       [folderPath]
     );
 
+    const loadCharactersFromDb = useCallback(
+      async (targetNovelId: number): Promise<Character[]> => {
+        const ipc = window.electron?.ipcRenderer;
+        if (!ipc) return [];
+        const rows = (await ipc.invoke('db-character-list', targetNovelId)) as Array<{
+          id: number;
+          name: string;
+          role: string;
+          description: string;
+          attributes: string;
+        }>;
+        const nextCharacters = mapCharacterRows(rows);
+        setCharacters(nextCharacters);
+        setCharactersLoaded(true);
+        return nextCharacters;
+      },
+      []
+    );
+
     useEffect(() => {
       if (!folderPath || !window.electron?.ipcRenderer) {
         setCharacters([]);
@@ -132,21 +158,13 @@ export const CharactersView: React.FC<{
         if (cancelled || !novel) return;
         const nid = novel.id;
         setNovelId(nid);
-        const rows = (await window.electron.ipcRenderer.invoke('db-character-list', nid)) as Array<{
-          id: number;
-          name: string;
-          role: string;
-          description: string;
-          attributes: string;
-        }>;
         if (cancelled) return;
-        setCharacters(mapCharacterRows(rows));
-        setCharactersLoaded(true);
+        await loadCharactersFromDb(nid);
       })();
       return () => {
         cancelled = true;
       };
-    }, [folderPath]);
+    }, [folderPath, loadCharactersFromDb]);
 
     useEffect(() => {
       if (!charactersLoaded) return;
@@ -213,41 +231,47 @@ export const CharactersView: React.FC<{
       if (!newName.trim() || novelId === null) return;
       const ipc = window.electron?.ipcRenderer;
       if (!ipc) return;
-      const attrs = newAvatar ? JSON.stringify({ avatar: newAvatar }) : '{}';
-      const result = (await ipc.invoke(
+      await ipc.invoke(
         'db-character-create',
         novelId,
         newName.trim(),
         newRole.trim(),
         newDesc.trim(),
-        attrs
-      )) as { lastInsertRowid: number | bigint };
-      const newId = Number(result.lastInsertRowid);
-      setCharacters((prev) => [
-        ...prev,
-        {
-          id: newId,
-          name: newName.trim(),
-          role: newRole.trim(),
-          description: newDesc.trim(),
+        stringifyCharacterAttributes({
           avatar: newAvatar || undefined,
-        },
-      ]);
+          highlightColor: newHighlightColor,
+          highlightFirstMentionOnly: newHighlightFirstMentionOnly,
+        })
+      );
+      await loadCharactersFromDb(novelId);
       setNewName('');
       setNewRole('');
       setNewDesc('');
       setNewAvatar('');
+      setNewHighlightColor(DEFAULT_CHARACTER_HIGHLIGHT_COLOR);
+      setNewHighlightFirstMentionOnly(DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY);
       setAdding(false);
-    }, [newName, newRole, newDesc, newAvatar, novelId]);
+    }, [
+      loadCharactersFromDb,
+      newDesc,
+      newAvatar,
+      newHighlightColor,
+      newHighlightFirstMentionOnly,
+      newName,
+      newRole,
+      novelId,
+    ]);
 
     const handleDelete = useCallback(
       async (index: number) => {
         const char = characters[index];
         if (!char) return;
         await window.electron?.ipcRenderer?.invoke('db-character-delete', char.id);
-        setCharacters((prev) => prev.filter((_, i) => i !== index));
+        if (novelId !== null) {
+          await loadCharactersFromDb(novelId);
+        }
       },
-      [characters]
+      [characters, loadCharactersFromDb, novelId]
     );
 
     const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, index: number) => {
@@ -332,6 +356,35 @@ export const CharactersView: React.FC<{
     const toggleAdding = useCallback(() => {
       setAdding((prev) => !prev);
     }, []);
+
+    const handleUpdateCharacterHighlight = useCallback(
+      async (
+        characterId: number,
+        patch: { highlightColor?: string; highlightFirstMentionOnly?: boolean }
+      ) => {
+        const ipc = window.electron?.ipcRenderer;
+        const target = characters.find((item) => item.id === characterId);
+        if (!ipc || !target) return;
+        await ipc.invoke('db-character-update', characterId, {
+          name: target.name,
+          role: target.role,
+          description: target.description,
+          attributes: stringifyCharacterAttributes({
+            avatar: target.avatar,
+            aliases: target.aliases,
+            highlightColor: patch.highlightColor ?? target.highlightColor,
+            highlightFirstMentionOnly:
+              typeof patch.highlightFirstMentionOnly === 'boolean'
+                ? patch.highlightFirstMentionOnly
+                : target.highlightFirstMentionOnly,
+          }),
+        });
+        if (novelId !== null) {
+          await loadCharactersFromDb(novelId);
+        }
+      },
+      [characters, loadCharactersFromDb, novelId]
+    );
 
     const handleAddRelation = useCallback(async () => {
       if (
@@ -535,7 +588,7 @@ export const CharactersView: React.FC<{
 
           if (matched) {
             const prevAttrs = parseCharacterAttributes(matched.attributes);
-            const nextAttributes = JSON.stringify({
+            const nextAttributes = stringifyCharacterAttributes({
               ...prevAttrs,
               aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
             });
@@ -554,7 +607,11 @@ export const CharactersView: React.FC<{
               character.name.trim(),
               nextRole,
               nextDescription,
-              JSON.stringify({ aliases: nextAliases })
+              stringifyCharacterAttributes({
+                aliases: nextAliases,
+                highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+                highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+              })
             )) as { lastInsertRowid: number | bigint };
             const createdId = Number(created.lastInsertRowid);
             nameToId.set(normalized, createdId);
@@ -562,14 +619,7 @@ export const CharactersView: React.FC<{
           }
         }
 
-        const refreshedRows = (await ipc.invoke('db-character-list', novelId)) as Array<{
-          id: number;
-          name: string;
-          role: string;
-          description: string;
-          attributes: string;
-        }>;
-        setCharacters(mapCharacterRows(refreshedRows));
+        await loadCharactersFromDb(novelId);
 
         const nextRelations: CharacterRelation[] = merged.relations
           .map((relation, index) => {
@@ -599,7 +649,7 @@ export const CharactersView: React.FC<{
       } finally {
         setAiGenerating(false);
       }
-    }, [content, folderPath, novelId, persistRelations]);
+    }, [content, folderPath, loadCharactersFromDb, novelId, persistRelations]);
 
     const selectedCharacter = characters.find((item) => item.id === selectedCharacterId) || null;
 
@@ -716,6 +766,25 @@ export const CharactersView: React.FC<{
               className={styles.formTextarea}
               rows={3}
             />
+            <div className={styles.highlightConfigRow}>
+              <label className={styles.highlightColorField}>
+                <span className={styles.highlightFieldLabel}>正文高亮颜色</span>
+                <input
+                  type="color"
+                  value={newHighlightColor}
+                  onChange={(e) => setNewHighlightColor(e.target.value)}
+                  className={styles.colorInput}
+                />
+              </label>
+              <label className={styles.highlightToggle}>
+                <input
+                  type="checkbox"
+                  checked={newHighlightFirstMentionOnly}
+                  onChange={(e) => setNewHighlightFirstMentionOnly(e.target.checked)}
+                />
+                <span>仅在每章第一次出现时高亮</span>
+              </label>
+            </div>
             <button className={styles.submitButton} onClick={handleAdd}>
               确认添加
             </button>
@@ -811,6 +880,46 @@ export const CharactersView: React.FC<{
                   <span className={styles.workspaceChip}>阵营 {focusedCamp || 'support'}</span>
                   <span className={styles.workspaceChip}>正文热度 {focusedHeat}</span>
                   <span className={styles.workspaceChip}>关系 {selectedRelations.length}</span>
+                </div>
+              </section>
+
+              <section className={styles.workspaceCardShell}>
+                <div className={styles.workspaceCardHeader}>
+                  <span className={styles.workspaceSectionTitle}>正文高亮</span>
+                  <span className={styles.workspaceListHint}>控制角色名在正文中的强调方式</span>
+                </div>
+                <div className={styles.highlightConfigPanel}>
+                  <label className={styles.highlightColorField}>
+                    <span className={styles.highlightFieldLabel}>高亮颜色</span>
+                    <div className={styles.highlightColorControl}>
+                      <input
+                        type="color"
+                        value={focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR}
+                        onChange={(event) =>
+                          void handleUpdateCharacterHighlight(focusedCharacter.id, {
+                            highlightColor: event.target.value,
+                          })
+                        }
+                        className={styles.colorInput}
+                      />
+                      <span className={styles.highlightColorValue}>
+                        {(focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR)
+                          .toUpperCase()}
+                      </span>
+                    </div>
+                  </label>
+                  <label className={styles.highlightToggle}>
+                    <input
+                      type="checkbox"
+                      checked={focusedCharacter.highlightFirstMentionOnly !== false}
+                      onChange={(event) =>
+                        void handleUpdateCharacterHighlight(focusedCharacter.id, {
+                          highlightFirstMentionOnly: event.target.checked,
+                        })
+                      }
+                    />
+                    <span>仅在每章第一次出现时高亮</span>
+                  </label>
                 </div>
               </section>
 

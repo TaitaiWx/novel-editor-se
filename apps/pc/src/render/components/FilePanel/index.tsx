@@ -34,6 +34,11 @@ import {
   WORKSPACE_TAB_CHARACTERS,
   WORKSPACE_TAB_LORE,
 } from '../../utils/workspace';
+import {
+  formatAssistantGenerationMetrics,
+  formatAssistantGenerationProgress,
+  type AssistantArtifactGenerationStatus,
+} from '../../utils/assistantGeneration';
 import styles from './styles.module.scss';
 
 export type ObjectContextMenuTarget =
@@ -55,6 +60,7 @@ export interface ObjectContextMenuEvent {
 interface FilePanelProps {
   files: FileNode[];
   characters: Character[];
+  characterGenerationStatus?: AssistantArtifactGenerationStatus | null;
   loreEntries: LoreEntry[];
   materialUsageMap?: Record<string, string>;
   projectName?: string | null;
@@ -306,6 +312,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
   ({
     files,
     characters,
+    characterGenerationStatus = null,
     loreEntries,
     materialUsageMap = {},
     projectName,
@@ -374,6 +381,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     );
     const searchInputRef = useRef<HTMLInputElement>(null);
     const createMenuButtonRef = useRef<HTMLButtonElement>(null);
+    const lastCharacterStatusSignatureRef = useRef<string | null>(null);
     const shouldShowLoadingState = isLoading && !folderPath && files.length === 0;
     const isWorkspaceBusy = isLoading && Boolean(folderPath);
 
@@ -489,6 +497,14 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       '设定 世界观 规则 资料'.includes(normalizedQuery) ||
       normalizedQuery.includes('设') ||
       normalizedQuery.includes('定');
+    const characterGenerationProgress = useMemo(
+      () => formatAssistantGenerationProgress(characterGenerationStatus),
+      [characterGenerationStatus]
+    );
+    const characterGenerationMetrics = useMemo(
+      () => formatAssistantGenerationMetrics(characterGenerationStatus),
+      [characterGenerationStatus]
+    );
 
     useEffect(() => {
       if (!selectedFile) return;
@@ -508,6 +524,32 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
         return next;
       });
     }, [activeVolumePath, storyDisplayNodes]);
+
+    useEffect(() => {
+      if (!characterGenerationStatus) return;
+      const signature = [
+        characterGenerationStatus.scopePath,
+        characterGenerationStatus.state,
+        characterGenerationStatus.startedAt,
+        characterGenerationStatus.finishedAt || '',
+      ].join(':');
+      const previousSignature = lastCharacterStatusSignatureRef.current;
+      lastCharacterStatusSignatureRef.current = signature;
+
+      const shouldReveal =
+        characterGenerationStatus.state === 'running' ||
+        (previousSignature !== null && previousSignature !== signature);
+      if (!shouldReveal) return;
+
+      setCollapsedSections((prev) =>
+        prev.characters ? { ...prev, characters: false } : prev
+      );
+    }, [
+      characterGenerationStatus?.scopePath,
+      characterGenerationStatus?.startedAt,
+      characterGenerationStatus?.finishedAt,
+      characterGenerationStatus?.state,
+    ]);
 
     const toggleSection = useCallback((section: 'story' | 'characters' | 'lore' | 'materials') => {
       setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -1096,12 +1138,36 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                           <span className={styles.storyNodeIcon}>
                             <AiOutlineUser />
                           </span>
-                          <span className={styles.storyNodeTitle}>人物</span>
+                          <span className={styles.storyNodeTitle}>角色</span>
                           <span className={styles.supportNodeCount}>
                             {filteredCharacters.length}
                           </span>
                         </button>
                       </div>
+                      {characterGenerationStatus && (
+                        <div
+                          className={`${styles.sectionStatusHint} ${
+                            characterGenerationStatus.state === 'running'
+                              ? styles.sectionStatusRunning
+                              : characterGenerationStatus.state === 'error'
+                                ? styles.sectionStatusError
+                                : characterGenerationStatus.state === 'empty'
+                                  ? styles.sectionStatusEmpty
+                                  : styles.sectionStatusSuccess
+                          }`}
+                        >
+                          <div className={styles.sectionStatusText}>
+                            {characterGenerationStatus.message}
+                          </div>
+                          {(characterGenerationProgress || characterGenerationMetrics) && (
+                            <div className={styles.sectionStatusMeta}>
+                              {[characterGenerationProgress, characterGenerationMetrics]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {!collapsedSections.characters && (
                         <div className={styles.supportNodeChildren}>
                           {filteredCharacters.map((item) => {

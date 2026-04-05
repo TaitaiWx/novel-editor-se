@@ -12,7 +12,7 @@ export type AssistantArtifactKind = 'characters' | 'lore' | 'materials';
 export type StoryOrderMap = Record<string, string[]>;
 
 export const WORKSPACE_TAB_LABELS: Record<string, string> = {
-  [WORKSPACE_TAB_CHARACTERS]: '人物',
+  [WORKSPACE_TAB_CHARACTERS]: '角色',
   [WORKSPACE_TAB_LORE]: '设定',
 };
 

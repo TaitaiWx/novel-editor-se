@@ -266,16 +266,71 @@ export function mergeCharacterGraphResults(
   };
 }
 
-export function parseCharacterAttributes(attributes: string): {
+export interface CharacterAttributesPayload {
   avatar?: string;
   aliases?: string[];
+  highlightColor?: string;
+  highlightFirstMentionOnly?: boolean;
+}
+
+export const DEFAULT_CHARACTER_HIGHLIGHT_COLOR = '#9cdcfe';
+export const DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY = true;
+
+function normalizeCharacterAliases(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeCharacterHighlightColor(value: unknown): string {
+  if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.trim())) {
+    return value.trim().toLowerCase();
+  }
+  return DEFAULT_CHARACTER_HIGHLIGHT_COLOR;
+}
+
+export function parseCharacterAttributes(attributes: string): {
+  avatar?: string;
+  aliases: string[];
+  highlightColor: string;
+  highlightFirstMentionOnly: boolean;
 } {
   try {
-    const parsed = JSON.parse(attributes || '{}') as { avatar?: string; aliases?: string[] };
-    return parsed || {};
+    const parsed = JSON.parse(attributes || '{}') as CharacterAttributesPayload;
+    return {
+      avatar: typeof parsed?.avatar === 'string' ? parsed.avatar : undefined,
+      aliases: normalizeCharacterAliases(parsed?.aliases),
+      highlightColor: normalizeCharacterHighlightColor(parsed?.highlightColor),
+      highlightFirstMentionOnly:
+        typeof parsed?.highlightFirstMentionOnly === 'boolean'
+          ? parsed.highlightFirstMentionOnly
+          : DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+    };
   } catch {
-    return {};
+    return {
+      aliases: [],
+      highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+      highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+    };
   }
+}
+
+export function stringifyCharacterAttributes(attributes: CharacterAttributesPayload): string {
+  return JSON.stringify({
+    ...(attributes.avatar ? { avatar: attributes.avatar } : {}),
+    aliases: normalizeCharacterAliases(attributes.aliases),
+    highlightColor: normalizeCharacterHighlightColor(attributes.highlightColor),
+    highlightFirstMentionOnly:
+      typeof attributes.highlightFirstMentionOnly === 'boolean'
+        ? attributes.highlightFirstMentionOnly
+        : DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+  });
 }
 
 export function mapCharacterRows(
@@ -295,6 +350,9 @@ export function mapCharacterRows(
       role: row.role || '',
       description: row.description || '',
       avatar: attrs.avatar || undefined,
+      aliases: attrs.aliases,
+      highlightColor: attrs.highlightColor,
+      highlightFirstMentionOnly: attrs.highlightFirstMentionOnly,
     };
   });
 }
