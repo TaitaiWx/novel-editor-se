@@ -47,6 +47,7 @@ interface TransientHighlightLineRequest {
 interface ContentPanelProps {
   openTabs: string[];
   activeTab: string | null;
+  virtualContent?: string;
   tabLabels?: Record<string, string>;
   specialTabContent?: Record<string, React.ReactNode>;
   focusMode?: boolean;
@@ -129,6 +130,7 @@ const contentFallback = (
 const ContentPanel: React.FC<ContentPanelProps> = ({
   openTabs,
   activeTab,
+  virtualContent,
   tabLabels,
   specialTabContent,
   focusMode = false,
@@ -281,7 +283,9 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
                 label: '格式化当前章节',
                 icon: <AiOutlineAlignLeft />,
                 kind: 'action' as const,
-                hint: formatChapterShortcut ? formatShortcutLabel(formatChapterShortcut) : undefined,
+                hint: formatChapterShortcut
+                  ? formatShortcutLabel(formatChapterShortcut)
+                  : undefined,
                 onClick: onFormatCurrentChapter,
               },
             ]
@@ -337,6 +341,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
           ) : (
             <TextEditor
               filePath={activeTab}
+              virtualContent={virtualContent}
               reloadToken={reloadToken}
               focusMode={focusMode}
               wordWrap={wordWrap}

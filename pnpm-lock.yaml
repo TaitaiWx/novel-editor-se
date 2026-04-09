@@ -106,6 +106,9 @@ importers:
       fs-extra:
         specifier: ^11.3.0
         version: 11.3.0
+      iconv-lite:
+        specifier: ^0.6.3
+        version: 0.6.3
       jszip:
         specifier: ^3.10.1
         version: 3.10.1

@@ -684,6 +684,7 @@ const App: React.FC = () => {
   // Tab management
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [untitledTabContents, setUntitledTabContents] = useState<Record<string, string>>({});
   const [initialViewportSnapshots, setInitialViewportSnapshots] = useState<
     Record<string, EditorViewportSnapshot>
   >({});
@@ -1396,6 +1397,13 @@ const App: React.FC = () => {
       }
       return newTabs;
     });
+    if (isUntitledTabPath(filePath)) {
+      setUntitledTabContents((prev) => {
+        if (!(filePath in prev)) return prev;
+        const { [filePath]: _removed, ...rest } = prev;
+        return rest;
+      });
+    }
   }, []);
 
   // Create new untitled tab (Cmd+N, like VS Code)
@@ -1403,6 +1411,7 @@ const App: React.FC = () => {
     const num = ++untitledCounterRef.current;
     const untitledPath = `__untitled__:Untitled-${num}`;
     setOpenTabs((prev) => [...prev, untitledPath]);
+    setUntitledTabContents((prev) => ({ ...prev, [untitledPath]: '' }));
     setActiveTab(untitledPath);
   }, []);
 
@@ -1415,6 +1424,7 @@ const App: React.FC = () => {
           const num = ++untitledCounterRef.current;
           const untitledPath = `__untitled__:Untitled-${num}`;
           setOpenTabs([untitledPath]);
+          setUntitledTabContents((prev) => ({ ...prev, [untitledPath]: '' }));
           setActiveTab(untitledPath);
         }
         preFocusStateRef.current = {
@@ -1455,7 +1465,9 @@ const App: React.FC = () => {
   const loadPersistedSettingsDraft = useCallback(async (): Promise<SettingsDraft> => {
     const ipc = window.electron?.ipcRenderer;
     if (!ipc) return DEFAULT_SETTINGS_DRAFT;
-    const rawSettings = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as string | null;
+    const rawSettings = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as
+      | string
+      | null;
     return mergeSettingsDraft(rawSettings);
   }, []);
 
@@ -1947,6 +1959,7 @@ const App: React.FC = () => {
         ++untitledCounterRef.current;
         const tabPath = `__untitled__:${preview.fileName}`;
         setOpenTabs((prev) => [...prev, tabPath]);
+        setUntitledTabContents((prev) => ({ ...prev, [tabPath]: preview.content }));
         setActiveTab(tabPath);
         setEditorContent(preview.content);
       }
@@ -2862,6 +2875,11 @@ const App: React.FC = () => {
         await window.electron.ipcRenderer.invoke('write-file', newPath, content);
         // Replace untitled tab with real file path
         setOpenTabs((prev) => prev.map((t) => (t === untitledPath ? newPath : t)));
+        setUntitledTabContents((prev) => {
+          if (!(untitledPath in prev)) return prev;
+          const { [untitledPath]: _removed, ...rest } = prev;
+          return rest;
+        });
         moveViewportSnapshot(untitledPath, newPath);
         if (activeTabRef.current === untitledPath) {
           setActiveTab(newPath);
@@ -2877,6 +2895,13 @@ const App: React.FC = () => {
 
   const handleContentChange = useCallback((content: string) => {
     setEditorContent(content);
+    const tab = activeTabRef.current;
+    if (tab && isUntitledTabPath(tab)) {
+      setUntitledTabContents((prev) => {
+        if (prev[tab] === content) return prev;
+        return { ...prev, [tab]: content };
+      });
+    }
   }, []);
 
   const handleCursorChange = useCallback((pos: CursorPosition) => {
@@ -2971,6 +2996,7 @@ const App: React.FC = () => {
 
   const handleCloseAllTabs = useCallback(() => {
     setOpenTabs([]);
+    setUntitledTabContents({});
     setActiveTab(null);
   }, []);
 
@@ -3024,6 +3050,10 @@ const App: React.FC = () => {
     () => (isWorkspaceTab(activeTab) ? activeTab : null),
     [activeTab]
   );
+  const activeUntitledVirtualContent = useMemo(() => {
+    if (!activeTab || !isUntitledTabPath(activeTab)) return undefined;
+    return untitledTabContents[activeTab] ?? '';
+  }, [activeTab, untitledTabContents]);
   const activeDocumentTab = useMemo(
     () => (isWorkspaceTab(activeTab) ? null : activeTab),
     [activeTab]
@@ -4846,6 +4876,7 @@ const App: React.FC = () => {
               <ContentPanel
                 openTabs={openTabs}
                 activeTab={activeTab}
+                virtualContent={activeUntitledVirtualContent}
                 tabLabels={workspaceTabLabels}
                 specialTabContent={specialTabContent}
                 focusMode={focusMode}

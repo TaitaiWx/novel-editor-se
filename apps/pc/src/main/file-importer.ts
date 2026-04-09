@@ -10,7 +10,7 @@ export interface ImportResult {
   /** 转换后的 Markdown 内容 */
   content: string;
   /** 源文件类型 */
-  sourceType: 'docx' | 'xlsx' | 'md' | 'txt' | 'json';
+  sourceType: 'doc' | 'docx' | 'xlsx' | 'md' | 'txt' | 'json';
 }
 
 /** 将 mammoth 输出的 HTML 转为简易 Markdown */
@@ -48,22 +48,176 @@ function htmlToMarkdown(html: string): string {
   return md.trim() + '\n';
 }
 
+function decodeXmlEntities(input: string): string {
+  return input
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
+function parseDocxXmlToMarkdown(xml: string): string {
+  const paragraphs: string[] = [];
+  const pRegex = /<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g;
+  let pMatch: RegExpExecArray | null;
+
+  while ((pMatch = pRegex.exec(xml)) !== null) {
+    const pContent = pMatch[1]
+      .replace(/<w:tab\s*\/?\s*>/g, '\t')
+      .replace(/<w:(br|cr)\s*\/?\s*>/g, '\n');
+
+    const texts: string[] = [];
+    const tRegex = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g;
+    let tMatch: RegExpExecArray | null;
+    while ((tMatch = tRegex.exec(pContent)) !== null) {
+      texts.push(decodeXmlEntities(tMatch[1]));
+    }
+
+    const paragraphText = texts.join('').replace(/\s+$/g, '');
+    if (paragraphText.trim().length > 0) {
+      paragraphs.push(paragraphText.trim());
+    }
+  }
+
+  if (paragraphs.length === 0) return '';
+  return `${paragraphs.join('\n\n')}\n`;
+}
+
+async function extractDocxMarkdownByZip(buffer: Buffer): Promise<string> {
+  const jszip = await import('jszip');
+  const JSZip = jszip.default ?? jszip;
+  const zip = await JSZip.loadAsync(buffer);
+  const docXml = await zip.file('word/document.xml')?.async('string');
+  if (!docXml) {
+    return '';
+  }
+  return parseDocxXmlToMarkdown(docXml);
+}
+
+function looksLikeUtf16(buffer: Buffer): 'utf-16le' | 'utf-16be' | null {
+  if (buffer.length < 2) return null;
+  let zeroEven = 0;
+  let zeroOdd = 0;
+  for (let i = 0; i < buffer.length; i++) {
+    if (buffer[i] === 0) {
+      if (i % 2 === 0) zeroEven += 1;
+      else zeroOdd += 1;
+    }
+  }
+  const zeroRatio = (zeroEven + zeroOdd) / buffer.length;
+  if (zeroRatio < 0.1) return null;
+  return zeroOdd >= zeroEven ? 'utf-16le' : 'utf-16be';
+}
+
+function scoreDecodedText(text: string): number {
+  if (!text) return -1_000;
+  const replacementCount = (text.match(/\uFFFD/g) || []).length;
+  const nullCount = (text.match(/\u0000/g) || []).length;
+  // 得分越高越可信：惩罚替换字符和空字节。
+  return text.length - replacementCount * 40 - nullCount * 80;
+}
+
+async function decodeTextBuffer(buffer: Buffer): Promise<string> {
+  if (buffer.length === 0) return '';
+
+  // BOM 优先。
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.subarray(3).toString('utf8');
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(buffer.subarray(2));
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(buffer.subarray(2));
+  }
+
+  const utf16Guess = looksLikeUtf16(buffer);
+  if (utf16Guess) {
+    return new TextDecoder(utf16Guess).decode(buffer);
+  }
+
+  const candidates: string[] = [];
+  // UTF-8 始终尝试（最常见）。
+  candidates.push(buffer.toString('utf8'));
+
+  // 一些历史 txt 常见于 GB18030/GBK，支持时作为回退。
+  try {
+    candidates.push(new TextDecoder('gb18030').decode(buffer));
+  } catch {
+    // Node 运行时不支持该编码时，回退到 iconv-lite（业界常用文本解码库）。
+    try {
+      const iconvLiteModule = await import('iconv-lite');
+      const iconvLite = iconvLiteModule.default ?? iconvLiteModule;
+      for (const encoding of ['gb18030', 'gbk', 'big5']) {
+        try {
+          candidates.push(iconvLite.decode(buffer, encoding));
+        } catch {
+          // 单个编码失败继续尝试其他编码。
+        }
+      }
+    } catch {
+      // iconv-lite 未加载成功时，仅使用 UTF-8 结果。
+    }
+  }
+
+  let best = candidates[0] || '';
+  let bestScore = scoreDecodedText(best);
+  for (const text of candidates.slice(1)) {
+    const score = scoreDecodedText(text);
+    if (score > bestScore) {
+      best = text;
+      bestScore = score;
+    }
+  }
+
+  return best.replace(/\u0000/g, '');
+}
+
+async function importDoc(filePath: string): Promise<ImportResult> {
+  throw new Error('暂不支持直接导入 .doc（二进制旧格式）。请在 Word/WPS 中另存为 .docx 后再导入。');
+}
+
 /**
  * 导入 Word (.docx) 文件，提取文本内容并转为 Markdown
  */
 async function importDocx(filePath: string): Promise<ImportResult> {
-  const mammoth = await import('mammoth');
   const buffer = await readFile(filePath);
-  const result = await mammoth.convertToHtml({ buffer });
+  let markdownContent = '';
 
-  if (result.messages.length > 0) {
-    console.warn(
-      '[file-importer] docx 转换警告:',
-      result.messages.map((m: { message: string }) => m.message)
-    );
+  try {
+    const mammothModule = await import('mammoth');
+    const mammoth = mammothModule.default ?? mammothModule;
+    const result = await mammoth.convertToHtml({ buffer });
+    if (result.messages.length > 0) {
+      console.warn(
+        '[file-importer] docx 转换警告:',
+        result.messages.map((m: { message: string }) => m.message)
+      );
+    }
+    markdownContent = htmlToMarkdown(result.value);
+
+    // convertToHtml 未提取到正文时，继续尝试 rawText（对某些复杂样式文档更稳）。
+    if (!markdownContent.trim()) {
+      const rawTextResult = await mammoth.extractRawText({ buffer });
+      markdownContent = `${rawTextResult.value ?? ''}`.trim();
+      if (markdownContent) {
+        markdownContent = `${markdownContent}\n`;
+      }
+    }
+  } catch (error) {
+    console.warn('[file-importer] mammoth 解析失败，准备回退到 ZIP/XML 解析:', error);
   }
 
-  const markdownContent = htmlToMarkdown(result.value);
+  if (!markdownContent.trim()) {
+    markdownContent = await extractDocxMarkdownByZip(buffer);
+  }
+
+  if (!markdownContent.trim()) {
+    throw new Error('Word 文件解析失败：未提取到可用文本内容');
+  }
 
   const baseName = path.basename(filePath, path.extname(filePath));
   return {
@@ -138,7 +292,8 @@ async function importXlsx(filePath: string): Promise<ImportResult> {
 }
 
 async function importTextFile(filePath: string, sourceType: 'md' | 'txt' | 'json') {
-  const content = await readFile(filePath, 'utf-8');
+  const buffer = await readFile(filePath);
+  const content = (await decodeTextBuffer(buffer)).replace(/\r\n?/g, '\n');
   return {
     fileName: path.basename(filePath),
     content,
@@ -147,6 +302,7 @@ async function importTextFile(filePath: string, sourceType: 'md' | 'txt' | 'json
 }
 
 const IMPORTERS: Record<string, (filePath: string) => Promise<ImportResult>> = {
+  '.doc': importDoc,
   '.docx': importDocx,
   '.xlsx': importXlsx,
   '.md': (filePath: string) => importTextFile(filePath, 'md'),
