@@ -191,7 +191,24 @@ async function main() {
 
     console.log(`打包产物启动烟雾测试通过: ${executablePath}`);
   } finally {
-    await rm(smokeUserDataDir, { recursive: true, force: true });
+    // Windows 上 Electron 子进程可能延迟释放文件句柄，需重试清理。
+    const CLEANUP_RETRIES = 5;
+    const CLEANUP_DELAY_MS = 1_000;
+    for (let attempt = 1; attempt <= CLEANUP_RETRIES; attempt++) {
+      try {
+        await rm(smokeUserDataDir, { recursive: true, force: true });
+        break;
+      } catch (cleanupErr) {
+        if (attempt < CLEANUP_RETRIES) {
+          await new Promise((r) => setTimeout(r, CLEANUP_DELAY_MS));
+        } else {
+          console.warn(
+            `清理临时目录失败（已重试 ${CLEANUP_RETRIES} 次），跳过:`,
+            cleanupErr.message
+          );
+        }
+      }
+    }
   }
 }
 
