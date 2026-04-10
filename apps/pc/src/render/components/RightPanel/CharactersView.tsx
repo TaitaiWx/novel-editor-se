@@ -903,8 +903,9 @@ export const CharactersView: React.FC<{
                         className={styles.colorInput}
                       />
                       <span className={styles.highlightColorValue}>
-                        {(focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR)
-                          .toUpperCase()}
+                        {(
+                          focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR
+                        ).toUpperCase()}
                       </span>
                     </div>
                   </label>

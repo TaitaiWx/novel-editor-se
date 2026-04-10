@@ -311,9 +311,7 @@ function buildDecorations(
  *
  * @param characterPatterns 需要高亮的角色规则列表
  */
-export function writingDecorations(
-  characterPatterns: CharacterHighlightPattern[] = []
-): Extension {
+export function writingDecorations(characterPatterns: CharacterHighlightPattern[] = []): Extension {
   const preparedPatterns = prepareHighlightPatterns(characterPatterns);
   const matcher = buildHighlightMatcher(preparedPatterns);
 

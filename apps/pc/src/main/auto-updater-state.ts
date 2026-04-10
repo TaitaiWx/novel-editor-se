@@ -41,10 +41,7 @@ export function createStartupHealthState(): StartupHealthState {
 
 export function isStartupHealthComplete(state: StartupHealthState): boolean {
   return (
-    state.mainProcessReady &&
-    state.windowLoaded &&
-    state.rendererReady &&
-    state.rendererHealthy
+    state.mainProcessReady && state.windowLoaded && state.rendererReady && state.rendererHealthy
   );
 }
 

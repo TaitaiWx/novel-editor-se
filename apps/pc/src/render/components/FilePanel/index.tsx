@@ -541,9 +541,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
         (previousSignature !== null && previousSignature !== signature);
       if (!shouldReveal) return;
 
-      setCollapsedSections((prev) =>
-        prev.characters ? { ...prev, characters: false } : prev
-      );
+      setCollapsedSections((prev) => (prev.characters ? { ...prev, characters: false } : prev));
     }, [
       characterGenerationStatus?.scopePath,
       characterGenerationStatus?.startedAt,

@@ -115,7 +115,7 @@ function looksLikeUtf16(buffer: Buffer): 'utf-16le' | 'utf-16be' | null {
 function scoreDecodedText(text: string): number {
   if (!text) return -1_000;
   const replacementCount = (text.match(/\uFFFD/g) || []).length;
-  const nullCount = (text.match(/\u0000/g) || []).length;
+  const nullCount = text.split('\0').length - 1;
   // 得分越高越可信：惩罚替换字符和空字节。
   return text.length - replacementCount * 40 - nullCount * 80;
 }
@@ -173,10 +173,10 @@ async function decodeTextBuffer(buffer: Buffer): Promise<string> {
     }
   }
 
-  return best.replace(/\u0000/g, '');
+  return best.replaceAll('\0', '');
 }
 
-async function importDoc(filePath: string): Promise<ImportResult> {
+async function importDoc(_filePath: string): Promise<ImportResult> {
   throw new Error('暂不支持直接导入 .doc（二进制旧格式）。请在 Word/WPS 中另存为 .docx 后再导入。');
 }
 

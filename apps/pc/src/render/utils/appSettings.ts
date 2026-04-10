@@ -205,7 +205,9 @@ function normalizeParsedAISettings(parsed: ParsedSettingsDraft): Partial<AISetti
     enabledExplicitlySet,
     // 中文说明：旧版本会把 enabled 默认存成 false，即使用户已经填了 API Key。
     // 没有“显式关闭”标记时，只要检测到已保存的密钥，就按已启用迁移。
-    enabled: enabledExplicitlySet ? Boolean(mergedAi.enabled) : Boolean(mergedAi.enabled) || hasStoredCredential,
+    enabled: enabledExplicitlySet
+      ? Boolean(mergedAi.enabled)
+      : Boolean(mergedAi.enabled) || hasStoredCredential,
   };
 }
 
@@ -215,7 +217,11 @@ function normalizeMarkerStep(step: unknown): number {
     return DEFAULT_GENERAL_SETTINGS.thousandCharMarkerStep;
   }
   const normalizedStep = Math.round(numericStep);
-  if (THOUSAND_CHAR_MARKER_STEP_OPTIONS.includes(normalizedStep as (typeof THOUSAND_CHAR_MARKER_STEP_OPTIONS)[number])) {
+  if (
+    THOUSAND_CHAR_MARKER_STEP_OPTIONS.includes(
+      normalizedStep as (typeof THOUSAND_CHAR_MARKER_STEP_OPTIONS)[number]
+    )
+  ) {
     return normalizedStep;
   }
   return DEFAULT_GENERAL_SETTINGS.thousandCharMarkerStep;
@@ -230,7 +236,9 @@ export function mergeSettingsDraft(raw: string | null): SettingsDraft {
       general: {
         ...general,
         // 中文说明：千字标记阈值统一限制在预设档位内，避免旧值或非法值污染根设置。
-        thousandCharMarkerStep: normalizeMarkerStep((general as Partial<GeneralSettings>).thousandCharMarkerStep),
+        thousandCharMarkerStep: normalizeMarkerStep(
+          (general as Partial<GeneralSettings>).thousandCharMarkerStep
+        ),
       },
       shortcuts: { ...DEFAULT_SHORTCUT_SETTINGS, ...(parsed.shortcuts || {}) },
       // 中文说明：这里兼容旧版 AI 设置结构。

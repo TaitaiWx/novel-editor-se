@@ -363,9 +363,7 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
                     <select
                       className={styles.select}
                       value={settings.general.thousandCharMarkerStep}
-                      onChange={(e) =>
-                        setGeneral('thousandCharMarkerStep', Number(e.target.value))
-                      }
+                      onChange={(e) => setGeneral('thousandCharMarkerStep', Number(e.target.value))}
                     >
                       {THOUSAND_CHAR_MARKER_STEP_OPTIONS.map((value) => (
                         <option key={value} value={value}>

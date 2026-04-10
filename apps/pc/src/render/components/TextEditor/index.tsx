@@ -411,7 +411,9 @@ function createThousandCharMarkerExtension(
   return StateField.define<DecorationSet>({
     create: (state) => buildThousandCharDecorationSet(state, milestoneStep),
     update: (deco, tr) =>
-      tr.docChanged ? buildThousandCharDecorationSet(tr.state, milestoneStep) : deco.map(tr.changes),
+      tr.docChanged
+        ? buildThousandCharDecorationSet(tr.state, milestoneStep)
+        : deco.map(tr.changes),
     provide: (field) => EditorView.decorations.from(field),
   });
 }
@@ -688,7 +690,11 @@ const TextEditor: React.FC<TextEditorProps> = ({
           appliedLineMarkerField,
           activeLineCompartment.current.of(createActiveLineExtensions(showLineNumbers)),
           thousandCharMarkerCompartment.current.of(
-            createThousandCharMarkerExtension(showThousandCharMarkers, focusMode, thousandCharMarkerStep)
+            createThousandCharMarkerExtension(
+              showThousandCharMarkers,
+              focusMode,
+              thousandCharMarkerStep
+            )
           ),
           editorRuntime.highlightSelectionMatches(),
           editorRuntime.history(),
@@ -837,7 +843,11 @@ const TextEditor: React.FC<TextEditorProps> = ({
         ),
         activeLineCompartment.current.reconfigure(createActiveLineExtensions(showLineNumbers)),
         thousandCharMarkerCompartment.current.reconfigure(
-          createThousandCharMarkerExtension(showThousandCharMarkers, focusMode, thousandCharMarkerStep)
+          createThousandCharMarkerExtension(
+            showThousandCharMarkers,
+            focusMode,
+            thousandCharMarkerStep
+          )
         ),
       ],
     });

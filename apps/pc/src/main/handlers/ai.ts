@@ -67,7 +67,9 @@ function normalizePersistedAISettings(rawSettings: string | null | undefined): P
   const hasStoredCredential = Boolean(mergedAi.apiKey?.trim());
   return {
     ...mergedAi,
-    enabled: enabledExplicitlySet ? Boolean(mergedAi.enabled) : Boolean(mergedAi.enabled) || hasStoredCredential,
+    enabled: enabledExplicitlySet
+      ? Boolean(mergedAi.enabled)
+      : Boolean(mergedAi.enabled) || hasStoredCredential,
     enabledExplicitlySet,
   };
 }

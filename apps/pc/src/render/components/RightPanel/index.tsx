@@ -52,7 +52,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
     [scopedCharacterGenerationStatus]
   );
   const characterProgressPercent =
-    scopedCharacterGenerationStatus?.state === 'running' && scopedCharacterGenerationStatus.totalSteps > 0
+    scopedCharacterGenerationStatus?.state === 'running' &&
+    scopedCharacterGenerationStatus.totalSteps > 0
       ? Math.max(
           6,
           Math.min(

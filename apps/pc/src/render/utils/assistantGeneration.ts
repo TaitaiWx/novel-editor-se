@@ -22,7 +22,13 @@ export interface AssistantArtifactGenerationStatus {
 type ParsedAssistantArtifactGenerationStatus = Partial<AssistantArtifactGenerationStatus>;
 type AssistantArtifactGenerationMetricsShape = Pick<
   AssistantArtifactGenerationStatus,
-  'state' | 'totalSteps' | 'completedSteps' | 'resultCount' | 'libraryCount' | 'createdCount' | 'updatedCount'
+  | 'state'
+  | 'totalSteps'
+  | 'completedSteps'
+  | 'resultCount'
+  | 'libraryCount'
+  | 'createdCount'
+  | 'updatedCount'
 >;
 
 const VALID_STATES = new Set<AssistantGenerationState>(['running', 'success', 'empty', 'error']);
@@ -64,7 +70,10 @@ export function parseAssistantArtifactGenerationStatus(
     }
 
     const totalSteps = normalizeNonNegativeInt(parsed.totalSteps);
-    const completedSteps = Math.min(normalizeNonNegativeInt(parsed.completedSteps), totalSteps || 0);
+    const completedSteps = Math.min(
+      normalizeNonNegativeInt(parsed.completedSteps),
+      totalSteps || 0
+    );
 
     return {
       artifact: parsed.artifact as AssistantArtifactKind,
