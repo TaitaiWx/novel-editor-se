@@ -171,6 +171,12 @@ interface AssistantScopedMaterial {
   relatedChapter?: string;
 }
 
+interface KnowledgeExportOptions {
+  includeCharacters: boolean;
+  includeLore: boolean;
+  includeMaterials: boolean;
+}
+
 function findNodeInTree(nodes: FileNode[], path: string): FileNode | null {
   for (const node of nodes) {
     if (node.path === path) return node;
@@ -773,6 +779,12 @@ const App: React.FC = () => {
     AssistantScopedMaterial[]
   >([]);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showKnowledgeExportDialog, setShowKnowledgeExportDialog] = useState(false);
+  const [knowledgeExportOptions, setKnowledgeExportOptions] = useState<KnowledgeExportOptions>({
+    includeCharacters: true,
+    includeLore: true,
+    includeMaterials: true,
+  });
   const [editorReloadToken, setEditorReloadToken] = useState(0);
   const [fixState, dispatchFixCommand] = useReducer(reduceFixSession, initialFixSessionState);
   const [dbReady, setDbReady] = useState(false);
@@ -2595,6 +2607,44 @@ const App: React.FC = () => {
     }
   }, [toast]);
 
+  // 导出角色卡、设定与资料：数据源直接来自 SQLite，避免依赖组件临时状态。
+  const handleExportKnowledgeText = useCallback(
+    async (options: KnowledgeExportOptions) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) return;
+      const folder = folderPathRef.current;
+      if (!folder) {
+        toast.error('请先打开一个项目文件夹');
+        return;
+      }
+      if (!options.includeCharacters && !options.includeLore && !options.includeMaterials) {
+        toast.warning('请至少勾选一种导出内容（角色/设定/资料）');
+        return;
+      }
+      try {
+        const filePath = (await ipc.invoke('db-export-knowledge-text', folder, options)) as
+          | string
+          | null;
+        if (!filePath) return;
+        toast.success(`角色卡、设定与资料已导出: ${filePath}`);
+      } catch (error) {
+        toast.error(
+          `导出角色卡、设定与资料失败: ${error instanceof Error ? error.message : '未知错误'}`
+        );
+      }
+    },
+    [toast]
+  );
+
+  const handleOpenKnowledgeExportDialog = useCallback(() => {
+    setShowKnowledgeExportDialog(true);
+  }, []);
+
+  const handleConfirmKnowledgeExport = useCallback(async () => {
+    await handleExportKnowledgeText(knowledgeExportOptions);
+    setShowKnowledgeExportDialog(false);
+  }, [handleExportKnowledgeText, knowledgeExportOptions]);
+
   // 监听原生菜单的导出项目快捷键
   React.useEffect(() => {
     const ipc = window.electron?.ipcRenderer;
@@ -4166,7 +4216,8 @@ const App: React.FC = () => {
   const handleGenerateScopedMaterials = useCallback(
     async (scope: AssistantScopeTarget) => {
       const ipc = window.electron?.ipcRenderer;
-      if (!ipc) return;
+      const folder = folderPathRef.current;
+      if (!ipc || !folder) return;
       const persistedSettings = await ensurePersistedAiReady();
       if (!persistedSettings) return;
 
@@ -4188,6 +4239,65 @@ const App: React.FC = () => {
           relatedChapter: item.relatedChapter || '',
         }));
         await persistScopedAssistantArtifacts(scope, { materials: nextMaterials });
+
+        // 资料上下文不仅保存在 SQLite settings，也同步落盘到资料目录，保证在文件树可见。
+        if (nextMaterials.length > 0) {
+          const defaultMaterialRoot =
+            filesRef.current.find(
+              (node) => node.type === 'directory' && isMaterialLikeName(node.name)
+            )?.path ??
+            (
+              (await ipc.invoke('create-directory', folder, '资料')) as {
+                success: boolean;
+                dirPath: string;
+              }
+            ).dirPath;
+          const scopeDirName =
+            scope.kind === 'project'
+              ? '项目上下文'
+              : scope.kind === 'volume'
+                ? '卷上下文'
+                : '章上下文';
+          const scopeRootPath = `${defaultMaterialRoot.replace(/[\\/]+$/, '')}/${scopeDirName}`;
+          const existingScopeRoot = findNodeInTree(filesRef.current, scopeRootPath);
+          const scopedMaterialRoot =
+            existingScopeRoot?.type === 'directory'
+              ? existingScopeRoot.path
+              : (
+                  (await ipc.invoke('create-directory', defaultMaterialRoot, scopeDirName)) as {
+                    success: boolean;
+                    dirPath: string;
+                  }
+                ).dirPath;
+
+          const existingNames = new Set(
+            ((findNodeInTree(filesRef.current, scopedMaterialRoot)?.children || []) as FileNode[])
+              .filter((node): node is FileNode & { type: 'file' } => node.type === 'file')
+              .map((node) => node.name)
+          );
+
+          for (const draft of nextMaterials) {
+            const fileName = buildUniqueMarkdownName(draft.title, existingNames);
+            const created = (await ipc.invoke('create-file', scopedMaterialRoot, fileName)) as {
+              success: boolean;
+              filePath: string;
+            };
+            const body = [
+              `# ${draft.title}`,
+              '',
+              `类型：${draft.kind}`,
+              draft.relatedChapter ? `关联章节：${draft.relatedChapter}` : '',
+              '',
+              draft.summary,
+            ]
+              .filter(Boolean)
+              .join('\n');
+            await ipc.invoke('write-file', created.filePath, body);
+          }
+
+          await refreshCurrentFolder();
+        }
+
         if (
           currentAssistantScope &&
           currentAssistantScope.kind === scope.kind &&
@@ -4195,7 +4305,9 @@ const App: React.FC = () => {
         ) {
           setAssistantScopedMaterials(nextMaterials);
         }
-        toast.success(`已为${scope.label}生成资料上下文 ${nextMaterials.length} 项`);
+        toast.success(
+          `已为${scope.label}生成资料上下文 ${nextMaterials.length} 项，并同步到资料目录`
+        );
       } catch (error) {
         toast.error(
           `AI 生成资料上下文失败: ${error instanceof Error ? error.message : '未知错误'}`
@@ -4206,6 +4318,7 @@ const App: React.FC = () => {
       currentAssistantScope,
       ensurePersistedAiReady,
       persistScopedAssistantArtifacts,
+      refreshCurrentFolder,
       resolveScopeTargetContext,
       toast,
     ]
@@ -4297,6 +4410,7 @@ const App: React.FC = () => {
         menuItem('', () => {}, { separator: true }),
         menuItem('新建人物', () => void handleCreateCharacter()),
         menuItem('新建设定', () => void handleCreateLoreEntry()),
+        menuItem('导出角色卡、设定与资料', () => void handleOpenKnowledgeExportDialog()),
         menuItem('', () => {}, { separator: true }),
         menuItem('新建资料目录', () => void handleCreateMaterialDirectory()),
         menuItem('导入 Word / Excel 文稿', () => void handleImportFile?.(), {
@@ -4356,6 +4470,7 @@ const App: React.FC = () => {
             menuItem('查看详情', handleOpenCharacters),
             menuItem('', () => {}, { separator: true }),
             menuItem('新建人物', () => void handleCreateCharacter()),
+            menuItem('导出角色卡、设定与资料', () => void handleOpenKnowledgeExportDialog()),
             menuItem('清空人物', () => void handleClearCharacters(), { danger: true }),
           ];
         case 'lore-root':
@@ -4363,6 +4478,7 @@ const App: React.FC = () => {
             menuItem('查看详情', handleOpenLore),
             menuItem('', () => {}, { separator: true }),
             menuItem('新建设定', () => void handleCreateLoreEntry()),
+            menuItem('导出角色卡、设定与资料', () => void handleOpenKnowledgeExportDialog()),
             menuItem('清空设定', () => void handleClearLoreEntries(), { danger: true }),
           ];
         case 'materials-root':
@@ -4462,6 +4578,7 @@ const App: React.FC = () => {
     handleDeleteFile,
     handleDeleteLoreNode,
     handleDeleteVolumeNode,
+    handleOpenKnowledgeExportDialog,
     handleGenerateCharacters,
     handleGenerateLoreEntries,
     handleGenerateMaterials,
@@ -5105,6 +5222,73 @@ const App: React.FC = () => {
           onSettingsChange={handleAppSettingsChange}
           onOpenShortcuts={() => setShowShortcuts(true)}
         />
+
+        {showKnowledgeExportDialog && (
+          <div
+            className={styles.exportPreviewOverlay}
+            onClick={() => setShowKnowledgeExportDialog(false)}
+          >
+            <div className={styles.exportPreviewModal} onClick={(event) => event.stopPropagation()}>
+              <h3 className={styles.exportPreviewTitle}>导出预览</h3>
+              <p className={styles.exportPreviewDescription}>请选择要导出的内容：</p>
+              <label className={styles.exportPreviewOption}>
+                <input
+                  type="checkbox"
+                  checked={knowledgeExportOptions.includeCharacters}
+                  onChange={(event) =>
+                    setKnowledgeExportOptions((prev) => ({
+                      ...prev,
+                      includeCharacters: event.target.checked,
+                    }))
+                  }
+                />
+                <span>角色卡</span>
+              </label>
+              <label className={styles.exportPreviewOption}>
+                <input
+                  type="checkbox"
+                  checked={knowledgeExportOptions.includeLore}
+                  onChange={(event) =>
+                    setKnowledgeExportOptions((prev) => ({
+                      ...prev,
+                      includeLore: event.target.checked,
+                    }))
+                  }
+                />
+                <span>设定资料</span>
+              </label>
+              <label className={styles.exportPreviewOption}>
+                <input
+                  type="checkbox"
+                  checked={knowledgeExportOptions.includeMaterials}
+                  onChange={(event) =>
+                    setKnowledgeExportOptions((prev) => ({
+                      ...prev,
+                      includeMaterials: event.target.checked,
+                    }))
+                  }
+                />
+                <span>资料卡</span>
+              </label>
+              <div className={styles.exportPreviewActions}>
+                <button
+                  type="button"
+                  className={styles.exportPreviewCancel}
+                  onClick={() => setShowKnowledgeExportDialog(false)}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className={styles.exportPreviewConfirm}
+                  onClick={() => void handleConfirmKnowledgeExport()}
+                >
+                  开始导出
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <AIAssistantDialog
           visible={showAIAssistant}

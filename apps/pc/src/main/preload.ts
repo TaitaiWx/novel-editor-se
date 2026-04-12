@@ -137,6 +137,7 @@ contextBridge.exposeInMainWorld('electron', {
         'db-export',
         'db-import',
         'db-export-to-file',
+        'db-export-knowledge-text',
         'db-import-from-file',
         // SQLite 版本快照
         'db-version-create',

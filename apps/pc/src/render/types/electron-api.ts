@@ -335,6 +335,11 @@ export interface ElectronAPI {
       content: string,
       options?: { title?: string; author?: string }
     ): Promise<{ success: boolean; filePath?: string; error?: string }>;
+    invoke(
+      channel: 'db-export-knowledge-text',
+      folderPath: string,
+      options?: { includeCharacters?: boolean; includeLore?: boolean; includeMaterials?: boolean }
+    ): Promise<string | null>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
     on(channel: string, listener: (...args: any[]) => void): (() => void) | void;
     removeListener(channel: string, listener: (...args: any[]) => void): void;
