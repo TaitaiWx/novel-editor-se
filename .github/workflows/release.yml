@@ -139,6 +139,59 @@ jobs:
         run: node ./scripts/run-packaged-smoke-test.mjs
         working-directory: apps/pc
 
+      - name: Windows shortcut regression check
+        if: runner.os == 'Windows' && matrix.arch != 'arm64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # 升级后必须保留桌面与开始菜单快捷方式。
+          $desktopShortcut = Join-Path $env:USERPROFILE 'Desktop\Novel Editor.lnk'
+          $startMenuShortcut = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Novel Editor.lnk'
+
+          $shortcutPaths = @($desktopShortcut, $startMenuShortcut)
+          $shell = New-Object -ComObject WScript.Shell
+
+          foreach ($shortcutPath in $shortcutPaths) {
+            if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
+              throw "未找到快捷方式: $shortcutPath"
+            }
+
+            $shortcut = $shell.CreateShortcut($shortcutPath)
+            $targetPath = $shortcut.TargetPath
+            if ([string]::IsNullOrWhiteSpace($targetPath)) {
+              throw "快捷方式目标为空: $shortcutPath"
+            }
+            if (-not (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+              throw "快捷方式目标不存在: $targetPath"
+            }
+            if (-not $targetPath.ToLowerInvariant().EndsWith('.exe')) {
+              throw "快捷方式目标不是可执行文件: $targetPath"
+            }
+          }
+
+          # 通过快捷方式目标再启动一次，验证目标可执行。
+          $targetExe = ($shell.CreateShortcut($desktopShortcut)).TargetPath
+          $smokeDataDir = Join-Path $env:RUNNER_TEMP ('shortcut-smoke-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Force -Path $smokeDataDir | Out-Null
+
+          $env:NOVEL_EDITOR_SMOKE_TEST = '1'
+          $env:NOVEL_EDITOR_DISABLE_AUTO_UPDATER = '1'
+          $env:NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR = $smokeDataDir
+
+          $proc = Start-Process -FilePath $targetExe -ArgumentList '--smoke-test' -PassThru
+          Start-Sleep -Seconds 5
+
+          if ($proc.HasExited -and $proc.ExitCode -ne 0) {
+            throw "快捷方式目标启动失败，exitCode=$($proc.ExitCode)"
+          }
+
+          if (-not $proc.HasExited) {
+            Stop-Process -Id $proc.Id -Force
+          }
+
+          Remove-Item -LiteralPath $smokeDataDir -Recurse -Force -ErrorAction SilentlyContinue
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:

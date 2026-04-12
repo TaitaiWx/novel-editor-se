@@ -6,6 +6,7 @@ import { registerAllShortcuts } from './shortcuts/registerAllShortcuts';
 import { unregisterAllShortcuts } from './shortcuts/unregisterAllShortcuts';
 import { setupAutoUpdater } from './auto-updater';
 import { applySmokeTestPaths, isAutoUpdaterDisabled } from './launch-mode';
+import { ensureWindowsShortcuts } from './windows-shortcut';
 
 applySmokeTestPaths();
 
@@ -20,6 +21,10 @@ if (process.platform === 'darwin') {
 
 // 应用准备就绪时创建窗口
 app.whenReady().then(() => {
+  void ensureWindowsShortcuts().catch((error) => {
+    console.warn('快捷方式自修复失败（不影响应用启动）:', error);
+  });
+
   // 设置 IPC 通信
   setupIPC();
 

@@ -326,6 +326,37 @@ function parseMaterialGenerationResult(raw: string): GeneratedMaterialDraft[] {
   }
 }
 
+function selectChunksForAiAnalysis(chunks: string[], maxChunks = 12): string[] {
+  if (chunks.length <= maxChunks) return chunks;
+
+  // 采用“全局均匀采样 + 尾部保留”的策略，避免只取前几段导致最新内容漏检。
+  const tailCount = Math.min(4, maxChunks);
+  const headCount = Math.max(0, maxChunks - tailCount);
+  const headEndExclusive = Math.max(0, chunks.length - tailCount);
+  const selectedIndexes = new Set<number>();
+
+  if (headCount > 0 && headEndExclusive > 0) {
+    if (headCount === 1) {
+      selectedIndexes.add(0);
+    } else {
+      for (let index = 0; index < headCount; index += 1) {
+        const ratio = index / (headCount - 1);
+        const sampledIndex = Math.floor(ratio * (headEndExclusive - 1));
+        selectedIndexes.add(sampledIndex);
+      }
+    }
+  }
+
+  for (let index = headEndExclusive; index < chunks.length; index += 1) {
+    selectedIndexes.add(index);
+  }
+
+  return Array.from(selectedIndexes)
+    .sort((left, right) => left - right)
+    .slice(0, maxChunks)
+    .map((index) => chunks[index]);
+}
+
 function getParentDirectory(path: string): string | null {
   const normalized = path.replace(/\\/g, '/');
   const lastSlash = normalized.lastIndexOf('/');
@@ -3493,7 +3524,7 @@ const App: React.FC = () => {
         const { content, label } = await resolveAIGenerationContext(scope);
         const contextTokens = persistedSettings.ai.contextTokens || 128000;
         const approxChunkChars = Math.max(4000, Math.min(12000, Math.floor(contextTokens * 0.08)));
-        const chunks = splitTextIntoChunks(content, approxChunkChars).slice(0, 12);
+        const chunks = selectChunksForAiAnalysis(splitTextIntoChunks(content, approxChunkChars));
         const loreEntries = await loadLoreEntriesByFolder(folder);
         const chunkResults = [];
 
@@ -3805,7 +3836,7 @@ const App: React.FC = () => {
         const novelId = await getCurrentNovelId();
         const contextTokens = persistedSettings.ai.contextTokens || 128000;
         const approxChunkChars = Math.max(4000, Math.min(12000, Math.floor(contextTokens * 0.08)));
-        const chunks = splitTextIntoChunks(content, approxChunkChars).slice(0, 12);
+        const chunks = selectChunksForAiAnalysis(splitTextIntoChunks(content, approxChunkChars));
         const loreEntries = await loadLoreEntriesByFolder(folder);
         const chunkResults: CharacterGraphAIResult[] = [];
         const totalSteps = chunks.length + 2;
@@ -4048,7 +4079,8 @@ const App: React.FC = () => {
   const handleGenerateScopedLore = useCallback(
     async (scope: AssistantScopeTarget) => {
       const ipc = window.electron?.ipcRenderer;
-      if (!ipc) return;
+      const folder = folderPathRef.current;
+      if (!ipc || !folder) return;
       const persistedSettings = await ensurePersistedAiReady();
       if (!persistedSettings) return;
 
@@ -4069,6 +4101,42 @@ const App: React.FC = () => {
           summary: item.summary,
         }));
         await persistScopedAssistantArtifacts(scope, { lore: nextLore });
+
+        const existingEntries = await loadLoreEntriesByFolder(folder);
+        const existingByKey = new Map(
+          existingEntries.map((item) => [buildLoreDedupKey(item), item])
+        );
+        let createdCount = 0;
+        let updatedCount = 0;
+
+        for (const item of nextLore) {
+          const matched = existingByKey.get(buildLoreDedupKey(item));
+          if (matched) {
+            if (!matched.summary.trim() && item.summary.trim()) {
+              await ipc.invoke('db-world-setting-update', matched.id, {
+                content: item.summary,
+                tags: JSON.stringify([]),
+              });
+              updatedCount += 1;
+            }
+            continue;
+          }
+          await ipc.invoke(
+            'db-world-setting-create-by-folder',
+            folder,
+            item.category,
+            item.title,
+            item.summary,
+            JSON.stringify([])
+          );
+          createdCount += 1;
+        }
+
+        const syncedEntries = await loadLoreEntriesByFolder(folder);
+        setWorkspaceLoreEntries(syncedEntries);
+        bumpWorkspaceLoreVersion();
+        // 设定已写入 SQLite 后，自动切到设定页，避免“生成成功但入口不明确”。
+        openFileInTab(WORKSPACE_TAB_LORE);
         if (
           currentAssistantScope &&
           currentAssistantScope.kind === scope.kind &&
@@ -4076,7 +4144,9 @@ const App: React.FC = () => {
         ) {
           setAssistantScopedLoreEntries(nextLore);
         }
-        toast.success(`已为${scope.label}生成设定上下文 ${nextLore.length} 项`);
+        toast.success(
+          `已为${scope.label}生成设定上下文 ${nextLore.length} 项，并同步设定库（新增 ${createdCount}，补全 ${updatedCount}）`
+        );
       } catch (error) {
         toast.error(
           `AI 生成设定上下文失败: ${error instanceof Error ? error.message : '未知错误'}`
@@ -4086,6 +4156,7 @@ const App: React.FC = () => {
     [
       currentAssistantScope,
       ensurePersistedAiReady,
+      openFileInTab,
       persistScopedAssistantArtifacts,
       resolveScopeTargetContext,
       toast,
