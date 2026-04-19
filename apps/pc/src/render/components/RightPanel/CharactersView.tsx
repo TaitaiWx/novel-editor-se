@@ -6,15 +6,18 @@ import type {
   CharacterRelation,
   RelationTone,
   CharacterCamp,
+  CharacterCategory,
   PersistedAISettings,
   CharacterGraphAIResult,
 } from './types';
 import { SETTINGS_STORAGE_KEY, RELATION_TONE_LABELS } from './constants';
 import {
+  CHARACTER_CATEGORY_LABELS,
   DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
   DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
   createRelationStorageKey,
   createGraphLayoutStorageKey,
+  inferCharacterCategoryFromRole,
   normalizePersonName,
   splitTextIntoChunks,
   normalizeRelationTone,
@@ -40,6 +43,7 @@ export const CharactersView: React.FC<{
   onCharactersChange?: (characters: Character[]) => void;
 }> = React.memo(
   ({ folderPath, content, initialSelectedCharacterId = null, onCharactersChange }) => {
+    type CharacterCategoryFilter = CharacterCategory | 'all';
     const debouncedContent = useDebounce(content, 300);
     const [characters, setCharacters] = useState<Character[]>([]);
     const [relations, setRelations] = useState<CharacterRelation[]>([]);
@@ -48,6 +52,7 @@ export const CharactersView: React.FC<{
     const [adding, setAdding] = useState(false);
     const [newName, setNewName] = useState('');
     const [newRole, setNewRole] = useState('');
+    const [newCategory, setNewCategory] = useState<CharacterCategory>('major');
     const [newDesc, setNewDesc] = useState('');
     const [newAvatar, setNewAvatar] = useState('');
     const [newHighlightColor, setNewHighlightColor] = useState(DEFAULT_CHARACTER_HIGHLIGHT_COLOR);
@@ -66,6 +71,11 @@ export const CharactersView: React.FC<{
     const [graphLayout, setGraphLayout] = useState<Record<number, { x: number; y: number }>>({});
     const [aiGenerating, setAiGenerating] = useState(false);
     const [aiStatus, setAiStatus] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState<CharacterCategoryFilter>('all');
+    const [characterSearch, setCharacterSearch] = useState('');
+    const [bulkUpdatingCategory, setBulkUpdatingCategory] = useState<CharacterCategory | null>(
+      null
+    );
     const dragCounter = useRef(0);
     const graphDraggingRef = useRef<{
       id: number;
@@ -237,15 +247,20 @@ export const CharactersView: React.FC<{
         newName.trim(),
         newRole.trim(),
         newDesc.trim(),
-        stringifyCharacterAttributes({
-          avatar: newAvatar || undefined,
-          highlightColor: newHighlightColor,
-          highlightFirstMentionOnly: newHighlightFirstMentionOnly,
-        })
+        stringifyCharacterAttributes(
+          {
+            avatar: newAvatar || undefined,
+            category: newCategory,
+            highlightColor: newHighlightColor,
+            highlightFirstMentionOnly: newHighlightFirstMentionOnly,
+          },
+          newRole.trim()
+        )
       );
       await loadCharactersFromDb(novelId);
       setNewName('');
       setNewRole('');
+      setNewCategory('major');
       setNewDesc('');
       setNewAvatar('');
       setNewHighlightColor(DEFAULT_CHARACTER_HIGHLIGHT_COLOR);
@@ -255,6 +270,7 @@ export const CharactersView: React.FC<{
       loadCharactersFromDb,
       newDesc,
       newAvatar,
+      newCategory,
       newHighlightColor,
       newHighlightFirstMentionOnly,
       newName,
@@ -357,10 +373,14 @@ export const CharactersView: React.FC<{
       setAdding((prev) => !prev);
     }, []);
 
-    const handleUpdateCharacterHighlight = useCallback(
+    const handleUpdateCharacterAttributes = useCallback(
       async (
         characterId: number,
-        patch: { highlightColor?: string; highlightFirstMentionOnly?: boolean }
+        patch: {
+          category?: CharacterCategory;
+          highlightColor?: string;
+          highlightFirstMentionOnly?: boolean;
+        }
       ) => {
         const ipc = window.electron?.ipcRenderer;
         const target = characters.find((item) => item.id === characterId);
@@ -369,15 +389,19 @@ export const CharactersView: React.FC<{
           name: target.name,
           role: target.role,
           description: target.description,
-          attributes: stringifyCharacterAttributes({
-            avatar: target.avatar,
-            aliases: target.aliases,
-            highlightColor: patch.highlightColor ?? target.highlightColor,
-            highlightFirstMentionOnly:
-              typeof patch.highlightFirstMentionOnly === 'boolean'
-                ? patch.highlightFirstMentionOnly
-                : target.highlightFirstMentionOnly,
-          }),
+          attributes: stringifyCharacterAttributes(
+            {
+              avatar: target.avatar,
+              aliases: target.aliases,
+              category: patch.category ?? target.category,
+              highlightColor: patch.highlightColor ?? target.highlightColor,
+              highlightFirstMentionOnly:
+                typeof patch.highlightFirstMentionOnly === 'boolean'
+                  ? patch.highlightFirstMentionOnly
+                  : target.highlightFirstMentionOnly,
+            },
+            target.role
+          ),
         });
         if (novelId !== null) {
           await loadCharactersFromDb(novelId);
@@ -570,7 +594,7 @@ export const CharactersView: React.FC<{
         const existingByName = new Map<string, (typeof existingRows)[number]>();
         for (const row of existingRows) {
           existingByName.set(normalizePersonName(row.name), row);
-          const attrs = parseCharacterAttributes(row.attributes);
+          const attrs = parseCharacterAttributes(row.attributes, row.role);
           (attrs.aliases || []).forEach((alias) =>
             existingByName.set(normalizePersonName(alias), row)
           );
@@ -587,11 +611,14 @@ export const CharactersView: React.FC<{
           );
 
           if (matched) {
-            const prevAttrs = parseCharacterAttributes(matched.attributes);
-            const nextAttributes = stringifyCharacterAttributes({
-              ...prevAttrs,
-              aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
-            });
+            const prevAttrs = parseCharacterAttributes(matched.attributes, nextRole);
+            const nextAttributes = stringifyCharacterAttributes(
+              {
+                ...prevAttrs,
+                aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
+              },
+              nextRole
+            );
             await ipc.invoke('db-character-update', matched.id, {
               name: matched.name,
               role: nextRole,
@@ -607,11 +634,15 @@ export const CharactersView: React.FC<{
               character.name.trim(),
               nextRole,
               nextDescription,
-              stringifyCharacterAttributes({
-                aliases: nextAliases,
-                highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
-                highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
-              })
+              stringifyCharacterAttributes(
+                {
+                  aliases: nextAliases,
+                  category: inferCharacterCategoryFromRole(nextRole),
+                  highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+                  highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+                },
+                nextRole
+              )
             )) as { lastInsertRowid: number | bigint };
             const createdId = Number(created.lastInsertRowid);
             nameToId.set(normalized, createdId);
@@ -691,6 +722,67 @@ export const CharactersView: React.FC<{
       return Array.from(stats.entries()).map(([stage, count]) => ({ stage, count }));
     }, [relations]);
 
+    const filteredCharacters = useMemo(() => {
+      const normalizedSearch = characterSearch.trim().toLowerCase();
+      return characters.filter((character) => {
+        if (categoryFilter !== 'all' && character.category !== categoryFilter) {
+          return false;
+        }
+        if (!normalizedSearch) {
+          return true;
+        }
+        return `${character.name} ${character.role} ${character.description} ${(character.aliases || []).join(' ')}`
+          .toLowerCase()
+          .includes(normalizedSearch);
+      });
+    }, [categoryFilter, characterSearch, characters]);
+
+    const categorizedCharacterEntries = useMemo(() => {
+      const grouped: Record<CharacterCategory, Array<{ character: Character; index: number }>> = {
+        major: [],
+        secondary: [],
+      };
+      filteredCharacters.forEach((character) => {
+        const index = characters.findIndex((item) => item.id === character.id);
+        if (index < 0) return;
+        grouped[character.category].push({ character, index });
+      });
+      return grouped;
+    }, [characters, filteredCharacters]);
+
+    const handleBulkApplyCategory = useCallback(
+      async (nextCategory: CharacterCategory) => {
+        const ipc = window.electron?.ipcRenderer;
+        if (!ipc || novelId === null || filteredCharacters.length === 0) return;
+        setBulkUpdatingCategory(nextCategory);
+        try {
+          await Promise.all(
+            filteredCharacters.map((character) =>
+              ipc.invoke('db-character-update', character.id, {
+                name: character.name,
+                role: character.role,
+                description: character.description,
+                attributes: stringifyCharacterAttributes(
+                  {
+                    avatar: character.avatar,
+                    aliases: character.aliases,
+                    category: nextCategory,
+                    highlightColor: character.highlightColor,
+                    highlightFirstMentionOnly: character.highlightFirstMentionOnly,
+                  },
+                  character.role
+                ),
+              })
+            )
+          );
+          await loadCharactersFromDb(novelId);
+        } finally {
+          setBulkUpdatingCategory(null);
+        }
+      },
+      [filteredCharacters, loadCharactersFromDb, novelId]
+    );
+
     const cardsView = (
       <div className={styles.charactersList}>
         <div className={styles.sectionHeader}>
@@ -715,10 +807,55 @@ export const CharactersView: React.FC<{
           </div>
           <div className={styles.metricRow}>
             <span className={styles.metricChip}>人物 {characters.length}</span>
+            <span className={styles.metricChip}>筛选结果 {filteredCharacters.length}</span>
             <span className={styles.metricChip}>关系 {links.length}</span>
           </div>
           <div className={styles.characterHeroStatus}>
             {aiStatus || '可以从正文直接抽取角色与关系'}
+          </div>
+        </div>
+        <div className={styles.characterToolbar}>
+          <input
+            value={characterSearch}
+            onChange={(event) => setCharacterSearch(event.target.value)}
+            placeholder="快速筛选人物、定位、描述或别名"
+            className={styles.formInput}
+          />
+          <div className={styles.filterChipRow}>
+            {(
+              [
+                ['all', '全部'],
+                ['major', '主要角色'],
+                ['secondary', '次要角色'],
+              ] as Array<[CharacterCategoryFilter, string]>
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`${styles.filterChip} ${categoryFilter === value ? styles.filterChipActive : ''}`}
+                onClick={() => setCategoryFilter(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className={styles.bulkActionRow}>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              disabled={filteredCharacters.length === 0 || bulkUpdatingCategory !== null}
+              onClick={() => void handleBulkApplyCategory('major')}
+            >
+              {bulkUpdatingCategory === 'major' ? '批量处理中...' : '批量设为主要角色'}
+            </button>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              disabled={filteredCharacters.length === 0 || bulkUpdatingCategory !== null}
+              onClick={() => void handleBulkApplyCategory('secondary')}
+            >
+              {bulkUpdatingCategory === 'secondary' ? '批量处理中...' : '批量设为次要角色'}
+            </button>
           </div>
         </div>
         {adding && (
@@ -755,10 +892,25 @@ export const CharactersView: React.FC<{
             <input
               placeholder="角色定位 (主角/配角/反派...)"
               value={newRole}
-              onChange={(e) => setNewRole(e.target.value)}
+              onChange={(e) => {
+                const nextRole = e.target.value;
+                setNewRole(nextRole);
+                setNewCategory(inferCharacterCategoryFromRole(nextRole));
+              }}
               onKeyDown={handleKeyDown}
               className={styles.formInput}
             />
+            <label className={styles.categoryField}>
+              <span className={styles.highlightFieldLabel}>人物分类</span>
+              <select
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value as CharacterCategory)}
+                className={styles.formInput}
+              >
+                <option value="major">主要角色</option>
+                <option value="secondary">次要角色</option>
+              </select>
+            </label>
             <textarea
               placeholder="角色描述、设定..."
               value={newDesc}
@@ -797,23 +949,42 @@ export const CharactersView: React.FC<{
             <span className={styles.hintSub}>可以手动创建，也可以直接让 AI 从正文生成图谱</span>
           </div>
         )}
+        {characters.length > 0 && filteredCharacters.length === 0 && !adding && (
+          <div className={styles.emptyHint}>
+            当前筛选条件下没有角色
+            <br />
+            <span className={styles.hintSub}>可以切换分类筛选，或清空搜索关键词</span>
+          </div>
+        )}
         <div className={styles.cardsContainer}>
-          {characters.map((c, i) => (
-            <CharacterCard
-              key={c.id}
-              character={c}
-              index={i}
-              dragIndex={dragIndex}
-              dropIndex={dropIndex}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onDelete={handleDelete}
-            />
-          ))}
+          {(Object.keys(categorizedCharacterEntries) as CharacterCategory[]).map((category) => {
+            const entries = categorizedCharacterEntries[category];
+            if (entries.length === 0) return null;
+            return (
+              <div key={category} className={styles.characterCategoryGroup}>
+                <div className={styles.characterCategoryHeader}>
+                  <span>{CHARACTER_CATEGORY_LABELS[category]}</span>
+                  <span className={styles.metricChip}>{entries.length}</span>
+                </div>
+                {entries.map(({ character, index }) => (
+                  <CharacterCard
+                    key={character.id}
+                    character={character}
+                    index={index}
+                    dragIndex={dragIndex}
+                    dropIndex={dropIndex}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={handleDragOver}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
+            );
+          })}
           {dropIndex !== null && dragIndex !== null && dropIndex >= characters.length && (
             <div className={styles.dropIndicator} />
           )}
@@ -875,6 +1046,9 @@ export const CharactersView: React.FC<{
                 </p>
                 <div className={styles.workspaceMetaRow}>
                   <span className={styles.workspaceChip}>
+                    分类 {CHARACTER_CATEGORY_LABELS[focusedCharacter.category]}
+                  </span>
+                  <span className={styles.workspaceChip}>
                     角色定位 {focusedCharacter.role || '未填写'}
                   </span>
                   <span className={styles.workspaceChip}>阵营 {focusedCamp || 'support'}</span>
@@ -889,6 +1063,21 @@ export const CharactersView: React.FC<{
                   <span className={styles.workspaceListHint}>控制角色名在正文中的强调方式</span>
                 </div>
                 <div className={styles.highlightConfigPanel}>
+                  <label className={styles.categoryField}>
+                    <span className={styles.highlightFieldLabel}>人物分类</span>
+                    <select
+                      value={focusedCharacter.category}
+                      onChange={(event) =>
+                        void handleUpdateCharacterAttributes(focusedCharacter.id, {
+                          category: event.target.value as CharacterCategory,
+                        })
+                      }
+                      className={styles.formInput}
+                    >
+                      <option value="major">主要角色</option>
+                      <option value="secondary">次要角色</option>
+                    </select>
+                  </label>
                   <label className={styles.highlightColorField}>
                     <span className={styles.highlightFieldLabel}>高亮颜色</span>
                     <div className={styles.highlightColorControl}>
@@ -896,7 +1085,7 @@ export const CharactersView: React.FC<{
                         type="color"
                         value={focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR}
                         onChange={(event) =>
-                          void handleUpdateCharacterHighlight(focusedCharacter.id, {
+                          void handleUpdateCharacterAttributes(focusedCharacter.id, {
                             highlightColor: event.target.value,
                           })
                         }
@@ -914,7 +1103,7 @@ export const CharactersView: React.FC<{
                       type="checkbox"
                       checked={focusedCharacter.highlightFirstMentionOnly !== false}
                       onChange={(event) =>
-                        void handleUpdateCharacterHighlight(focusedCharacter.id, {
+                        void handleUpdateCharacterAttributes(focusedCharacter.id, {
                           highlightFirstMentionOnly: event.target.checked,
                         })
                       }

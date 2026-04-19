@@ -65,6 +65,7 @@ type AssistantScopedMaterialExport = {
 
 type CharacterAttributesPayload = {
   aliases?: string[];
+  category?: 'major' | 'secondary';
 };
 
 function parseCharacterAliases(attributesRaw?: string): string[] {
@@ -78,6 +79,19 @@ function parseCharacterAliases(attributesRaw?: string): string[] {
       .filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+function parseCharacterCategory(attributesRaw?: string, role = ''): 'major' | 'secondary' {
+  const fallback = /主角|主人公|男主|女主|核心|主线/.test(role.trim()) ? 'major' : 'secondary';
+  if (!attributesRaw) return fallback;
+  try {
+    const parsed = JSON.parse(attributesRaw) as CharacterAttributesPayload;
+    return parsed.category === 'major' || parsed.category === 'secondary'
+      ? parsed.category
+      : fallback;
+  } catch {
+    return fallback;
   }
 }
 
@@ -126,9 +140,22 @@ function formatKnowledgeExportMarkdown(payload: {
     if (payload.characters.length === 0) {
       lines.push('（暂无角色）');
     } else {
-      payload.characters.forEach((character, index) => {
+      const orderedCharacters = [...payload.characters].sort((left, right) => {
+        const leftCategory = parseCharacterCategory(left.attributes, left.role);
+        const rightCategory = parseCharacterCategory(right.attributes, right.role);
+        if (leftCategory !== rightCategory) {
+          return leftCategory === 'major' ? -1 : 1;
+        }
+        return left.name.localeCompare(right.name, 'zh-CN');
+      });
+      orderedCharacters.forEach((character, index) => {
         const aliases = parseCharacterAliases(character.attributes);
+        const categoryLabel =
+          parseCharacterCategory(character.attributes, character.role) === 'major'
+            ? '主要角色'
+            : '次要角色';
         lines.push(`### ${index + 1}. ${character.name || '未命名角色'}`);
+        lines.push(`- 分类：${categoryLabel}`);
         lines.push(`- 定位：${character.role || '未填写'}`);
         lines.push(`- 描述：${character.description || '未填写'}`);
         lines.push(`- 别名：${aliases.length > 0 ? aliases.join('、') : '无'}`);

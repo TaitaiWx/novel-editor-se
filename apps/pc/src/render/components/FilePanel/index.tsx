@@ -16,7 +16,7 @@ import Popover from '../Popover';
 import Tooltip from '../Tooltip';
 import type { ContextMenuEvent } from '../FileTree';
 import { FileNode } from '../../types';
-import type { Character, LoreEntry } from '../RightPanel/types';
+import type { Character, LoreEntry, CharacterCategory } from '../RightPanel/types';
 import { formatShortcutLabel, matchShortcutEvent } from '../../utils/appSettings';
 import { isImeComposing } from '../../utils/ime';
 import {
@@ -287,6 +287,10 @@ function getStoryFileMeta(name: string): { label: string; icon: React.ReactNode 
   };
 }
 
+function getCharacterCategoryLabel(category: CharacterCategory): string {
+  return category === 'major' ? '主要角色' : '次要角色';
+}
+
 function findAncestorPaths(
   nodes: FileNode[],
   targetPath: string,
@@ -484,6 +488,21 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
             : true
         ),
       [loreEntries, normalizedQuery]
+    );
+    const groupedCharacters = useMemo(
+      () => [
+        {
+          key: 'major' as const,
+          label: '主要角色',
+          items: filteredCharacters.filter((item) => item.category === 'major'),
+        },
+        {
+          key: 'secondary' as const,
+          label: '次要角色',
+          items: filteredCharacters.filter((item) => item.category === 'secondary'),
+        },
+      ],
+      [filteredCharacters]
     );
     const showCharactersSection =
       normalizedQuery.length === 0 ||
@@ -1168,72 +1187,95 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       )}
                       {!collapsedSections.characters && (
                         <div className={styles.supportNodeChildren}>
-                          {filteredCharacters.map((item) => {
-                            const tabPath = createCharacterWorkspaceTab(item);
-                            return (
-                              <div
-                                key={item.id}
-                                className={`${styles.objectNodeShell} ${
-                                  activeWorkspaceTab === tabPath ? styles.objectNodeShellActive : ''
-                                }`}
-                                style={{ marginLeft: '28px', marginRight: '12px' }}
-                                onContextMenu={(event) =>
-                                  emitObjectContextMenu(event, {
-                                    kind: 'character-item',
-                                    characterId: item.id,
-                                  })
-                                }
-                              >
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  className={styles.objectNode}
-                                  onClick={() => onOpenCharacterNode(item.id)}
-                                  onKeyDown={(event) =>
-                                    handleRowKeyDown(event, () => onOpenCharacterNode(item.id))
-                                  }
-                                >
-                                  <span className={styles.objectNodeMarker}>
-                                    <AiOutlineUser />
-                                  </span>
-                                  <span className={styles.objectNodePrimary}>
-                                    <span className={styles.objectNodeTitle}>{item.name}</span>
-                                    <Tooltip content="修改人物" position="top">
-                                      <button
-                                        type="button"
-                                        className={styles.objectNodeAction}
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          onRenameCharacterNode(item.id);
-                                        }}
-                                        aria-label={`修改人物 ${item.name}`}
-                                        title={`修改人物 ${item.name}`}
+                          {filteredCharacters.length === 0 ? (
+                            <div className={styles.objectEmpty}>当前筛选条件下没有人物</div>
+                          ) : (
+                            groupedCharacters.map((group) => {
+                              if (group.items.length === 0) return null;
+                              return (
+                                <div key={group.key} className={styles.objectSubgroup}>
+                                  <div className={styles.objectSubgroupLabel}>
+                                    <span>{group.label}</span>
+                                    <span className={styles.objectSubgroupCount}>
+                                      {group.items.length}
+                                    </span>
+                                  </div>
+                                  {group.items.map((item) => {
+                                    const tabPath = createCharacterWorkspaceTab(item);
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className={`${styles.objectNodeShell} ${
+                                          activeWorkspaceTab === tabPath
+                                            ? styles.objectNodeShellActive
+                                            : ''
+                                        }`}
+                                        style={{ marginLeft: '28px', marginRight: '12px' }}
+                                        onContextMenu={(event) =>
+                                          emitObjectContextMenu(event, {
+                                            kind: 'character-item',
+                                            characterId: item.id,
+                                          })
+                                        }
                                       >
-                                        <AiOutlineEdit />
-                                      </button>
-                                    </Tooltip>
-                                  </span>
-                                  <span className={styles.objectNodeMetaInline}>
-                                    {item.role || '未填写角色定位'}
-                                  </span>
+                                        <div
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.objectNode}
+                                          onClick={() => onOpenCharacterNode(item.id)}
+                                          onKeyDown={(event) =>
+                                            handleRowKeyDown(event, () =>
+                                              onOpenCharacterNode(item.id)
+                                            )
+                                          }
+                                        >
+                                          <span className={styles.objectNodeMarker}>
+                                            <AiOutlineUser />
+                                          </span>
+                                          <span className={styles.objectNodePrimary}>
+                                            <span className={styles.objectNodeTitle}>
+                                              {item.name}
+                                            </span>
+                                            <Tooltip content="修改人物" position="top">
+                                              <button
+                                                type="button"
+                                                className={styles.objectNodeAction}
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  onRenameCharacterNode(item.id);
+                                                }}
+                                                aria-label={`修改人物 ${item.name}`}
+                                                title={`修改人物 ${item.name}`}
+                                              >
+                                                <AiOutlineEdit />
+                                              </button>
+                                            </Tooltip>
+                                          </span>
+                                          <span className={styles.objectNodeMetaInline}>
+                                            {`${getCharacterCategoryLabel(item.category)} · ${item.role || '未填写角色定位'}`}
+                                          </span>
+                                        </div>
+                                        <Tooltip content="删除人物" position="top">
+                                          <button
+                                            type="button"
+                                            className={styles.objectNodeAction}
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              onDeleteCharacterNode(item.id);
+                                            }}
+                                            aria-label={`删除人物 ${item.name}`}
+                                            title={`删除人物 ${item.name}`}
+                                          >
+                                            <AiOutlineDelete />
+                                          </button>
+                                        </Tooltip>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                                <Tooltip content="删除人物" position="top">
-                                  <button
-                                    type="button"
-                                    className={styles.objectNodeAction}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      onDeleteCharacterNode(item.id);
-                                    }}
-                                    aria-label={`删除人物 ${item.name}`}
-                                    title={`删除人物 ${item.name}`}
-                                  >
-                                    <AiOutlineDelete />
-                                  </button>
-                                </Tooltip>
-                              </div>
-                            );
-                          })}
+                              );
+                            })
+                          )}
                         </div>
                       )}
                     </section>

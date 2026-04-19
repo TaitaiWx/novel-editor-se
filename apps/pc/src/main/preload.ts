@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('electron', {
         'create-file',
         'create-directory',
         'refresh-folder',
+        'cleanup-empty-generated-material-directories',
         'window-minimize',
         'window-maximize',
         'window-close',

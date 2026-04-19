@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Character } from './types';
-import { getRoleColor } from './utils';
+import { CHARACTER_CATEGORY_LABELS, getRoleColor } from './utils';
 import styles from './styles.module.scss';
 
 export const CharacterCard: React.FC<{
@@ -58,6 +58,7 @@ export const CharacterCard: React.FC<{
               <div className={styles.cardHeader}>
                 <span className={styles.dragHandle}>⠿</span>
                 <span className={styles.cardName}>{c.name}</span>
+                <span className={styles.cardCategory}>{CHARACTER_CATEGORY_LABELS[c.category]}</span>
                 {c.highlightColor && (
                   <span
                     className={styles.characterHighlightSwatch}

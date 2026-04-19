@@ -18,6 +18,7 @@ import {
   mkdir,
   access,
   cp,
+  readdir,
   stat,
   unlink,
   rm,
@@ -72,6 +73,55 @@ function guessMimeType(filePath: string): string {
 }
 
 const DIR_EXCLUDE = /node_modules|\.git|\.novel-editor|\.vscode|\.DS_Store|dist|build|out/;
+const GENERATED_MATERIAL_ROOT_NAME = '资料';
+const GENERATED_MATERIAL_SCOPE_DIRS = new Set(['AI资料', '项目上下文', '卷上下文', '章上下文']);
+
+async function isEmptyDirectory(dirPath: string): Promise<boolean> {
+  try {
+    const entries = await readdir(dirPath);
+    return entries.length === 0;
+  } catch {
+    return false;
+  }
+}
+
+async function cleanupEmptyGeneratedMaterialDirectories(folderPath: string): Promise<string[]> {
+  const removed: string[] = [];
+  const materialRootPath = path.join(folderPath, GENERATED_MATERIAL_ROOT_NAME);
+
+  try {
+    const materialRootStat = await stat(materialRootPath);
+    if (!materialRootStat.isDirectory()) return removed;
+  } catch {
+    return removed;
+  }
+
+  const childNames = await readdir(materialRootPath);
+  for (const childName of childNames) {
+    if (!GENERATED_MATERIAL_SCOPE_DIRS.has(childName)) continue;
+    const childPath = path.join(materialRootPath, childName);
+    try {
+      const childStat = await stat(childPath);
+      if (!childStat.isDirectory()) continue;
+      if (!(await isEmptyDirectory(childPath))) continue;
+      await rm(childPath, { recursive: false, force: false });
+      removed.push(childPath);
+    } catch {
+      // 安全迁移只处理明确可删的空目录，失败时跳过。
+    }
+  }
+
+  if (await isEmptyDirectory(materialRootPath)) {
+    try {
+      await rm(materialRootPath, { recursive: false, force: false });
+      removed.push(materialRootPath);
+    } catch {
+      // 根目录无法删除时保留现场，不影响其他功能。
+    }
+  }
+
+  return removed;
+}
 
 // ─── File watchers ──────────────────────────────────────────────────────────
 
@@ -276,6 +326,18 @@ export function registerFileSystemHandlers(): void {
       throw new Error(`Failed to refresh folder: ${folderPath}`);
     }
   });
+
+  ipcMain.handle(
+    'cleanup-empty-generated-material-directories',
+    async (_event, folderPath: string) => {
+      try {
+        const removed = await cleanupEmptyGeneratedMaterialDirectories(folderPath);
+        return { success: true, removed };
+      } catch {
+        throw new Error(`Failed to cleanup generated material directories: ${folderPath}`);
+      }
+    }
+  );
 
   ipcMain.handle('delete-file', async (_event, filePath: string) => {
     try {

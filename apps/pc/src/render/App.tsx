@@ -46,14 +46,17 @@ import type { EditorViewportSnapshot } from './components/TextEditor';
 import type { PersistedOutlineScopeInput } from './types/electron-api';
 import { setInlineDiffEffect } from './components/TextEditor/inline-diff';
 import {
+  CHARACTER_CATEGORY_LABELS,
   DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
   DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
   createGraphLayoutStorageKey,
   createRelationStorageKey,
   extractJsonBlock,
   fnv1a32,
+  inferCharacterCategoryFromRole,
   mapCharacterRows,
   mergeCharacterGraphResults,
+  normalizeCharacterCategory,
   normalizePersonName,
   parseCharacterAttributes,
   parseCharacterGraphAIResult,
@@ -641,6 +644,7 @@ function areCharactersEqual(left: Character[], right: Character[]): boolean {
       item.id === next.id &&
       item.name === next.name &&
       item.role === next.role &&
+      item.category === next.category &&
       item.description === next.description &&
       item.avatar === next.avatar &&
       item.highlightColor === next.highlightColor &&
@@ -890,6 +894,39 @@ const App: React.FC = () => {
   const restoredEditorSessionKeyRef = useRef<string | null>(null);
   const editorSessionHydratedRef = useRef(false);
   const persistEditorSessionTimerRef = useRef<number | null>(null);
+  const cleanedGeneratedMaterialFoldersRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const currentFolderPath = folderPath;
+    const ipc = window.electron?.ipcRenderer;
+    if (!currentFolderPath || !ipc) return;
+    if (cleanedGeneratedMaterialFoldersRef.current.has(currentFolderPath)) return;
+    cleanedGeneratedMaterialFoldersRef.current.add(currentFolderPath);
+
+    let cancelled = false;
+    const cleanupGeneratedDirectories = async () => {
+      try {
+        const result = (await ipc.invoke(
+          'cleanup-empty-generated-material-directories',
+          currentFolderPath
+        )) as { success: boolean; removed?: string[] };
+        if (cancelled || !result?.success) return;
+        const removedCount = result.removed?.length || 0;
+        if (removedCount === 0) return;
+        await refreshCurrentFolder();
+        if (!cancelled) {
+          toast.info(`已安全清理 ${removedCount} 个历史空资料目录`);
+        }
+      } catch {
+        // 历史目录迁移失败不应阻塞项目打开。
+      }
+    };
+
+    void cleanupGeneratedDirectories();
+    return () => {
+      cancelled = true;
+    };
+  }, [folderPath, refreshCurrentFolder, toast]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1758,6 +1795,13 @@ const App: React.FC = () => {
     const name = await dialog.prompt('新建人物', '请输入人物名称', '新人物');
     if (!name?.trim()) return;
     const role = await dialog.prompt('人物定位', '请输入角色定位（可选）', '');
+    const inferredCategory = inferCharacterCategoryFromRole(role?.trim() || '');
+    const categoryInput = await dialog.prompt(
+      '人物分类',
+      '请输入人物分类（主要角色 / 次要角色）',
+      CHARACTER_CATEGORY_LABELS[inferredCategory]
+    );
+    const category = normalizeCharacterCategory(categoryInput, role?.trim() || '');
 
     try {
       const result = (await ipc.invoke(
@@ -1766,10 +1810,14 @@ const App: React.FC = () => {
         name.trim(),
         role?.trim() || '',
         '',
-        stringifyCharacterAttributes({
-          highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
-          highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
-        })
+        stringifyCharacterAttributes(
+          {
+            category,
+            highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+            highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+          },
+          role?.trim() || ''
+        )
       )) as { lastInsertRowid?: number | bigint };
       const nextRows = (await ipc.invoke('db-character-list', novelId)) as Array<{
         id: number;
@@ -2224,12 +2272,16 @@ const App: React.FC = () => {
           description: target.description,
           attributes:
             matchedRow?.attributes ||
-            stringifyCharacterAttributes({
-              avatar: target.avatar,
-              aliases: target.aliases,
-              highlightColor: target.highlightColor,
-              highlightFirstMentionOnly: target.highlightFirstMentionOnly,
-            }),
+            stringifyCharacterAttributes(
+              {
+                avatar: target.avatar,
+                aliases: target.aliases,
+                category: target.category,
+                highlightColor: target.highlightColor,
+                highlightFirstMentionOnly: target.highlightFirstMentionOnly,
+              },
+              target.role
+            ),
         });
         setWorkspaceCharacters((prev) =>
           prev.map((item) => (item.id === characterId ? { ...item, name: normalizedName } : item))
@@ -3617,7 +3669,7 @@ const App: React.FC = () => {
         const existingByName = new Map<string, (typeof existingRows)[number]>();
         existingRows.forEach((row) => {
           existingByName.set(normalizePersonName(row.name), row);
-          const attrs = parseCharacterAttributes(row.attributes);
+          const attrs = parseCharacterAttributes(row.attributes, row.role);
           (attrs.aliases || []).forEach((alias) =>
             existingByName.set(normalizePersonName(alias), row)
           );
@@ -3636,15 +3688,18 @@ const App: React.FC = () => {
           );
 
           if (matched) {
-            const prevAttrs = parseCharacterAttributes(matched.attributes);
+            const prevAttrs = parseCharacterAttributes(matched.attributes, nextRole);
             await ipc.invoke('db-character-update', matched.id, {
               name: matched.name,
               role: nextRole,
               description: nextDescription,
-              attributes: stringifyCharacterAttributes({
-                ...prevAttrs,
-                aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
-              }),
+              attributes: stringifyCharacterAttributes(
+                {
+                  ...prevAttrs,
+                  aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
+                },
+                nextRole
+              ),
             });
             updatedCount += 1;
             nameToId.set(normalized, matched.id);
@@ -3656,11 +3711,15 @@ const App: React.FC = () => {
               character.name.trim(),
               nextRole,
               nextDescription,
-              stringifyCharacterAttributes({
-                aliases: nextAliases,
-                highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
-                highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
-              })
+              stringifyCharacterAttributes(
+                {
+                  aliases: nextAliases,
+                  category: inferCharacterCategoryFromRole(nextRole),
+                  highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+                  highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+                },
+                nextRole
+              )
             )) as { lastInsertRowid: number | bigint };
             const createdId = Number(created.lastInsertRowid);
             createdCount += 1;
@@ -3812,29 +3871,34 @@ const App: React.FC = () => {
           return;
         }
 
+        let createdMaterialRoot = false;
+        const existingMaterialRoot = filesRef.current.find(
+          (node) => node.type === 'directory' && isMaterialLikeName(node.name)
+        );
         const defaultMaterialRoot =
-          filesRef.current.find(
-            (node) => node.type === 'directory' && isMaterialLikeName(node.name)
-          )?.path ??
+          existingMaterialRoot?.path ??
+          ((createdMaterialRoot = true),
           (
             (await ipc.invoke('create-directory', folder, '资料')) as {
               success: boolean;
               dirPath: string;
             }
-          ).dirPath;
+          ).dirPath);
         const existingAiMaterialRoot = findNodeInTree(
           filesRef.current,
           `${defaultMaterialRoot.replace(/[\\/]+$/, '')}/AI资料`
         );
+        let createdAiMaterialRoot = false;
         const aiMaterialRoot =
           existingAiMaterialRoot?.type === 'directory'
             ? existingAiMaterialRoot.path
-            : (
+            : ((createdAiMaterialRoot = true),
+              (
                 (await ipc.invoke('create-directory', defaultMaterialRoot, 'AI资料')) as {
                   success: boolean;
                   dirPath: string;
                 }
-              ).dirPath;
+              ).dirPath);
 
         const existingNames = new Set(
           ((findNodeInTree(filesRef.current, aiMaterialRoot)?.children || []) as FileNode[])
@@ -3842,12 +3906,14 @@ const App: React.FC = () => {
             .map((node) => node.name)
         );
 
+        let writtenCount = 0;
         for (const draft of drafts) {
           const fileName = buildUniqueMarkdownName(draft.title, existingNames);
           const created = (await ipc.invoke('create-file', aiMaterialRoot, fileName)) as {
             success: boolean;
             filePath: string;
           };
+          if (!created.success || !created.filePath) continue;
           const body = [
             `# ${draft.title}`,
             '',
@@ -3860,10 +3926,22 @@ const App: React.FC = () => {
             .filter(Boolean)
             .join('\n');
           await ipc.invoke('write-file', created.filePath, body);
+          writtenCount += 1;
+        }
+
+        if (writtenCount === 0) {
+          if (createdAiMaterialRoot) {
+            await ipc.invoke('delete-directory', aiMaterialRoot);
+          }
+          if (createdMaterialRoot) {
+            await ipc.invoke('delete-directory', defaultMaterialRoot);
+          }
+          toast.warning('资料条目未成功落盘，已取消创建空目录');
+          return;
         }
 
         await refreshCurrentFolder();
-        toast.success(`AI 已生成 ${drafts.length} 条资料笔记`);
+        toast.success(`AI 已生成 ${writtenCount} 条资料笔记`);
       } catch (error) {
         toast.error(`AI 生成资料失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
@@ -3995,7 +4073,7 @@ const App: React.FC = () => {
           const existingByName = new Map<string, (typeof existingRows)[number]>();
           existingRows.forEach((row) => {
             existingByName.set(normalizePersonName(row.name), row);
-            const attrs = parseCharacterAttributes(row.attributes);
+            const attrs = parseCharacterAttributes(row.attributes, row.role);
             (attrs.aliases || []).forEach((alias) =>
               existingByName.set(normalizePersonName(alias), row)
             );
@@ -4005,17 +4083,23 @@ const App: React.FC = () => {
             const normalizedName = normalizePersonName(character.name);
             const matched = existingByName.get(normalizedName);
             if (matched) {
-              const prevAttrs = parseCharacterAttributes(matched.attributes);
+              const prevAttrs = parseCharacterAttributes(
+                matched.attributes,
+                character.role || matched.role || ''
+              );
               await ipc.invoke('db-character-update', matched.id, {
                 name: matched.name,
                 role: character.role || matched.role || '',
                 description: character.description || matched.description || '',
-                attributes: stringifyCharacterAttributes({
-                  ...prevAttrs,
-                  aliases: Array.from(
-                    new Set([...(prevAttrs.aliases || []), ...(character.aliases || [])])
-                  ),
-                }),
+                attributes: stringifyCharacterAttributes(
+                  {
+                    ...prevAttrs,
+                    aliases: Array.from(
+                      new Set([...(prevAttrs.aliases || []), ...(character.aliases || [])])
+                    ),
+                  },
+                  character.role || matched.role || ''
+                ),
               });
               updatedCount += 1;
             } else {
@@ -4025,11 +4109,15 @@ const App: React.FC = () => {
                 character.name,
                 character.role,
                 character.description,
-                stringifyCharacterAttributes({
-                  aliases: character.aliases,
-                  highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
-                  highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
-                })
+                stringifyCharacterAttributes(
+                  {
+                    aliases: character.aliases,
+                    category: inferCharacterCategoryFromRole(character.role),
+                    highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
+                    highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+                  },
+                  character.role
+                )
               );
               createdCount += 1;
             }
@@ -4242,16 +4330,19 @@ const App: React.FC = () => {
 
         // 资料上下文不仅保存在 SQLite settings，也同步落盘到资料目录，保证在文件树可见。
         if (nextMaterials.length > 0) {
+          let createdMaterialRoot = false;
+          const existingMaterialRoot = filesRef.current.find(
+            (node) => node.type === 'directory' && isMaterialLikeName(node.name)
+          );
           const defaultMaterialRoot =
-            filesRef.current.find(
-              (node) => node.type === 'directory' && isMaterialLikeName(node.name)
-            )?.path ??
+            existingMaterialRoot?.path ??
+            ((createdMaterialRoot = true),
             (
               (await ipc.invoke('create-directory', folder, '资料')) as {
                 success: boolean;
                 dirPath: string;
               }
-            ).dirPath;
+            ).dirPath);
           const scopeDirName =
             scope.kind === 'project'
               ? '项目上下文'
@@ -4260,15 +4351,17 @@ const App: React.FC = () => {
                 : '章上下文';
           const scopeRootPath = `${defaultMaterialRoot.replace(/[\\/]+$/, '')}/${scopeDirName}`;
           const existingScopeRoot = findNodeInTree(filesRef.current, scopeRootPath);
+          let createdScopeRoot = false;
           const scopedMaterialRoot =
             existingScopeRoot?.type === 'directory'
               ? existingScopeRoot.path
-              : (
+              : ((createdScopeRoot = true),
+                (
                   (await ipc.invoke('create-directory', defaultMaterialRoot, scopeDirName)) as {
                     success: boolean;
                     dirPath: string;
                   }
-                ).dirPath;
+                ).dirPath);
 
           const existingNames = new Set(
             ((findNodeInTree(filesRef.current, scopedMaterialRoot)?.children || []) as FileNode[])
@@ -4276,12 +4369,14 @@ const App: React.FC = () => {
               .map((node) => node.name)
           );
 
+          let writtenCount = 0;
           for (const draft of nextMaterials) {
             const fileName = buildUniqueMarkdownName(draft.title, existingNames);
             const created = (await ipc.invoke('create-file', scopedMaterialRoot, fileName)) as {
               success: boolean;
               filePath: string;
             };
+            if (!created.success || !created.filePath) continue;
             const body = [
               `# ${draft.title}`,
               '',
@@ -4293,6 +4388,18 @@ const App: React.FC = () => {
               .filter(Boolean)
               .join('\n');
             await ipc.invoke('write-file', created.filePath, body);
+            writtenCount += 1;
+          }
+
+          if (writtenCount === 0) {
+            if (createdScopeRoot) {
+              await ipc.invoke('delete-directory', scopedMaterialRoot);
+            }
+            if (createdMaterialRoot) {
+              await ipc.invoke('delete-directory', defaultMaterialRoot);
+            }
+            toast.warning('资料上下文未成功落盘，已取消创建空目录');
+            return;
           }
 
           await refreshCurrentFolder();
@@ -5230,7 +5337,9 @@ const App: React.FC = () => {
           >
             <div className={styles.exportPreviewModal} onClick={(event) => event.stopPropagation()}>
               <h3 className={styles.exportPreviewTitle}>导出预览</h3>
-              <p className={styles.exportPreviewDescription}>请选择要导出的内容：</p>
+              <p className={styles.exportPreviewDescription}>
+                支持单独导出人物、设定或资料，也可以按需组合导出。
+              </p>
               <label className={styles.exportPreviewOption}>
                 <input
                   type="checkbox"

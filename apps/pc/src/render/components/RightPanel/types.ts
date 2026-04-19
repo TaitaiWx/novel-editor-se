@@ -160,6 +160,7 @@ export interface Character {
   id: number;
   name: string;
   role: string;
+  category: CharacterCategory;
   description: string;
   avatar?: string;
   aliases?: string[];
@@ -173,4 +174,5 @@ export interface CharacterLink {
   label: string;
 }
 
+export type CharacterCategory = 'major' | 'secondary';
 export type CharacterCamp = 'protagonist' | 'antagonist' | 'support';
