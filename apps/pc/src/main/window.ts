@@ -11,10 +11,23 @@ const __dirname = dirname(__filename);
 let mainWindowRef: BrowserWindow | null = null;
 let mainWindowReadyToShow = false;
 let mainWindowRendererReady = false;
+let splashFailsafeTimer: NodeJS.Timeout | null = null;
+
+/** Splash 最大等待时间（秒）。超时后强制显示主窗口，避免卡死 */
+const SPLASH_FAILSAFE_TIMEOUT_MS = 15_000;
+
+function clearSplashFailsafe() {
+  if (splashFailsafeTimer) {
+    clearTimeout(splashFailsafeTimer);
+    splashFailsafeTimer = null;
+  }
+}
 
 function revealMainWindowIfReady() {
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
   if (!mainWindowReadyToShow || !mainWindowRendererReady) return;
+
+  clearSplashFailsafe();
 
   if (!mainWindowRef.isVisible()) {
     mainWindowRef.show();
@@ -27,6 +40,24 @@ function revealMainWindowIfReady() {
   ) {
     mainWindowRef.webContents.openDevTools();
   }
+}
+
+/**
+ * 强制显示主窗口并关闭 splash（超时兜底）。
+ * 即使渲染进程未报告 ready，也要让用户看到窗口，避免永远卡在启动画面。
+ */
+function forceRevealMainWindow(reason: string) {
+  clearSplashFailsafe();
+  if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+
+  console.warn(`强制显示主窗口: ${reason}`);
+  mainWindowReadyToShow = true;
+  mainWindowRendererReady = true;
+
+  if (!mainWindowRef.isVisible()) {
+    mainWindowRef.show();
+  }
+  closeSplashWindow();
 }
 
 function resolveBrandingIconPath() {
@@ -100,6 +131,26 @@ export function createMainWindow(): BrowserWindow {
 
   // 加载应用页面
   void loadRendererPage(mainWindow, __dirname);
+
+  // 启动 splash 超时兜底：如果渲染进程在规定时间内未 ready，强制显示主窗口
+  splashFailsafeTimer = setTimeout(() => {
+    splashFailsafeTimer = null;
+    if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+    if (mainWindowRef.isVisible()) return;
+    forceRevealMainWindow(`渲染进程 ${SPLASH_FAILSAFE_TIMEOUT_MS / 1000}s 内未就绪，超时兜底`);
+  }, SPLASH_FAILSAFE_TIMEOUT_MS);
+
+  // 页面加载失败时强制显示窗口，避免永远卡在 splash
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error(`页面加载失败 (code=${errorCode}): ${errorDescription}`);
+    forceRevealMainWindow(`页面加载失败: ${errorDescription}`);
+  });
+
+  // 渲染进程崩溃时强制显示窗口
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`渲染进程异常退出: ${details.reason}`);
+    forceRevealMainWindow(`渲染进程异常: ${details.reason}`);
+  });
 
   // 窗口准备好后，等待渲染进程显式 ready 再显示，避免与 splash 同时出现
   mainWindow.once('ready-to-show', () => {

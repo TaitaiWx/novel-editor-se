@@ -57,6 +57,8 @@ const CHECK_JITTER_MS = 30 * 60 * 1000;
 const NETWORK_PROBE_TIMEOUT_MS = 4_000;
 const NETWORK_RECOVERY_INTERVAL_MS = 15_000;
 const DOWNLOAD_STALL_TIMEOUT_MS = 30_000;
+/** 首次更新检查延迟（秒），让渲染进程先完成启动再检查更新 */
+const FIRST_CHECK_DELAY_MS = 10_000;
 
 type RecoveryAction = 'check' | 'download';
 type UpdateNetworkPhase = 'online' | 'recovering' | 'offline';
@@ -854,22 +856,7 @@ async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
   await syncStatusFromUpdateInfo(info, updaterStatus.channel);
   const state = await loadUpdaterState();
 
-  // 核心：在安装新版本前，先把当前版本的安装包缓存到本地
-  updaterStatus.preCaching = true;
-  updaterStatus.downloadPercent = 100;
-  emitStatus();
-  const rollbackTarget = await preCacheCurrentVersion();
-  if (rollbackTarget) {
-    state.rollbackTarget = rollbackTarget;
-    if (rollbackTarget.cachedInstallerPath) {
-      log.info(`回滚安装包已就绪: ${rollbackTarget.cachedInstallerPath}`);
-    } else {
-      log.warn('回滚安装包未能缓存到本地，回滚将依赖网络下载');
-    }
-  } else {
-    log.error('无法准备回滚信息，更新后将无法回滚');
-  }
-
+  // 立即通知更新就绪，预缓存在后台异步执行，不阻塞用户操作
   state.pendingVersion = info.version;
   state.pendingFromVersion = app.getVersion();
   state.pendingLaunchAttempts = 0;
@@ -890,6 +877,39 @@ async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
 
   broadcast('update-downloaded', info);
   emitStatus();
+
+  // 后台异步预缓存当前版本安装包（用于回滚），不阻塞更新就绪通知
+  void preCacheCurrentVersionInBackground(state);
+}
+
+/**
+ * 在后台预缓存当前版本安装包，用于高可用回滚。
+ * 独立于 handleUpdateDownloaded，不阻塞更新安装流程。
+ */
+async function preCacheCurrentVersionInBackground(state: PersistedUpdaterState) {
+  updaterStatus.preCaching = true;
+  emitStatus();
+  try {
+    const rollbackTarget = await preCacheCurrentVersion();
+    if (rollbackTarget) {
+      state.rollbackTarget = rollbackTarget;
+      await persistUpdaterState();
+      if (rollbackTarget.cachedInstallerPath) {
+        log.info(`回滚安装包已就绪: ${rollbackTarget.cachedInstallerPath}`);
+      } else {
+        log.warn('回滚安装包未能缓存到本地，回滚将依赖网络下载');
+      }
+    } else {
+      log.error('无法准备回滚信息，更新后将无法回滚');
+    }
+    updaterStatus.rollbackAvailable = Boolean(state.rollbackTarget);
+    updaterStatus.rollbackVersion = state.rollbackTarget?.version ?? null;
+  } catch (error) {
+    log.error('后台预缓存回滚安装包失败:', error);
+  } finally {
+    updaterStatus.preCaching = false;
+    emitStatus();
+  }
 }
 
 async function handleUpdaterError(error: Error) {
@@ -1108,7 +1128,8 @@ export async function setupAutoUpdater() {
   const intervalMin = Math.round((UPDATE_CHECK_INTERVAL_MS + jitter) / 60000);
   log.info(`定时更新检查已启动，间隔: ${intervalMin}min`);
 
-  void checkForUpdatesManually();
+  // 延迟首次更新检查，避免与启动渲染竞争 CPU / 网络 / IO
+  setTimeout(() => void checkForUpdatesManually(), FIRST_CHECK_DELAY_MS);
 }
 
 export async function downloadUpdate() {
