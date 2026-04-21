@@ -26,7 +26,6 @@ import {
 } from '../auto-updater';
 import type { UpdateChannel } from '../auto-updater';
 import { settingsOps } from '@novel-editor/store';
-import { notifyMainWindowRendererReady } from '../window';
 import { isSmokeTestMode } from '../launch-mode';
 import { detectSystemProfile } from '../system-profile';
 
@@ -81,7 +80,7 @@ export function registerWindowAppHandlers(): void {
   });
 
   ipcMain.handle('app-renderer-ready', () => {
-    notifyMainWindowRendererReady();
+    // 主窗口显示时机由 Electron `ready-to-show` 事件决定，这里只通知自动更新模块
     noteUpdaterRendererReady();
     return { success: true };
   });

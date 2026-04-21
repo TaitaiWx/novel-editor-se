@@ -9,23 +9,16 @@ import { isRendererDevServerEnabled, loadRendererPage } from './renderer-entry';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 let mainWindowRef: BrowserWindow | null = null;
-let mainWindowReadyToShow = false;
-let mainWindowRendererReady = false;
+let mainWindowRevealed = false;
 let splashFailsafeTimer: NodeJS.Timeout | null = null;
-let revealGraceTimer: NodeJS.Timeout | null = null;
 let mainFrameLoadRetryCount = 0;
 
 /**
- * Splash 最大等待时间（秒）。超时后强制启动恢复流程。
- * 注意：低配机（如 Pentium G4560 + 集显 + 机械硬盘）首次启动渲染主框架可能需要 30s 以上，
- * 因此放宽到 45s，避免误判“启动失败”
+ * Splash 最大等待时间（秒）。超时后进入启动恢复流程（重试主帧加载 → 展示安全模式错误页）。
+ * 这是"真正加载失败"的最后兜底，不用于普通的慢启动
+ * 低配机首次启动（磁盘缓存冷）可能需要 20~30s，放宽到 45s 避免误判
  */
 const SPLASH_FAILSAFE_TIMEOUT_MS = 45_000;
-/**
- * 窗口 ready-to-show 后给渲染进程上报 ready 的宽限时间。
- * 超过后即使渲染未上报，也提前显示主窗口，防止用户长时间只看到 splash
- */
-const REVEAL_GRACE_AFTER_READY_MS = 6_000;
 /** 主帧加载失败时的最大重试次数 */
 const MAIN_FRAME_LOAD_MAX_RETRIES = 2;
 
@@ -36,19 +29,19 @@ function clearSplashFailsafe() {
   }
 }
 
-function clearRevealGrace() {
-  if (revealGraceTimer) {
-    clearTimeout(revealGraceTimer);
-    revealGraceTimer = null;
-  }
-}
-
-function revealMainWindowIfReady() {
+/**
+ * 显示主窗口并关闭 splash。
+ * 只应在 Electron 官方认为"可以无闪白显示"的时机调用：
+ *   - `ready-to-show`（首帧已光栅化）
+ *   - 启动错误页加载完成后（确保不会看到黑屏）
+ * 禁止在渲染内容还未就绪时强行调用 —— 这是之前黑屏问题的根因
+ */
+function revealMainWindow() {
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
-  if (!mainWindowReadyToShow || !mainWindowRendererReady) return;
+  if (mainWindowRevealed) return;
 
+  mainWindowRevealed = true;
   clearSplashFailsafe();
-  clearRevealGrace();
 
   if (!mainWindowRef.isVisible()) {
     mainWindowRef.show();
@@ -151,27 +144,9 @@ function recoverMainFrameLoad(reason: string) {
     return;
   }
 
-  forceRevealMainWindow(`启动恢复失败，进入安全模式: ${reason}`);
+  // 多次重试仍失败，加载错误页；错误页本身的 ready-to-show 会触发 revealMainWindow
+  console.warn(`启动恢复失败，进入安全模式: ${reason}`);
   renderStartupErrorPage(reason);
-}
-
-/**
- * 强制显示主窗口并关闭 splash（超时兜底）。
- * 即使渲染进程未报告 ready，也要让用户看到窗口，避免永远卡在启动画面。
- */
-function forceRevealMainWindow(reason: string) {
-  clearSplashFailsafe();
-  clearRevealGrace();
-  if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
-
-  console.warn(`强制显示主窗口: ${reason}`);
-  mainWindowReadyToShow = true;
-  mainWindowRendererReady = true;
-
-  if (!mainWindowRef.isVisible()) {
-    mainWindowRef.show();
-  }
-  closeSplashWindow();
 }
 
 function resolveBrandingIconPath() {
@@ -232,8 +207,7 @@ export function createMainWindow(): BrowserWindow {
   const windowConfig = getWindowConfig();
   const mainWindow = new BrowserWindow(windowConfig);
   mainWindowRef = mainWindow;
-  mainWindowReadyToShow = false;
-  mainWindowRendererReady = false;
+  mainWindowRevealed = false;
   mainFrameLoadRetryCount = 0;
   const iconPath = resolveBrandingIconPath();
 
@@ -252,7 +226,7 @@ export function createMainWindow(): BrowserWindow {
   splashFailsafeTimer = setTimeout(() => {
     splashFailsafeTimer = null;
     if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
-    if (mainWindowRendererReady) return;
+    if (mainWindowRevealed) return;
     recoverMainFrameLoad(`渲染进程 ${SPLASH_FAILSAFE_TIMEOUT_MS / 1000}s 内未就绪`);
   }, SPLASH_FAILSAFE_TIMEOUT_MS);
 
@@ -272,34 +246,20 @@ export function createMainWindow(): BrowserWindow {
     recoverMainFrameLoad(`渲染进程异常: ${details.reason}`);
   });
 
-  // 窗口准备好后，等待渲染进程显式 ready 再显示，避免与 splash 同时出现
+  // `ready-to-show` 是 Electron 官方保证的"首帧已光栅化、可无闪白显示"的信号
+  // 直接在此显示主窗口即可 —— 此时 React 可能还在 hydrate，但至少 index.html 和初始
+  // CSS 已渲染（背景色已应用），用户看到的是"软件窗口"而不是"黑屏"
+  // 不要再加任何基于定时器的强制显示，那会在渲染尚未出首帧时打开空窗口（= 黑屏）
   mainWindow.once('ready-to-show', () => {
-    mainWindowReadyToShow = true;
-    setSplashHint('界面已准备，正在初始化数据…');
-    revealMainWindowIfReady();
-    // 低配机宽限：ready-to-show 后若渲染仍未上报 ready，先放出主窗口
-    // 此时 DOM 已可显示，不会黑屏；React 还在挂载也只是"边渲染边出现"
-    if (!mainWindowRendererReady) {
-      clearRevealGrace();
-      revealGraceTimer = setTimeout(() => {
-        revealGraceTimer = null;
-        if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
-        if (mainWindowRendererReady) return;
-        console.warn(
-          `渲染进程 ${REVEAL_GRACE_AFTER_READY_MS / 1000}s 内未上报 ready，提前显示主窗口`
-        );
-        forceRevealMainWindow('低配设备宽限超时，提前显示');
-      }, REVEAL_GRACE_AFTER_READY_MS);
-    }
+    setSplashHint('界面已准备…');
+    revealMainWindow();
   });
 
   mainWindow.on('closed', () => {
     if (mainWindowRef === mainWindow) {
       clearSplashFailsafe();
-      clearRevealGrace();
       mainWindowRef = null;
-      mainWindowReadyToShow = false;
-      mainWindowRendererReady = false;
+      mainWindowRevealed = false;
       mainFrameLoadRetryCount = 0;
     }
   });
@@ -330,9 +290,4 @@ export function createMainWindow(): BrowserWindow {
 // 设置应用级别的窗口事件
 export function setupWindowEvents() {
   // 可以在这里添加全局窗口事件处理
-}
-
-export function notifyMainWindowRendererReady() {
-  mainWindowRendererReady = true;
-  revealMainWindowIfReady();
 }

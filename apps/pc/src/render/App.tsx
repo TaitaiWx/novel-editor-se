@@ -895,6 +895,8 @@ const App: React.FC = () => {
   const editorSessionHydratedRef = useRef(false);
   const persistEditorSessionTimerRef = useRef<number | null>(null);
   const cleanedGeneratedMaterialFoldersRef = useRef<Set<string>>(new Set());
+  // 通过 ref 间接引用 refreshCurrentFolder，避免跨声明顺序依赖（TDZ）
+  const refreshCurrentFolderRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     const currentFolderPath = folderPath;
@@ -916,7 +918,7 @@ const App: React.FC = () => {
         if (cancelled || !result?.success) return;
         const removedCount = result.removed?.length || 0;
         if (removedCount === 0) return;
-        await refreshCurrentFolder();
+        await refreshCurrentFolderRef.current?.();
         if (!cancelled) {
           toast.info(`已安全清理 ${removedCount} 个历史空资料目录`);
         }
@@ -945,7 +947,7 @@ const App: React.FC = () => {
         window.clearTimeout(timeoutHandle);
       }
     };
-  }, [folderPath, refreshCurrentFolder, toast]);
+  }, [folderPath, toast]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1560,6 +1562,8 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   }, [toast]);
+  // 同步最新引用，供声明顺序靠前的 effect 通过 ref 访问
+  refreshCurrentFolderRef.current = refreshCurrentFolder;
 
   const loadPersistedSettingsDraft = useCallback(async (): Promise<SettingsDraft> => {
     const ipc = window.electron?.ipcRenderer;
