@@ -62,6 +62,8 @@ nsis:
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico
   installerHeaderIcon: resources/icon.ico
+  # 自定义安装脚本：安装/升级/卸载前自动关闭旧实例，避免“无法关闭”弹窗
+  include: resources/installer.nsh
 
 linux:
   icon: resources/icon.png

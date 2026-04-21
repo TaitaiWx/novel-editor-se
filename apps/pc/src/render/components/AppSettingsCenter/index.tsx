@@ -23,6 +23,14 @@ import { isImeComposing } from '../../utils/ime';
 export type SettingsTab = 'general' | 'ai' | 'data' | 'shortcuts';
 type ClearDataScope = 'document' | 'ai' | 'all';
 
+interface SystemProfileInfo {
+  isLowSpec: boolean;
+  totalMemoryGB: number;
+  cpuCount: number;
+  cpuSpeedMHz: number;
+  reasons: string[];
+}
+
 interface AppSettingsCenterProps {
   visible: boolean;
   onClose: () => void;
@@ -113,6 +121,7 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
   const [loaded, setLoaded] = useState(false);
   const [aiSaveStatus, setAiSaveStatus] = useState('');
   const [clearConfirmScope, setClearConfirmScope] = useState<ClearDataScope | null>(null);
+  const [systemProfile, setSystemProfile] = useState<SystemProfileInfo | null>(null);
   const aiSettings = settings.ai ?? DEFAULT_AI_SETTINGS;
   const activeAIPreset =
     AI_PRESET_OPTIONS.find((item) => item.key === aiSettings.preset) || AI_PRESET_OPTIONS[0];
@@ -156,6 +165,20 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
     };
     void load();
   }, [visible, onSettingsChange]);
+
+  useEffect(() => {
+    if (!visible || systemProfile) return;
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    ipc
+      .invoke('get-system-profile')
+      .then((info) => {
+        if (info && typeof info === 'object') {
+          setSystemProfile(info as SystemProfileInfo);
+        }
+      })
+      .catch(() => {});
+  }, [visible, systemProfile]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -406,6 +429,52 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {systemProfile && (
+                  <div className={styles.statusCard}>
+                    <div>
+                      <div className={styles.statusTitle}>
+                        运行性能模式
+                        {systemProfile.isLowSpec ? '：低配自动适配中' : '：标准模式'}
+                      </div>
+                      <div className={styles.statusSubtext}>
+                        {systemProfile.isLowSpec
+                          ? '已自动关闭硬件加速、延后非关键任务，让老电脑也能流畅启动。无需手动设置。'
+                          : '当前设备性能充足，按标准模式运行。'}
+                      </div>
+                      <div className={styles.specRow} style={{ marginTop: 8 }}>
+                        <span className={styles.specLabel}>CPU</span>
+                        <span className={styles.specValue}>
+                          {systemProfile.cpuCount} 逻辑核
+                          {systemProfile.cpuSpeedMHz > 0
+                            ? ` · ${(systemProfile.cpuSpeedMHz / 1000).toFixed(1)}GHz`
+                            : ''}
+                        </span>
+                      </div>
+                      <div className={styles.specRow}>
+                        <span className={styles.specLabel}>内存</span>
+                        <span className={styles.specValue}>
+                          {systemProfile.totalMemoryGB > 0
+                            ? `${systemProfile.totalMemoryGB} GB`
+                            : '未知'}
+                        </span>
+                      </div>
+                      {systemProfile.isLowSpec && systemProfile.reasons.length > 0 && (
+                        <div className={styles.specRow}>
+                          <span className={styles.specLabel}>触发原因</span>
+                          <span className={styles.specValue}>
+                            {systemProfile.reasons.join('；')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <span
+                      className={`${styles.statusBadge} ${systemProfile.isLowSpec ? styles.expired : styles['signed-in']}`}
+                    >
+                      {systemProfile.isLowSpec ? '低配模式' : '标准'}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

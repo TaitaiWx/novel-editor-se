@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('electron', {
         'get-shortcuts',
         'get-app-version',
         'get-device-id',
+        'get-system-profile',
         'update-check',
         'update-status',
         'update-download',

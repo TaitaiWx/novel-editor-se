@@ -28,6 +28,7 @@ import type { UpdateChannel } from '../auto-updater';
 import { settingsOps } from '@novel-editor/store';
 import { notifyMainWindowRendererReady } from '../window';
 import { isSmokeTestMode } from '../launch-mode';
+import { detectSystemProfile } from '../system-profile';
 
 const DOCUMENT_CACHE_PREFIXES = [
   'novel-editor:lore:',
@@ -98,6 +99,8 @@ export function registerWindowAppHandlers(): void {
   ipcMain.handle('get-shortcuts', () => getAllShortcuts());
   ipcMain.handle('get-app-version', () => app.getVersion());
   ipcMain.handle('get-device-id', () => getDeviceId());
+  // 系统能力探测：返回是否处于自动低配模式，渲染端据此延迟非关键工作
+  ipcMain.handle('get-system-profile', () => detectSystemProfile());
 
   // ─── Updates ──────────────────────────────────────────────────────────────
 

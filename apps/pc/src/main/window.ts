@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { closeSplashWindow } from './static/splash/splash-window';
+import { closeSplashWindow, setSplashHint } from './static/splash/splash-window';
 import { isRendererDevServerEnabled, loadRendererPage } from './renderer-entry';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,10 +12,20 @@ let mainWindowRef: BrowserWindow | null = null;
 let mainWindowReadyToShow = false;
 let mainWindowRendererReady = false;
 let splashFailsafeTimer: NodeJS.Timeout | null = null;
+let revealGraceTimer: NodeJS.Timeout | null = null;
 let mainFrameLoadRetryCount = 0;
 
-/** Splash 最大等待时间（秒）。超时后强制显示主窗口，避免卡死 */
-const SPLASH_FAILSAFE_TIMEOUT_MS = 15_000;
+/**
+ * Splash 最大等待时间（秒）。超时后强制启动恢复流程。
+ * 注意：低配机（如 Pentium G4560 + 集显 + 机械硬盘）首次启动渲染主框架可能需要 30s 以上，
+ * 因此放宽到 45s，避免误判“启动失败”
+ */
+const SPLASH_FAILSAFE_TIMEOUT_MS = 45_000;
+/**
+ * 窗口 ready-to-show 后给渲染进程上报 ready 的宽限时间。
+ * 超过后即使渲染未上报，也提前显示主窗口，防止用户长时间只看到 splash
+ */
+const REVEAL_GRACE_AFTER_READY_MS = 6_000;
 /** 主帧加载失败时的最大重试次数 */
 const MAIN_FRAME_LOAD_MAX_RETRIES = 2;
 
@@ -26,11 +36,19 @@ function clearSplashFailsafe() {
   }
 }
 
+function clearRevealGrace() {
+  if (revealGraceTimer) {
+    clearTimeout(revealGraceTimer);
+    revealGraceTimer = null;
+  }
+}
+
 function revealMainWindowIfReady() {
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
   if (!mainWindowReadyToShow || !mainWindowRendererReady) return;
 
   clearSplashFailsafe();
+  clearRevealGrace();
 
   if (!mainWindowRef.isVisible()) {
     mainWindowRef.show();
@@ -143,6 +161,7 @@ function recoverMainFrameLoad(reason: string) {
  */
 function forceRevealMainWindow(reason: string) {
   clearSplashFailsafe();
+  clearRevealGrace();
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
 
   console.warn(`强制显示主窗口: ${reason}`);
@@ -227,6 +246,7 @@ export function createMainWindow(): BrowserWindow {
 
   // 加载应用页面
   void loadRendererPage(mainWindow, __dirname);
+  setSplashHint('正在加载界面…');
 
   // 启动 splash 超时兜底：如果渲染进程在规定时间内未 ready，先尝试恢复加载
   splashFailsafeTimer = setTimeout(() => {
@@ -255,12 +275,28 @@ export function createMainWindow(): BrowserWindow {
   // 窗口准备好后，等待渲染进程显式 ready 再显示，避免与 splash 同时出现
   mainWindow.once('ready-to-show', () => {
     mainWindowReadyToShow = true;
+    setSplashHint('界面已准备，正在初始化数据…');
     revealMainWindowIfReady();
+    // 低配机宽限：ready-to-show 后若渲染仍未上报 ready，先放出主窗口
+    // 此时 DOM 已可显示，不会黑屏；React 还在挂载也只是"边渲染边出现"
+    if (!mainWindowRendererReady) {
+      clearRevealGrace();
+      revealGraceTimer = setTimeout(() => {
+        revealGraceTimer = null;
+        if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+        if (mainWindowRendererReady) return;
+        console.warn(
+          `渲染进程 ${REVEAL_GRACE_AFTER_READY_MS / 1000}s 内未上报 ready，提前显示主窗口`
+        );
+        forceRevealMainWindow('低配设备宽限超时，提前显示');
+      }, REVEAL_GRACE_AFTER_READY_MS);
+    }
   });
 
   mainWindow.on('closed', () => {
     if (mainWindowRef === mainWindow) {
       clearSplashFailsafe();
+      clearRevealGrace();
       mainWindowRef = null;
       mainWindowReadyToShow = false;
       mainWindowRendererReady = false;

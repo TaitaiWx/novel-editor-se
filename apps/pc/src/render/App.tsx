@@ -904,6 +904,9 @@ const App: React.FC = () => {
     cleanedGeneratedMaterialFoldersRef.current.add(currentFolderPath);
 
     let cancelled = false;
+    let idleHandle: number | null = null;
+    let timeoutHandle: number | null = null;
+
     const cleanupGeneratedDirectories = async () => {
       try {
         const result = (await ipc.invoke(
@@ -922,9 +925,25 @@ const App: React.FC = () => {
       }
     };
 
-    void cleanupGeneratedDirectories();
+    // 推迟到浏览器空闲再跑：低配机首屏不会被 IPC + 文件扫描拖慢
+    const schedule = () => {
+      if (cancelled) return;
+      void cleanupGeneratedDirectories();
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      idleHandle = window.requestIdleCallback(schedule, { timeout: 4000 });
+    } else {
+      timeoutHandle = window.setTimeout(schedule, 1500);
+    }
+
     return () => {
       cancelled = true;
+      if (idleHandle !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+      }
     };
   }, [folderPath, refreshCurrentFolder, toast]);
 
