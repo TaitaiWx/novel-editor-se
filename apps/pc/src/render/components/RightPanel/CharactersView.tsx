@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { extractCharacterTimeline } from '@novel-editor/basic-algorithm';
 import { useDebounce } from './useDebounce';
 import styles from './styles.module.scss';
 import type {
@@ -7,6 +8,7 @@ import type {
   RelationTone,
   CharacterCamp,
   CharacterCategory,
+  CharacterTimelineItem,
   PersistedAISettings,
   CharacterGraphAIResult,
 } from './types';
@@ -15,12 +17,18 @@ import {
   CHARACTER_CATEGORY_LABELS,
   DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
   DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+  createCharacterTimelineOrderStorageKey,
+  createCharacterTimelineStorageKey,
   createRelationStorageKey,
   createGraphLayoutStorageKey,
+  getCharacterTimelineOrderKey,
   inferCharacterCategoryFromRole,
+  mergeCharacterTimelineItems,
   normalizePersonName,
+  parseTimelineOrderKeys,
   splitTextIntoChunks,
   normalizeRelationTone,
+  parseCharacterTimelineItems,
   parseCharacterGraphAIResult,
   mergeCharacterGraphResults,
   parseCharacterAttributes,
@@ -35,6 +43,78 @@ import { loadLoreEntriesByFolder } from './lore-data';
 import { CharacterCard } from './CharacterCard';
 import { CharacterGraphPanel } from './CharacterGraphPanel';
 import { isImeComposing } from '../../utils/ime';
+import type { FileNode, OpenLocalResult } from '../../types/File';
+import {
+  NOVEL_EDITOR_FILE_SAVED_EVENT,
+  type NovelEditorFileSavedDetail,
+} from '../../utils/editor-events';
+
+interface TimelineIpcInvoker {
+  invoke(channel: 'refresh-folder', folderPath: string): Promise<OpenLocalResult>;
+  invoke(channel: 'read-file', filePath: string): Promise<string>;
+}
+
+interface NovelCorpusFile {
+  path: string;
+  label: string;
+  content: string;
+}
+
+interface TimelineEditorState {
+  itemId: string;
+  mode: 'edit' | 'create-manual';
+  source: CharacterTimelineItem['source'];
+  autoKey?: string;
+  sourceLabel?: string;
+}
+
+const TIMELINE_TEXT_FILE_RE = /\.(md|markdown|txt)$/i;
+const NOVEL_CORPUS_READ_CONCURRENCY = 4;
+
+function flattenFileNodes(nodes: FileNode[]): FileNode[] {
+  return nodes.flatMap((node) => {
+    if (node.type === 'file') return [node];
+    return node.children ? flattenFileNodes(node.children) : [];
+  });
+}
+
+function buildRelativeFileLabel(folderPath: string, filePath: string): string {
+  const normalizedFolderPath = folderPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normalizedFilePath = filePath.replace(/\\/g, '/');
+  if (normalizedFilePath.startsWith(`${normalizedFolderPath}/`)) {
+    return normalizedFilePath.slice(normalizedFolderPath.length + 1);
+  }
+  const segments = normalizedFilePath.split('/');
+  return segments[segments.length - 1] || normalizedFilePath;
+}
+
+async function loadNovelCorpusFiles(
+  folderPath: string,
+  ipc: TimelineIpcInvoker
+): Promise<NovelCorpusFile[]> {
+  const tree = await ipc.invoke('refresh-folder', folderPath);
+  const textFiles = flattenFileNodes(tree.files)
+    .filter((node) => node.type === 'file' && TIMELINE_TEXT_FILE_RE.test(node.name))
+    .sort((left, right) => left.path.localeCompare(right.path, 'zh-CN', { numeric: true }));
+
+  const corpusFiles: NovelCorpusFile[] = [];
+  for (let index = 0; index < textFiles.length; index += NOVEL_CORPUS_READ_CONCURRENCY) {
+    const batch = textFiles.slice(index, index + NOVEL_CORPUS_READ_CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map(async (file) => {
+        const raw = await ipc.invoke('read-file', file.path);
+        return {
+          path: file.path,
+          label: buildRelativeFileLabel(folderPath, file.path),
+          content: raw.trim(),
+        } satisfies NovelCorpusFile;
+      })
+    );
+    corpusFiles.push(...batchResults.filter((item) => item.content));
+  }
+
+  return corpusFiles;
+}
 
 export const CharactersView: React.FC<{
   folderPath: string | null;
@@ -76,7 +156,22 @@ export const CharactersView: React.FC<{
     const [bulkUpdatingCategory, setBulkUpdatingCategory] = useState<CharacterCategory | null>(
       null
     );
+    const [novelCorpusFiles, setNovelCorpusFiles] = useState<NovelCorpusFile[]>([]);
+    const [novelCorpusLoading, setNovelCorpusLoading] = useState(false);
+    const [novelCorpusError, setNovelCorpusError] = useState('');
+    const [persistedTimelineItems, setPersistedTimelineItems] = useState<CharacterTimelineItem[]>(
+      []
+    );
+    const [persistedTimelineOrderKeys, setPersistedTimelineOrderKeys] = useState<string[]>([]);
+    const [timelineEditor, setTimelineEditor] = useState<TimelineEditorState | null>(null);
+    const [timelineDraftTitle, setTimelineDraftTitle] = useState('');
+    const [timelineDraftSummary, setTimelineDraftSummary] = useState('');
+    const [timelineSaving, setTimelineSaving] = useState(false);
+    const [timelineDragIndex, setTimelineDragIndex] = useState<number | null>(null);
+    const [timelineDropIndex, setTimelineDropIndex] = useState<number | null>(null);
+    const [novelCorpusReloadToken, setNovelCorpusReloadToken] = useState(0);
     const dragCounter = useRef(0);
+    const novelCorpusCacheRef = useRef<Map<string, NovelCorpusFile[]>>(new Map());
     const graphDraggingRef = useRef<{
       id: number;
       offsetX: number;
@@ -175,6 +270,103 @@ export const CharactersView: React.FC<{
         cancelled = true;
       };
     }, [folderPath, loadCharactersFromDb]);
+
+    useEffect(() => {
+      if (!folderPath || !window.electron?.ipcRenderer) {
+        setNovelCorpusFiles([]);
+        setNovelCorpusLoading(false);
+        setNovelCorpusError('');
+        return;
+      }
+
+      const cachedCorpusFiles = novelCorpusCacheRef.current.get(folderPath);
+      if (cachedCorpusFiles) {
+        setNovelCorpusFiles(cachedCorpusFiles);
+        setNovelCorpusLoading(false);
+        setNovelCorpusError('');
+        return;
+      }
+
+      let cancelled = false;
+      setNovelCorpusLoading(true);
+      setNovelCorpusError('');
+
+      void loadNovelCorpusFiles(folderPath, window.electron.ipcRenderer)
+        .then((files) => {
+          if (cancelled) return;
+          novelCorpusCacheRef.current.set(folderPath, files);
+          setNovelCorpusFiles(files);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          setNovelCorpusFiles([]);
+          setNovelCorpusError(error instanceof Error ? error.message : '作品语料加载失败');
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setNovelCorpusLoading(false);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [folderPath, novelCorpusReloadToken]);
+
+    useEffect(() => {
+      if (!folderPath || !window.electron?.ipcRenderer) return;
+
+      let cancelled = false;
+      const ipc = window.electron.ipcRenderer;
+      const normalizedFolderPath = folderPath.replace(/\\/g, '/').replace(/\/+$/, '');
+
+      const handleFileSaved = async (event: Event) => {
+        const detail = (event as CustomEvent<NovelEditorFileSavedDetail>).detail;
+        const normalizedFilePath = detail?.filePath?.replace(/\\/g, '/');
+        if (!normalizedFilePath) return;
+        if (!normalizedFilePath.startsWith(`${normalizedFolderPath}/`)) return;
+        if (!TIMELINE_TEXT_FILE_RE.test(normalizedFilePath)) return;
+
+        const cachedCorpusFiles = novelCorpusCacheRef.current.get(folderPath);
+        if (!cachedCorpusFiles) {
+          novelCorpusCacheRef.current.delete(folderPath);
+          setNovelCorpusReloadToken((prev) => prev + 1);
+          return;
+        }
+
+        try {
+          const raw = await ipc.invoke('read-file', detail.filePath);
+          if (cancelled) return;
+
+          const nextItem: NovelCorpusFile = {
+            path: detail.filePath,
+            label: buildRelativeFileLabel(folderPath, detail.filePath),
+            content: raw.trim(),
+          };
+          const withoutCurrent = cachedCorpusFiles.filter((item) => item.path !== detail.filePath);
+          const nextCorpusFiles = nextItem.content ? [...withoutCurrent, nextItem] : withoutCurrent;
+          nextCorpusFiles.sort((left, right) =>
+            left.path.localeCompare(right.path, 'zh-CN', { numeric: true })
+          );
+          novelCorpusCacheRef.current.set(folderPath, nextCorpusFiles);
+          setNovelCorpusFiles(nextCorpusFiles);
+          setNovelCorpusError('');
+        } catch {
+          if (cancelled) return;
+          novelCorpusCacheRef.current.delete(folderPath);
+          setNovelCorpusReloadToken((prev) => prev + 1);
+        }
+      };
+
+      document.addEventListener(NOVEL_EDITOR_FILE_SAVED_EVENT, handleFileSaved as EventListener);
+      return () => {
+        cancelled = true;
+        document.removeEventListener(
+          NOVEL_EDITOR_FILE_SAVED_EVENT,
+          handleFileSaved as EventListener
+        );
+      };
+    }, [folderPath]);
 
     useEffect(() => {
       if (!charactersLoaded) return;
@@ -689,6 +881,73 @@ export const CharactersView: React.FC<{
       if (!characters.some((item) => item.id === initialSelectedCharacterId)) return;
       setSelectedCharacterId(initialSelectedCharacterId);
     }, [characters, initialSelectedCharacterId]);
+
+    useEffect(() => {
+      const ipc = window.electron?.ipcRenderer;
+      const storageKey =
+        selectedCharacterId !== null
+          ? createCharacterTimelineStorageKey(novelId, selectedCharacterId)
+          : null;
+      if (!ipc || !storageKey) {
+        setPersistedTimelineItems([]);
+        return;
+      }
+
+      let cancelled = false;
+      void ipc
+        .invoke('db-settings-get', storageKey)
+        .then((raw) => {
+          if (cancelled) return;
+          setPersistedTimelineItems(parseCharacterTimelineItems(raw as string | null));
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setPersistedTimelineItems([]);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [novelId, selectedCharacterId]);
+
+    useEffect(() => {
+      const ipc = window.electron?.ipcRenderer;
+      const storageKey =
+        selectedCharacterId !== null
+          ? createCharacterTimelineOrderStorageKey(novelId, selectedCharacterId)
+          : null;
+      if (!ipc || !storageKey) {
+        setPersistedTimelineOrderKeys([]);
+        return;
+      }
+
+      let cancelled = false;
+      void ipc
+        .invoke('db-settings-get', storageKey)
+        .then((raw) => {
+          if (cancelled) return;
+          setPersistedTimelineOrderKeys(parseTimelineOrderKeys(raw as string | null));
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setPersistedTimelineOrderKeys([]);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [novelId, selectedCharacterId]);
+
+    useEffect(() => {
+      setTimelineEditor(null);
+      setTimelineDraftTitle('');
+      setTimelineDraftSummary('');
+      setTimelineDragIndex(null);
+      setTimelineDropIndex(null);
+    }, [selectedCharacterId]);
+
     const selectedRelations = selectedCharacter
       ? links.filter(
           (item) => item.sourceId === selectedCharacter.id || item.targetId === selectedCharacter.id
@@ -721,6 +980,268 @@ export const CharactersView: React.FC<{
       });
       return Array.from(stats.entries()).map(([stage, count]) => ({ stage, count }));
     }, [relations]);
+
+    const focusedTimelineAuto = useMemo(() => {
+      if (!selectedCharacter) return [];
+
+      const sourceFiles =
+        novelCorpusFiles.length > 0
+          ? novelCorpusFiles
+          : novelCorpusError && debouncedContent.trim()
+            ? [
+                {
+                  path: '__current__',
+                  label: '当前正文',
+                  content: debouncedContent.trim(),
+                } satisfies NovelCorpusFile,
+              ]
+            : [];
+
+      return sourceFiles.flatMap((file) =>
+        extractCharacterTimeline(file.content, [
+          selectedCharacter.name,
+          ...(selectedCharacter.aliases || []),
+        ]).map((entry) => ({
+          id: `${file.path}::${entry.key}`,
+          autoKey: `${file.path}::${entry.key}`,
+          title: `${file.label} · ${entry.title}`,
+          summary: entry.summary,
+          source: 'auto' as const,
+          mentionCount: entry.mentionCount,
+          sourceLabel: file.label,
+        }))
+      );
+    }, [debouncedContent, novelCorpusError, novelCorpusFiles, selectedCharacter]);
+
+    const focusedTimeline = useMemo(
+      () =>
+        mergeCharacterTimelineItems(
+          focusedTimelineAuto,
+          persistedTimelineItems,
+          persistedTimelineOrderKeys
+        ),
+      [focusedTimelineAuto, persistedTimelineItems, persistedTimelineOrderKeys]
+    );
+
+    const persistCharacterTimelineItems = useCallback(
+      async (characterId: number, nextItems: CharacterTimelineItem[]) => {
+        const ipc = window.electron?.ipcRenderer;
+        const storageKey = createCharacterTimelineStorageKey(novelId, characterId);
+        if (!ipc || !storageKey) return;
+        await ipc.invoke('db-settings-set', storageKey, JSON.stringify(nextItems));
+        if (selectedCharacterId === characterId) {
+          setPersistedTimelineItems(nextItems);
+        }
+      },
+      [novelId, selectedCharacterId]
+    );
+
+    const persistCharacterTimelineOrderKeys = useCallback(
+      async (characterId: number, nextOrderKeys: string[]) => {
+        const ipc = window.electron?.ipcRenderer;
+        const storageKey = createCharacterTimelineOrderStorageKey(novelId, characterId);
+        if (!ipc || !storageKey) return;
+        await ipc.invoke('db-settings-set', storageKey, JSON.stringify(nextOrderKeys));
+        if (selectedCharacterId === characterId) {
+          setPersistedTimelineOrderKeys(nextOrderKeys);
+        }
+      },
+      [novelId, selectedCharacterId]
+    );
+
+    const resetTimelineEditor = useCallback(() => {
+      setTimelineEditor(null);
+      setTimelineDraftTitle('');
+      setTimelineDraftSummary('');
+    }, []);
+
+    const handleStartEditTimelineItem = useCallback((item: CharacterTimelineItem) => {
+      setTimelineEditor({
+        itemId: item.id,
+        mode: 'edit',
+        source: item.source,
+        autoKey: item.autoKey,
+        sourceLabel: item.sourceLabel,
+      });
+      setTimelineDraftTitle(item.title);
+      setTimelineDraftSummary(item.summary);
+    }, []);
+
+    const handleStartCreateManualTimelineItem = useCallback(() => {
+      const itemId = `manual-${Date.now()}`;
+      setTimelineEditor({
+        itemId,
+        mode: 'create-manual',
+        source: 'manual',
+        sourceLabel: '手工整理',
+      });
+      setTimelineDraftTitle('');
+      setTimelineDraftSummary('');
+    }, []);
+
+    const hasTimelineOverride = useCallback(
+      (item: CharacterTimelineItem) => {
+        return persistedTimelineItems.some(
+          (saved) => saved.id === item.id || (item.autoKey && saved.autoKey === item.autoKey)
+        );
+      },
+      [persistedTimelineItems]
+    );
+
+    const handleSaveTimelineItem = useCallback(async () => {
+      if (!selectedCharacter || !timelineEditor) return;
+
+      const title = timelineDraftTitle.trim();
+      const summary = timelineDraftSummary.trim();
+      if (!title || !summary) return;
+
+      const focusedItem = focusedTimeline.find((item) => item.id === timelineEditor.itemId) || null;
+      const nextItem: CharacterTimelineItem = {
+        id: timelineEditor.itemId,
+        title,
+        summary,
+        source: timelineEditor.source,
+        autoKey: timelineEditor.autoKey || focusedItem?.autoKey,
+        mentionCount:
+          timelineEditor.source === 'auto' ? (focusedItem?.mentionCount ?? 0) : undefined,
+        sourceLabel: timelineEditor.sourceLabel || focusedItem?.sourceLabel,
+      };
+
+      const nextPersistedItems = [...persistedTimelineItems];
+      const existingIndex = nextPersistedItems.findIndex(
+        (item) => item.id === nextItem.id || (nextItem.autoKey && item.autoKey === nextItem.autoKey)
+      );
+
+      if (existingIndex >= 0) {
+        nextPersistedItems.splice(existingIndex, 1, nextItem);
+      } else {
+        nextPersistedItems.push(nextItem);
+      }
+
+      const nextOrderKeys =
+        persistedTimelineOrderKeys.length > 0
+          ? [...persistedTimelineOrderKeys]
+          : focusedTimeline.map((item) => getCharacterTimelineOrderKey(item));
+      const nextOrderKey = getCharacterTimelineOrderKey(nextItem);
+      const shouldAppendToOrder =
+        timelineEditor.mode === 'create-manual' && !nextOrderKeys.includes(nextOrderKey);
+      if (shouldAppendToOrder) {
+        nextOrderKeys.push(nextOrderKey);
+      }
+
+      setTimelineSaving(true);
+      try {
+        await persistCharacterTimelineItems(selectedCharacter.id, nextPersistedItems);
+        if (shouldAppendToOrder) {
+          await persistCharacterTimelineOrderKeys(selectedCharacter.id, nextOrderKeys);
+        }
+        resetTimelineEditor();
+      } finally {
+        setTimelineSaving(false);
+      }
+    }, [
+      focusedTimeline,
+      persistedTimelineItems,
+      persistCharacterTimelineItems,
+      persistCharacterTimelineOrderKeys,
+      persistedTimelineOrderKeys,
+      resetTimelineEditor,
+      selectedCharacter,
+      timelineDraftSummary,
+      timelineDraftTitle,
+      timelineEditor,
+    ]);
+
+    const handleRestoreAutoTimelineItem = useCallback(
+      async (item: CharacterTimelineItem) => {
+        if (!selectedCharacter || !item.autoKey) return;
+        const nextPersistedItems = persistedTimelineItems.filter(
+          (saved) => saved.id !== item.id && saved.autoKey !== item.autoKey
+        );
+        await persistCharacterTimelineItems(selectedCharacter.id, nextPersistedItems);
+        if (timelineEditor?.itemId === item.id) {
+          resetTimelineEditor();
+        }
+      },
+      [
+        persistedTimelineItems,
+        persistCharacterTimelineItems,
+        resetTimelineEditor,
+        selectedCharacter,
+        timelineEditor,
+      ]
+    );
+
+    const handleDeleteManualTimelineItem = useCallback(
+      async (itemId: string) => {
+        if (!selectedCharacter) return;
+        const nextPersistedItems = persistedTimelineItems.filter((item) => item.id !== itemId);
+        const nextOrderKeys = persistedTimelineOrderKeys.filter((key) => key !== itemId);
+        await persistCharacterTimelineItems(selectedCharacter.id, nextPersistedItems);
+        await persistCharacterTimelineOrderKeys(selectedCharacter.id, nextOrderKeys);
+        if (timelineEditor?.itemId === itemId) {
+          resetTimelineEditor();
+        }
+      },
+      [
+        persistedTimelineItems,
+        persistedTimelineOrderKeys,
+        persistCharacterTimelineItems,
+        persistCharacterTimelineOrderKeys,
+        resetTimelineEditor,
+        selectedCharacter,
+        timelineEditor,
+      ]
+    );
+
+    const handleTimelineDragStart = useCallback(
+      (event: React.DragEvent<HTMLButtonElement>, index: number) => {
+        if (timelineEditor) {
+          event.preventDefault();
+          return;
+        }
+        setTimelineDragIndex(index);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(index));
+      },
+      [timelineEditor]
+    );
+
+    const handleTimelineDragEnd = useCallback(() => {
+      setTimelineDragIndex(null);
+      setTimelineDropIndex(null);
+    }, []);
+
+    const handleTimelineDragOver = useCallback(
+      (event: React.DragEvent<HTMLDivElement>, index: number) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        if (timelineDragIndex === null || timelineDragIndex === index) return;
+        setTimelineDropIndex(index);
+      },
+      [timelineDragIndex]
+    );
+
+    const handleTimelineDrop = useCallback(
+      async (event: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
+        event.preventDefault();
+        if (!selectedCharacter || timelineDragIndex === null || timelineDragIndex === targetIndex) {
+          setTimelineDragIndex(null);
+          setTimelineDropIndex(null);
+          return;
+        }
+
+        const reordered = [...focusedTimeline];
+        const [movedItem] = reordered.splice(timelineDragIndex, 1);
+        reordered.splice(targetIndex, 0, movedItem);
+        const nextOrderKeys = reordered.map((item) => getCharacterTimelineOrderKey(item));
+
+        await persistCharacterTimelineOrderKeys(selectedCharacter.id, nextOrderKeys);
+        setTimelineDragIndex(null);
+        setTimelineDropIndex(null);
+      },
+      [focusedTimeline, persistCharacterTimelineOrderKeys, selectedCharacter, timelineDragIndex]
+    );
 
     const filteredCharacters = useMemo(() => {
       const normalizedSearch = characterSearch.trim().toLowerCase();
@@ -1032,6 +1553,9 @@ export const CharactersView: React.FC<{
     const activeCampCount = Object.values(clusteredCharacters).filter(
       (items) => items.length > 0
     ).length;
+    const focusedTimelineEditedCount = focusedTimeline.filter((item) =>
+      hasTimelineOverride(item)
+    ).length;
 
     if (detailMode) {
       return (
@@ -1042,7 +1566,9 @@ export const CharactersView: React.FC<{
                 <div className={styles.workspaceEyebrow}>人物资料</div>
                 <h2 className={styles.workspaceTitle}>{focusedCharacter.name}</h2>
                 <p className={styles.workspaceDesc}>
-                  {focusedCharacter.description || '这个人物还没有补充详细描述。'}
+                  {focusedTimeline.length > 0
+                    ? `已从整个作品目录中按顺序整理出 ${focusedTimeline.length} 段关键经历，覆盖前期到后期的主要推进。`
+                    : focusedCharacter.description || '这个人物还没有补充详细描述。'}
                 </p>
                 <div className={styles.workspaceMetaRow}>
                   <span className={styles.workspaceChip}>
@@ -1054,8 +1580,193 @@ export const CharactersView: React.FC<{
                   <span className={styles.workspaceChip}>阵营 {focusedCamp || 'support'}</span>
                   <span className={styles.workspaceChip}>正文热度 {focusedHeat}</span>
                   <span className={styles.workspaceChip}>关系 {selectedRelations.length}</span>
+                  <span className={styles.workspaceChip}>经历节点 {focusedTimeline.length}</span>
+                  <span className={styles.workspaceChip}>
+                    手工修订 {focusedTimelineEditedCount}
+                  </span>
+                  <span className={styles.workspaceChip}>作品正文 {novelCorpusFiles.length}</span>
                 </div>
               </section>
+
+              <section className={styles.workspaceCardShell}>
+                <div className={styles.workspaceCardHeader}>
+                  <span className={styles.workspaceSectionTitle}>经历时间线</span>
+                  <div className={styles.characterTimelineHeaderActions}>
+                    <span className={styles.workspaceListHint}>
+                      按整个作品目录的正文顺序自动提取，可拖动左侧手柄重排，也可直接手工修订和补充
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={handleStartCreateManualTimelineItem}
+                    >
+                      新增手工条目
+                    </button>
+                  </div>
+                </div>
+                {novelCorpusLoading ? (
+                  <div className={styles.workspaceBodyCopy}>正在汇总整个作品目录中的正文内容…</div>
+                ) : novelCorpusError ? (
+                  <div className={styles.emptyHint}>作品语料加载失败：{novelCorpusError}</div>
+                ) : focusedTimeline.length > 0 ? (
+                  <div className={styles.characterTimelineList}>
+                    {focusedTimeline.map((item, index) => {
+                      const isEditing = timelineEditor?.itemId === item.id;
+                      const isManualItem = item.source === 'manual';
+                      const hasManualRevision = item.source === 'auto' && hasTimelineOverride(item);
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`${styles.characterTimelineItem} ${
+                            timelineDragIndex === index ? styles.characterTimelineDragging : ''
+                          } ${timelineDropIndex === index ? styles.characterTimelineDropTarget : ''}`}
+                          onDragOver={(event) => handleTimelineDragOver(event, index)}
+                          onDrop={(event) => void handleTimelineDrop(event, index)}
+                        >
+                          <div className={styles.characterTimelineMarker}>
+                            <button
+                              type="button"
+                              className={styles.characterTimelineHandle}
+                              title={isEditing ? '编辑中不可拖拽' : '拖拽排序'}
+                              aria-label={isEditing ? '编辑中不可拖拽' : '拖拽排序'}
+                              draggable={!isEditing}
+                              disabled={isEditing}
+                              onDragStart={(event) => handleTimelineDragStart(event, index)}
+                              onDragEnd={handleTimelineDragEnd}
+                            >
+                              <span
+                                className={styles.characterTimelineHandleDots}
+                                aria-hidden="true"
+                              >
+                                <span className={styles.characterTimelineHandleDot} />
+                                <span className={styles.characterTimelineHandleDot} />
+                                <span className={styles.characterTimelineHandleDot} />
+                                <span className={styles.characterTimelineHandleDot} />
+                                <span className={styles.characterTimelineHandleDot} />
+                                <span className={styles.characterTimelineHandleDot} />
+                              </span>
+                            </button>
+                            <div className={styles.characterTimelineIndexBadge}>
+                              {String(index + 1).padStart(2, '0')}
+                            </div>
+                          </div>
+                          <div className={styles.characterTimelineBody}>
+                            <div className={styles.characterTimelineHeader}>
+                              <div>
+                                <div className={styles.characterTimelineTitleRow}>
+                                  <div className={styles.workspaceListTitle}>{item.title}</div>
+                                  {isManualItem && (
+                                    <span className={styles.characterTimelineManualBadge}>
+                                      手工整理
+                                    </span>
+                                  )}
+                                  {hasManualRevision && (
+                                    <span className={styles.characterTimelineEditedBadge}>
+                                      已手工修订
+                                    </span>
+                                  )}
+                                </div>
+                                {item.sourceLabel && (
+                                  <div className={styles.characterTimelineSource}>
+                                    {item.sourceLabel}
+                                  </div>
+                                )}
+                              </div>
+                              <div className={styles.characterTimelineMeta}>
+                                {item.source === 'manual'
+                                  ? '手工条目'
+                                  : `提及 ${item.mentionCount || 0} 次`}
+                              </div>
+                            </div>
+                            {timelineEditor?.itemId === item.id ? (
+                              <div className={styles.characterTimelineEditor}>
+                                <input
+                                  value={timelineDraftTitle}
+                                  onChange={(event) => setTimelineDraftTitle(event.target.value)}
+                                  placeholder="经历标题，例如：第三卷 · 身份暴露"
+                                  className={styles.formInput}
+                                />
+                                <textarea
+                                  value={timelineDraftSummary}
+                                  onChange={(event) => setTimelineDraftSummary(event.target.value)}
+                                  placeholder="补充这一段经历的真正变化、结果和影响"
+                                  className={styles.formTextarea}
+                                  rows={4}
+                                />
+                                <div className={styles.characterTimelineActionRow}>
+                                  <button
+                                    type="button"
+                                    className={styles.submitButton}
+                                    disabled={timelineSaving}
+                                    onClick={() => void handleSaveTimelineItem()}
+                                  >
+                                    {timelineSaving ? '保存中...' : '保存修订'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={resetTimelineEditor}
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className={styles.workspaceListDesc}>{item.summary}</div>
+                                <div className={styles.characterTimelineActionRow}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() => handleStartEditTimelineItem(item)}
+                                  >
+                                    手工修订
+                                  </button>
+                                  {item.source === 'auto' && hasTimelineOverride(item) && (
+                                    <button
+                                      type="button"
+                                      className={styles.secondaryButton}
+                                      onClick={() => void handleRestoreAutoTimelineItem(item)}
+                                    >
+                                      恢复自动
+                                    </button>
+                                  )}
+                                  {item.source === 'manual' && (
+                                    <button
+                                      type="button"
+                                      className={styles.secondaryButton}
+                                      onClick={() => void handleDeleteManualTimelineItem(item.id)}
+                                    >
+                                      删除条目
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className={styles.emptyHint}>
+                    整个作品目录里还没有抽取到这个人物的明确经历。
+                  </div>
+                )}
+              </section>
+
+              {focusedCharacter.description && (
+                <section className={styles.workspaceCardShell}>
+                  <div className={styles.workspaceCardHeader}>
+                    <span className={styles.workspaceSectionTitle}>资料摘要</span>
+                    <span className={styles.workspaceListHint}>
+                      保留资料库中的原始描述，便于后续手工修订
+                    </span>
+                  </div>
+                  <div className={styles.workspaceBodyCopy}>{focusedCharacter.description}</div>
+                </section>
+              )}
 
               <section className={styles.workspaceCardShell}>
                 <div className={styles.workspaceCardHeader}>

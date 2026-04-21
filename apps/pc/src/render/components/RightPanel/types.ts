@@ -168,6 +168,16 @@ export interface Character {
   highlightFirstMentionOnly?: boolean;
 }
 
+export interface CharacterTimelineItem {
+  id: string;
+  title: string;
+  summary: string;
+  source: 'auto' | 'manual';
+  autoKey?: string;
+  mentionCount?: number;
+  sourceLabel?: string;
+}
+
 export interface CharacterLink {
   sourceId: number;
   targetId: number;

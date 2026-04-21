@@ -35,11 +35,20 @@ import type { CharacterHighlightPattern } from './writing-decorations';
 import { inlineDiffField, inlineDiffTheme, setInlineDiffEffect } from './inline-diff';
 import type { InlineDiffRange } from './inline-diff';
 import { buildThousandCharMarkers } from '../../utils/contentStats';
+import { NOVEL_EDITOR_FILE_SAVED_EVENT } from '../../utils/editor-events';
 import styles from './styles.module.scss';
 
 /** Threshold: files larger than this show a performance warning */
 const LARGE_FILE_THRESHOLD = 500_000; // 500KB
 const DEFAULT_SHOW_LINE_NUMBERS = false;
+
+function emitFileSaved(filePath: string, mode: 'auto' | 'manual') {
+  document.dispatchEvent(
+    new CustomEvent(NOVEL_EDITOR_FILE_SAVED_EVENT, {
+      detail: { filePath, mode },
+    })
+  );
+}
 
 interface CursorPosition {
   line: number;
@@ -620,6 +629,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
         setHasChanges(false);
         setLastSaved(new Date());
       }
+      emitFileSaved(targetPath, 'auto');
     } catch (err) {
       console.error('Auto-save failed:', err);
     } finally {
@@ -663,6 +673,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
         setHasChanges(false);
         setLastSaved(new Date());
       }
+      emitFileSaved(targetPath, 'manual');
       toast.success('保存成功');
     } catch (err) {
       console.error('Manual save failed:', err);
