@@ -145,9 +145,31 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
+          function Resolve-KnownFolderPath {
+            param(
+              [string]$specialFolder,
+              [string]$fallbackPath
+            )
+
+            $resolved = [Environment]::GetFolderPath([System.Environment+SpecialFolder]::$specialFolder)
+            if (-not [string]::IsNullOrWhiteSpace($resolved)) {
+              return $resolved
+            }
+
+            return $fallbackPath
+          }
+
           # 升级后必须保留桌面与开始菜单快捷方式。
-          $desktopShortcut = Join-Path $env:USERPROFILE 'Desktop\Novel Editor.lnk'
-          $startMenuShortcut = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Novel Editor.lnk'
+          # GitHub Actions Windows runner 可能重定向桌面目录，不能直接硬编码 USERPROFILE\Desktop。
+          $desktopDirectory = Resolve-KnownFolderPath `
+            -specialFolder 'DesktopDirectory' `
+            -fallbackPath (Join-Path $env:USERPROFILE 'Desktop')
+          $programsDirectory = Resolve-KnownFolderPath `
+            -specialFolder 'Programs' `
+            -fallbackPath (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs')
+
+          $desktopShortcut = Join-Path $desktopDirectory 'Novel Editor.lnk'
+          $startMenuShortcut = Join-Path $programsDirectory 'Novel Editor.lnk'
 
           $shortcutPaths = @($desktopShortcut, $startMenuShortcut)
           $shell = New-Object -ComObject WScript.Shell
