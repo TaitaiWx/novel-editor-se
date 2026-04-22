@@ -15,7 +15,8 @@ describe('extractCharacterTimeline', () => {
     const timeline = extractCharacterTimeline(text, ['沈岳']);
 
     expect(timeline).toHaveLength(3);
-    expect(timeline[0]?.title).toContain('第一章');
+    expect(timeline[0]?.chapterLabel).toContain('第一章');
+    expect(timeline[0]?.title).toContain('初入宗门');
     expect(timeline[1]?.summary).toContain('矿洞');
     expect(timeline[2]?.summary).toContain('炼药房');
   });
@@ -30,6 +31,7 @@ describe('extractCharacterTimeline', () => {
     const timeline = extractCharacterTimeline(text, ['沈岳', '沈师兄']);
 
     expect(timeline).toHaveLength(2);
+    expect(timeline[0]?.chapterLabel).toContain('第一章');
     expect(timeline[0]?.summary).toContain('沈岳拜入外门');
     expect(timeline[1]?.summary).toContain('独自炼体');
   });
@@ -44,6 +46,20 @@ describe('extractCharacterTimeline', () => {
     const timeline = extractCharacterTimeline(text, ['沈岳']);
 
     expect(timeline.length).toBeGreaterThan(0);
-    expect(timeline[0]?.title).toContain('正文片段');
+    expect(timeline[0]?.chapterLabel).toContain('正文片段');
+  });
+
+  it('支持用文件名作为章节标签回退', () => {
+    const text = `沈岳服下玄灵丹，成功突破练气后期。
+
+随后他打开储物袋，开始整理刚得到的剑修传承。`;
+
+    const timeline = extractCharacterTimeline(text, ['沈岳'], {
+      fallbackChapterLabel: '第23章 服用玄灵丹',
+    });
+
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0]?.chapterLabel).toBe('第23章');
+    expect(timeline[0]?.chapterNumber).toBe(23);
   });
 });

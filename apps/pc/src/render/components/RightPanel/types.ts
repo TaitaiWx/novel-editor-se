@@ -34,15 +34,15 @@ export interface PlotSceneBoard {
   tension: string;
   outcome: string;
   status: 'draft' | 'ready' | 'done';
-  /** Characters involved in this scene */
+  /** 场景涉及人物 */
   characters: string[];
-  /** Beat notes within the scene */
+  /** 场景内节拍 */
   beats: string[];
-  /** Causal link: key of the scene this scene causes/leads to */
+  /** 因果链：当前场景指向的下一个场景 */
   causesScene: string | null;
-  /** POV character for swimlane placement */
+  /** 泳道视图使用的 POV 人物 */
   pov: string;
-  /** Emotional intensity 1-5 for visual heat mapping */
+  /** 情绪强度 1-5，用于热度可视化 */
   intensity: number;
 }
 
@@ -156,12 +156,19 @@ export interface RightPanelProps {
   currentLine?: number;
 }
 
+export interface CharacterCurrentStateItem {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface Character {
   id: number;
   name: string;
   role: string;
   category: CharacterCategory;
   description: string;
+  currentState: CharacterCurrentStateItem[];
   avatar?: string;
   aliases?: string[];
   highlightColor?: string;
@@ -176,6 +183,11 @@ export interface CharacterTimelineItem {
   autoKey?: string;
   mentionCount?: number;
   sourceLabel?: string;
+  chapterLabel?: string;
+  chapterNumber?: number;
+  sourcePath?: string;
+  startLine?: number;
+  endLine?: number;
 }
 
 export interface CharacterLink {

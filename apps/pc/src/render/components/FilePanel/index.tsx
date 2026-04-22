@@ -70,6 +70,7 @@ interface FilePanelProps {
   storyOrderMap?: StoryOrderMap;
   showFileSizes?: boolean;
   quickOpenShortcut?: string;
+  revealFileRequest?: { path: string; id: string } | null;
   isLoading: boolean;
   onFileSelect: (filePath: string) => void;
   onOpenCharacterNode: (characterId: number) => void;
@@ -326,6 +327,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     storyOrderMap = {},
     showFileSizes = true,
     quickOpenShortcut = 'Mod+P',
+    revealFileRequest = null,
     isLoading,
     onFileSelect,
     onOpenCharacterNode,
@@ -385,6 +387,8 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     );
     const searchInputRef = useRef<HTMLInputElement>(null);
     const createMenuButtonRef = useRef<HTMLButtonElement>(null);
+    const revealResetTimerRef = useRef<number | null>(null);
+    const storyNodeRefsRef = useRef<Map<string, HTMLDivElement>>(new Map());
     const lastCharacterStatusSignatureRef = useRef<string | null>(null);
     const shouldShowLoadingState = isLoading && !folderPath && files.length === 0;
     const isWorkspaceBusy = isLoading && Boolean(folderPath);
@@ -592,19 +596,69 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       });
     }, []);
 
+    const triggerRevealPath = useCallback((path: string) => {
+      if (revealResetTimerRef.current !== null) {
+        window.clearTimeout(revealResetTimerRef.current);
+      }
+      setRevealPath(path);
+      revealResetTimerRef.current = window.setTimeout(() => {
+        setRevealPath((current) => (current === path ? null : current));
+        revealResetTimerRef.current = null;
+      }, 420);
+    }, []);
+
+    useEffect(() => {
+      return () => {
+        if (revealResetTimerRef.current !== null) {
+          window.clearTimeout(revealResetTimerRef.current);
+        }
+      };
+    }, []);
+
+    useEffect(() => {
+      if (!revealFileRequest?.path) return;
+      setSearchQuery('');
+      setShowSearch(false);
+      setCollapsedSections((prev) => (prev.story ? { ...prev, story: false } : prev));
+      setExpandedStoryDirs((prev) => {
+        const next = new Set(prev);
+        findAncestorPaths(storyDisplayNodes, revealFileRequest.path).forEach((path) =>
+          next.add(path)
+        );
+        return next;
+      });
+      triggerRevealPath(revealFileRequest.path);
+    }, [revealFileRequest?.id, revealFileRequest?.path, storyDisplayNodes, triggerRevealPath]);
+
+    useEffect(() => {
+      if (!revealPath) return;
+      let outerFrame = 0;
+      let innerFrame = 0;
+      outerFrame = window.requestAnimationFrame(() => {
+        innerFrame = window.requestAnimationFrame(() => {
+          const target = storyNodeRefsRef.current.get(revealPath);
+          if (!target) return;
+          target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          target.focus({ preventScroll: true });
+        });
+      });
+      return () => {
+        window.cancelAnimationFrame(outerFrame);
+        window.cancelAnimationFrame(innerFrame);
+      };
+    }, [expandedStoryDirs, revealPath]);
+
     // 搜索结果中选择文件时：关闭搜索、展开目录、选中文件
     const handleFileSelectFromSearch = useCallback(
       (filePath: string) => {
         if (searchQuery.trim()) {
           setSearchQuery('');
           setShowSearch(false);
-          setRevealPath(filePath);
-          // revealPath 用完后清除，避免影响后续手动折叠
-          setTimeout(() => setRevealPath(null), 300);
+          triggerRevealPath(filePath);
         }
         onFileSelect(filePath);
       },
-      [searchQuery, onFileSelect]
+      [searchQuery, onFileSelect, triggerRevealPath]
     );
 
     // Cmd+P 快捷键打开搜索
@@ -769,6 +823,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     ): React.ReactNode => {
       if (node.type === 'directory') {
         const expanded = expandedStoryDirs.has(node.path);
+        const isRevealedNode = revealPath === node.path;
         const directoryMeta = getStoryDirectoryMeta(node.name);
         const directoryTypeClass =
           directoryMeta.label === '卷'
@@ -785,17 +840,25 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
         const isReorderableDirectory =
           Boolean(parentPath) && !isVolumeNode && !isSyntheticVolume && Boolean(onReorderStoryNode);
         const currentDropMode = storyDropTarget?.path === node.path ? storyDropTarget.mode : null;
+
         return (
           <div key={node.path} className={styles.storyNode}>
             <div className={styles.storyNodeRow} style={{ paddingLeft: `${14 + level * 16}px` }}>
               <div
+                ref={(element) => {
+                  if (element) {
+                    storyNodeRefsRef.current.set(node.path, element);
+                    return;
+                  }
+                  storyNodeRefsRef.current.delete(node.path);
+                }}
                 role="button"
                 tabIndex={0}
                 aria-expanded={expanded}
                 draggable={isReorderableDirectory}
                 className={`${groupRowClassName} ${
                   isActiveVolume ? styles.storyNodeButtonActive : ''
-                } ${
+                } ${isRevealedNode ? styles.storyNodeButtonReveal : ''} ${
                   currentDropMode === 'inside'
                     ? styles.storyNodeDropTargetInside
                     : currentDropMode === 'before'
@@ -877,19 +940,28 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       }
 
       const isSelectedChapter = selectedFile === node.path;
+      const isRevealedNode = revealPath === node.path;
       const fileMeta = getStoryFileMeta(node.name);
       const fileTypeClass =
         fileMeta.label === '章' ? styles.storyNodeTypeChapter : styles.storyNodeTypeDraft;
       const currentDropMode = storyDropTarget?.path === node.path ? storyDropTarget.mode : null;
+
       return (
         <div key={node.path} className={styles.storyNode}>
           <div
+            ref={(element) => {
+              if (element) {
+                storyNodeRefsRef.current.set(node.path, element);
+                return;
+              }
+              storyNodeRefsRef.current.delete(node.path);
+            }}
             role="button"
             tabIndex={0}
             draggable={Boolean(parentPath && onReorderStoryNode)}
             className={`${itemRowClassName} ${
               isSelectedChapter ? styles.storyNodeButtonActive : ''
-            } ${
+            } ${isRevealedNode ? styles.storyNodeButtonReveal : ''} ${
               currentDropMode === 'before'
                 ? styles.storyNodeDropTargetBefore
                 : currentDropMode === 'after'

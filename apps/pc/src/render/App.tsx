@@ -729,6 +729,10 @@ const App: React.FC = () => {
   const [initialViewportSnapshots, setInitialViewportSnapshots] = useState<
     Record<string, EditorViewportSnapshot>
   >({});
+  const [filePanelRevealRequest, setFilePanelRevealRequest] = useState<{
+    path: string;
+    id: string;
+  } | null>(null);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(
@@ -882,6 +886,7 @@ const App: React.FC = () => {
   appSettingsRef.current = appSettings;
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
+  const filePanelRevealCounterRef = useRef(0);
   const openTabsRef = useRef(openTabs);
   openTabsRef.current = openTabs;
   const filesRef = useRef(files);
@@ -3088,13 +3093,41 @@ const App: React.FC = () => {
     setScrollToLine({ line, id: fnv1a32(contentKey ?? `line:${line}`) });
   }, []);
 
+  const handleTransientHighlightLine = useCallback((line: number) => {
+    setTransientHighlightLine({ line, id: fnv1a32(`line:${line}`) });
+  }, []);
+
+  const handleOpenSourceLocation = useCallback(
+    (filePath: string, line: number, contentKey?: string) => {
+      if (!filePath || line <= 0) return;
+      if (!filePath.startsWith('__')) {
+        if (focusMode) {
+          setFocusMode(false);
+        }
+        if (sidebarCollapsedRef.current) {
+          handleExpandSidebar();
+        }
+        setFilePanelRevealRequest({
+          path: filePath,
+          id: `reveal-${++filePanelRevealCounterRef.current}`,
+        });
+        openFileInTab(filePath);
+      }
+      handleScrollToLine(line, contentKey ?? `${filePath}:${line}`);
+      handleTransientHighlightLine(line);
+    },
+    [
+      focusMode,
+      handleExpandSidebar,
+      openFileInTab,
+      handleScrollToLine,
+      handleTransientHighlightLine,
+    ]
+  );
+
   const replaceIdRef = useRef(0);
   const handleReplaceLineText = useCallback((line: number, text: string) => {
     setReplaceLineRequest({ line, text, id: ++replaceIdRef.current });
-  }, []);
-
-  const handleTransientHighlightLine = useCallback((line: number) => {
-    setTransientHighlightLine({ line, id: fnv1a32(`line:${line}`) });
   }, []);
 
   const handleDiffRequest = useCallback(
@@ -4985,6 +5018,7 @@ const App: React.FC = () => {
           folderPath={folderPath}
           content={editorContent}
           onCharactersChange={syncWorkspaceCharacters}
+          onOpenSourceLocation={handleOpenSourceLocation}
         />
       ),
       [WORKSPACE_TAB_LORE]: (
@@ -5004,6 +5038,7 @@ const App: React.FC = () => {
                 content={editorContent}
                 initialSelectedCharacterId={selectedCharacterTabId}
                 onCharactersChange={syncWorkspaceCharacters}
+                onOpenSourceLocation={handleOpenSourceLocation}
               />
             ),
           }
@@ -5044,6 +5079,7 @@ const App: React.FC = () => {
       folderPath,
       openFileInTab,
       handleCreateStoryItem,
+      handleOpenSourceLocation,
       selectedCharacterTabId,
       selectedLoreEntryTabId,
       selectedVolumeNode,
@@ -5131,6 +5167,7 @@ const App: React.FC = () => {
                   folderPath={folderPath}
                   showFileSizes={appSettings.general.showFileSizes}
                   quickOpenShortcut={appSettings.shortcuts.quickOpen}
+                  revealFileRequest={filePanelRevealRequest}
                   isLoading={isLoading}
                   onFileSelect={handleFileSelect}
                   onOpenCharacterNode={handleOpenCharacterNode}

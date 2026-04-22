@@ -5,6 +5,8 @@ export interface CharacterTimelineEntry {
   key: string;
   title: string;
   summary: string;
+  chapterLabel: string;
+  chapterNumber?: number;
   mentionCount: number;
   startLine: number;
   endLine: number;
@@ -14,10 +16,13 @@ export interface ExtractCharacterTimelineOptions {
   maxEntries?: number;
   maxSummaryLength?: number;
   fallbackSegmentChars?: number;
+  fallbackChapterLabel?: string;
 }
 
 interface TimelineSection {
   title: string;
+  chapterLabel: string;
+  chapterNumber?: number;
   body: string;
   startLine: number;
   endLine: number;
@@ -26,6 +31,17 @@ interface TimelineSection {
 const SENTENCE_RE = /[^。！？!?；;\n]+[。！？!?；;]?/g;
 const DEFAULT_MAX_SUMMARY_LENGTH = 120;
 const DEFAULT_FALLBACK_SEGMENT_CHARS = 1200;
+const DEFAULT_EVENT_TITLE_LENGTH = 30;
+const RE_PRIMARY_CHAPTER = /^(第([一二三四五六七八九十百千万零〇两\d]+)([章节回集篇]))\s*(.*)$/;
+const RE_CONTAINER_CHAPTER = /^(第([一二三四五六七八九十百千万零〇两\d]+)([幕卷部]))\s*(.*)$/;
+const RE_NUMBERED_TITLE = /^(\d+(?:\.\d+)*)[.、)\s]\s*(.+)$/;
+
+interface ParsedChapterMeta {
+  label: string;
+  chapterNumber?: number;
+  remainder: string;
+  kind: 'primary' | 'container' | 'numbered' | 'other';
+}
 
 function normalizeKeywords(keywords: string[]): string[] {
   const unique = Array.from(
@@ -47,6 +63,100 @@ function normalizeComparableText(value: string): string {
     .replace(/\s+/g, '')
     .replace(/[。！？!?；;，,、]/g, '')
     .trim();
+}
+
+function parseChineseInteger(raw: string): number | undefined {
+  if (!raw) return undefined;
+  if (/^\d+$/.test(raw)) return Number(raw);
+
+  const digitMap: Record<string, number> = {
+    零: 0,
+    〇: 0,
+    一: 1,
+    二: 2,
+    两: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  };
+  const unitMap: Record<string, number> = {
+    十: 10,
+    百: 100,
+    千: 1000,
+    万: 10000,
+  };
+
+  let section = 0;
+  let total = 0;
+  let number = 0;
+
+  for (const char of raw) {
+    if (char in digitMap) {
+      number = digitMap[char];
+      continue;
+    }
+
+    const unit = unitMap[char];
+    if (!unit) return undefined;
+
+    if (unit === 10000) {
+      section = (section + (number || 0)) * unit;
+      total += section;
+      section = 0;
+      number = 0;
+      continue;
+    }
+
+    section += (number || 1) * unit;
+    number = 0;
+  }
+
+  const result = total + section + number;
+  return result > 0 ? result : undefined;
+}
+
+function parseChapterMeta(rawTitle: string): ParsedChapterMeta {
+  const title = rawTitle.trim();
+  const primaryMatch = title.match(RE_PRIMARY_CHAPTER);
+  if (primaryMatch) {
+    return {
+      label: primaryMatch[1].trim(),
+      chapterNumber: parseChineseInteger(primaryMatch[2]),
+      remainder: (primaryMatch[4] || '').trim(),
+      kind: 'primary',
+    };
+  }
+
+  const containerMatch = title.match(RE_CONTAINER_CHAPTER);
+  if (containerMatch) {
+    return {
+      label: containerMatch[1].trim(),
+      chapterNumber: parseChineseInteger(containerMatch[2]),
+      remainder: (containerMatch[4] || '').trim(),
+      kind: 'container',
+    };
+  }
+
+  const numberedMatch = title.match(RE_NUMBERED_TITLE);
+  if (numberedMatch) {
+    const prefix = numberedMatch[1];
+    return {
+      label: prefix,
+      chapterNumber: Number(prefix.split('.')[0]),
+      remainder: numberedMatch[2].trim(),
+      kind: 'numbered',
+    };
+  }
+
+  return {
+    label: title,
+    remainder: '',
+    kind: 'other',
+  };
 }
 
 function countKeywordMentions(text: string, keywords: string[]): number {
@@ -84,6 +194,32 @@ function clipSentence(sentence: string, maxSummaryLength: number): string {
   return `${clipped.trim()}…`;
 }
 
+function trimSentenceEnding(text: string): string {
+  return text.replace(/[。！？!?；;：:]+$/g, '').trim();
+}
+
+function buildEventTitle(
+  sectionTitle: string,
+  chapterLabel: string,
+  summary: string,
+  maxLength: number = DEFAULT_EVENT_TITLE_LENGTH
+): string {
+  const parsed = parseChapterMeta(sectionTitle);
+  const headingRemainder = trimSentenceEnding(parsed.remainder);
+  if (headingRemainder) {
+    return clipSentence(headingRemainder, maxLength).replace(/…$/g, '');
+  }
+
+  const candidateSentence = trimSentenceEnding(
+    (summary.match(SENTENCE_RE) || [summary])[0] || summary
+  );
+  if (candidateSentence) {
+    return clipSentence(candidateSentence, maxLength).replace(/…$/g, '');
+  }
+
+  return chapterLabel;
+}
+
 function buildSectionSummary(body: string, keywords: string[], maxSummaryLength: number): string {
   const normalizedBody = body.replace(/\r/g, '').replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
   if (!normalizedBody) return '';
@@ -116,16 +252,27 @@ function buildSectionSummary(body: string, keywords: string[], maxSummaryLength:
 }
 
 function selectTimelineAnchors(outline: OutlineNode[]): OutlineNode[] {
-  const normalized = outline.filter((item) => item.text.trim());
-  if (normalized.length < 2) return [];
+  const normalized = outline.filter((item) => item.text.trim() && item.source !== 'heuristic');
+  if (normalized.length === 0) return [];
 
-  const preferred = normalized.filter((item) => item.source !== 'heuristic');
-  if (preferred.length < 2) return [];
+  const primaryCandidates = normalized.filter((item) => {
+    const parsed = parseChapterMeta(item.text);
+    return parsed.kind === 'primary' || parsed.kind === 'numbered';
+  });
+  const candidates = primaryCandidates.length > 0 ? primaryCandidates : normalized;
 
-  const candidates = preferred;
-  const minLevel = Math.min(...candidates.map((item) => item.level));
-  const topLevel = candidates.filter((item) => item.level === minLevel);
-  return topLevel.length >= 2 ? topLevel : candidates;
+  const levelCounts = new Map<number, number>();
+  candidates.forEach((item) => {
+    levelCounts.set(item.level, (levelCounts.get(item.level) || 0) + 1);
+  });
+
+  const dominantLevel = Array.from(levelCounts.entries()).sort((left, right) => {
+    if (right[1] !== left[1]) return right[1] - left[1];
+    return left[0] - right[0];
+  })[0]?.[0];
+
+  if (dominantLevel === undefined) return [];
+  return candidates.filter((item) => item.level === dominantLevel);
 }
 
 function buildOutlineSections(content: string): TimelineSection[] {
@@ -134,6 +281,7 @@ function buildOutlineSections(content: string): TimelineSection[] {
   if (anchors.length === 0) return [];
 
   return anchors.map((anchor, index) => {
+    const parsed = parseChapterMeta(anchor.text);
     const nextLine = anchors[index + 1]?.line || lines.length + 1;
     const body = lines
       .slice(anchor.line, Math.max(anchor.line, nextLine - 1))
@@ -141,6 +289,8 @@ function buildOutlineSections(content: string): TimelineSection[] {
       .trim();
     return {
       title: anchor.text.trim() || `片段 ${index + 1}`,
+      chapterLabel: parsed.label || `片段 ${index + 1}`,
+      chapterNumber: parsed.chapterNumber,
       body,
       startLine: anchor.line,
       endLine: Math.max(anchor.line, nextLine - 1),
@@ -148,7 +298,26 @@ function buildOutlineSections(content: string): TimelineSection[] {
   });
 }
 
-function buildFallbackSections(content: string, fallbackSegmentChars: number): TimelineSection[] {
+function buildFallbackSections(
+  content: string,
+  fallbackSegmentChars: number,
+  fallbackChapterLabel?: string
+): TimelineSection[] {
+  if (fallbackChapterLabel) {
+    const lineCount = content.split(/\r?\n/).length;
+    const parsed = parseChapterMeta(fallbackChapterLabel);
+    return [
+      {
+        title: fallbackChapterLabel,
+        chapterLabel: parsed.label || fallbackChapterLabel,
+        chapterNumber: parsed.chapterNumber,
+        body: content.trim(),
+        startLine: 1,
+        endLine: lineCount,
+      },
+    ].filter((item) => item.body);
+  }
+
   const paragraphs = content
     .split(/\n{2,}/)
     .map((item) => item.trim())
@@ -168,6 +337,7 @@ function buildFallbackSections(content: string, fallbackSegmentChars: number): T
     const paragraphCount = currentParts.length;
     sections.push({
       title: `正文片段 ${sections.length + 1}`,
+      chapterLabel: `正文片段 ${sections.length + 1}`,
       body,
       startLine,
       endLine: startLine + paragraphCount - 1,
@@ -220,7 +390,13 @@ export function extractCharacterTimeline(
   const fallbackSegmentChars = options.fallbackSegmentChars ?? DEFAULT_FALLBACK_SEGMENT_CHARS;
   const sections = buildOutlineSections(normalizedContent);
   const timelineSections =
-    sections.length > 0 ? sections : buildFallbackSections(normalizedContent, fallbackSegmentChars);
+    sections.length > 0
+      ? sections
+      : buildFallbackSections(
+          normalizedContent,
+          fallbackSegmentChars,
+          options.fallbackChapterLabel
+        );
   const seenSummaryKeys = new Set<string>();
 
   const entries = timelineSections
@@ -234,10 +410,15 @@ export function extractCharacterTimeline(
       if (!summaryKey || seenSummaryKeys.has(summaryKey)) return null;
       seenSummaryKeys.add(summaryKey);
 
+      const chapterLabel = section.chapterLabel || section.title || `正文片段 ${index + 1}`;
+      const eventTitle = buildEventTitle(section.title, chapterLabel, summary);
+
       return {
         key: `${section.startLine}-${section.endLine}-${index}`,
-        title: section.title,
+        title: eventTitle,
         summary,
+        chapterLabel,
+        chapterNumber: section.chapterNumber,
         mentionCount,
         startLine: section.startLine,
         endLine: section.endLine,

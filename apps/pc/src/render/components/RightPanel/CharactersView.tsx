@@ -4,6 +4,7 @@ import { useDebounce } from './useDebounce';
 import styles from './styles.module.scss';
 import type {
   Character,
+  CharacterCurrentStateItem,
   CharacterRelation,
   RelationTone,
   CharacterCamp,
@@ -70,6 +71,80 @@ interface TimelineEditorState {
 
 const TIMELINE_TEXT_FILE_RE = /\.(md|markdown|txt)$/i;
 const NOVEL_CORPUS_READ_CONCURRENCY = 4;
+const DEFAULT_CURRENT_STATE_LABELS = ['当前进展', '当前危机', '当前目标', '关键能力', '关键资源'];
+
+function stripTimelineFileExtension(label: string): string {
+  return label.replace(TIMELINE_TEXT_FILE_RE, '');
+}
+
+function formatTimelineLineLabel(startLine?: number, endLine?: number): string {
+  if (typeof startLine !== 'number' || startLine <= 0) return '';
+  if (typeof endLine === 'number' && endLine > startLine) {
+    return `第 ${startLine}-${endLine} 行`;
+  }
+  return `第 ${startLine} 行`;
+}
+
+function createCurrentStateItem(label = '', value = ''): CharacterCurrentStateItem {
+  const generatedId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `state-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id: generatedId,
+    label,
+    value,
+  };
+}
+
+function cloneCurrentStateItems(items: CharacterCurrentStateItem[]): CharacterCurrentStateItem[] {
+  return items.map((item, index) => ({
+    id: item.id || `state-copy-${index}`,
+    label: item.label,
+    value: item.value,
+  }));
+}
+
+function buildDerivedCurrentStateItems(
+  character: Character | null,
+  timelineItems: CharacterTimelineItem[]
+): CharacterCurrentStateItem[] {
+  if (!character) return [];
+
+  const latestItem = timelineItems.length > 0 ? timelineItems[timelineItems.length - 1] : null;
+  const derivedItems: CharacterCurrentStateItem[] = [];
+
+  if (latestItem?.chapterLabel) {
+    derivedItems.push({
+      id: 'derived-current-chapter',
+      label: '当前章节',
+      value: latestItem.chapterLabel,
+    });
+  }
+  if (latestItem?.title) {
+    derivedItems.push({
+      id: 'derived-current-progress',
+      label: '当前进展',
+      value: latestItem.title,
+    });
+  }
+  if (latestItem?.summary) {
+    derivedItems.push({
+      id: 'derived-current-summary',
+      label: '当前状态',
+      value: latestItem.summary,
+    });
+  }
+  if (character.role.trim()) {
+    derivedItems.push({
+      id: 'derived-current-role',
+      label: '角色定位',
+      value: character.role.trim(),
+    });
+  }
+
+  return derivedItems;
+}
 
 function flattenFileNodes(nodes: FileNode[]): FileNode[] {
   return nodes.flatMap((node) => {
@@ -121,8 +196,15 @@ export const CharactersView: React.FC<{
   content: string;
   initialSelectedCharacterId?: number | null;
   onCharactersChange?: (characters: Character[]) => void;
+  onOpenSourceLocation?: (filePath: string, line: number, contentKey?: string) => void;
 }> = React.memo(
-  ({ folderPath, content, initialSelectedCharacterId = null, onCharactersChange }) => {
+  ({
+    folderPath,
+    content,
+    initialSelectedCharacterId = null,
+    onCharactersChange,
+    onOpenSourceLocation,
+  }) => {
     type CharacterCategoryFilter = CharacterCategory | 'all';
     const debouncedContent = useDebounce(content, 300);
     const [characters, setCharacters] = useState<Character[]>([]);
@@ -164,12 +246,18 @@ export const CharactersView: React.FC<{
     );
     const [persistedTimelineOrderKeys, setPersistedTimelineOrderKeys] = useState<string[]>([]);
     const [timelineEditor, setTimelineEditor] = useState<TimelineEditorState | null>(null);
+    const [timelineDraftChapterLabel, setTimelineDraftChapterLabel] = useState('');
     const [timelineDraftTitle, setTimelineDraftTitle] = useState('');
     const [timelineDraftSummary, setTimelineDraftSummary] = useState('');
     const [timelineSaving, setTimelineSaving] = useState(false);
     const [timelineDragIndex, setTimelineDragIndex] = useState<number | null>(null);
     const [timelineDropIndex, setTimelineDropIndex] = useState<number | null>(null);
     const [novelCorpusReloadToken, setNovelCorpusReloadToken] = useState(0);
+    const [currentStateEditing, setCurrentStateEditing] = useState(false);
+    const [currentStateDraftItems, setCurrentStateDraftItems] = useState<
+      CharacterCurrentStateItem[]
+    >([]);
+    const [currentStateSaving, setCurrentStateSaving] = useState(false);
     const dragCounter = useRef(0);
     const novelCorpusCacheRef = useRef<Map<string, NovelCorpusFile[]>>(new Map());
     const graphDraggingRef = useRef<{
@@ -572,6 +660,7 @@ export const CharactersView: React.FC<{
           category?: CharacterCategory;
           highlightColor?: string;
           highlightFirstMentionOnly?: boolean;
+          currentState?: CharacterCurrentStateItem[];
         }
       ) => {
         const ipc = window.electron?.ipcRenderer;
@@ -591,6 +680,7 @@ export const CharactersView: React.FC<{
                 typeof patch.highlightFirstMentionOnly === 'boolean'
                   ? patch.highlightFirstMentionOnly
                   : target.highlightFirstMentionOnly,
+              currentState: patch.currentState ?? target.currentState,
             },
             target.role
           ),
@@ -942,11 +1032,18 @@ export const CharactersView: React.FC<{
 
     useEffect(() => {
       setTimelineEditor(null);
+      setTimelineDraftChapterLabel('');
       setTimelineDraftTitle('');
       setTimelineDraftSummary('');
       setTimelineDragIndex(null);
       setTimelineDropIndex(null);
+      setCurrentStateEditing(false);
     }, [selectedCharacterId]);
+
+    useEffect(() => {
+      if (currentStateEditing) return;
+      setCurrentStateDraftItems(cloneCurrentStateItems(selectedCharacter?.currentState || []));
+    }, [currentStateEditing, selectedCharacter]);
 
     const selectedRelations = selectedCharacter
       ? links.filter(
@@ -998,15 +1095,23 @@ export const CharactersView: React.FC<{
             : [];
 
       return sourceFiles.flatMap((file) =>
-        extractCharacterTimeline(file.content, [
-          selectedCharacter.name,
-          ...(selectedCharacter.aliases || []),
-        ]).map((entry) => ({
+        extractCharacterTimeline(
+          file.content,
+          [selectedCharacter.name, ...(selectedCharacter.aliases || [])],
+          {
+            fallbackChapterLabel: stripTimelineFileExtension(file.label),
+          }
+        ).map((entry) => ({
           id: `${file.path}::${entry.key}`,
           autoKey: `${file.path}::${entry.key}`,
-          title: `${file.label} · ${entry.title}`,
+          title: entry.title,
           summary: entry.summary,
           source: 'auto' as const,
+          chapterLabel: entry.chapterLabel,
+          chapterNumber: entry.chapterNumber,
+          sourcePath: file.path,
+          startLine: entry.startLine,
+          endLine: entry.endLine,
           mentionCount: entry.mentionCount,
           sourceLabel: file.label,
         }))
@@ -1051,6 +1156,7 @@ export const CharactersView: React.FC<{
 
     const resetTimelineEditor = useCallback(() => {
       setTimelineEditor(null);
+      setTimelineDraftChapterLabel('');
       setTimelineDraftTitle('');
       setTimelineDraftSummary('');
     }, []);
@@ -1063,6 +1169,7 @@ export const CharactersView: React.FC<{
         autoKey: item.autoKey,
         sourceLabel: item.sourceLabel,
       });
+      setTimelineDraftChapterLabel(item.chapterLabel || '');
       setTimelineDraftTitle(item.title);
       setTimelineDraftSummary(item.summary);
     }, []);
@@ -1075,6 +1182,7 @@ export const CharactersView: React.FC<{
         source: 'manual',
         sourceLabel: '手工整理',
       });
+      setTimelineDraftChapterLabel('');
       setTimelineDraftTitle('');
       setTimelineDraftSummary('');
     }, []);
@@ -1093,6 +1201,7 @@ export const CharactersView: React.FC<{
 
       const title = timelineDraftTitle.trim();
       const summary = timelineDraftSummary.trim();
+      const chapterLabel = timelineDraftChapterLabel.trim();
       if (!title || !summary) return;
 
       const focusedItem = focusedTimeline.find((item) => item.id === timelineEditor.itemId) || null;
@@ -1102,6 +1211,11 @@ export const CharactersView: React.FC<{
         summary,
         source: timelineEditor.source,
         autoKey: timelineEditor.autoKey || focusedItem?.autoKey,
+        chapterLabel: chapterLabel || focusedItem?.chapterLabel,
+        chapterNumber: focusedItem?.chapterNumber,
+        sourcePath: focusedItem?.sourcePath,
+        startLine: focusedItem?.startLine,
+        endLine: focusedItem?.endLine,
         mentionCount:
           timelineEditor.source === 'auto' ? (focusedItem?.mentionCount ?? 0) : undefined,
         sourceLabel: timelineEditor.sourceLabel || focusedItem?.sourceLabel,
@@ -1147,6 +1261,7 @@ export const CharactersView: React.FC<{
       persistedTimelineOrderKeys,
       resetTimelineEditor,
       selectedCharacter,
+      timelineDraftChapterLabel,
       timelineDraftSummary,
       timelineDraftTitle,
       timelineEditor,
@@ -1243,6 +1358,83 @@ export const CharactersView: React.FC<{
       [focusedTimeline, persistCharacterTimelineOrderKeys, selectedCharacter, timelineDragIndex]
     );
 
+    const handleOpenTimelineSource = useCallback(
+      (item: CharacterTimelineItem) => {
+        if (!onOpenSourceLocation || !item.sourcePath || !item.startLine) return;
+        if (item.sourcePath.startsWith('__')) {
+          onOpenSourceLocation(item.sourcePath, item.startLine, item.autoKey || item.id);
+          return;
+        }
+        onOpenSourceLocation(item.sourcePath, item.startLine, item.autoKey || item.id);
+      },
+      [onOpenSourceLocation]
+    );
+
+    const derivedCurrentStateItems = useMemo(
+      () => buildDerivedCurrentStateItems(selectedCharacter, focusedTimeline),
+      [focusedTimeline, selectedCharacter]
+    );
+
+    const displayCurrentStateItems =
+      selectedCharacter && selectedCharacter.currentState.length > 0
+        ? selectedCharacter.currentState
+        : derivedCurrentStateItems;
+
+    const handleStartEditCurrentState = useCallback(() => {
+      const baseItems =
+        selectedCharacter && selectedCharacter.currentState.length > 0
+          ? selectedCharacter.currentState
+          : derivedCurrentStateItems.length > 0
+            ? derivedCurrentStateItems
+            : DEFAULT_CURRENT_STATE_LABELS.map((label) => createCurrentStateItem(label, ''));
+      setCurrentStateDraftItems(cloneCurrentStateItems(baseItems));
+      setCurrentStateEditing(true);
+    }, [derivedCurrentStateItems, selectedCharacter]);
+
+    const handleCancelEditCurrentState = useCallback(() => {
+      setCurrentStateDraftItems(cloneCurrentStateItems(selectedCharacter?.currentState || []));
+      setCurrentStateEditing(false);
+    }, [selectedCharacter]);
+
+    const handleCurrentStateDraftChange = useCallback(
+      (itemId: string, field: 'label' | 'value', nextValue: string) => {
+        setCurrentStateDraftItems((prev) =>
+          prev.map((item) => (item.id === itemId ? { ...item, [field]: nextValue } : item))
+        );
+      },
+      []
+    );
+
+    const handleAddCurrentStateItem = useCallback(() => {
+      setCurrentStateDraftItems((prev) => [...prev, createCurrentStateItem('', '')]);
+    }, []);
+
+    const handleRemoveCurrentStateItem = useCallback((itemId: string) => {
+      setCurrentStateDraftItems((prev) => prev.filter((item) => item.id !== itemId));
+    }, []);
+
+    const handleSaveCurrentState = useCallback(async () => {
+      if (!selectedCharacter) return;
+
+      const nextItems = currentStateDraftItems
+        .map((item) => ({
+          id: item.id,
+          label: item.label.trim(),
+          value: item.value.trim(),
+        }))
+        .filter((item) => item.label && item.value);
+
+      setCurrentStateSaving(true);
+      try {
+        await handleUpdateCharacterAttributes(selectedCharacter.id, {
+          currentState: nextItems,
+        });
+        setCurrentStateEditing(false);
+      } finally {
+        setCurrentStateSaving(false);
+      }
+    }, [currentStateDraftItems, handleUpdateCharacterAttributes, selectedCharacter]);
+
     const filteredCharacters = useMemo(() => {
       const normalizedSearch = characterSearch.trim().toLowerCase();
       return characters.filter((character) => {
@@ -1290,6 +1482,7 @@ export const CharactersView: React.FC<{
                     category: nextCategory,
                     highlightColor: character.highlightColor,
                     highlightFirstMentionOnly: character.highlightFirstMentionOnly,
+                    currentState: character.currentState,
                   },
                   character.role
                 ),
@@ -1567,7 +1760,7 @@ export const CharactersView: React.FC<{
                 <h2 className={styles.workspaceTitle}>{focusedCharacter.name}</h2>
                 <p className={styles.workspaceDesc}>
                   {focusedTimeline.length > 0
-                    ? `已从整个作品目录中按顺序整理出 ${focusedTimeline.length} 段关键经历，覆盖前期到后期的主要推进。`
+                    ? `已从整个作品目录中按章节整理出 ${focusedTimeline.length} 段关键经历，覆盖前期到后期的主要推进。`
                     : focusedCharacter.description || '这个人物还没有补充详细描述。'}
                 </p>
                 <div className={styles.workspaceMetaRow}>
@@ -1590,10 +1783,100 @@ export const CharactersView: React.FC<{
 
               <section className={styles.workspaceCardShell}>
                 <div className={styles.workspaceCardHeader}>
+                  <span className={styles.workspaceSectionTitle}>当前状态</span>
+                  <div className={styles.characterTimelineHeaderActions}>
+                    <span className={styles.workspaceListHint}>
+                      {focusedCharacter.currentState.length > 0
+                        ? '这里保存的是人物当前已确认状态，直接来自角色根数据。'
+                        : '当前根据最近章节自动汇总，确认后可保存为人物当前状态。'}
+                    </span>
+                    {currentStateEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.submitButton}
+                          disabled={currentStateSaving}
+                          onClick={() => void handleSaveCurrentState()}
+                        >
+                          {currentStateSaving ? '保存中...' : '保存当前状态'}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={handleCancelEditCurrentState}
+                        >
+                          取消
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={handleStartEditCurrentState}
+                      >
+                        编辑当前状态
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {currentStateEditing ? (
+                  <div className={styles.characterCurrentStateEditor}>
+                    {currentStateDraftItems.map((item) => (
+                      <div key={item.id} className={styles.characterCurrentStateEditorRow}>
+                        <input
+                          value={item.label}
+                          onChange={(event) =>
+                            handleCurrentStateDraftChange(item.id, 'label', event.target.value)
+                          }
+                          placeholder="状态标签，例如：修为 / 当前危机"
+                          className={styles.formInput}
+                        />
+                        <textarea
+                          value={item.value}
+                          onChange={(event) =>
+                            handleCurrentStateDraftChange(item.id, 'value', event.target.value)
+                          }
+                          placeholder="状态内容，例如：练气后期 / 黄家逼迫"
+                          className={styles.formTextarea}
+                          rows={2}
+                        />
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={() => handleRemoveCurrentStateItem(item.id)}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={handleAddCurrentStateItem}
+                    >
+                      新增状态项
+                    </button>
+                  </div>
+                ) : displayCurrentStateItems.length > 0 ? (
+                  <div className={styles.characterCurrentStateList}>
+                    {displayCurrentStateItems.map((item) => (
+                      <div key={item.id} className={styles.characterCurrentStateItem}>
+                        <div className={styles.characterCurrentStateLabel}>{item.label}</div>
+                        <div className={styles.characterCurrentStateValue}>{item.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={styles.emptyHint}>还没有为这个人物整理当前状态。</div>
+                )}
+              </section>
+
+              <section className={styles.workspaceCardShell}>
+                <div className={styles.workspaceCardHeader}>
                   <span className={styles.workspaceSectionTitle}>经历时间线</span>
                   <div className={styles.characterTimelineHeaderActions}>
                     <span className={styles.workspaceListHint}>
-                      按整个作品目录的正文顺序自动提取，可拖动左侧手柄重排，也可直接手工修订和补充
+                      按整个作品目录的章节顺序自动提取，可拖动左侧手柄重排，也可直接手工修订和补充
                     </span>
                     <button
                       type="button"
@@ -1614,6 +1897,13 @@ export const CharactersView: React.FC<{
                       const isEditing = timelineEditor?.itemId === item.id;
                       const isManualItem = item.source === 'manual';
                       const hasManualRevision = item.source === 'auto' && hasTimelineOverride(item);
+                      const chapterBadgeLabel =
+                        item.chapterLabel || (isManualItem ? '手工补充' : '正文片段');
+                      const lineLabel = formatTimelineLineLabel(item.startLine, item.endLine);
+                      const canOpenTimelineSource =
+                        Boolean(item.sourcePath) &&
+                        typeof item.startLine === 'number' &&
+                        item.startLine > 0;
 
                       return (
                         <div
@@ -1648,7 +1938,7 @@ export const CharactersView: React.FC<{
                               </span>
                             </button>
                             <div className={styles.characterTimelineIndexBadge}>
-                              {String(index + 1).padStart(2, '0')}
+                              {chapterBadgeLabel}
                             </div>
                           </div>
                           <div className={styles.characterTimelineBody}>
@@ -1669,7 +1959,7 @@ export const CharactersView: React.FC<{
                                 </div>
                                 {item.sourceLabel && (
                                   <div className={styles.characterTimelineSource}>
-                                    {item.sourceLabel}
+                                    {[item.sourceLabel, lineLabel].filter(Boolean).join(' · ')}
                                   </div>
                                 )}
                               </div>
@@ -1681,6 +1971,14 @@ export const CharactersView: React.FC<{
                             </div>
                             {timelineEditor?.itemId === item.id ? (
                               <div className={styles.characterTimelineEditor}>
+                                <input
+                                  value={timelineDraftChapterLabel}
+                                  onChange={(event) =>
+                                    setTimelineDraftChapterLabel(event.target.value)
+                                  }
+                                  placeholder="章节标签，例如：第23章"
+                                  className={styles.formInput}
+                                />
                                 <input
                                   value={timelineDraftTitle}
                                   onChange={(event) => setTimelineDraftTitle(event.target.value)}
@@ -1723,6 +2021,15 @@ export const CharactersView: React.FC<{
                                   >
                                     手工修订
                                   </button>
+                                  {canOpenTimelineSource && (
+                                    <button
+                                      type="button"
+                                      className={styles.secondaryButton}
+                                      onClick={() => handleOpenTimelineSource(item)}
+                                    >
+                                      跳回正文
+                                    </button>
+                                  )}
                                   {item.source === 'auto' && hasTimelineOverride(item) && (
                                     <button
                                       type="button"

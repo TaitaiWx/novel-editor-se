@@ -3,6 +3,7 @@ import type {
   OutlineEntry,
   Character,
   CharacterCategory,
+  CharacterCurrentStateItem,
   CharacterLink,
   CharacterRelation,
   CharacterCamp,
@@ -290,6 +291,7 @@ export interface CharacterAttributesPayload {
   category?: CharacterCategory;
   highlightColor?: string;
   highlightFirstMentionOnly?: boolean;
+  currentState?: CharacterCurrentStateItem[];
 }
 
 export const DEFAULT_CHARACTER_HIGHLIGHT_COLOR = '#9cdcfe';
@@ -339,6 +341,26 @@ function normalizeCharacterAliases(value: unknown): string[] {
   );
 }
 
+function normalizeCharacterCurrentStateItems(value: unknown): CharacterCurrentStateItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      if (!item || typeof item !== 'object') return null;
+      const candidate = item as Record<string, unknown>;
+      const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+      const currentValue = typeof candidate.value === 'string' ? candidate.value.trim() : '';
+      if (!label || !currentValue) return null;
+      const rawId = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+      return {
+        id: rawId || fnv1a32(`${label}:${currentValue}:${index}`),
+        label,
+        value: currentValue,
+      } satisfies CharacterCurrentStateItem;
+    })
+    .filter((item): item is CharacterCurrentStateItem => Boolean(item));
+}
+
 function normalizeCharacterHighlightColor(value: unknown): string {
   if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.trim())) {
     return value.trim().toLowerCase();
@@ -352,6 +374,7 @@ export function parseCharacterAttributes(attributes: string): {
   category: CharacterCategory;
   highlightColor: string;
   highlightFirstMentionOnly: boolean;
+  currentState: CharacterCurrentStateItem[];
 };
 
 export function parseCharacterAttributes(
@@ -363,6 +386,7 @@ export function parseCharacterAttributes(
   category: CharacterCategory;
   highlightColor: string;
   highlightFirstMentionOnly: boolean;
+  currentState: CharacterCurrentStateItem[];
 } {
   try {
     const parsed = JSON.parse(attributes || '{}') as CharacterAttributesPayload;
@@ -375,6 +399,7 @@ export function parseCharacterAttributes(
         typeof parsed?.highlightFirstMentionOnly === 'boolean'
           ? parsed.highlightFirstMentionOnly
           : DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+      currentState: normalizeCharacterCurrentStateItems(parsed?.currentState),
     };
   } catch {
     return {
@@ -382,6 +407,7 @@ export function parseCharacterAttributes(
       category: inferCharacterCategoryFromRole(role),
       highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
       highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+      currentState: [],
     };
   }
 }
@@ -399,6 +425,7 @@ export function stringifyCharacterAttributes(
       typeof attributes.highlightFirstMentionOnly === 'boolean'
         ? attributes.highlightFirstMentionOnly
         : DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
+    currentState: normalizeCharacterCurrentStateItems(attributes.currentState),
   });
 }
 
@@ -419,6 +446,7 @@ export function mapCharacterRows(
       role: row.role || '',
       category: attrs.category,
       description: row.description || '',
+      currentState: attrs.currentState,
       avatar: attrs.avatar || undefined,
       aliases: attrs.aliases,
       highlightColor: attrs.highlightColor,
@@ -471,6 +499,20 @@ export function parseCharacterTimelineItems(
           summary,
           source,
           autoKey: normalizeTimelineText(candidate.autoKey) || undefined,
+          chapterLabel: normalizeTimelineText(candidate.chapterLabel) || undefined,
+          chapterNumber:
+            typeof candidate.chapterNumber === 'number' && Number.isFinite(candidate.chapterNumber)
+              ? candidate.chapterNumber
+              : undefined,
+          sourcePath: normalizeTimelineText(candidate.sourcePath) || undefined,
+          startLine:
+            typeof candidate.startLine === 'number' && Number.isFinite(candidate.startLine)
+              ? candidate.startLine
+              : undefined,
+          endLine:
+            typeof candidate.endLine === 'number' && Number.isFinite(candidate.endLine)
+              ? candidate.endLine
+              : undefined,
           mentionCount:
             typeof candidate.mentionCount === 'number' && Number.isFinite(candidate.mentionCount)
               ? candidate.mentionCount
@@ -513,6 +555,11 @@ export function mergeCharacterTimelineItems(
       id: persisted.id || item.id,
       title: persisted.title,
       summary: persisted.summary,
+      chapterLabel: persisted.chapterLabel || item.chapterLabel,
+      chapterNumber: persisted.chapterNumber ?? item.chapterNumber,
+      sourcePath: persisted.sourcePath || item.sourcePath,
+      startLine: persisted.startLine ?? item.startLine,
+      endLine: persisted.endLine ?? item.endLine,
       sourceLabel: persisted.sourceLabel || item.sourceLabel,
     } satisfies CharacterTimelineItem;
   });
