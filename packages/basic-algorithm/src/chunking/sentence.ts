@@ -4,7 +4,7 @@ import type { TextChunk, SentenceChunkOptions } from './types';
  * CJK sentence-ending punctuation and common Western sentence endings.
  * We split on these boundaries to preserve sentence integrity.
  */
-const SENTENCE_TERMINATORS = /([。！？….!?]+[\s"'」』）)】]*)/;
+const SENTENCE_TERMINATORS = /([。！？….!?]+[\s"'”’」』）)】]*)/;
 
 /**
  * Split text into chunks along sentence boundaries.

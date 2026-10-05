@@ -65,7 +65,11 @@ function normalizeComparableText(value: string): string {
     .trim();
 }
 
-function parseChineseInteger(raw: string): number | undefined {
+/**
+ * 解析中文或阿拉伯数字整数（如 “四”“十”“一百零三”“两千”“12”）。
+ * 无法解析或结果不大于 0 时返回 undefined。
+ */
+export function parseChineseInteger(raw: string): number | undefined {
   if (!raw) return undefined;
   if (/^\d+$/.test(raw)) return Number(raw);
 
@@ -251,12 +255,18 @@ function buildSectionSummary(body: string, keywords: string[], maxSummaryLength:
   return clipSentence(summary, maxSummaryLength);
 }
 
-function selectTimelineAnchors(outline: OutlineNode[]): OutlineNode[] {
+/** 取锚点所在的原始行文本；extractOutline 会去掉 "12." 之类的编号前缀，解析章节号需要原文 */
+function getAnchorRawTitle(anchor: OutlineNode, lines: string[]): string {
+  if (anchor.source !== 'numbered') return anchor.text;
+  return lines[anchor.line - 1]?.trim() || anchor.text;
+}
+
+function selectTimelineAnchors(outline: OutlineNode[], lines: string[]): OutlineNode[] {
   const normalized = outline.filter((item) => item.text.trim() && item.source !== 'heuristic');
   if (normalized.length === 0) return [];
 
   const primaryCandidates = normalized.filter((item) => {
-    const parsed = parseChapterMeta(item.text);
+    const parsed = parseChapterMeta(getAnchorRawTitle(item, lines));
     return parsed.kind === 'primary' || parsed.kind === 'numbered';
   });
   const candidates = primaryCandidates.length > 0 ? primaryCandidates : normalized;
@@ -277,11 +287,11 @@ function selectTimelineAnchors(outline: OutlineNode[]): OutlineNode[] {
 
 function buildOutlineSections(content: string): TimelineSection[] {
   const lines = content.split(/\r?\n/);
-  const anchors = selectTimelineAnchors(extractOutline(content));
+  const anchors = selectTimelineAnchors(extractOutline(content), lines);
   if (anchors.length === 0) return [];
 
   return anchors.map((anchor, index) => {
-    const parsed = parseChapterMeta(anchor.text);
+    const parsed = parseChapterMeta(getAnchorRawTitle(anchor, lines));
     const nextLine = anchors[index + 1]?.line || lines.length + 1;
     const body = lines
       .slice(anchor.line, Math.max(anchor.line, nextLine - 1))
@@ -318,43 +328,56 @@ function buildFallbackSections(
     ].filter((item) => item.body);
   }
 
-  const paragraphs = content
-    .split(/\n{2,}/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  // 按空行切分段落，同时记录每段在原文中的起止行号（1-based）
+  const paragraphs: Array<{ text: string; startLine: number; endLine: number }> = [];
+  let buffer: string[] = [];
+  let bufferStartLine = 1;
+  const flushParagraph = (endLine: number) => {
+    const text = buffer.join('\n').trim();
+    if (text) paragraphs.push({ text, startLine: bufferStartLine, endLine });
+    buffer = [];
+  };
+  const contentLines = content.split(/\r?\n/);
+  contentLines.forEach((line, index) => {
+    if (line.trim() === '') {
+      if (buffer.length > 0) flushParagraph(index);
+      return;
+    }
+    if (buffer.length === 0) bufferStartLine = index + 1;
+    buffer.push(line);
+  });
+  if (buffer.length > 0) flushParagraph(contentLines.length);
 
   if (paragraphs.length === 0) return [];
 
   const sections: TimelineSection[] = [];
-  let currentParts: string[] = [];
+  let currentParts: typeof paragraphs = [];
   let currentLength = 0;
-  let startLine = 1;
-  let consumedParagraphs = 0;
 
   const flush = () => {
     if (currentParts.length === 0) return;
-    const body = currentParts.join('\n\n').trim();
-    const paragraphCount = currentParts.length;
+    const body = currentParts
+      .map((item) => item.text)
+      .join('\n\n')
+      .trim();
     sections.push({
       title: `正文片段 ${sections.length + 1}`,
       chapterLabel: `正文片段 ${sections.length + 1}`,
       body,
-      startLine,
-      endLine: startLine + paragraphCount - 1,
+      startLine: currentParts[0].startLine,
+      endLine: currentParts[currentParts.length - 1].endLine,
     });
-    consumedParagraphs += paragraphCount;
-    startLine = consumedParagraphs + 1;
     currentParts = [];
     currentLength = 0;
   };
 
   paragraphs.forEach((paragraph) => {
-    const nextLength = currentLength + paragraph.length + (currentParts.length > 0 ? 2 : 0);
+    const nextLength = currentLength + paragraph.text.length + (currentParts.length > 0 ? 2 : 0);
     if (currentParts.length > 0 && nextLength > fallbackSegmentChars) {
       flush();
     }
     currentParts.push(paragraph);
-    currentLength += paragraph.length + (currentParts.length > 1 ? 2 : 0);
+    currentLength += paragraph.text.length + (currentParts.length > 1 ? 2 : 0);
   });
   flush();
 
@@ -382,9 +405,10 @@ export function extractCharacterTimeline(
   keywords: string[],
   options: ExtractCharacterTimelineOptions = {}
 ): CharacterTimelineEntry[] {
-  const normalizedContent = content.trim();
+  // 只去掉尾部空白：开头的空行若被裁掉，所有行号都会整体偏移
+  const normalizedContent = content.replace(/\s+$/, '');
   const normalizedKeywords = normalizeKeywords(keywords);
-  if (!normalizedContent || normalizedKeywords.length === 0) return [];
+  if (!normalizedContent.trim() || normalizedKeywords.length === 0) return [];
 
   const maxSummaryLength = options.maxSummaryLength ?? DEFAULT_MAX_SUMMARY_LENGTH;
   const fallbackSegmentChars = options.fallbackSegmentChars ?? DEFAULT_FALLBACK_SEGMENT_CHARS;
@@ -400,7 +424,7 @@ export function extractCharacterTimeline(
   const seenSummaryKeys = new Set<string>();
 
   const entries = timelineSections
-    .map((section, index) => {
+    .map((section, index): CharacterTimelineEntry | null => {
       const mentionCount = countKeywordMentions(section.body, normalizedKeywords);
       if (mentionCount === 0) return null;
       const summary = buildSectionSummary(section.body, normalizedKeywords, maxSummaryLength);
@@ -422,7 +446,7 @@ export function extractCharacterTimeline(
         mentionCount,
         startLine: section.startLine,
         endLine: section.endLine,
-      } satisfies CharacterTimelineEntry;
+      };
     })
     .filter((item): item is CharacterTimelineEntry => Boolean(item));
 

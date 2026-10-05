@@ -58,8 +58,9 @@ export function chunkByFixedLength(text: string, options: FixedLengthOptions = {
     }
     lineCount += stepNewlines;
 
+    // 当前块已覆盖到文本末尾时结束，避免重叠模式下产生完全包含于上一块的尾块
+    if (end >= text.length) break;
     pos += step;
-    if (pos >= text.length) break;
   }
 
   return chunks;

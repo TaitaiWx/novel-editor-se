@@ -18,6 +18,11 @@ const RE_CHINESE_SECTION = /^(第[一二三四五六七八九十百千万零〇\
 const RE_NUMBERED = /^(\d+(?:\.\d+)*)[.、)\s]\s*(.+)/;
 
 /**
+ * 日期行（如 "2024.03.15"、"2024-3-15 晴"、"2024/03/15"），不应被识别为编号标题
+ */
+const RE_DATE_LIKE = /^\d{4}[./-]\d{1,2}[./-]\d{1,2}(?:\D|$)/;
+
+/**
  * 分隔线式标题（常见于网文）
  * 匹配: "--- 标题 ---"、"*** 标题 ***"、"=== 标题 ==="
  */
@@ -99,7 +104,7 @@ export function extractOutline(text: string, options: OutlineOptions = {}): Outl
     }
 
     // 策略 3: 数字编号标题
-    const numMatch = trimmed.match(RE_NUMBERED);
+    const numMatch = RE_DATE_LIKE.test(trimmed) ? null : trimmed.match(RE_NUMBERED);
     if (numMatch) {
       // 排除纯数字行（如 "123456" 或 "2024.03.15"）
       const textPart = numMatch[2].trim();
@@ -151,7 +156,7 @@ export function extractOutline(text: string, options: OutlineOptions = {}): Outl
         // 排除常见非标题短行
         const isLikelyTitle =
           // 不以标点开头
-          !/^[，。！？、；：""''（）【】—…·,.;:!?()[\]{}]/.test(trimmed) &&
+          !/^[，。！？、；：“”‘’「」『』《》〈〉"'（）【】—…·,.;:!?()[\]{}]/.test(trimmed) &&
           // 不是纯数字/纯标点
           !/^[\d\s.,;:!?]+$/.test(trimmed) &&
           // 不是空白标记

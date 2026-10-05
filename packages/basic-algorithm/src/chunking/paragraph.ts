@@ -21,32 +21,28 @@ export function chunkByParagraph(text: string, options: ParagraphChunkOptions = 
 
   if (text.length === 0) return [];
 
-  // Split into paragraphs preserving the separators
-  const rawParts = text.split(separator);
-
-  // Rebuild paragraphs with their trailing separators by tracking offsets
+  // 用全局正则逐个定位分隔符，段落文本附带其后的分隔符，保证所有段落拼接后与原文完全一致
+  // （包括末尾的空行），偏移量也不依赖 indexOf 猜测
+  const globalSeparator = new RegExp(
+    separator.source,
+    separator.flags.includes('g') ? separator.flags : `${separator.flags}g`
+  );
   const paragraphs: { text: string; offset: number }[] = [];
-  let searchFrom = 0;
+  let paragraphStart = 0;
+  let match: RegExpExecArray | null;
 
-  for (let i = 0; i < rawParts.length; i++) {
-    const part = rawParts[i];
-    const offset = searchFrom;
-
-    if (i < rawParts.length - 1) {
-      // Find the separator between this part and the next
-      const nextPartStart = text.indexOf(rawParts[i + 1], offset + part.length);
-      const separatorText = text.slice(offset + part.length, nextPartStart);
-      const fullText = part + separatorText;
-      if (fullText.length > 0) {
-        paragraphs.push({ text: fullText, offset });
-      }
-      searchFrom = nextPartStart;
-    } else {
-      // Last part, no trailing separator
-      if (part.length > 0) {
-        paragraphs.push({ text: part, offset });
-      }
+  while ((match = globalSeparator.exec(text)) !== null) {
+    if (match[0].length === 0) {
+      // 防御零宽匹配导致死循环
+      globalSeparator.lastIndex += 1;
+      continue;
     }
+    const separatorEnd = match.index + match[0].length;
+    paragraphs.push({ text: text.slice(paragraphStart, separatorEnd), offset: paragraphStart });
+    paragraphStart = separatorEnd;
+  }
+  if (paragraphStart < text.length) {
+    paragraphs.push({ text: text.slice(paragraphStart), offset: paragraphStart });
   }
 
   if (paragraphs.length === 0) return [];
