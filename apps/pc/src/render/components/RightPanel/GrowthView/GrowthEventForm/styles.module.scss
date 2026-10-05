@@ -1,0 +1,67 @@
+@use '../growth-ui' as ui;
+
+.form {
+  @include ui.card;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.typeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.typeButton {
+  @include ui.button;
+  padding: 2px 8px;
+}
+
+.typeActive {
+  background: rgba(ui.$info-rgb, 0.14);
+  border-color: rgba(ui.$info-rgb, 0.3);
+  color: ui.$info-fg;
+}
+
+.fields {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.input {
+  @include ui.input;
+  flex: 1;
+}
+
+.number {
+  flex: 0 0 72px;
+  width: 72px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.primary {
+  @include ui.button-primary;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: ui.$danger-fg;
+  background: rgba(ui.$danger, 0.08);
+  border: 1px solid rgba(ui.$danger, 0.2);
+}
+
+.forceButton {
+  @include ui.button;
+}

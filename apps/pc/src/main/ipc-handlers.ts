@@ -11,6 +11,7 @@
  * - documents:    XLSX/PPTX/DOCX reading, document export/import
  * - versioning:   Git-like version snapshots
  * - window-app:   Window controls, shortcuts, updates, app info
+ * - growth/memory: 成长记录器与记忆资料快照（资料/记忆/）
  */
 import {
   registerFileSystemHandlers,
@@ -19,6 +20,8 @@ import {
   registerDocumentHandlers,
   registerVersionHandlers,
   registerWindowAppHandlers,
+  registerGrowthHandlers,
+  registerMemoryHandlers,
 } from './handlers';
 
 export { type FileNode } from './handlers';
@@ -30,4 +33,6 @@ export function setupIPC() {
   registerDocumentHandlers();
   registerVersionHandlers();
   registerWindowAppHandlers();
+  registerGrowthHandlers();
+  registerMemoryHandlers();
 }

@@ -18,7 +18,7 @@ const __handler_dirname = path.dirname(__handler_filename);
 // so __handler_dirname already points to dist/. No need to go up a level.
 const __dist_dir = __handler_dirname;
 
-interface AIRequestPayload {
+export interface AIRequestPayload {
   prompt: string;
   systemPrompt?: string;
   context?: string;
@@ -74,7 +74,7 @@ function normalizePersistedAISettings(rawSettings: string | null | undefined): P
   };
 }
 
-async function invokeConfiguredAI(payload: AIRequestPayload) {
+export async function invokeConfiguredAI(payload: AIRequestPayload) {
   const rawSettings = settingsOps.get('novel-editor:settings-center');
   const ai = normalizePersistedAISettings(rawSettings);
 

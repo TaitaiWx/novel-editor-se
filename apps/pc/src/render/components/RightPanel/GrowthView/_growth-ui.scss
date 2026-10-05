@@ -1,0 +1,112 @@
+// 成长面板共用的设计 token 与 mixin（仅供 GrowthView 下各组件 @use，不产出全局样式）
+// 颜色沿用 RightPanel 的 --rp-* 变量，保持右侧面板整体色调一致
+
+$accent: var(--rp-accent, #be7a48);
+$accent-rgb: var(--rp-accent-rgb, 190, 122, 72);
+$info: var(--rp-info, #d7ba7d);
+$info-rgb: var(--rp-info-rgb, 215, 186, 125);
+$info-fg: var(--rp-info-fg, #f2e4bf);
+$fg: var(--ui-fg-primary, #d4d4d4);
+$muted: var(--ui-fg-muted, #8b8b8b);
+$disabled: var(--ui-fg-disabled, #666);
+$danger: #e06c60;
+$danger-fg: #eb9a91;
+$success: #7ab896;
+$radius: 8px;
+
+@mixin card {
+  padding: 10px 12px;
+  border-radius: $radius;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@mixin section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: $muted;
+}
+
+@mixin button {
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+@mixin button-primary {
+  @include button;
+  background: rgba($info-rgb, 0.14);
+  border-color: rgba($info-rgb, 0.3);
+  color: $info-fg;
+
+  &:hover:not(:disabled) {
+    background: rgba($info-rgb, 0.22);
+    color: $info-fg;
+  }
+}
+
+@mixin input {
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  color: $fg;
+  outline: none;
+
+  &:focus {
+    border-color: rgba($info-rgb, 0.45);
+  }
+
+  &::placeholder {
+    color: $disabled;
+  }
+}
+
+@mixin chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+@mixin empty {
+  padding: 10px 0;
+  font-size: 12px;
+  color: $disabled;
+  text-align: center;
+}

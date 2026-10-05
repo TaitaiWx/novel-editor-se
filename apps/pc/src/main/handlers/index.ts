@@ -11,6 +11,8 @@
  * - documents:   XLSX/PPTX/DOCX reading, document export/import
  * - versioning:  Git-like version snapshots
  * - window-app:  Window controls, shortcuts, updates, app info
+ * - growth:      角色成长记录器（资料/记忆/ 中的规则、角色卡、队伍、地图、AI 推演）
+ * - memory:      数据库人物卡/设定 → 资料/记忆/ 只读快照
  */
 export { registerFileSystemHandlers } from './file-system';
 export { registerDatabaseHandlers } from './database';
@@ -18,5 +20,7 @@ export { registerAIHandlers } from './ai';
 export { registerDocumentHandlers } from './documents';
 export { registerVersionHandlers } from './versioning';
 export { registerWindowAppHandlers } from './window-app';
+export { registerGrowthHandlers } from './growth';
+export { registerMemoryHandlers } from './memory';
 
 export type { FileNode } from './file-system';

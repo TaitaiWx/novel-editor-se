@@ -1,0 +1,243 @@
+@use '../growth-ui' as ui;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  @include ui.card;
+}
+
+.title {
+  @include ui.section-title;
+}
+
+.meta {
+  font-weight: 400;
+}
+
+.empty {
+  @include ui.empty;
+  text-align: left;
+}
+
+.group {
+  margin-bottom: 8px;
+}
+
+.groupName {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  @include ui.chip;
+  cursor: pointer;
+
+  &:hover {
+    color: ui.$fg;
+  }
+}
+
+.chipOn {
+  background: rgba(ui.$info-rgb, 0.16);
+  border-color: rgba(ui.$info-rgb, 0.35);
+  color: ui.$info-fg;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.input {
+  @include ui.input;
+  flex: 1;
+}
+
+.button {
+  @include ui.button;
+}
+
+.primary {
+  @include ui.button-primary;
+}
+
+.settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.modeSwitch {
+  display: inline-flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mode {
+  padding: 3px 12px;
+  font-size: 11px;
+  border: none;
+  background: transparent;
+  color: ui.$muted;
+  cursor: pointer;
+
+  &:hover {
+    color: ui.$fg;
+  }
+}
+
+.modeOn {
+  background: rgba(ui.$info-rgb, 0.16);
+  color: ui.$info-fg;
+}
+
+.horizon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: ui.$muted;
+
+  input {
+    flex: 0 0 44px;
+    width: 44px;
+    text-align: center;
+  }
+}
+
+.rules {
+  @include ui.input;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 8px;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hint {
+  font-size: 10px;
+  color: ui.$disabled;
+}
+
+.error {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: ui.$danger-fg;
+  background: rgba(ui.$danger, 0.08);
+  border: 1px solid rgba(ui.$danger, 0.2);
+}
+
+.issues,
+.risks {
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.branch {
+  @include ui.card;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.branchHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.branchTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: ui.$fg;
+}
+
+.recommend {
+  @include ui.chip;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--rp-accent-text, #d8b08e);
+  border-color: rgba(ui.$accent-rgb, 0.35);
+  background: rgba(ui.$accent-rgb, 0.12);
+}
+
+.summary {
+  font-size: 12px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.changes {
+  margin: 0;
+  padding-left: 14px;
+  font-size: 11px;
+  line-height: 17px;
+  color: ui.$info-fg;
+}
+
+.events {
+  font-size: 11px;
+  color: ui.$muted;
+
+  summary {
+    cursor: pointer;
+  }
+
+  ol {
+    margin: 4px 0 0;
+    padding-left: 16px;
+    line-height: 17px;
+  }
+}
+
+.branchRisks {
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.branchWarnings {
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: ui.$info-fg;
+  background: rgba(ui.$info-rgb, 0.06);
+  cursor: help;
+}
+
+.branchErrors {
+  color: ui.$danger-fg;
+  background: rgba(ui.$danger, 0.08);
+}

@@ -1,0 +1,190 @@
+@use '../growth-ui' as ui;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  @include ui.card;
+}
+
+.title {
+  @include ui.section-title;
+}
+
+.meta {
+  font-weight: 400;
+  cursor: help;
+}
+
+.empty {
+  @include ui.empty;
+}
+
+.ok {
+  font-size: 12px;
+  color: rgba(ui.$success, 0.9);
+}
+
+.forgotten {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  button {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+}
+
+.forgottenName {
+  font-size: 12px;
+  color: ui.$info-fg;
+}
+
+.forgottenMeta {
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.party {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.partyHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.partyName {
+  font-size: 12px;
+  font-weight: 600;
+  color: ui.$fg;
+}
+
+.partyRange {
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.chip {
+  @include ui.chip;
+}
+
+.notes {
+  margin-top: 4px;
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.partyActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inlineField {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.input {
+  @include ui.input;
+  flex: 1;
+}
+
+.small {
+  flex: 0 0 64px;
+  width: 64px;
+}
+
+.button {
+  @include ui.button;
+}
+
+.primary {
+  @include ui.button-primary;
+}
+
+.companion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.companionName {
+  flex: 1;
+  color: ui.$fg;
+}
+
+.companionSeen {
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.star {
+  border: none;
+  background: transparent;
+  color: ui.$disabled;
+  cursor: pointer;
+  font-size: 13px;
+
+  &:hover:not(:disabled) {
+    color: ui.$info-fg;
+  }
+}
+
+.starOn {
+  color: ui.$info;
+}
+
+.error {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: ui.$danger-fg;
+  background: rgba(ui.$danger, 0.08);
+  border: 1px solid rgba(ui.$danger, 0.2);
+}

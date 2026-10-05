@@ -1,0 +1,136 @@
+@use '../growth-ui' as ui;
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  @include ui.card;
+}
+
+.title {
+  @include ui.section-title;
+}
+
+.meta {
+  font-weight: 400;
+  cursor: help;
+}
+
+.empty {
+  @include ui.empty;
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: ui.$fg;
+}
+
+.remove {
+  border: none;
+  background: transparent;
+  color: ui.$disabled;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 18px;
+
+  &:hover:not(:disabled) {
+    color: ui.$danger-fg;
+  }
+}
+
+.noteForm {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.input {
+  @include ui.input;
+  flex: 1;
+}
+
+.button {
+  @include ui.button;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 46px;
+    top: 4px;
+    bottom: 4px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.item {
+  display: flex;
+  gap: 14px;
+  padding: 5px 0;
+}
+
+.chapter {
+  flex: 0 0 40px;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: right;
+  color: ui.$muted;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: ui.$fg;
+}
+
+.levelUp {
+  @include ui.chip;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--rp-accent-text, #d8b08e);
+  border-color: rgba(ui.$accent-rgb, 0.3);
+  background: rgba(ui.$accent-rgb, 0.1);
+}
+
+.source {
+  @include ui.chip;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.why {
+  font-size: 11px;
+  line-height: 16px;
+  color: ui.$muted;
+}
+
+.more {
+  @include ui.button;
+  width: 100%;
+  margin-top: 6px;
+}
