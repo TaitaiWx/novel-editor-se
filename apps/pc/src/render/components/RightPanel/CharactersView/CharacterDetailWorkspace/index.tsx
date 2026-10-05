@@ -9,6 +9,7 @@ import type {
   CharacterTimelineItem,
 } from '../../types';
 import { CHARACTER_CATEGORY_LABELS, DEFAULT_CHARACTER_HIGHLIGHT_COLOR } from '../../utils';
+import { CAMP_LABELS } from '../../constants';
 import { CharacterCurrentStateSection } from '../CharacterCurrentStateSection';
 import { CharacterTimelineSection } from '../CharacterTimelineSection';
 import { CharacterGrowthButton } from '../CharacterGrowthButton';
@@ -93,7 +94,9 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
               <span className={styles.workspaceChip}>
                 角色定位 {focusedCharacter.role || '未填写'}
               </span>
-              <span className={styles.workspaceChip}>阵营 {focusedCamp || 'support'}</span>
+              <span className={styles.workspaceChip}>
+                阵营 {CAMP_LABELS[focusedCamp ?? 'support']}
+              </span>
               <span className={styles.workspaceChip}>正文热度 {focusedHeat}</span>
               <span className={styles.workspaceChip}>关系 {selectedRelations.length}</span>
               <span className={styles.workspaceChip}>经历节点 {focusedTimeline.length}</span>

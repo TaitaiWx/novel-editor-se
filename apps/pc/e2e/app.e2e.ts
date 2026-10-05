@@ -337,6 +337,43 @@ describe('小说编辑器 GUI', () => {
     await ensureRightPanelOpen(page);
     await switchStorylineMode(page, '成长');
 
+    // 视图切换按钮在默认宽度与接近折叠阈值的窄宽度下都保持单行（不出现「目\n录」）
+    const toggleLayout = () =>
+      page.evaluate<{ multiLine: string[]; count: number }>(() => {
+        const buttons = Array.from(
+          document.querySelectorAll<HTMLElement>('[class*="storylineToolbar"] > button')
+        );
+        const lineHeight = (el: HTMLElement) => parseFloat(getComputedStyle(el).lineHeight) || 16;
+        return {
+          count: buttons.length,
+          multiLine: buttons
+            .filter((el) => el.clientHeight > lineHeight(el) * 1.6 + 8)
+            .map((el) => el.innerText),
+        };
+      });
+    expect(await toggleLayout()).toEqual({ count: 5, multiLine: [] });
+    await captureForReview('storyline-toggle-default');
+    const wrapperSelector = '[class*="rightPanelWrapper"]';
+    const originalWidth = await page.evaluate<string>(
+      (selector: string) => (document.querySelector(selector) as HTMLElement).style.width,
+      wrapperSelector
+    );
+    await page.evaluate((selector: string) => {
+      (document.querySelector(selector) as HTMLElement).style.width = '140px';
+    }, wrapperSelector);
+    expect(await toggleLayout()).toEqual({ count: 5, multiLine: [] });
+    await page.evaluate(() =>
+      document.querySelector('[class*="storylineToolbar"]')?.scrollIntoView({ block: 'center' })
+    );
+    await captureForReview('storyline-toggle-narrow');
+    await page.evaluate(
+      (selector: string, width: string) => {
+        (document.querySelector(selector) as HTMLElement).style.width = width;
+      },
+      wrapperSelector,
+      originalWidth
+    );
+
     await page.click({ text: '创建记忆库', exact: true });
     await page.waitUntil(() => existsSync(path.join(memoryDir, '规则.json')), {
       message: '规则.json 已创建',
@@ -372,8 +409,8 @@ describe('小说编辑器 GUI', () => {
       expect.objectContaining({ type: 'exp', delta: 500, chapter: 1 }),
     ]);
     expect(existsSync(path.join(memoryDir, '角色', '林舟.md'))).toBe(true);
-    // 页面展示等级与经验条
-    await page.waitForTarget({ text: '经验 200 / 600' });
+    // 页面展示等级与经验条：本级进度与累计经验分开标注
+    await page.waitForTarget({ text: '本级 200 / 600 · 累计经验 500' });
 
     for (const [tab, marker] of [
       ['队伍', '组队历史'],
@@ -439,6 +476,9 @@ describe('小说编辑器 GUI', () => {
     expect(sheet.events).toEqual([
       expect.objectContaining({ type: 'exp', delta: 300, chapter: 2 }),
     ]);
+    // 角色卡显示本级进度，头部显示累计经验，二者文案不再混淆
+    await page.waitForTarget({ text: '本级 0 / 600 · 累计经验 300', within: GROWTH_WORKSPACE });
+    await page.waitForTarget({ text: '累计经验 300', within: GROWTH_HERO, exact: true });
     // 写入后文件面板中的等级徽章同步刷新（白芷与林舟都是 Lv.2）
     await page.waitFor(
       (selector: string) =>

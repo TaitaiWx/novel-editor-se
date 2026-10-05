@@ -230,6 +230,18 @@ describe('workspace tabs', () => {
     expect(shouldEnableChapterAssistant('/n/a.txt')).toBe(true);
     expect(shouldEnableChapterAssistant('/n/a.pdf')).toBe(false);
   });
+
+  it('传入项目根目录时，资料目录下的文本文件不算正文', () => {
+    expect(isStoryFilePath('/n/资料/记忆/README.md')).toBe(true);
+    expect(isStoryFilePath('/n/资料/记忆/README.md', '/n')).toBe(false);
+    expect(isStoryFilePath('/n/资料/AI资料/a.md', '/n/')).toBe(false);
+    expect(isStoryFilePath('C:\\n\\资料\\a.txt', 'C:\\n')).toBe(false);
+    expect(isStoryFilePath('/n/卷一/第1章.md', '/n')).toBe(true);
+    expect(isStoryFilePath('/n/卷一/资料/第1章.md', '/n')).toBe(true);
+    expect(isStoryFilePath('/n/第1章.md', null)).toBe(true);
+    expect(shouldEnableChapterAssistant('/n/资料/记忆/README.md', '/n')).toBe(false);
+    expect(shouldEnableChapterAssistant('/n/第1章.md', '/n')).toBe(true);
+  });
 });
 
 describe('splitWorkspaceFiles / flattenFileNodes', () => {

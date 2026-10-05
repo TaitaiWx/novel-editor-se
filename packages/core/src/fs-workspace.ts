@@ -24,6 +24,7 @@ import {
 import path from 'node:path';
 import { CoreError, toCoreError } from './errors';
 import { pathExists } from './fs-ops';
+import { GENERATED_MATERIAL_ROOT_NAME, isGeneratedMaterialPath } from './material';
 
 // ─── 读取 ──────────────────────────────────────────────────────────────────
 
@@ -273,8 +274,7 @@ export async function ensureSeededDirectory(targetDir: string, sourceDir: string
 
 // ─── 生成资料空目录清理 ────────────────────────────────────────────────────
 
-/** AI 生成资料的根目录名 */
-export const GENERATED_MATERIAL_ROOT_NAME = '资料';
+export { GENERATED_MATERIAL_ROOT_NAME, isGeneratedMaterialPath };
 /** 资料根目录下由程序生成、可安全清理的作用域子目录 */
 export const GENERATED_MATERIAL_SCOPE_DIRS: ReadonlySet<string> = new Set([
   'AI资料',

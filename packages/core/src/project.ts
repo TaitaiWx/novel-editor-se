@@ -20,6 +20,7 @@
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CoreError } from './errors';
+import { isGeneratedMaterialPath } from './material';
 import {
   assertDirectory,
   createFile,
@@ -229,11 +230,17 @@ function assertNovelName(name: string): void {
 export async function listNovelNames(project: Project): Promise<string[]> {
   if (!(await pathExists(project.novelsPath))) return [];
   const entries = await readdir(project.novelsPath, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
-    .filter((entry) => !['node_modules', 'dist', 'build', 'out'].includes(entry.name))
-    .map((entry) => entry.name)
-    .sort(naturalCollator.compare);
+  return (
+    entries
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+      .filter((entry) => !['node_modules', 'dist', 'build', 'out'].includes(entry.name))
+      // novelsDir 为项目根（"."）时，根下的生成资料目录（资料/记忆 等）不是作品
+      .filter(
+        (entry) => !isGeneratedMaterialPath(path.join(project.novelsPath, entry.name), project.root)
+      )
+      .map((entry) => entry.name)
+      .sort(naturalCollator.compare)
+  );
 }
 
 export async function resolveNovelPath(project: Project, name: string): Promise<string> {

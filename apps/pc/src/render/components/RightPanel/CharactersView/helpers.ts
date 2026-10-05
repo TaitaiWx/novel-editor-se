@@ -4,6 +4,7 @@ import type {
   CharacterCurrentStateItem,
   CharacterTimelineItem,
 } from '../types';
+import { isGeneratedMaterialPath } from '@novel-editor/core/material';
 import type { FileNode, OpenLocalResult } from '../../../types/File';
 
 // 人物视图内部使用的纯函数与类型（无 React 依赖）
@@ -141,13 +142,24 @@ export function buildRelativeFileLabel(folderPath: string, filePath: string): st
   return segments[segments.length - 1] || normalizedFilePath;
 }
 
+/**
+ * 是否计入作品正文语料：项目内的 .md/.markdown/.txt，且不在生成资料目录（资料/、资料/记忆/）下
+ */
+export function isNovelCorpusFilePath(filePath: string, folderPath: string): boolean {
+  const normalizedFilePath = filePath.replace(/\\/g, '/');
+  const normalizedFolderPath = folderPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!normalizedFilePath.startsWith(`${normalizedFolderPath}/`)) return false;
+  if (!TIMELINE_TEXT_FILE_RE.test(normalizedFilePath)) return false;
+  return !isGeneratedMaterialPath(normalizedFilePath, normalizedFolderPath);
+}
+
 export async function loadNovelCorpusFiles(
   folderPath: string,
   ipc: TimelineIpcInvoker
 ): Promise<NovelCorpusFile[]> {
   const tree = await ipc.invoke('refresh-folder', folderPath);
   const textFiles = flattenFileNodes(tree.files)
-    .filter((node) => node.type === 'file' && TIMELINE_TEXT_FILE_RE.test(node.name))
+    .filter((node) => node.type === 'file' && isNovelCorpusFilePath(node.path, folderPath))
     .sort((left, right) => left.path.localeCompare(right.path, 'zh-CN', { numeric: true }));
 
   const corpusFiles: NovelCorpusFile[] = [];

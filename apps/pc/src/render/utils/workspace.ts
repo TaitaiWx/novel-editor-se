@@ -1,4 +1,5 @@
 import { parseChineseInteger } from '@novel-editor/basic-algorithm';
+import { isGeneratedMaterialPath } from '@novel-editor/core/material';
 import type { FileNode } from '../types';
 import type { Character, LoreEntry } from '../components/RightPanel/types';
 
@@ -356,14 +357,22 @@ export function isUntitledWritingTab(path: string | null): boolean {
   return typeof path === 'string' && path.startsWith('__untitled__:');
 }
 
-export function isStoryFilePath(path: string | null): boolean {
+/**
+ * 是否为正文文件。传入项目根目录时，位于生成资料目录（`<root>/资料/`，含记忆库）下的
+ * 文本文件不算正文，与 core 的 `isGeneratedMaterialPath` 保持同一口径。
+ */
+export function isStoryFilePath(path: string | null, projectRoot?: string | null): boolean {
   if (!path || path.startsWith('__')) return false;
   const normalized = normalizePath(path);
-  return STORY_FILE_EXTENSIONS.some((ext) => normalized.endsWith(ext));
+  if (!STORY_FILE_EXTENSIONS.some((ext) => normalized.endsWith(ext))) return false;
+  return !(projectRoot && isGeneratedMaterialPath(path, projectRoot));
 }
 
-export function shouldEnableChapterAssistant(path: string | null): boolean {
-  return isUntitledWritingTab(path) || isStoryFilePath(path);
+export function shouldEnableChapterAssistant(
+  path: string | null,
+  projectRoot?: string | null
+): boolean {
+  return isUntitledWritingTab(path) || isStoryFilePath(path, projectRoot);
 }
 
 function partitionWorkspaceFiles(

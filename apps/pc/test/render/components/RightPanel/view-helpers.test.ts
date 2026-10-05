@@ -14,6 +14,7 @@ import {
   createCurrentStateItem,
   flattenFileNodes,
   formatTimelineLineLabel,
+  isNovelCorpusFilePath,
   loadNovelCorpusFiles,
   stripTimelineFileExtension,
 } from '@/render/components/RightPanel/CharactersView/helpers';
@@ -194,6 +195,50 @@ describe('CharactersView/helpers', () => {
       '卷一/第4章.md',
     ]);
     expect(corpus[0]).toEqual({ path: '/n/第2章.md', label: '第2章.md', content: '第二章 正文' });
+  });
+
+  it('isNovelCorpusFilePath 排除生成资料目录（资料/、资料/记忆/）与项目外文件', () => {
+    expect(isNovelCorpusFilePath('/n/卷一/第1章.md', '/n')).toBe(true);
+    expect(isNovelCorpusFilePath('/n/资料/记忆/README.md', '/n')).toBe(false);
+    expect(isNovelCorpusFilePath('/n/资料/AI资料/人物.md', '/n/')).toBe(false);
+    expect(isNovelCorpusFilePath('C:\\n\\资料\\记忆\\README.md', 'C:\\n')).toBe(false);
+    expect(isNovelCorpusFilePath('C:\\n\\第1章.txt', 'C:\\n')).toBe(true);
+    // 只排除项目根下的资料目录，卷内同名子目录或「资料集」不受影响
+    expect(isNovelCorpusFilePath('/n/卷一/资料/第1章.md', '/n')).toBe(true);
+    expect(isNovelCorpusFilePath('/n/资料集/第1章.md', '/n')).toBe(true);
+    expect(isNovelCorpusFilePath('/n/封面.png', '/n')).toBe(false);
+    expect(isNovelCorpusFilePath('/other/第1章.md', '/n')).toBe(false);
+  });
+
+  it('loadNovelCorpusFiles 不读取资料目录下的记忆库文件', async () => {
+    const files: FileNode[] = [
+      { name: '第1章.md', path: '/n/第1章.md', type: 'file' },
+      {
+        name: '资料',
+        path: '/n/资料',
+        type: 'directory',
+        children: [
+          {
+            name: '记忆',
+            path: '/n/资料/记忆',
+            type: 'directory',
+            children: [{ name: 'README.md', path: '/n/资料/记忆/README.md', type: 'file' }],
+          },
+        ],
+      },
+    ];
+    const readPaths: string[] = [];
+    const invoke = vi.fn(async (channel: string, path: string) => {
+      if (channel === 'refresh-folder') {
+        const result: OpenLocalResult = { path, files };
+        return result;
+      }
+      readPaths.push(path);
+      return '林舟走进森林';
+    });
+    const corpus = await loadNovelCorpusFiles('/n', { invoke } as unknown as TimelineIpcInvoker);
+    expect(readPaths).toEqual(['/n/第1章.md']);
+    expect(corpus.map((f) => f.label)).toEqual(['第1章.md']);
   });
 });
 

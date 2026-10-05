@@ -18,6 +18,8 @@ import {
   getHistoryStats,
   getTodayStats,
   initProject,
+  isGeneratedMaterialPath,
+  listNovelNames,
   listChapters,
   listNovels,
   listTree,
@@ -199,6 +201,27 @@ describe('project model', () => {
     expect(chapters[0]).toMatchObject({ volume: '第1卷', file: '第1卷/001-序.md' });
     expect(parseChapterFileName('012_标题.txt')).toEqual({ order: 12, title: '标题' });
     expect(parseChapterFileName('无编号.md')).toEqual({ order: null, title: '无编号' });
+  });
+
+  it('novelsDir 为项目根时，生成资料目录（资料/记忆）不会被当作作品', async () => {
+    const rootProject = (
+      await initProject(path.join(dir, 'flat'), { name: '平铺', novelsDir: '.' })
+    ).project;
+    await createNovel(rootProject, '星河旅人');
+    await mkdir(path.join(rootProject.root, '资料', '记忆'), { recursive: true });
+    await writeFile(path.join(rootProject.root, '资料', '记忆', 'README.md'), '记忆库说明');
+    await mkdir(path.join(rootProject.root, '资料集'), { recursive: true });
+    expect(await listNovelNames(rootProject)).toEqual(['星河旅人', '资料集']);
+  });
+
+  it('isGeneratedMaterialPath 只匹配项目根下的资料目录', () => {
+    expect(isGeneratedMaterialPath('/p/资料', '/p')).toBe(true);
+    expect(isGeneratedMaterialPath('/p/资料/记忆/README.md', '/p/')).toBe(true);
+    expect(isGeneratedMaterialPath('C:\\p\\资料\\记忆\\a.md', 'C:\\p')).toBe(true);
+    expect(isGeneratedMaterialPath('/p/资料集/a.md', '/p')).toBe(false);
+    expect(isGeneratedMaterialPath('/p/novels/资料/a.md', '/p')).toBe(false);
+    expect(isGeneratedMaterialPath('/资料/a.md', '/p')).toBe(false);
+    expect(isGeneratedMaterialPath('/p/资料/a.md', '')).toBe(false);
   });
 
   it('作品列表与导出 txt/md/docx', async () => {

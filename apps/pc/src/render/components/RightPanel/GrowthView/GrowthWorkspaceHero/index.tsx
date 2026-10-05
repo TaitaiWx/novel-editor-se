@@ -47,7 +47,7 @@ export const GrowthWorkspaceHero: React.FC<GrowthWorkspaceHeroProps> = ({
       <div className={styles.chips}>
         {sheet && progress ? (
           <>
-            <span className={styles.chip}>经验 {sheet.exp}</span>
+            <span className={styles.chip}>累计经验 {sheet.exp}</span>
             <span className={styles.chip}>
               {progress.isMaxLevel ? '已满级' : `距下一级 ${progress.expToNext}`}
             </span>

@@ -4,8 +4,8 @@ import {
   type NovelEditorFileSavedDetail,
 } from '../../../utils/editor-events';
 import {
-  TIMELINE_TEXT_FILE_RE,
   buildRelativeFileLabel,
+  isNovelCorpusFilePath,
   loadNovelCorpusFiles,
   type NovelCorpusFile,
 } from './helpers';
@@ -68,14 +68,10 @@ export function useNovelCorpus(folderPath: string | null) {
 
     let cancelled = false;
     const ipc = window.electron.ipcRenderer;
-    const normalizedFolderPath = folderPath.replace(/\\/g, '/').replace(/\/+$/, '');
 
     const handleFileSaved = async (event: Event) => {
       const detail = (event as CustomEvent<NovelEditorFileSavedDetail>).detail;
-      const normalizedFilePath = detail?.filePath?.replace(/\\/g, '/');
-      if (!normalizedFilePath) return;
-      if (!normalizedFilePath.startsWith(`${normalizedFolderPath}/`)) return;
-      if (!TIMELINE_TEXT_FILE_RE.test(normalizedFilePath)) return;
+      if (!detail?.filePath || !isNovelCorpusFilePath(detail.filePath, folderPath)) return;
 
       const cachedCorpusFiles = novelCorpusCacheRef.current.get(folderPath);
       if (!cachedCorpusFiles) {

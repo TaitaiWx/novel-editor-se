@@ -52,8 +52,8 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     [activeTab]
   );
   const chapterAssistantEnabled = useMemo(
-    () => shouldEnableChapterAssistant(activeDocumentTab),
-    [activeDocumentTab]
+    () => shouldEnableChapterAssistant(activeDocumentTab, folderPath),
+    [activeDocumentTab, folderPath]
   );
   const selectedCharacterTabId = useMemo(
     () => parseCharacterWorkspaceTab(activeWorkspaceTab),
@@ -107,7 +107,7 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     return null;
   }, [files, folderPath, rootVolumeNode, selectedVolumePath]);
   const currentAssistantScope = useMemo<AssistantScopeTarget | null>(() => {
-    if (activeDocumentTab && isStoryFilePath(activeDocumentTab)) {
+    if (activeDocumentTab && isStoryFilePath(activeDocumentTab, folderPath)) {
       return {
         kind: 'chapter',
         path: activeDocumentTab,
@@ -140,9 +140,9 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     () =>
       flattenFileNodes(workspaceStoryNodes).filter(
         (node): node is FileNode & { type: 'file' } =>
-          node.type === 'file' && isStoryFilePath(node.path)
+          node.type === 'file' && isStoryFilePath(node.path, folderPath)
       ),
-    [workspaceStoryNodes]
+    [folderPath, workspaceStoryNodes]
   );
 
   return {

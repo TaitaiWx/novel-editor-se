@@ -21,7 +21,7 @@ describe('GrowthSheetCard', () => {
     expect(screen.getByText('阿尔')).toBeTruthy();
     expect(screen.getByText('2')).toBeTruthy();
     // 2 级区间 300~900：已获得 100 / 600
-    expect(screen.getByText('经验 100 / 600')).toBeTruthy();
+    expect(screen.getByText('本级 100 / 600 · 累计经验 400')).toBeTruthy();
     expect(screen.getByText('距下一级 500 经验')).toBeTruthy();
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('17');
     expect(screen.getByText('力量')).toBeTruthy();

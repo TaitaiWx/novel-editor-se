@@ -3,7 +3,7 @@ import { extractActs, type ActNode } from '@novel-editor/basic-algorithm';
 import styles from './styles.module.scss';
 import type { PlotActBoard, StorylineLayoutMode } from './types';
 import { createPlotStorageKey, createActBoardKey, mergeActBoard } from './utils';
-import { LAYOUT_MODE_LABELS, LAYOUT_MODE_KEYS, ACT_COLORS } from './constants';
+import { LAYOUT_MODE_LABELS, LAYOUT_MODE_KEYS, ACT_COLORS, PLOT_STATUS_LABELS } from './constants';
 import { PlotBoardInspector } from './PlotBoardInspector';
 import { SwimlaneTimeline } from './SwimlaneTimeline';
 import { CausalChainView } from './CausalChainView';
@@ -149,7 +149,7 @@ export const ActsView: React.FC<{
         context: [
           `正文片段:\n${content.slice(0, 2400)}`,
           `当前剧情板:\n前提: ${board.premise}\n目标: ${board.goal}\n冲突: ${board.conflict}\n转折: ${board.twist}\n结果: ${board.payoff}`,
-          `场景列表:\n${board.sceneBoards.map((item, i) => `${i + 1}. ${item.title} [目标:${item.objective || '未填'}] [状态:${item.status}]`).join('\n')}`,
+          `场景列表:\n${board.sceneBoards.map((item, i) => `${i + 1}. ${item.title} [目标:${item.objective || '未填'}] [状态:${PLOT_STATUS_LABELS[item.status]}]`).join('\n')}`,
         ].join('\n\n'),
       })) as { ok: boolean; text?: string; error?: string };
       void updateSelectedBoard((prev) => ({

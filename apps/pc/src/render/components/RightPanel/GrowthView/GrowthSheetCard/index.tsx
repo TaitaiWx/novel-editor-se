@@ -87,8 +87,8 @@ export const GrowthSheetCard: React.FC<GrowthSheetCardProps> = ({
               <span>已满级 · 累计经验 {sheet.exp}</span>
             ) : (
               <>
-                <span>
-                  经验 {progress.expIntoLevel} / {progress.expForLevel}
+                <span title="本级已获得 / 升到下一级所需经验">
+                  本级 {progress.expIntoLevel} / {progress.expForLevel} · 累计经验 {sheet.exp}
                 </span>
                 <span className={styles.expToNext}>距下一级 {progress.expToNext} 经验</span>
               </>

@@ -354,11 +354,24 @@
   gap: 4px;
   margin-bottom: 10px;
   flex-shrink: 0;
+  // 按钮文字不换行；面板过窄时横向滚动而不是把中文挤成一字一行
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .storylineToggle {
-  padding: 3px 10px;
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: 3px 8px;
   font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-align: center;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 4px;
