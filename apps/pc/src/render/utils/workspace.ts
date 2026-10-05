@@ -7,6 +7,10 @@ export const WORKSPACE_TAB_LORE = '__workspace__:lore';
 export const WORKSPACE_TAB_CHARACTER_PREFIX = '__workspace__:character:';
 export const WORKSPACE_TAB_LORE_ENTRY_PREFIX = '__workspace__:lore-entry:';
 export const WORKSPACE_TAB_VOLUME_PREFIX = '__workspace__:volume:';
+/** 成长档案总览（不指定角色） */
+export const WORKSPACE_TAB_GROWTH = '__workspace__:growth';
+/** 单个角色的成长档案：`__workspace__:growth:<角色名>` */
+export const WORKSPACE_TAB_GROWTH_PREFIX = '__workspace__:growth:';
 
 export type AssistantScopeKind = 'project' | 'volume' | 'chapter';
 export type AssistantArtifactKind = 'characters' | 'lore' | 'materials';
@@ -15,6 +19,7 @@ export type StoryOrderMap = Record<string, string[]>;
 export const WORKSPACE_TAB_LABELS: Record<string, string> = {
   [WORKSPACE_TAB_CHARACTERS]: '角色',
   [WORKSPACE_TAB_LORE]: '设定',
+  [WORKSPACE_TAB_GROWTH]: '成长档案',
 };
 
 const STORY_FILE_EXTENSIONS = ['.md', '.markdown', '.txt'];
@@ -293,7 +298,8 @@ export function isWorkspaceTab(path: string | null): boolean {
       (path in WORKSPACE_TAB_LABELS ||
         path.startsWith(WORKSPACE_TAB_CHARACTER_PREFIX) ||
         path.startsWith(WORKSPACE_TAB_LORE_ENTRY_PREFIX) ||
-        path.startsWith(WORKSPACE_TAB_VOLUME_PREFIX))
+        path.startsWith(WORKSPACE_TAB_VOLUME_PREFIX) ||
+        path.startsWith(WORKSPACE_TAB_GROWTH_PREFIX))
   );
 }
 
@@ -328,6 +334,22 @@ export function createVolumeWorkspaceTab(volumePath: string): string {
 export function parseVolumeWorkspaceTab(path: string | null): string | null {
   if (!path?.startsWith(WORKSPACE_TAB_VOLUME_PREFIX)) return null;
   return path.slice(WORKSPACE_TAB_VOLUME_PREFIX.length) || null;
+}
+
+/** 成长档案标签：传入角色名时打开该角色，否则打开总览 */
+export function createGrowthWorkspaceTab(characterName?: string | null): string {
+  const name = characterName?.trim();
+  return name ? `${WORKSPACE_TAB_GROWTH_PREFIX}${name}` : WORKSPACE_TAB_GROWTH;
+}
+
+export function isGrowthWorkspaceTab(path: string | null): boolean {
+  return path === WORKSPACE_TAB_GROWTH || Boolean(path?.startsWith(WORKSPACE_TAB_GROWTH_PREFIX));
+}
+
+/** 解析成长档案标签中的角色名；总览或非成长档案标签返回 null */
+export function parseGrowthWorkspaceTab(path: string | null): string | null {
+  if (!path?.startsWith(WORKSPACE_TAB_GROWTH_PREFIX)) return null;
+  return path.slice(WORKSPACE_TAB_GROWTH_PREFIX.length).trim() || null;
 }
 
 export function isUntitledWritingTab(path: string | null): boolean {

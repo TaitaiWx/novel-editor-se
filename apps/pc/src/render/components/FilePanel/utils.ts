@@ -4,6 +4,7 @@ import type { Character, CharacterCategory, LoreEntry } from '../RightPanel/type
 import { isChapterLikeStoryName, isDraftLikeStoryName } from '../../utils/workspace';
 import { isImeComposing } from '../../utils/ime';
 import type { StoryDropMode } from './types';
+import type { GrowthSheetSummary } from '../../utils/growthIndex';
 import { getPathBasename } from '@/render/utils/path';
 
 /** 根据路径在树中查找节点 */
@@ -148,6 +149,26 @@ export function shouldShowCharactersSection(normalizedQuery: string, matchCount:
 }
 
 /** 搜索时是否保留"设定"分区 */
+/** 按角色名 / 别名筛选成长档案 */
+export function filterGrowthSheets(
+  sheets: GrowthSheetSummary[],
+  normalizedQuery: string
+): GrowthSheetSummary[] {
+  if (!normalizedQuery) return sheets;
+  return sheets.filter((item) =>
+    [item.name, ...item.aliases].some((name) => name.toLowerCase().includes(normalizedQuery))
+  );
+}
+
+export function shouldShowGrowthSection(normalizedQuery: string, matchCount: number): boolean {
+  return (
+    normalizedQuery.length === 0 ||
+    matchCount > 0 ||
+    '成长 档案 等级 经验 记忆'.includes(normalizedQuery) ||
+    normalizedQuery.includes('成长')
+  );
+}
+
 export function shouldShowLoreSection(normalizedQuery: string, matchCount: number): boolean {
   return (
     normalizedQuery.length === 0 ||

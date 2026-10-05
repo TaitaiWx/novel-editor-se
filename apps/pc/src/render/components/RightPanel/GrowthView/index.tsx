@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { latestChapterOfSheet, type GrowthTemplate } from '@novel-editor/core/growth';
 import { GrowthEventForm } from './GrowthEventForm';
 import { GrowthMapPanel } from './GrowthMapPanel';
@@ -8,6 +8,7 @@ import { GrowthSheetCard } from './GrowthSheetCard';
 import { GrowthSimulationPanel } from './GrowthSimulationPanel';
 import { GrowthTimeline } from './GrowthTimeline';
 import { GrowthWarningList } from './GrowthWarningList';
+import { GrowthWorkspaceHero } from './GrowthWorkspaceHero';
 import { useGrowthMemory } from './useGrowthMemory';
 import styles from './styles.module.scss';
 
@@ -29,6 +30,15 @@ const TEMPLATE_LABELS: Record<GrowthTemplate, string> = {
 export interface GrowthViewProps {
   folderPath: string | null;
   dbReady: boolean;
+  /** 打开时定位到该角色；记忆库中还没有成长卡时自动创建（记忆库未创建时，创建后再建卡） */
+  initialCharacter?: string | null;
+  /** panel：右侧面板窄布局；workspace：工作区标签宽布局（标题区 + 双栏角色卡） */
+  layout?: 'panel' | 'workspace';
+  /**
+   * 切换到其他角色时的导航回调（工作区标签中由外部打开对应角色的标签）。
+   * 仅在指定了 initialCharacter 时生效；未提供时在当前视图内切换
+   */
+  onNavigateCharacter?: (name: string) => void;
 }
 
 /**
@@ -37,12 +47,38 @@ export interface GrowthViewProps {
  * 数据保存在 `<项目>/资料/记忆/`，与 CLI `ne growth` 共用；让几百章后的技能、
  * 抉择、队友与足迹一目了然，并用一致性检查与 AI 推演防止战力崩溃。
  */
-export const GrowthView: React.FC<GrowthViewProps> = ({ folderPath, dbReady }) => {
+export const GrowthView: React.FC<GrowthViewProps> = ({
+  folderPath,
+  dbReady,
+  initialCharacter = null,
+  layout = 'panel',
+  onNavigateCharacter,
+}) => {
   const growth = useGrowthMemory({ folderPath, dbReady });
   const [tab, setTab] = useState<GrowthTab>('sheet');
   const [template, setTemplate] = useState<GrowthTemplate>('dnd');
   const [actionError, setActionError] = useState<string | null>(null);
-  const { snapshot, selectedSheet, notice, setNotice } = growth;
+  const { snapshot, selectedSheet, notice, setNotice, selectCharacter } = growth;
+  const isWorkspace = layout === 'workspace';
+  const pinnedName = initialCharacter?.trim() || null;
+  const appliedInitialRef = useRef<string | null>(null);
+
+  // 定位到指定角色：记忆库就绪后只执行一次（必要时建卡），失败时显示错误而不是反复重试
+  useEffect(() => {
+    if (!pinnedName || !snapshot?.initialized) return;
+    if (appliedInitialRef.current === pinnedName) return;
+    appliedInitialRef.current = pinnedName;
+    void selectCharacter(pinnedName).then(setActionError);
+  }, [pinnedName, selectCharacter, snapshot?.initialized]);
+
+  /** 角色选择器 / 新建表单：固定角色的标签页中改为打开对应角色的标签 */
+  const chooseCharacter = (name: string) => {
+    if (pinnedName && onNavigateCharacter && name !== pinnedName) {
+      onNavigateCharacter(name);
+      return;
+    }
+    void selectCharacter(name).then(setActionError);
+  };
 
   // 提示 4 秒后自动消失
   useEffect(() => {
@@ -81,13 +117,16 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ folderPath, dbReady }) =
 
   if (!snapshot.initialized) {
     return (
-      <div className={styles.intro}>
+      <div className={`${styles.intro} ${isWorkspace ? styles.introWorkspace : ''}`}>
         <div className={styles.introTitle}>角色成长记录器</div>
         <p className={styles.introText}>
           把角色的等级、经验、属性、技能、二选一/三选一抉择、组过的队伍和去过的地方记在
           <code>资料/记忆/</code>
           里。几百章之后也能一眼看清「这个技能升级还要多少经验」「哪个配角好久没出场了」，并在战力暴涨时提醒你。
         </p>
+        {pinnedName && (
+          <p className={styles.introText}>创建记忆库后会自动为「{pinnedName}」建立成长卡。</p>
+        )}
         <div className={styles.templates} role="radiogroup" aria-label="规则模板">
           {(Object.keys(TEMPLATE_LABELS) as GrowthTemplate[]).map((key) => (
             <label key={key} className={styles.template}>
@@ -119,17 +158,59 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ folderPath, dbReady }) =
     ? latestChapterOfSheet(selectedSheet) || undefined
     : undefined;
 
+  const sheetMain = selectedSheet && (
+    <GrowthSheetCard
+      ruleset={snapshot.ruleset}
+      sheet={selectedSheet}
+      busy={growth.busy}
+      onChoose={(groupId, optionId) =>
+        void growth
+          .applyEvent({
+            type: 'choice',
+            target: groupId,
+            value: optionId,
+            chapter: defaultChapter,
+          })
+          .then(setActionError)
+      }
+    />
+  );
+  const sheetSide = selectedSheet && (
+    <>
+      <GrowthEventForm
+        key={selectedSheet.name}
+        ruleset={snapshot.ruleset}
+        busy={growth.busy}
+        defaultChapter={defaultChapter}
+        onSubmit={growth.applyEvent}
+      />
+      <GrowthWarningList warnings={sheetWarnings} />
+      <GrowthTimeline
+        ruleset={snapshot.ruleset}
+        sheet={selectedSheet}
+        busy={growth.busy}
+        onUpdateNotes={growth.updateNotes}
+      />
+    </>
+  );
+
   return (
-    <div className={styles.view}>
+    <div className={`${styles.view} ${isWorkspace ? styles.viewWorkspace : ''}`}>
+      {isWorkspace && (
+        <GrowthWorkspaceHero
+          sheet={selectedSheet}
+          ruleset={snapshot.ruleset}
+          sheetCount={snapshot.sheets.length}
+          warningCount={sheetWarnings.length}
+        />
+      )}
       <div className={styles.toolbar}>
         <select
           className={styles.select}
           value={growth.selectedName ?? ''}
           aria-label="选择角色"
           onChange={(event) => {
-            if (event.target.value) {
-              void growth.selectCharacter(event.target.value).then(setActionError);
-            }
+            if (event.target.value) chooseCharacter(event.target.value);
           }}
         >
           <option value="">选择角色…</option>
@@ -158,7 +239,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ folderPath, dbReady }) =
           if (!(input instanceof HTMLInputElement) || !input.value.trim()) return;
           const name = input.value.trim();
           input.value = '';
-          void growth.selectCharacter(name).then(setActionError);
+          chooseCharacter(name);
         }}
       >
         <input
@@ -216,39 +297,19 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ folderPath, dbReady }) =
         {(tab === 'sheet' || tab === 'simulate') && !selectedSheet && (
           <div className={styles.placeholder}>选择或新建一个角色，开始记录成长。</div>
         )}
-        {tab === 'sheet' && selectedSheet && (
-          <>
-            <GrowthSheetCard
-              ruleset={snapshot.ruleset}
-              sheet={selectedSheet}
-              busy={growth.busy}
-              onChoose={(groupId, optionId) =>
-                void growth
-                  .applyEvent({
-                    type: 'choice',
-                    target: groupId,
-                    value: optionId,
-                    chapter: defaultChapter,
-                  })
-                  .then(setActionError)
-              }
-            />
-            <GrowthEventForm
-              key={selectedSheet.name}
-              ruleset={snapshot.ruleset}
-              busy={growth.busy}
-              defaultChapter={defaultChapter}
-              onSubmit={growth.applyEvent}
-            />
-            <GrowthWarningList warnings={sheetWarnings} />
-            <GrowthTimeline
-              ruleset={snapshot.ruleset}
-              sheet={selectedSheet}
-              busy={growth.busy}
-              onUpdateNotes={growth.updateNotes}
-            />
-          </>
-        )}
+        {tab === 'sheet' &&
+          selectedSheet &&
+          (isWorkspace ? (
+            <div className={styles.sheetGrid}>
+              <div className={styles.sheetColumn}>{sheetMain}</div>
+              <div className={styles.sheetColumn}>{sheetSide}</div>
+            </div>
+          ) : (
+            <>
+              {sheetMain}
+              {sheetSide}
+            </>
+          ))}
         {tab === 'simulate' && selectedSheet && (
           <GrowthSimulationPanel
             key={selectedSheet.name}

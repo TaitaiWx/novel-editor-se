@@ -167,7 +167,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
   - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
   - `workbench.ts`: 本应用的高层操作（展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
   - `fixture.ts`: 每次运行在临时目录生成全新的示例项目（中文作品/章节 + `资料/`）
-- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、单实例转发）
+- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、单实例转发）
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
 - 调试: 失败时自动把截图（`*.png`）和主进程 stdout/stderr（`*.log`）写入 `apps/pc/e2e/.artifacts/`（已 gitignore，CI 失败时作为 artifact 上传）；设置 `NOVEL_EDITOR_E2E_VERBOSE=1` 可实时输出主进程日志；可用 `pnpm test:e2e:only -t "<用例名>"` 过滤（用例共享同一窗口状态，单独运行靠后的用例时可能需要连同前置用例一起跑）
@@ -286,7 +286,7 @@ ne update [--check|--install]   # 检查/安装更新
 
 - 数据源: `<project>/资料/记忆/` 下的 JSON 文件（带 `schemaVersion`，旧版本自动迁移，高版本拒绝读写），GUI、CLI 与 AI agent 直接读写同一份文件；Markdown 均为派生文件，每次保存时重新生成
 - 纯逻辑: `packages/core/src/growth/`（不依赖 Node/Electron，渲染进程通过 `@novel-editor/core/growth` 引入）；文件读写在 `growth/storage.ts`（仅主进程与 CLI 使用）
-- GUI: 右侧面板「成长」页签（`RightPanel/GrowthView/`），主进程通道 `growth-*`（`main/handlers/growth.ts`）与 `memory-sync-snapshots`（`main/handlers/memory.ts`）
+- GUI: `RightPanel/GrowthView/` 同时用于右侧面板「成长」页签与工作区标签（`__workspace__:growth` 总览、`__workspace__:growth:<角色名>` 单个角色，宽布局）；入口还有文件面板「成长档案」分区（`FilePanel/GrowthSection`，等级徽章 + 新建）、人物详情的「成长档案」按钮、快捷键 `Mod+Shift+J`。索引与打开动作在 `hooks/useGrowthEntry.ts`，各视图写入后通过 `growth-memory-changed` 事件互相刷新（`utils/growthIndex.ts`）。主进程通道 `growth-*`（`main/handlers/growth.ts`）与 `memory-sync-snapshots`（`main/handlers/memory.ts`）
 - AI 推演只产出提案：GUI 用设置中心配置的 AI 执行；CLI 不保存 AI Key，只输出 prompt 与 JSON schema，由驱动 CLI 的 AI agent 执行后再 `apply-sim`。作者确认「采用此分支」之前不会写入任何数据
 - 生成资料清理逻辑（`cleanup-empty-generated-material-directories`）只处理 `资料/` 下的 AI资料/项目上下文/卷上下文/章上下文 空目录，不会删除 `资料/记忆/`
 

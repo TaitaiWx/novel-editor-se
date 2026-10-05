@@ -47,6 +47,7 @@ export const getAllShortcuts = (): ShortcutDisplay[] => {
     { accelerator: `${mod}+B`, description: '切换侧边栏', category: '视图' },
     { accelerator: `${mod}+Shift+F`, description: '切换专注模式', category: '视图' },
     { accelerator: 'F11', description: '切换专注模式', category: '视图' },
+    { accelerator: `${mod}+Shift+J`, description: '打开成长档案', category: '视图' },
   ];
 
   return [...mainShortcuts, ...rendererShortcuts];

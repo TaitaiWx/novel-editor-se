@@ -11,6 +11,7 @@ import type {
 import { CHARACTER_CATEGORY_LABELS, DEFAULT_CHARACTER_HIGHLIGHT_COLOR } from '../../utils';
 import { CharacterCurrentStateSection } from '../CharacterCurrentStateSection';
 import { CharacterTimelineSection } from '../CharacterTimelineSection';
+import { CharacterGrowthButton } from '../CharacterGrowthButton';
 import type { CharacterCurrentStateController } from '../useCharacterCurrentState';
 import type { CharacterTimelineController } from '../useCharacterTimeline';
 
@@ -37,6 +38,10 @@ interface CharacterDetailWorkspaceProps {
     }
   ) => Promise<void>;
   graphView: React.ReactNode;
+  /** 当前人物成长卡的等级；null 表示尚未建档 */
+  growthLevel?: number | null;
+  /** 打开（或新建）该人物的成长档案；未提供时不显示入口 */
+  onOpenGrowthSheet?: (characterName: string) => void;
 }
 
 /**
@@ -57,6 +62,8 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
   currentState,
   handleUpdateCharacterAttributes,
   graphView,
+  growthLevel = null,
+  onOpenGrowthSheet,
 }) => {
   return (
     <div className={styles.objectWorkspace}>
@@ -64,7 +71,16 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
         <>
           <section className={styles.workspaceHero}>
             <div className={styles.workspaceEyebrow}>人物资料</div>
-            <h2 className={styles.workspaceTitle}>{focusedCharacter.name}</h2>
+            <div className={styles.workspaceTitleRow}>
+              <h2 className={styles.workspaceTitle}>{focusedCharacter.name}</h2>
+              {onOpenGrowthSheet && (
+                <CharacterGrowthButton
+                  characterName={focusedCharacter.name}
+                  level={growthLevel}
+                  onOpen={onOpenGrowthSheet}
+                />
+              )}
+            </div>
             <p className={styles.workspaceDesc}>
               {focusedTimeline.length > 0
                 ? `已从整个作品目录中按章节整理出 ${focusedTimeline.length} 段关键经历，覆盖前期到后期的主要推进。`

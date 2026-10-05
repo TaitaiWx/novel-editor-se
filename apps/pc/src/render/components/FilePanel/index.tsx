@@ -18,6 +18,7 @@ import type { FilePanelProps, ObjectContextMenuTarget } from './types';
 import {
   countFiles,
   filterCharacters,
+  filterGrowthSheets,
   filterLoreEntries,
   filterTree,
   getCharacterCategoryLabel,
@@ -26,6 +27,7 @@ import {
   handleRowActivationKey,
   resolvePasteTargetDir,
   shouldShowCharactersSection,
+  shouldShowGrowthSection,
   shouldShowLoreSection,
 } from './utils';
 import { useExternalFileDrop } from './hooks/useExternalFileDrop';
@@ -38,6 +40,8 @@ import ObjectItemRow from './ObjectItemRow';
 import WorkspaceHeader, { buildCreateMenuItems } from './WorkspaceHeader';
 import SearchBar from './SearchBar';
 import CharacterGenerationHint from './CharacterGenerationHint';
+import GrowthSection from './GrowthSection';
+import type { GrowthSheetSummary } from '../../utils/growthIndex';
 import styles from './styles.module.scss';
 
 export type { ObjectContextMenuTarget, ObjectContextMenuEvent } from './types';
@@ -46,6 +50,7 @@ export type { ObjectContextMenuTarget, ObjectContextMenuEvent } from './types';
 // 进而让依赖它的展开 effect 反复 setState，造成无限重渲染。
 const EMPTY_STORY_ORDER_MAP: StoryOrderMap = {};
 const EMPTY_MATERIAL_USAGE_MAP: Record<string, string> = {};
+const EMPTY_GROWTH_SHEETS: GrowthSheetSummary[] = [];
 
 const FilePanel: React.FC<FilePanelProps> = React.memo(
   ({
@@ -79,6 +84,9 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onCreateCharacter,
     onCreateLoreEntry,
     onCreateMaterialDirectory,
+    growthIndex = null,
+    onOpenGrowth,
+    onCreateGrowthSheet,
     onRefresh,
     onOpenFolder,
     onRenameProject,
@@ -163,6 +171,13 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       filteredCharacters.length
     );
     const showLoreSection = shouldShowLoreSection(normalizedQuery, filteredLoreEntries.length);
+    const filteredGrowthSheets = useMemo(
+      () => filterGrowthSheets(growthIndex?.sheets ?? EMPTY_GROWTH_SHEETS, normalizedQuery),
+      [growthIndex, normalizedQuery]
+    );
+    const showGrowthSection =
+      Boolean(onOpenGrowth) &&
+      shouldShowGrowthSection(normalizedQuery, filteredGrowthSheets.length);
 
     const {
       revealPath,
@@ -422,6 +437,20 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                         </div>
                       )}
                     </section>
+                  )}
+
+                  {showGrowthSection && onOpenGrowth && (
+                    <GrowthSection
+                      sheets={filteredGrowthSheets}
+                      initialized={growthIndex?.initialized ?? false}
+                      filtering={normalizedQuery.length > 0}
+                      collapsed={collapsedSections.growth}
+                      activeWorkspaceTab={activeWorkspaceTab}
+                      onToggle={() => toggleSection('growth')}
+                      onOpen={onOpenGrowth}
+                      onCreate={() => onCreateGrowthSheet?.()}
+                      onContextMenu={emitObjectContextMenu}
+                    />
                   )}
 
                   <section className={styles.objectSection}>

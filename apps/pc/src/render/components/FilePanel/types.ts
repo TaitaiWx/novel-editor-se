@@ -3,6 +3,7 @@ import type { FileNode } from '../../types';
 import type { Character, LoreEntry } from '../RightPanel/types';
 import type { StoryOrderMap } from '../../utils/workspace';
 import type { AssistantArtifactGenerationStatus } from '../../utils/assistantGeneration';
+import type { GrowthIndex } from '../../utils/growthIndex';
 
 export type ObjectContextMenuTarget =
   | { kind: 'project-root' }
@@ -12,7 +13,9 @@ export type ObjectContextMenuTarget =
   | { kind: 'lore-root' }
   | { kind: 'materials-root' }
   | { kind: 'character-item'; characterId: number }
-  | { kind: 'lore-item'; entryId: number };
+  | { kind: 'lore-item'; entryId: number }
+  | { kind: 'growth-root' }
+  | { kind: 'growth-item'; characterName: string };
 
 export interface ObjectContextMenuEvent {
   x: number;
@@ -34,7 +37,7 @@ export interface StoryDropTarget {
 }
 
 /** 可折叠的对象分区 */
-export type FilePanelSection = 'story' | 'characters' | 'lore' | 'materials';
+export type FilePanelSection = 'story' | 'characters' | 'lore' | 'growth' | 'materials';
 
 export type CollapsedSections = Record<FilePanelSection, boolean>;
 
@@ -69,6 +72,11 @@ export interface FilePanelProps {
   onCreateCharacter: () => void;
   onCreateLoreEntry: () => void;
   onCreateMaterialDirectory: () => void;
+  /** 成长档案索引（资料/记忆/）；null 表示尚未读取或读取失败 */
+  growthIndex?: GrowthIndex | null;
+  /** 打开成长档案标签（传角色名打开该角色，否则打开总览）；未提供时不显示「成长档案」分区 */
+  onOpenGrowth?: (characterName?: string | null) => void;
+  onCreateGrowthSheet?: () => void;
   onRefresh: () => void;
   onOpenFolder: () => void;
   onRenameProject?: () => void;

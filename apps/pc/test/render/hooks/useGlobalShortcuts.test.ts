@@ -18,6 +18,7 @@ function createCtx(activeTab: string | null = '/a.md') {
     handleCreateFile: vi.fn(),
     handleFormatCurrentChapter: vi.fn(),
     handleNewTab: vi.fn(),
+    handleOpenGrowth: vi.fn(),
     handleOpenLocal: vi.fn(),
     handleToggleSidebar: vi.fn(),
     toggleFocusMode: vi.fn(),
@@ -48,6 +49,14 @@ describe('useGlobalShortcuts', () => {
   afterEach(() => {
     uninstallElectronMock();
     document.body.innerHTML = '';
+  });
+
+  it('Mod+Shift+J 打开成长档案总览', () => {
+    const { ctx, fns } = createCtx();
+    renderHook(() => useGlobalShortcuts(ctx));
+    const event = press({ key: 'J', metaKey: true, shiftKey: true });
+    expect(event.defaultPrevented).toBe(true);
+    expect(fns.handleOpenGrowth).toHaveBeenCalledWith(null);
   });
 
   it('挂载时注册主进程快捷键事件，卸载时清理', () => {

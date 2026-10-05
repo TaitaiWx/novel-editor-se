@@ -1,0 +1,98 @@
+// 与正文 / 角色 / 设定分区保持同样的节奏；强调色沿用成长档案的 info 色（柔和金）
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 0 6px;
+}
+
+.children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.headerAction {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-fg-muted, #8b8b8b);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+    color: var(--ui-fg-primary, #d4d4d4);
+  }
+}
+
+.empty {
+  margin: 0 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #7f7f7f;
+  line-height: 1.5;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.hint {
+  margin: 0 12px 0 28px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(215, 186, 125, 0.16);
+  background: rgba(215, 186, 125, 0.05);
+}
+
+.hintTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #d9c18d;
+}
+
+.hintText {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #9a9a9a;
+}
+
+.hintButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(215, 186, 125, 0.3);
+  background: rgba(215, 186, 125, 0.12);
+  color: #f2e4bf;
+  cursor: pointer;
+  transition: background-color 0.15s;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &:hover {
+    background: rgba(215, 186, 125, 0.2);
+  }
+}

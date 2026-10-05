@@ -11,6 +11,7 @@ import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 import type { EditorInteractions } from './useEditorInteractions';
 import type { ProjectLoaderApi } from './useProjectLoader';
 import type { PaneLayoutApi } from './usePaneLayout';
+import type { GrowthEntryApi } from './useGrowthEntry';
 
 export type UseGlobalShortcutsContext = Pick<TabsState, 'activeTabRef'> &
   Pick<LayoutState, 'sidebarFocusedRef' | 'sidebarRef'> &
@@ -19,7 +20,8 @@ export type UseGlobalShortcutsContext = Pick<TabsState, 'activeTabRef'> &
   Pick<WorkspaceCreationApi, 'handleCreateFile'> &
   Pick<EditorInteractions, 'handleFormatCurrentChapter'> &
   Pick<ProjectLoaderApi, 'handleOpenLocal'> &
-  Pick<PaneLayoutApi, 'handleToggleSidebar'>;
+  Pick<PaneLayoutApi, 'handleToggleSidebar'> &
+  Pick<GrowthEntryApi, 'handleOpenGrowth'>;
 
 /**
  * 全局快捷键、菜单事件与默认拖放拦截
@@ -32,6 +34,7 @@ export function useGlobalShortcuts(ctx: UseGlobalShortcutsContext) {
     handleCreateFile,
     handleFormatCurrentChapter,
     handleNewTab,
+    handleOpenGrowth,
     handleOpenLocal,
     handleToggleSidebar,
     sidebarFocusedRef,
@@ -75,6 +78,11 @@ export function useGlobalShortcuts(ctx: UseGlobalShortcutsContext) {
         handleFormatCurrentChapter();
         return;
       }
+      if (matchShortcutEvent(e, appSettings.shortcuts.openGrowth)) {
+        e.preventDefault();
+        handleOpenGrowth(null);
+        return;
+      }
       // Cmd+N: 新建标签
       if (mod && !e.shiftKey && e.key === 'n') {
         e.preventDefault();
@@ -111,6 +119,7 @@ export function useGlobalShortcuts(ctx: UseGlobalShortcutsContext) {
     closeTab,
     handleFormatCurrentChapter,
     handleNewTab,
+    handleOpenGrowth,
     handleOpenLocal,
     handleToggleSidebar,
     toggleFocusMode,

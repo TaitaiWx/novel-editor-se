@@ -11,6 +11,11 @@ import type {
   PartyBook,
 } from '../../../types/growth-api';
 import { mapCharacterRows } from '../utils';
+import {
+  GROWTH_MEMORY_CHANGED_EVENT,
+  emitGrowthMemoryChanged,
+  type GrowthMemoryChangedDetail,
+} from '../../../utils/growthIndex';
 
 export interface GrowthCharacterOption {
   name: string;
@@ -47,6 +52,8 @@ export function useGrowthMemory({
   const [notice, setNotice] = useState<string | null>(null);
   const folderRef = useRef(folderPath);
   folderRef.current = folderPath;
+  // 本实例标识：广播写入结果时带上，收到自己的广播时忽略
+  const [sourceId] = useState(() => `growth-view-${Math.random().toString(36).slice(2)}`);
 
   /** 统一处理 IPC 结果；成功时更新快照 */
   const run = useCallback(
@@ -60,7 +67,11 @@ export function useGrowthMemory({
         if (!result) return { data: null, error: '当前环境不支持该操作' };
         if (!result.ok) return { data: null, error: result.error };
         const next = pick(result.data);
-        if (next) setSnapshot(next);
+        if (next) {
+          setSnapshot(next);
+          // 广播写入结果：文件面板「成长档案」分区、人物详情及其他成长视图据此刷新
+          if (folderRef.current) emitGrowthMemoryChanged(folderRef.current, next, sourceId);
+        }
         return { data: result.data, error: null };
       } catch (err) {
         return { data: null, error: err instanceof Error ? err.message : String(err) };
@@ -68,7 +79,7 @@ export function useGrowthMemory({
         setBusy(false);
       }
     },
-    []
+    [sourceId]
   );
 
   const reload = useCallback(async () => {
@@ -97,6 +108,17 @@ export function useGrowthMemory({
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // 其他成长视图（右侧面板 / 工作区标签）写入后同步刷新；只读不广播，避免互相触发
+  useEffect(() => {
+    const onChanged = (event: Event) => {
+      const detail = (event as CustomEvent<GrowthMemoryChangedDetail>).detail;
+      if (!detail || detail.source === sourceId || detail.folderPath !== folderRef.current) return;
+      void reload();
+    };
+    window.addEventListener(GROWTH_MEMORY_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(GROWTH_MEMORY_CHANGED_EVENT, onChanged);
+  }, [reload, sourceId]);
 
   // 编辑器人物库（SQLite）：用于角色选择器，选中后自动建卡
   useEffect(() => {

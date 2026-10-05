@@ -54,6 +54,18 @@
   flex: 1;
 }
 
+.objectNodeBadge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  color: #d9c18d;
+  background: rgba(215, 186, 125, 0.12);
+  border: 1px solid rgba(215, 186, 125, 0.22);
+}
+
 .objectNodeMetaInline {
   flex-shrink: 0;
   font-size: 11px;

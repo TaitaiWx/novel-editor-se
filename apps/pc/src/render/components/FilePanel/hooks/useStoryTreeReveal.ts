@@ -36,6 +36,7 @@ export function useStoryTreeReveal({
     story: false,
     characters: false,
     lore: false,
+    growth: false,
     materials: false,
   });
   const [expandedStoryDirs, setExpandedStoryDirs] = useState<Set<string>>(new Set());

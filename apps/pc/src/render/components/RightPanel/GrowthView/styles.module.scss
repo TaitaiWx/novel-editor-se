@@ -171,3 +171,47 @@
   color: ui.$fg;
   cursor: pointer;
 }
+
+// ─── 工作区标签宽布局 ─────────────────────────────────────────
+// 与人物 / 设定工作区一致的内边距；内容限宽居中，避免超宽屏下行过长
+
+.viewWorkspace {
+  gap: 12px;
+  width: 100%;
+  max-width: 1180px;
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 16px 18px 20px;
+  box-sizing: border-box;
+  container-type: inline-size;
+
+  .body {
+    overflow: visible;
+  }
+}
+
+.introWorkspace {
+  max-width: 640px;
+  margin: 40px auto;
+  padding: 20px 22px;
+}
+
+.sheetGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.sheetColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+@container (min-width: 760px) {
+  .sheetGrid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(300px, 1fr);
+  }
+}

@@ -10,6 +10,7 @@ import type { LibraryGenerationApi } from './useLibraryGeneration';
 import type { ScopedAssistantGenerationApi } from './useScopedAssistantGeneration';
 import type { ProjectExportApi } from './useProjectExport';
 import type { ProjectLoaderApi } from './useProjectLoader';
+import type { GrowthEntryApi } from './useGrowthEntry';
 
 export type UseContextMenuItemsContext = Pick<
   WorkspaceEntityActions,
@@ -27,6 +28,7 @@ export type UseContextMenuItemsContext = Pick<
   | 'handleOpenVolumeNode'
   | 'handleRenameProject'
 > &
+  Pick<GrowthEntryApi, 'handleCreateGrowthSheet' | 'handleOpenGrowth'> &
   Pick<WorkspaceState, 'folderPath'> &
   Pick<EntitiesState, 'workspaceCharacters' | 'workspaceLoreEntries'> &
   Pick<UiState, 'contextMenu'> &
@@ -79,6 +81,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleCreateCharacter,
     handleCreateDirectory,
     handleCreateFile,
+    handleCreateGrowthSheet,
     handleCreateLoreEntry,
     handleCreateMaterialDirectory,
     handleCreateStoryItem,
@@ -96,6 +99,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleImportFile,
     handleOpenCharacterNode,
     handleOpenCharacters,
+    handleOpenGrowth,
     handleOpenKnowledgeExportDialog,
     handleOpenLore,
     handleOpenLoreNode,
@@ -206,6 +210,14 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
             menuItem('导出角色卡、设定与资料', () => void handleOpenKnowledgeExportDialog()),
             menuItem('清空设定', () => void handleClearLoreEntries(), { danger: true }),
           ];
+        case 'growth-root':
+          return [
+            menuItem('查看总览', () => handleOpenGrowth(null)),
+            menuItem('', () => {}, { separator: true }),
+            menuItem('新建成长档案', () => void handleCreateGrowthSheet()),
+          ];
+        case 'growth-item':
+          return [menuItem('打开成长档案', () => handleOpenGrowth(target.characterName))];
         case 'materials-root':
           return [
             menuItem('新建资料目录', () => void handleCreateMaterialDirectory()),
@@ -297,6 +309,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleCreateCharacter,
     handleCreateDirectory,
     handleCreateFile,
+    handleCreateGrowthSheet,
     handleCreateLoreEntry,
     handleCreateMaterialDirectory,
     handleCreateStoryItem,
@@ -315,6 +328,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleImportFile,
     handleOpenCharacterNode,
     handleOpenCharacters,
+    handleOpenGrowth,
     handleOpenLore,
     handleOpenLoreNode,
     handleOpenVolumeNode,

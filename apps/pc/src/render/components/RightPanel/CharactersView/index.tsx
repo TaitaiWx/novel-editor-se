@@ -15,12 +15,28 @@ import { useCharacterCurrentState } from './useCharacterCurrentState';
 import { CharacterListPanel } from './CharacterListPanel';
 import { CharacterDetailWorkspace } from './CharacterDetailWorkspace';
 
+/** 按人物名或别名查找成长卡等级 */
+function resolveGrowthLevel(
+  growthLevels: Record<string, number> | undefined,
+  character: Character | null
+): number | null {
+  if (!growthLevels || !character) return null;
+  for (const key of [character.name, ...(character.aliases ?? [])]) {
+    const level = growthLevels[key];
+    if (typeof level === 'number') return level;
+  }
+  return null;
+}
+
 export const CharactersView: React.FC<{
   folderPath: string | null;
   content: string;
   initialSelectedCharacterId?: number | null;
   onCharactersChange?: (characters: Character[]) => void;
   onOpenSourceLocation?: (filePath: string, line: number, contentKey?: string) => void;
+  /** 角色名 → 成长卡等级（来自 资料/记忆/），用于人物详情中的「成长档案」入口 */
+  growthLevels?: Record<string, number>;
+  onOpenGrowthSheet?: (characterName: string) => void;
 }> = React.memo(
   ({
     folderPath,
@@ -28,6 +44,8 @@ export const CharactersView: React.FC<{
     initialSelectedCharacterId = null,
     onCharactersChange,
     onOpenSourceLocation,
+    growthLevels,
+    onOpenGrowthSheet,
   }) => {
     const debouncedContent = useDebounce(content, 300);
     const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(null);
@@ -200,6 +218,8 @@ export const CharactersView: React.FC<{
           currentState={currentState}
           handleUpdateCharacterAttributes={handleUpdateCharacterAttributes}
           graphView={graphView}
+          growthLevel={resolveGrowthLevel(growthLevels, focusedCharacter)}
+          onOpenGrowthSheet={onOpenGrowthSheet}
         />
       );
     }

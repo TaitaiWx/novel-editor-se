@@ -1,0 +1,88 @@
+@use '../growth-ui' as ui;
+
+// 与人物 / 设定工作区的标题区保持同一层级与间距
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  min-width: 0;
+  font-size: 28px;
+  line-height: 1.15;
+  color: #f2f2f2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.levelBadge {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  color: ui.$info-fg;
+  background: rgba(ui.$info-rgb, 0.14);
+  border: 1px solid rgba(ui.$info-rgb, 0.3);
+}
+
+.desc {
+  margin: 0;
+  max-width: 760px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.68);
+
+  code {
+    margin: 0 2px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 12px;
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chipWarning {
+  color: ui.$danger-fg;
+  background: rgba(ui.$danger, 0.08);
+  border-color: rgba(ui.$danger, 0.2);
+}

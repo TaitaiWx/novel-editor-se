@@ -35,6 +35,7 @@ import { useScopedAssistantArtifacts } from './useScopedAssistantArtifacts';
 import { useWorkspaceTabContent } from './useWorkspaceTabContent';
 import { useOpenSettingsTabListener } from './useOpenSettingsTabListener';
 import { useAssistantDialogHandlers } from './useAssistantDialogHandlers';
+import { useGrowthEntry } from './useGrowthEntry';
 
 /**
  * 应用组合根的全部 hook 调用：声明各领域状态，并按依赖把状态与动作接到各业务 hook。
@@ -92,6 +93,8 @@ export function useAppController() {
     ...tabs,
     ...creation,
   });
+  // 成长档案入口（文件面板分区、工作区标签、人物详情按钮）；effect 只读 资料/记忆/，与其他 hook 无顺序依赖
+  const growthEntry = useGrowthEntry({ ...workspaceState, ...uiState, ...tabs });
   const contentReader = useScopedContentReader({ ...workspaceState, ...editorState, ...derived });
   const fileOps = useFileOperations({
     ...workspaceState,
@@ -126,6 +129,7 @@ export function useAppController() {
     ...loader,
     ...creation,
     ...editor,
+    ...growthEntry,
   });
   const projectExport = useProjectExport({ ...workspaceState, ...uiState });
   useAiWindowBridge({ ...editorState, ...aiState, ...uiState, ...tabs });
@@ -174,6 +178,7 @@ export function useAppController() {
     ...loader,
     ...creation,
     ...entityActions,
+    ...growthEntry,
     ...fileOps,
     ...projectExport,
     ...libraryGeneration,
@@ -197,6 +202,7 @@ export function useAppController() {
       ...tabs,
       ...creation,
       ...entityActions,
+      ...growthEntry,
       ...editor,
     });
   useOpenSettingsTabListener(uiState);
@@ -223,6 +229,7 @@ export function useAppController() {
     loader,
     creation,
     entityActions,
+    growthEntry,
     fileOps,
     editor,
     projectExport,

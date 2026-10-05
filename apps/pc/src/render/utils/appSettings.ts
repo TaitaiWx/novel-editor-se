@@ -16,7 +16,8 @@ export type ShortcutCommand =
   | 'toggleSidebar'
   | 'toggleFocusMode'
   | 'closeTab'
-  | 'formatChapter';
+  | 'formatChapter'
+  | 'openGrowth';
 
 export interface ShortcutSettings {
   quickOpen: string;
@@ -24,6 +25,7 @@ export interface ShortcutSettings {
   toggleFocusMode: string;
   closeTab: string;
   formatChapter: string;
+  openGrowth: string;
 }
 
 export type AIProvider = 'openai-compatible' | 'openai' | 'deepseek';
@@ -101,6 +103,12 @@ export const SHORTCUT_FIELD_DEFINITIONS: ShortcutFieldDefinition[] = [
     description: '对当前章节执行整章排版整理，统一段首缩进和空行。',
     placeholder: '例如 Mod+Alt+L',
   },
+  {
+    key: 'openGrowth',
+    label: '打开成长档案',
+    description: '打开角色成长档案总览（等级、技能、抉择、队伍与地图）。',
+    placeholder: '例如 Mod+Shift+J',
+  },
 ];
 
 export const READONLY_SHORTCUTS = [
@@ -131,6 +139,7 @@ export const DEFAULT_SHORTCUT_SETTINGS: ShortcutSettings = {
   toggleFocusMode: 'Mod+Shift+F',
   closeTab: 'Mod+W',
   formatChapter: 'Mod+Alt+L',
+  openGrowth: 'Mod+Shift+J',
 };
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
@@ -377,6 +386,7 @@ export function applyShortcutOverrides<T extends { accelerator: string; descript
     ['切换专注模式', settings.toggleFocusMode],
     ['关闭当前标签', settings.closeTab],
     ['格式化当前章节', settings.formatChapter],
+    ['打开成长档案', settings.openGrowth],
   ]);
 
   const consumed = new Set<string>();

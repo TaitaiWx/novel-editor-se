@@ -5,8 +5,11 @@ import {
   WORKSPACE_TAB_LABELS,
   WORKSPACE_TAB_LORE,
   createCharacterWorkspaceTab,
+  createGrowthWorkspaceTab,
   createLoreWorkspaceTab,
   createVolumeWorkspaceTab,
+  isGrowthWorkspaceTab,
+  parseGrowthWorkspaceTab,
   parseVolumeWorkspaceTab,
 } from '@/render/utils/workspace';
 import { findNodeInTree } from '@/render/app/fileTreeUtils';
@@ -19,6 +22,7 @@ import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 import type { EditorInteractions } from './useEditorInteractions';
 import type { TabActions } from './useTabActions';
 import type { WorkspaceEntityActions } from './useWorkspaceEntityActions';
+import type { GrowthEntryApi } from './useGrowthEntry';
 
 const CharactersView = lazy(() =>
   import('@/render/components/RightPanel/CharactersView').then((module) => ({
@@ -29,6 +33,11 @@ const LoreView = lazy(() =>
   import('@/render/components/RightPanel/LoreView').then((module) => ({ default: module.LoreView }))
 );
 const VolumeWorkspaceView = lazy(() => import('@/render/components/VolumeWorkspaceView'));
+const GrowthView = lazy(() =>
+  import('@/render/components/RightPanel/GrowthView').then((module) => ({
+    default: module.GrowthView,
+  }))
+);
 
 export type UseWorkspaceTabContentContext = Pick<
   WorkspaceDerivedState,
@@ -39,7 +48,7 @@ export type UseWorkspaceTabContentContext = Pick<
   | 'selectedVolumeNode'
   | 'selectedVolumePath'
 > &
-  Pick<WorkspaceState, 'files' | 'folderPath' | 'storyOrderMap'> &
+  Pick<WorkspaceState, 'dbReady' | 'files' | 'folderPath' | 'storyOrderMap'> &
   Pick<TabsState, 'openTabs'> &
   Pick<EditorState, 'editorContent'> &
   Pick<
@@ -52,18 +61,22 @@ export type UseWorkspaceTabContentContext = Pick<
   Pick<WorkspaceCreationApi, 'handleCreateStoryItem'> &
   Pick<EditorInteractions, 'handleOpenSourceLocation'> &
   Pick<TabActions, 'openFileInTab'> &
-  Pick<WorkspaceEntityActions, 'syncWorkspaceCharacters' | 'syncWorkspaceLoreEntries'>;
+  Pick<WorkspaceEntityActions, 'syncWorkspaceCharacters' | 'syncWorkspaceLoreEntries'> &
+  Pick<GrowthEntryApi, 'growthIndex' | 'handleOpenGrowth'>;
 
 /**
- * 工作区虚拟标签页（人物 / 设定 / 卷）的标题与内容
+ * 工作区虚拟标签页（人物 / 设定 / 卷 / 成长档案）的标题与内容
  */
 export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
   const {
     activeWorkspaceTab,
+    dbReady,
     editorContent,
     files,
     folderPath,
+    growthIndex,
     handleCreateStoryItem,
+    handleOpenGrowth,
     handleOpenSourceLocation,
     openFileInTab,
     openTabs,
@@ -104,9 +117,22 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
             return [createVolumeWorkspaceTab(volumePath), label];
           })
       ),
+      ...Object.fromEntries(
+        openTabs
+          .map((tab) => parseGrowthWorkspaceTab(tab))
+          .filter((name): name is string => Boolean(name))
+          .map((name) => [createGrowthWorkspaceTab(name), `成长 · ${name}`])
+      ),
     }),
     [files, folderPath, openTabs, rootVolumeNode, workspaceCharacters, workspaceLoreEntries]
   );
+
+  // 人物详情中的「成长档案」按钮：显示已建档角色的等级
+  const growthLevels = useMemo<Record<string, number>>(
+    () => Object.fromEntries((growthIndex?.sheets ?? []).map((item) => [item.name, item.level])),
+    [growthIndex]
+  );
+  const activeGrowthTab = isGrowthWorkspaceTab(activeWorkspaceTab) ? activeWorkspaceTab : null;
 
   const editorCharacterHighlights = useMemo(
     () =>
@@ -151,6 +177,8 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
                 initialSelectedCharacterId={selectedCharacterTabId}
                 onCharactersChange={syncWorkspaceCharacters}
                 onOpenSourceLocation={handleOpenSourceLocation}
+                growthLevels={growthLevels}
+                onOpenGrowthSheet={handleOpenGrowth}
               />
             ),
           }
@@ -164,6 +192,20 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
                 content={editorContent}
                 initialEntryId={selectedLoreEntryTabId}
                 onEntriesChange={syncWorkspaceLoreEntries}
+              />
+            ),
+          }
+        : {}),
+      ...(activeGrowthTab
+        ? {
+            [activeGrowthTab]: (
+              <GrowthView
+                key={`${activeGrowthTab}-${folderPath ?? ''}`}
+                folderPath={folderPath}
+                dbReady={dbReady}
+                layout="workspace"
+                initialCharacter={parseGrowthWorkspaceTab(activeGrowthTab)}
+                onNavigateCharacter={handleOpenGrowth}
               />
             ),
           }
@@ -186,11 +228,15 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
         : {}),
     }),
     [
+      activeGrowthTab,
       activeWorkspaceTab,
+      dbReady,
       editorContent,
       folderPath,
+      growthLevels,
       openFileInTab,
       handleCreateStoryItem,
+      handleOpenGrowth,
       handleOpenSourceLocation,
       selectedCharacterTabId,
       selectedLoreEntryTabId,

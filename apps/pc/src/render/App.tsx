@@ -41,6 +41,7 @@ const App: React.FC = () => {
     loader,
     creation,
     entityActions,
+    growthEntry,
     fileOps,
     editor,
     projectExport,
@@ -259,6 +260,9 @@ const App: React.FC = () => {
                   onCreateCharacter={() => void handleCreateCharacter()}
                   onCreateLoreEntry={() => void handleCreateLoreEntry()}
                   onCreateMaterialDirectory={() => void handleCreateMaterialDirectory()}
+                  growthIndex={growthEntry.growthIndex}
+                  onOpenGrowth={growthEntry.handleOpenGrowth}
+                  onCreateGrowthSheet={() => void growthEntry.handleCreateGrowthSheet()}
                   onRefresh={refreshCurrentFolder}
                   onOpenFolder={handleOpenLocal}
                   onRenameProject={() => void handleRenameProject()}

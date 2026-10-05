@@ -118,4 +118,38 @@ describe('FilePanel', () => {
     fireEvent.click(screen.getByText('角色'), { detail: 1 });
     expect(screen.queryByText('林舟')).toBeNull();
   });
+
+  it('提供 onOpenGrowth 时显示「成长档案」分区，未提供时不显示', () => {
+    const onOpenGrowth = vi.fn();
+    const onCreateGrowthSheet = vi.fn();
+    const { unmount } = renderPanel({
+      growthIndex: {
+        initialized: true,
+        sheets: [
+          {
+            name: '白芷',
+            aliases: [],
+            level: 3,
+            exp: 900,
+            latestChapter: 0,
+            errorCount: 0,
+            warningCount: 0,
+          },
+        ],
+      },
+      onOpenGrowth,
+      onCreateGrowthSheet,
+      activeWorkspaceTab: '__workspace__:growth:白芷',
+    });
+    expect(screen.getByText('成长档案')).toBeTruthy();
+    expect(screen.getByText('Lv.3')).toBeTruthy();
+    fireEvent.click(screen.getByText('Lv.3'));
+    expect(onOpenGrowth).toHaveBeenCalledWith('白芷');
+    fireEvent.click(screen.getByLabelText('新建成长档案'));
+    expect(onCreateGrowthSheet).toHaveBeenCalledTimes(1);
+    unmount();
+
+    renderPanel();
+    expect(screen.queryByText('成长档案')).toBeNull();
+  });
 });
