@@ -227,6 +227,55 @@ async function importDocx(filePath: string): Promise<ImportResult> {
   };
 }
 
+/** 将 Date 格式化为日期（午夜时省略时间部分），使用 UTC 以与 Excel 存储语义一致 */
+function formatExcelDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) return '';
+  const iso = date.toISOString();
+  const [day, time] = iso.split('T');
+  return time.startsWith('00:00:00') ? day : `${day} ${time.slice(0, 8)}`;
+}
+
+/**
+ * 安全地将 exceljs 单元格值转为文本，覆盖富文本、超链接、公式（含未缓存结果）、
+ * 共享公式、日期、错误值等对象形态，绝不输出 "[object Object]"
+ */
+function formatExcelCellValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Date) return formatExcelDate(value);
+  if (typeof value !== 'object') return '';
+
+  const record = value as Record<string, unknown>;
+  // 富文本：{ richText: [{ text }] }
+  if (Array.isArray(record.richText)) {
+    return record.richText
+      .map((part) =>
+        typeof part === 'object' && part !== null
+          ? formatExcelCellValue((part as Record<string, unknown>).text)
+          : ''
+      )
+      .join('');
+  }
+  // 超链接：{ text, hyperlink }，text 自身可能是富文本
+  if ('hyperlink' in record) {
+    const text = formatExcelCellValue(record.text);
+    return text || formatExcelCellValue(record.hyperlink);
+  }
+  // 公式 / 共享公式：优先使用缓存结果，无结果时回退为公式文本
+  if ('formula' in record || 'sharedFormula' in record) {
+    const result = formatExcelCellValue(record.result);
+    if (result) return result;
+    const formula = record.formula ?? record.sharedFormula;
+    return typeof formula === 'string' && formula ? `=${formula}` : '';
+  }
+  // 错误值：{ error: '#N/A' }
+  if (typeof record.error === 'string') return record.error;
+  if ('result' in record) return formatExcelCellValue(record.result);
+  if ('text' in record) return formatExcelCellValue(record.text);
+  return '';
+}
+
 /**
  * 导入 Excel (.xlsx) 文件，将每个 Sheet 转为 Markdown 表格
  */
@@ -245,19 +294,7 @@ async function importXlsx(filePath: string): Promise<ImportResult> {
     worksheet.eachRow((row) => {
       const cells: string[] = [];
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        // 安全地提取单元格文本值
-        let text = '';
-        if (cell.value === null || cell.value === undefined) {
-          text = '';
-        } else if (typeof cell.value === 'object' && 'richText' in cell.value) {
-          // 富文本
-          text = (cell.value.richText as { text: string }[]).map((rt) => rt.text).join('');
-        } else if (typeof cell.value === 'object' && 'result' in cell.value) {
-          // 公式结果
-          text = String((cell.value as { result: unknown }).result ?? '');
-        } else {
-          text = String(cell.value);
-        }
+        const text = formatExcelCellValue(cell.value);
         // 确保 cells 数组与列号对齐（补空位）
         while (cells.length < colNumber - 1) cells.push('');
         cells.push(text.replace(/\|/g, '\\|').replace(/\n/g, ' '));

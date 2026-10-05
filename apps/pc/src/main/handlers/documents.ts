@@ -12,17 +12,30 @@ import {
   exportProjectToWord,
   exportToPptx,
   beautifyPptx,
+  loadJSZip,
 } from '../document-exporter';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+const XML_ENTITY_MAP: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&apos;': "'",
+};
+
+/** 识别「不是 zip / zip 已损坏」类错误（JSZip 与 exceljs 抛出的文案不统一） */
+function isInvalidZipError(message: string): boolean {
+  return /Corrupted zip|End of data|not a valid zip|end of central directory|is this a zip file/i.test(
+    message
+  );
+}
+
 function escapeHtml(text: string): string {
+  // 单次扫描解码 XML 实体，避免 &amp;lt; 被连续解码两次
   return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
+    .replace(/&(?:amp|lt|gt|quot|apos);/g, (entity) => XML_ENTITY_MAP[entity] ?? entity)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
@@ -137,7 +150,7 @@ export function registerDocumentHandlers(): void {
       return { sheets, fileName: path.basename(filePath) };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('Corrupted zip') || msg.includes('End of data')) {
+      if (isInvalidZipError(msg)) {
         throw new Error('文件已损坏或不是有效的 Excel (.xlsx) 格式');
       }
       throw new Error(`读取 Excel 文件失败: ${msg}`);
@@ -153,13 +166,7 @@ export function registerDocumentHandlers(): void {
         buffer.byteOffset + buffer.byteLength
       );
 
-      const jszip = await import('jszip');
-      const JSZipCtor: any =
-        typeof jszip === 'function'
-          ? jszip
-          : (jszip as Record<string, unknown>).default
-            ? (jszip as Record<string, unknown>).default
-            : jszip;
+      const JSZipCtor = await loadJSZip();
 
       if (typeof JSZipCtor.loadAsync !== 'function') {
         throw new Error('JSZip 模块加载异常，loadAsync 不可用');
@@ -205,11 +212,7 @@ export function registerDocumentHandlers(): void {
       return { fileName: path.basename(filePath), slideCount: slides.length, slides };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      if (
-        msg.includes('Corrupted zip') ||
-        msg.includes('End of data') ||
-        msg.includes('not a valid zip')
-      ) {
+      if (isInvalidZipError(msg)) {
         throw new Error('文件已损坏或不是有效的 PowerPoint (.pptx) 格式');
       }
       throw new Error(`读取 PPT 文件失败: ${msg}`);

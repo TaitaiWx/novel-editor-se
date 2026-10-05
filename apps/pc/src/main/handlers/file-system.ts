@@ -2,6 +2,10 @@
  * File System IPC Handlers
  *
  * Handles: file read/write, directory operations, file watching, clipboard paths
+ *
+ * 纯文件逻辑统一由 @novel-editor/core 实现（与 CLI 共用同一套代码），
+ * 这里只保留 Electron 专属能力（dialog / shell / clipboard / app 路径 / fs.watch 推送）
+ * 并负责保持 IPC 通道名、参数与返回结构不变。
  */
 import {
   ipcMain,
@@ -12,115 +16,44 @@ import {
   shell,
 } from 'electron';
 import { watch, type FSWatcher, existsSync } from 'fs';
-import {
-  readFile,
-  writeFile,
-  mkdir,
-  access,
-  cp,
-  readdir,
-  stat,
-  unlink,
-  rm,
-  rename,
-  copyFile,
-  realpath,
-} from 'fs/promises';
 import path from 'path';
-import dirTree from 'directory-tree';
+import {
+  cleanupEmptyGeneratedMaterialDirectories,
+  copyProjectTo,
+  createDirectory,
+  createFile,
+  deleteDirectory,
+  deleteFile,
+  ensureSeededDirectory,
+  getFileInfo,
+  getFileInfoBatch,
+  isCoreError,
+  pastePaths,
+  readFileBinary,
+  readFolderTree,
+  readTextFileWithEncoding,
+  renamePath,
+  saveTextFile,
+} from '@novel-editor/core';
 import { addRecentFolder } from '../recent-folders';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export interface FileNode {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  children?: FileNode[];
-}
+export type { FileNode } from '@novel-editor/core';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function convertTreeFormat(node: dirTree.DirectoryTree): FileNode {
-  return {
-    name: node.name,
-    path: node.path,
-    type: node.type === 'directory' ? 'directory' : 'file',
-    ...(node?.children && { children: node?.children?.map(convertTreeFormat) }),
-  };
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
-function guessMimeType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  const mimeByExt: Record<string, string> = {
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    '.pdf': 'application/pdf',
-    '.mp3': 'audio/mpeg',
-    '.wav': 'audio/wav',
-    '.ogg': 'audio/ogg',
-    '.m4a': 'audio/mp4',
-    '.aac': 'audio/aac',
-    '.flac': 'audio/flac',
-    '.mp4': 'video/mp4',
-    '.mov': 'video/quicktime',
-  };
-  return mimeByExt[ext] || 'application/octet-stream';
-}
-
-const DIR_EXCLUDE = /node_modules|\.git|\.novel-editor|\.vscode|\.DS_Store|dist|build|out/;
-const GENERATED_MATERIAL_ROOT_NAME = '资料';
-const GENERATED_MATERIAL_SCOPE_DIRS = new Set(['AI资料', '项目上下文', '卷上下文', '章上下文']);
-
-async function isEmptyDirectory(dirPath: string): Promise<boolean> {
-  try {
-    const entries = await readdir(dirPath);
-    return entries.length === 0;
-  } catch {
-    return false;
-  }
-}
-
-async function cleanupEmptyGeneratedMaterialDirectories(folderPath: string): Promise<string[]> {
-  const removed: string[] = [];
-  const materialRootPath = path.join(folderPath, GENERATED_MATERIAL_ROOT_NAME);
-
-  try {
-    const materialRootStat = await stat(materialRootPath);
-    if (!materialRootStat.isDirectory()) return removed;
-  } catch {
-    return removed;
-  }
-
-  const childNames = await readdir(materialRootPath);
-  for (const childName of childNames) {
-    if (!GENERATED_MATERIAL_SCOPE_DIRS.has(childName)) continue;
-    const childPath = path.join(materialRootPath, childName);
-    try {
-      const childStat = await stat(childPath);
-      if (!childStat.isDirectory()) continue;
-      if (!(await isEmptyDirectory(childPath))) continue;
-      await rm(childPath, { recursive: false, force: false });
-      removed.push(childPath);
-    } catch {
-      // 安全迁移只处理明确可删的空目录，失败时跳过。
-    }
-  }
-
-  if (await isEmptyDirectory(materialRootPath)) {
-    try {
-      await rm(materialRootPath, { recursive: false, force: false });
-      removed.push(materialRootPath);
-    } catch {
-      // 根目录无法删除时保留现场，不影响其他功能。
-    }
-  }
-
-  return removed;
+/** 示例数据：用户文档目录下的副本，以及随应用分发的种子目录 */
+function getSampleDataPaths(): { userSamplePath: string; sourcePath: string } {
+  const userSamplePath = path.join(app.getPath('documents'), 'Novel Editor', 'sample-data');
+  const sourcePath = app.isPackaged
+    ? path.join(process.resourcesPath, 'sample-data')
+    : path.join(path.resolve(app.getAppPath(), '..'), 'sample-data');
+  return { userSamplePath, sourcePath };
 }
 
 // ─── File watchers ──────────────────────────────────────────────────────────
@@ -138,26 +71,14 @@ export function registerFileSystemHandlers(): void {
     if (!result.canceled && result.filePaths.length > 0) {
       const folderPath = result.filePaths[0];
       addRecentFolder(folderPath);
-      const tree = dirTree(folderPath, {
-        exclude: DIR_EXCLUDE,
-        attributes: ['type'],
-      });
-      return {
-        path: folderPath,
-        files: tree?.children ? tree?.children?.map(convertTreeFormat) : [],
-      };
+      return readFolderTree(folderPath);
     }
     return null;
   });
 
   ipcMain.handle('read-file', async (_event, filePath: string, encoding?: string) => {
     try {
-      if (encoding && encoding.toUpperCase() !== 'UTF-8') {
-        const buffer = await readFile(filePath);
-        const decoder = new TextDecoder(encoding.toLowerCase());
-        return decoder.decode(buffer);
-      }
-      return await readFile(filePath, 'utf-8');
+      return await readTextFileWithEncoding(filePath, encoding);
     } catch {
       throw new Error(`Failed to read file: ${filePath}`);
     }
@@ -165,12 +86,7 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('read-file-binary', async (_event, filePath: string) => {
     try {
-      const buffer = await readFile(filePath);
-      return {
-        base64Content: buffer.toString('base64'),
-        byteSize: buffer.byteLength,
-        mimeType: guessMimeType(filePath),
-      };
+      return await readFileBinary(filePath);
     } catch {
       throw new Error(`Failed to read binary file: ${filePath}`);
     }
@@ -178,7 +94,7 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('write-file', async (_event, filePath: string, content: string) => {
     try {
-      await writeFile(filePath, content, 'utf-8');
+      await saveTextFile(filePath, content);
       return { success: true };
     } catch {
       throw new Error(`Failed to write file: ${filePath}`);
@@ -187,53 +103,15 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('get-file-info', async (_event, filePath: string) => {
     try {
-      const stats = await stat(filePath);
-      return {
-        size: stats.size,
-        created: stats.birthtime,
-        modified: stats.mtime,
-        isDirectory: stats.isDirectory(),
-        isFile: stats.isFile(),
-      };
+      return await getFileInfo(filePath);
     } catch {
       throw new Error(`Failed to get file info: ${filePath}`);
     }
   });
 
-  ipcMain.handle('get-file-info-batch', async (_event, filePaths: string[]) => {
-    const results = await Promise.allSettled(
-      filePaths.map(async (filePath) => {
-        const stats = await stat(filePath);
-        return {
-          path: filePath,
-          info: {
-            size: stats.size,
-            created: stats.birthtime,
-            modified: stats.mtime,
-            isDirectory: stats.isDirectory(),
-            isFile: stats.isFile(),
-          },
-        };
-      })
-    );
-
-    return results
-      .filter(
-        (
-          result
-        ): result is PromiseFulfilledResult<{
-          path: string;
-          info: {
-            size: number;
-            created: Date;
-            modified: Date;
-            isDirectory: boolean;
-            isFile: boolean;
-          };
-        }> => result.status === 'fulfilled'
-      )
-      .map((result) => result.value);
-  });
+  ipcMain.handle('get-file-info-batch', (_event, filePaths: string[]) =>
+    getFileInfoBatch(filePaths)
+  );
 
   ipcMain.handle('open-in-system-app', async (_event, filePath: string) => {
     try {
@@ -277,51 +155,32 @@ export function registerFileSystemHandlers(): void {
   });
 
   ipcMain.handle('create-file', async (_event, folderPath: string, fileName: string) => {
+    const filePath = path.join(folderPath, fileName);
     try {
-      const filePath = path.join(folderPath, fileName);
-      try {
-        await access(filePath);
-        throw new Error('文件已存在');
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
-      await writeFile(filePath, '', 'utf-8');
+      await createFile(filePath);
       return { success: true, filePath };
     } catch (error) {
-      throw new Error(
-        `Failed to create file: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      const reason =
+        isCoreError(error) && error.code === 'ALREADY_EXISTS' ? '文件已存在' : errorMessage(error);
+      throw new Error(`Failed to create file: ${reason}`);
     }
   });
 
   ipcMain.handle('create-directory', async (_event, folderPath: string, dirName: string) => {
+    const dirPath = path.join(folderPath, dirName);
     try {
-      const dirPath = path.join(folderPath, dirName);
-      try {
-        await access(dirPath);
-        throw new Error('目录已存在');
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
-      await mkdir(dirPath, { recursive: true });
+      await createDirectory(dirPath);
       return { success: true, dirPath };
     } catch (error) {
-      throw new Error(
-        `Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      const reason =
+        isCoreError(error) && error.code === 'ALREADY_EXISTS' ? '目录已存在' : errorMessage(error);
+      throw new Error(`Failed to create directory: ${reason}`);
     }
   });
 
   ipcMain.handle('refresh-folder', async (_event, folderPath: string) => {
     try {
-      const tree = dirTree(folderPath, {
-        exclude: DIR_EXCLUDE,
-        attributes: ['type'],
-      });
-      return {
-        path: folderPath,
-        files: tree?.children ? tree?.children?.map(convertTreeFormat) : [],
-      };
+      return await readFolderTree(folderPath);
     } catch {
       throw new Error(`Failed to refresh folder: ${folderPath}`);
     }
@@ -341,7 +200,7 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('delete-file', async (_event, filePath: string) => {
     try {
-      await unlink(filePath);
+      await deleteFile(filePath);
       return { success: true };
     } catch {
       throw new Error(`Failed to delete file: ${filePath}`);
@@ -350,7 +209,7 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('delete-directory', async (_event, dirPath: string) => {
     try {
-      await rm(dirPath, { recursive: true });
+      await deleteDirectory(dirPath);
       return { success: true };
     } catch {
       throw new Error(`Failed to delete directory: ${dirPath}`);
@@ -359,7 +218,7 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('rename-file', async (_event, oldPath: string, newPath: string) => {
     try {
-      await rename(oldPath, newPath);
+      await renamePath(oldPath, newPath);
       return { success: true, newPath };
     } catch {
       throw new Error(`Failed to rename: ${oldPath}`);
@@ -367,63 +226,12 @@ export function registerFileSystemHandlers(): void {
   });
 
   ipcMain.handle('paste-files', async (_event, sourcePaths: string[], targetDir: string) => {
-    const results: { source: string; dest: string }[] = [];
-    if (!existsSync(targetDir)) {
-      throw new Error(`目标目录不存在: ${path.basename(targetDir)}`);
+    try {
+      const results = await pastePaths(sourcePaths, targetDir);
+      return { success: true, results };
+    } catch (error) {
+      throw new Error(errorMessage(error));
     }
-
-    for (const sourcePath of sourcePaths) {
-      if (!existsSync(sourcePath)) {
-        throw new Error(`源文件不存在: ${path.basename(sourcePath)}`);
-      }
-
-      const baseName = path.basename(sourcePath);
-      const srcStat = await stat(sourcePath);
-      const isDir = srcStat.isDirectory();
-
-      let destPath = path.join(targetDir, baseName);
-      let needsRename = false;
-      if (existsSync(destPath)) {
-        needsRename = true;
-      } else {
-        const srcReal = await realpath(sourcePath);
-        const parentReal = await realpath(targetDir);
-        if (path.dirname(srcReal) === parentReal && path.basename(srcReal) === baseName) {
-          needsRename = true;
-        }
-      }
-
-      if (needsRename) {
-        const ext = path.extname(baseName);
-        const nameWithoutExt = ext ? baseName.slice(0, -ext.length) : baseName;
-        destPath = path.join(
-          targetDir,
-          isDir ? `${baseName} copy` : `${nameWithoutExt} copy${ext}`
-        );
-        let counter = 2;
-        while (existsSync(destPath)) {
-          destPath = path.join(
-            targetDir,
-            isDir ? `${baseName} copy ${counter}` : `${nameWithoutExt} copy ${counter}${ext}`
-          );
-          counter++;
-        }
-      }
-
-      try {
-        if (isDir) {
-          await cp(sourcePath, destPath, { recursive: true });
-        } else {
-          await copyFile(sourcePath, destPath);
-        }
-        results.push({ source: sourcePath, dest: destPath });
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        throw new Error(`粘贴失败 (${baseName}): ${msg}`);
-      }
-    }
-
-    return { success: true, results };
   });
 
   ipcMain.handle('read-clipboard-file-paths', (): string[] => {
@@ -466,64 +274,22 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('get-default-data-path', async () => {
     try {
-      const userDataDir = path.join(app.getPath('documents'), 'Novel Editor');
-      const userSamplePath = path.join(userDataDir, 'sample-data');
-      try {
-        await access(userSamplePath);
-        return userSamplePath;
-      } catch {
-        // 尚未复制
-      }
-
-      let sourcePath: string;
-      if (app.isPackaged) {
-        sourcePath = path.join(process.resourcesPath, 'sample-data');
-      } else {
-        const appRoot = path.resolve(app.getAppPath(), '..');
-        sourcePath = path.join(appRoot, 'sample-data');
-      }
-      try {
-        await access(sourcePath);
-        await mkdir(userDataDir, { recursive: true });
-        await cp(sourcePath, userSamplePath, { recursive: true });
-      } catch {
-        await mkdir(userSamplePath, { recursive: true });
-      }
-      return userSamplePath;
+      const { userSamplePath, sourcePath } = getSampleDataPaths();
+      return await ensureSeededDirectory(userSamplePath, sourcePath);
     } catch {
       throw new Error('Failed to get default data path');
     }
   });
 
   ipcMain.handle('open-sample-data', async () => {
-    const userDataDir = path.join(app.getPath('documents'), 'Novel Editor');
-    const userSamplePath = path.join(userDataDir, 'sample-data');
-    try {
-      await access(userSamplePath);
-    } catch {
-      let sourcePath: string;
-      if (app.isPackaged) {
-        sourcePath = path.join(process.resourcesPath, 'sample-data');
-      } else {
-        const appRoot = path.resolve(app.getAppPath(), '..');
-        sourcePath = path.join(appRoot, 'sample-data');
-      }
-      try {
-        await access(sourcePath);
-        await mkdir(userDataDir, { recursive: true });
-        await cp(sourcePath, userSamplePath, { recursive: true });
-      } catch {
-        await mkdir(userSamplePath, { recursive: true });
-      }
-    }
-    return userSamplePath;
+    const { userSamplePath, sourcePath } = getSampleDataPaths();
+    return ensureSeededDirectory(userSamplePath, sourcePath);
   });
 
   ipcMain.handle('export-project', async (_event, folderPath: string) => {
     if (!existsSync(folderPath)) {
       return { success: false, error: '项目目录不存在' };
     }
-    const projectName = path.basename(folderPath);
     const result = await dialog.showOpenDialog({
       title: '选择导出位置',
       buttonLabel: '导出到此处',
@@ -531,16 +297,9 @@ export function registerFileSystemHandlers(): void {
     });
     if (result.canceled || result.filePaths.length === 0) return null;
 
-    const destDir = path.join(result.filePaths[0], projectName);
-    let finalDest = destDir;
-    if (existsSync(finalDest)) {
-      let counter = 2;
-      while (existsSync(`${destDir} (${counter})`)) counter++;
-      finalDest = `${destDir} (${counter})`;
-    }
     try {
-      await cp(folderPath, finalDest, { recursive: true });
-      return { success: true, destPath: finalDest };
+      const destPath = await copyProjectTo(folderPath, result.filePaths[0]);
+      return { success: true, destPath };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' };
     }

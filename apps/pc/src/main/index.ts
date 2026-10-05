@@ -8,6 +8,9 @@ import { setupAutoUpdater } from './auto-updater';
 import { applySmokeTestPaths, isAutoUpdaterDisabled } from './launch-mode';
 import { ensureWindowsShortcuts } from './windows-shortcut';
 import { detectSystemProfile } from './system-profile';
+import { configureWebAuthn, registerWebAuthnSessionHandlers } from './webauthn';
+import { resolveLaunchFolder } from './launch-folder';
+import { addRecentFolder } from './recent-folders';
 
 applySmokeTestPaths();
 
@@ -27,7 +30,9 @@ if (
 
 // 设置安全恢复状态支持
 if (process.platform === 'darwin') {
-  (app as any).applicationSupportsSecureRestorableState = true;
+  (
+    app as typeof app & { applicationSupportsSecureRestorableState?: boolean }
+  ).applicationSupportsSecureRestorableState = true;
 }
 
 // 应用准备就绪时创建窗口
@@ -35,9 +40,17 @@ app.whenReady().then(() => {
   // ── 关键路径：尽快展示窗口 ─────────────────────────────────
   // 1) IPC 注册必须先于窗口（preload 加载需要这些通道）
   setupIPC();
-  // 2) 窗口事件
+  // 命令行传入的目录（如 `ne open <path>`）设为上次工作区，渲染进程启动时会直接打开
+  const launchFolder = resolveLaunchFolder(process.argv);
+  if (launchFolder) {
+    addRecentFolder(launchFolder);
+  }
+  // 2) WebAuthn / passkey：macOS Touch ID 需要在窗口创建前完成配置
+  configureWebAuthn();
+  registerWebAuthnSessionHandlers();
+  // 3) 窗口事件
   setupWindowEvents();
-  // 3) splash + 主窗口
+  // 4) splash + 主窗口
   createSplashWindow();
   createMainWindow();
 
@@ -93,11 +106,18 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv, workingDirectory) => {
     // 当运行第二个实例时，将会聚焦到主窗口
     const windows = BrowserWindow.getAllWindows();
+    const launchFolder = resolveLaunchFolder(argv, workingDirectory);
+    if (launchFolder) {
+      addRecentFolder(launchFolder);
+    }
     if (windows.length > 0) {
       const mainWindow = windows[0];
+      if (launchFolder) {
+        mainWindow.webContents.send('open-folder-request', launchFolder);
+      }
       if (mainWindow.isMinimized()) {
         mainWindow.restore();
       }

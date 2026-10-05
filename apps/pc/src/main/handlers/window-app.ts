@@ -26,8 +26,10 @@ import {
 } from '../auto-updater';
 import type { UpdateChannel } from '../auto-updater';
 import { settingsOps } from '@novel-editor/store';
-import { isSmokeTestMode } from '../launch-mode';
+import { isE2ETestMode, isSmokeTestMode } from '../launch-mode';
+import { getReleaseNotesCandidates, isJustUpdated } from '../changelog';
 import { detectSystemProfile } from '../system-profile';
+import { getWebAuthnSupportInfo } from '../webauthn';
 
 const DOCUMENT_CACHE_PREFIXES = [
   'novel-editor:lore:',
@@ -87,7 +89,8 @@ export function registerWindowAppHandlers(): void {
 
   ipcMain.handle('app-renderer-health-ready', () => {
     noteUpdaterRendererHealthy();
-    if (isSmokeTestMode()) {
+    // 烟雾测试只验证能启动到健康状态即退出；E2E 测试需要保持应用运行
+    if (isSmokeTestMode() && !isE2ETestMode()) {
       setTimeout(() => app.exit(0), 300);
     }
     return { success: true };
@@ -100,6 +103,7 @@ export function registerWindowAppHandlers(): void {
   ipcMain.handle('get-device-id', () => getDeviceId());
   // 系统能力探测：返回是否处于自动低配模式，渲染端据此延迟非关键工作
   ipcMain.handle('get-system-profile', () => detectSystemProfile());
+  ipcMain.handle('get-webauthn-support', () => getWebAuthnSupportInfo());
 
   // ─── Updates ──────────────────────────────────────────────────────────────
 
@@ -134,14 +138,30 @@ export function registerWindowAppHandlers(): void {
 
   // ─── Changelog ────────────────────────────────────────────────────────────
 
+  /** 依次尝试候选路径，返回第一个可读文件的内容 */
+  const readFirstExisting = async (candidates: string[]): Promise<string> => {
+    let lastError: unknown = new Error('没有候选路径');
+    for (const candidate of candidates) {
+      try {
+        return await readFile(candidate, 'utf-8');
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  };
+
   ipcMain.handle('get-changelog', async () => {
-    const baseDir = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), '..');
-    const releaseNotesPath = path.join(baseDir, 'release-notes.json');
+    const candidates = getReleaseNotesCandidates({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+    });
     const normalizeVersion = (v: string) => v.trim().replace(/^v/i, '').toLowerCase();
 
     try {
       const currentVersion = app.getVersion();
-      const raw = await readFile(releaseNotesPath, 'utf-8');
+      const raw = await readFirstExisting(candidates);
       const parsed = JSON.parse(raw) as {
         versions?: Record<string, { markdown: string }>;
       };
@@ -166,7 +186,7 @@ export function registerWindowAppHandlers(): void {
       // 首次启动
     }
     await writeFile(versionFilePath, currentVersion, 'utf-8');
-    if (!previousVersion || previousVersion !== currentVersion) {
+    if (isJustUpdated(previousVersion, currentVersion)) {
       return { updated: true, fromVersion: previousVersion, toVersion: currentVersion };
     }
     return { updated: false, fromVersion: null, toVersion: currentVersion };

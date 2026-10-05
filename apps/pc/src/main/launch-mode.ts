@@ -7,6 +7,14 @@ export function isSmokeTestMode(): boolean {
   return process.argv.includes('--smoke-test') || process.env.NOVEL_EDITOR_SMOKE_TEST === '1';
 }
 
+/**
+ * 当前是否为 GUI E2E 测试（apps/pc/e2e）。
+ * 复用烟雾测试的 userData 隔离，但不会在渲染进程就绪后自动退出，由测试进程负责关闭应用
+ */
+export function isE2ETestMode(): boolean {
+  return process.env.NOVEL_EDITOR_E2E === '1';
+}
+
 /** 是否禁用自动更新 */
 export function isAutoUpdaterDisabled(): boolean {
   return process.env.NOVEL_EDITOR_DISABLE_AUTO_UPDATER === '1';
@@ -14,7 +22,7 @@ export function isAutoUpdaterDisabled(): boolean {
 
 /** 为烟雾测试隔离 userData，避免污染真实用户数据 */
 export function applySmokeTestPaths(): void {
-  if (!isSmokeTestMode()) {
+  if (!isSmokeTestMode() && !isE2ETestMode()) {
     return;
   }
 

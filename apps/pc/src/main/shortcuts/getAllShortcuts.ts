@@ -55,7 +55,8 @@ export const getAllShortcuts = (): ShortcutDisplay[] => {
 /** 根据描述自动归类 */
 function categorize(description: string): ShortcutDisplay['category'] {
   if (/退出|最小化/.test(description)) return '应用';
+  // 视图规则需先于文件规则：如“打开/关闭开发者工具”含“打开”，但属于视图类
+  if (/开发者|工具|侧边|聚焦|专注|刷新/.test(description)) return '视图';
   if (/新建|打开|保存/.test(description)) return '文件';
-  if (/开发者|工具|侧边|聚焦|专注/.test(description)) return '视图';
   return '编辑';
 }

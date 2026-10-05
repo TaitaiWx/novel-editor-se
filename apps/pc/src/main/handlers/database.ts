@@ -465,7 +465,9 @@ export function registerDatabaseHandlers(): void {
         !version ||
         version.novel_id !== novel.id ||
         version.scope_kind !== normalizedScope.kind ||
-        version.scope_path !== normalizedScope.path
+        // 旧数据的项目级版本 scope_path 为空串，列表查询会一并返回，这里也要允许应用
+        (version.scope_path !== normalizedScope.path &&
+          !(normalizedScope.kind === 'project' && version.scope_path === ''))
       ) {
         throw new Error('大纲版本不存在或不属于当前项目');
       }

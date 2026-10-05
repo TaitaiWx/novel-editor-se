@@ -232,12 +232,27 @@ export async function download(options: DownloadOptions): Promise<DownloadResult
         signal: fetchSignal,
       });
 
-      // 416 = Range Not Satisfiable → 服务端文件已变更，从头重下
+      // 416 = Range Not Satisfiable
       if (response.status === 416) {
-        log.warn('[download] 416 Range Not Satisfiable, 从头下载');
-        await safeUnlink(toPartPath(destPath));
-        startByte = 0;
-        continue;
+        if (startByte > 0) {
+          // 已有的 .part 可能恰好已下载完整（上次在 rename 前中断），先尝试直接收尾
+          const remoteTotal = parseUnsatisfiedRangeTotal(response.headers.get('content-range'));
+          const knownTotal = remoteTotal ?? meta?.expectedSize ?? expectedSize ?? null;
+          if (knownTotal !== null && knownTotal === startByte) {
+            log.info('[download] 416 且 .part 已完整, 直接校验收尾');
+            return await finalizeDownload(destPath, expectedHash, startByte, true, attempts);
+          }
+          // 否则说明服务端文件已变更或 .part 不一致 → 删除后从头重下
+          log.warn('[download] 416 Range Not Satisfiable, 删除 .part 后从头下载');
+          await safeUnlink(toPartPath(destPath));
+          await removeMeta(destPath);
+          if (retry < maxRetries) continue;
+          throw new Error(
+            `HTTP 416 Range Not Satisfiable: 续传起点 ${startByte} 无效，已删除临时文件，请重新下载`
+          );
+        }
+        // 未发送 Range 却收到 416 → 视为普通 HTTP 错误，走退避重试
+        throw new Error(`HTTP 416 ${response.statusText || 'Range Not Satisfiable'}`);
       }
 
       if (!response.ok && response.status !== 206) {
@@ -307,32 +322,18 @@ export async function download(options: DownloadOptions): Promise<DownloadResult
           ws.on('error', reject);
           ws.end();
         });
+        // ── 6. 持久化实际写入的字节数 ─────────────────────────────
+        // 无论成功还是流中断，都以磁盘上 .part 的真实大小为准，保证下次重试可用 Range 续传
+        try {
+          newMeta.downloadedBytes = await fileSize(pp);
+          await saveMeta(destPath, newMeta);
+        } catch (metaError) {
+          log.warn(`[download] 保存下载进度失败: ${metaError}`);
+        }
       }
 
-      // ── 6. 更新已下载字节 ───────────────────────────────────────
-      newMeta.downloadedBytes = downloaded;
-      await saveMeta(destPath, newMeta);
-
-      // ── 7. SHA-256 完整性校验 ───────────────────────────────────
-      const actualHash = await sha256(pp);
-      if (expectedHash && actualHash !== expectedHash) {
-        log.error(`[download] SHA-256 不匹配: expected=${expectedHash}, actual=${actualHash}`);
-        await safeUnlink(pp);
-        await removeMeta(destPath);
-        throw new Error(`SHA-256 完整性校验失败 (expected=${expectedHash.slice(0, 12)}…)`);
-      }
-
-      // ── 8. 原子 rename → 最终路径 ──────────────────────────────
-      await rename(pp, destPath);
-      await removeMeta(destPath);
-
-      log.info(
-        `[download] 完成: ${destPath} ` +
-          `(${downloaded} bytes, sha256=${actualHash.slice(0, 16)}…, ` +
-          `attempts=${attempts}, resumed=${resumed})`
-      );
-
-      return { path: destPath, hash: actualHash, size: downloaded, resumed, attempts };
+      // ── 7-8. 校验并原子 rename ─────────────────────────────────
+      return await finalizeDownload(destPath, expectedHash, downloaded, resumed, attempts);
     } catch (error) {
       // 用户主动取消 → 不重试，直接抛出
       if (signal?.aborted) throw error;
@@ -355,8 +356,44 @@ export async function download(options: DownloadOptions): Promise<DownloadResult
     }
   }
 
-  // 逻辑上不可达，for 循环必然 return 或 throw
-  throw new Error('[download] Unreachable');
+  // 正常情况下循环内必然 return 或 throw；此处仅作类型兜底
+  throw new Error(`[download] 下载失败: 已尝试 ${attempts} 次`);
+}
+
+/** 解析 416 响应的 `Content-Range: bytes *\/TOTAL`，返回服务端文件总大小 */
+function parseUnsatisfiedRangeTotal(header: string | null): number | null {
+  if (!header) return null;
+  const matched = /^bytes\s+\*\/(\d+)$/i.exec(header.trim());
+  return matched ? Number(matched[1]) : null;
+}
+
+/** SHA-256 校验 `.part`，通过后原子 rename 到目标路径并清理 meta */
+async function finalizeDownload(
+  destPath: string,
+  expectedHash: string | undefined,
+  size: number,
+  resumed: boolean,
+  attempts: number
+): Promise<DownloadResult> {
+  const pp = toPartPath(destPath);
+  const actualHash = await sha256(pp);
+  if (expectedHash && actualHash !== expectedHash) {
+    log.error(`[download] SHA-256 不匹配: expected=${expectedHash}, actual=${actualHash}`);
+    await safeUnlink(pp);
+    await removeMeta(destPath);
+    throw new Error(`SHA-256 完整性校验失败 (expected=${expectedHash.slice(0, 12)}…)`);
+  }
+
+  await rename(pp, destPath);
+  await removeMeta(destPath);
+
+  log.info(
+    `[download] 完成: ${destPath} ` +
+      `(${size} bytes, sha256=${actualHash.slice(0, 16)}…, ` +
+      `attempts=${attempts}, resumed=${resumed})`
+  );
+
+  return { path: destPath, hash: actualHash, size, resumed, attempts };
 }
 
 // ─── Cleanup ──────────────────────────────────────────────────────────────

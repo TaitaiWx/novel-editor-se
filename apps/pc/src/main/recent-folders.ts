@@ -23,10 +23,23 @@ function read(): RecentFoldersData {
     return { lastFolder: null, folders: [] };
   }
   try {
-    return JSON.parse(readFileSync(filePath, 'utf-8'));
+    return normalize(JSON.parse(readFileSync(filePath, 'utf-8')));
   } catch {
     return { lastFolder: null, folders: [] };
   }
+}
+
+/** 校验并规范化磁盘上的数据结构，字段缺失或类型错误时回退为默认值 */
+function normalize(raw: unknown): RecentFoldersData {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { lastFolder: null, folders: [] };
+  }
+  const record = raw as Record<string, unknown>;
+  const folders = Array.isArray(record.folders)
+    ? record.folders.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    : [];
+  const lastFolder = typeof record.lastFolder === 'string' ? record.lastFolder : null;
+  return { lastFolder, folders: Array.from(new Set(folders)).slice(0, MAX_RECENT) };
 }
 
 function write(data: RecentFoldersData): void {

@@ -1,4 +1,6 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
+
+type IpcListener = Parameters<typeof ipcRenderer.on>[1];
 
 // ── MessagePort 转发 ────────────────────────────────────────
 // 将 main process 通过 webContents.postMessage 发来的 MessagePort
@@ -12,8 +14,8 @@ ipcRenderer.on('port-transfer', (event, channelName: string) => {
   );
 });
 
-// Electron 28 + contextIsolation: File.path 在 preload 特权上下文中仍可用，
-// 但在隔离的渲染进程中为空。在 capture 阶段拦截 drop 事件提取路径。
+// Electron 32+ 已移除 File.path，需在 preload 中通过 webUtils.getPathForFile 获取。
+// 在 capture 阶段拦截 drop 事件提取路径，供隔离的渲染进程读取。
 let lastDroppedPaths: string[] = [];
 document.addEventListener(
   'drop',
@@ -21,7 +23,7 @@ document.addEventListener(
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
       lastDroppedPaths = Array.from(files)
-        .map((f) => (f as File & { path: string }).path)
+        .map((f) => webUtils.getPathForFile(f))
         .filter(Boolean);
     }
   },
@@ -35,7 +37,7 @@ contextBridge.exposeInMainWorld('electron', {
     return paths;
   },
   ipcRenderer: {
-    invoke: (channel: string, ...args: any[]) => {
+    invoke: (channel: string, ...args: unknown[]) => {
       const validChannels = [
         'open-local-folder',
         'read-file',
@@ -69,6 +71,7 @@ contextBridge.exposeInMainWorld('electron', {
         'get-app-version',
         'get-device-id',
         'get-system-profile',
+        'get-webauthn-support',
         'update-check',
         'update-status',
         'update-download',
@@ -177,13 +180,25 @@ contextBridge.exposeInMainWorld('electron', {
         'ai-window-request-open-settings',
         'ai-window-apply-fix',
         'ai-save-session-state',
+        // 成长记录器 / 记忆库
+        'growth-load',
+        'growth-init',
+        'growth-ensure-sheet',
+        'growth-apply-event',
+        'growth-update-notes',
+        'growth-save-ruleset',
+        'growth-save-party',
+        'growth-save-atlas',
+        'growth-simulate',
+        'growth-apply-branch',
+        'memory-sync-snapshots',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
       }
       throw new Error(`Unauthorized IPC channel: ${channel}`);
     },
-    on: (channel: string, listener: (...args: any[]) => void) => {
+    on: (channel: string, listener: IpcListener) => {
       const validChannels = [
         'shortcut-new-file',
         'shortcut-open-folder',
@@ -202,6 +217,7 @@ contextBridge.exposeInMainWorld('electron', {
         'open-settings-from-ai',
         'ai-apply-fix-request',
         'right-panel-window-closed',
+        'open-folder-request',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.on(channel, listener);
@@ -213,7 +229,7 @@ contextBridge.exposeInMainWorld('electron', {
         throw new Error(`Unauthorized IPC channel: ${channel}`);
       }
     },
-    removeListener: (channel: string, listener: (...args: any[]) => void) => {
+    removeListener: (channel: string, listener: IpcListener) => {
       const validChannels = [
         'shortcut-new-file',
         'shortcut-open-folder',
