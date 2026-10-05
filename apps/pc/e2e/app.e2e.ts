@@ -1,0 +1,380 @@
+/**
+ * 小说编辑器 GUI 端到端测试
+ *
+ * 整个文件共用一个 Electron 实例（启动约 2~3 秒），用例按顺序执行并共享界面状态，
+ * 因此每个用例开头都要自己把界面带到需要的位置（打开章节、展开面板等），不要依赖上一个用例的结尾。
+ * 运行：pnpm test:e2e（会先构建）或 pnpm test:e2e:only（使用现有 dist）。
+ */
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  buildAppEnv,
+  launchApp,
+  spawnElectron,
+  stopProcess,
+  waitForExit,
+  writeLogs,
+  type ElectronApp,
+} from './support/app';
+import { createFixtureProject, FIXTURE_CHAPTERS, type FixtureProject } from './support/fixture';
+import type { ConsoleIssue, Page } from './support/page';
+import {
+  SEL,
+  answerPrompt,
+  confirmDialog,
+  contextMenuAction,
+  editorText,
+  ensureRightPanelOpen,
+  expandTreePath,
+  focusEditorEnd,
+  redo,
+  statusBarStats,
+  switchStorylineMode,
+  treeTitles,
+  undo,
+  undoUntilGone,
+  waitForEditorText,
+  waitForWorkspace,
+} from './support/workbench';
+
+/** 已知且可接受的控制台错误（新增条目时写明原因） */
+const ALLOWED_ISSUES: RegExp[] = [];
+
+const CHAPTER_DIR = ['未分卷', 'novels', '星河旅人'];
+
+let fixture: FixtureProject;
+let app: ElectronApp;
+let page: Page;
+
+function unexpected(issues: ConsoleIssue[]): ConsoleIssue[] {
+  return issues.filter((issue) => !ALLOWED_ISSUES.some((pattern) => pattern.test(issue.text)));
+}
+
+async function readProjectFile(relative: string): Promise<string> {
+  return readFile(fixture.resolve(relative), 'utf-8');
+}
+
+/** 打开「星河旅人」下的某一章并等待编辑器加载出内容 */
+async function openChapter(title: string, expectText: string): Promise<void> {
+  await expandTreePath(page, [...CHAPTER_DIR, title]);
+  await page.click({ text: title, within: SEL.workspaceTree, exact: true });
+  await waitForEditorText(page, expectText);
+}
+
+beforeAll(async () => {
+  fixture = await createFixtureProject();
+  app = await launchApp({ projectDir: fixture.root });
+  page = app.page;
+});
+
+afterAll(async () => {
+  await app?.close();
+  await fixture?.dispose();
+});
+
+beforeEach(({ task, onTestFailed }) => {
+  onTestFailed(async () => {
+    const name = `${Date.now()}-${task.name}`;
+    const shot = await page?.screenshot(name);
+    if (app) await writeLogs(name, app.logs);
+    if (shot) console.error(`[e2e] 失败截图: ${shot}`);
+  });
+});
+
+afterEach(() => {
+  // 每个用例结束时检查控制台错误 / 未捕获异常，出现非预期错误直接判定失败
+  const issues = unexpected(page?.takeIssues() ?? []);
+  expect(issues, `控制台出现非预期错误:\n${issues.map((i) => i.text).join('\n')}`).toEqual([]);
+});
+
+describe('小说编辑器 GUI', () => {
+  it('1. 启动：主窗口打开 fixture 项目并展示章节', async () => {
+    await waitForWorkspace(page, path.basename(fixture.root));
+    await expandTreePath(page, [...CHAPTER_DIR, '001-启程']);
+    const titles = await treeTitles(page);
+    expect(titles).toEqual(
+      expect.arrayContaining(['剑与诗', '星河旅人', '001-启程', '002-迷雾森林'])
+    );
+    expect(titles).toContain('资料');
+
+    // 开发构建同样应能读到仓库里的 release-notes.json
+    const changelog = await page.evaluate<string>(() =>
+      window.electron.ipcRenderer.invoke('get-changelog')
+    );
+    expect(changelog).not.toContain('发布说明不可用');
+    // 全新安装不是「刚更新」，不应自动弹出更新日志
+    expect(await page.exists({ text: '更新日志', exact: true })).toBe(false);
+  });
+
+  it('2. 编辑章节：自动保存到磁盘，撤销 / 重做生效', async () => {
+    await openChapter('001-启程', '林舟背起行囊');
+    const original = await readProjectFile(FIXTURE_CHAPTERS.first.file);
+
+    await focusEditorEnd(page);
+    await page.type('新增一句话。');
+    await waitForEditorText(page, '新增一句话。');
+
+    // 2 秒防抖：立即检查时磁盘尚未写入
+    expect(await readProjectFile(FIXTURE_CHAPTERS.first.file)).toBe(original);
+    await page.waitUntil(
+      async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)).includes('新增一句话。'),
+      { timeout: 6_000, message: '自动保存写入磁盘' }
+    );
+
+    await undo(page);
+    await page.waitFor(
+      () =>
+        !Array.from(document.querySelectorAll('.cm-line')).some((line) =>
+          line.textContent?.includes('新增一句话。')
+        ),
+      { message: '撤销后文本消失' }
+    );
+    await redo(page);
+    await waitForEditorText(page, '新增一句话。');
+
+    // 撤销后再自动保存，磁盘恢复原文
+    await undo(page);
+    await page.waitUntil(
+      async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)) === original,
+      { timeout: 6_000, message: '撤销后自动保存恢复原文' }
+    );
+    expect(await editorText(page)).not.toContain('新增一句话。');
+  });
+
+  it('3. 文件操作：新建、重命名、删除与磁盘保持一致', async () => {
+    const chapterDir = fixture.resolve('novels/星河旅人');
+    await openChapter('002-迷雾森林', '森林里的雾气');
+
+    // 新建章：落在当前章节所在目录
+    await page.click('button[aria-label="新建"]');
+    await page.click({ text: '新建章', within: SEL.menu, exact: true });
+    await answerPrompt(page, '003-归来');
+    await page.waitUntil(() => existsSync(path.join(chapterDir, '003-归来.md')), {
+      message: '新章节写入磁盘',
+    });
+    await page.waitForTarget({ text: '003-归来', within: SEL.workspaceTree, exact: true });
+
+    // 重命名：行内铅笔按钮
+    await page.click('button[aria-label="修改 003-归来"]');
+    await answerPrompt(page, '003-重逢');
+    await page.waitUntil(() => existsSync(path.join(chapterDir, '003-重逢.md')), {
+      message: '重命名写入磁盘',
+    });
+    expect(existsSync(path.join(chapterDir, '003-归来.md'))).toBe(false);
+    await page.waitForTarget({ text: '003-重逢', within: SEL.workspaceTree, exact: true });
+
+    // 右键菜单同样可以重命名
+    await contextMenuAction(page, '003-重逢', '重命名');
+    await answerPrompt(page, '003-再会');
+    await page.waitUntil(() => existsSync(path.join(chapterDir, '003-再会.md')), {
+      message: '右键重命名写入磁盘',
+    });
+
+    // 删除：右键菜单 + 确认对话框
+    await contextMenuAction(page, '003-再会', '删除文件');
+    await confirmDialog(page, '003-再会.md');
+    await page.waitUntil(() => !existsSync(path.join(chapterDir, '003-再会.md')), {
+      message: '文件已从磁盘删除',
+    });
+    await page.waitForGone({ text: '003-再会', within: SEL.workspaceTree, exact: true });
+    expect((await readdir(chapterDir)).sort()).toEqual(['001-启程.md', '002-迷雾森林.md']);
+  });
+
+  it('4. 状态栏字数统计随输入变化', async () => {
+    await openChapter('002-迷雾森林', '森林里的雾气');
+    const original = await readProjectFile(FIXTURE_CHAPTERS.second.file);
+    const before = await statusBarStats(page);
+    expect(Number.isFinite(before.words)).toBe(true);
+
+    await focusEditorEnd(page);
+    await page.type('雾中传来脚步声');
+    await page.waitFor(
+      (selector: string, expected: number) => {
+        const text = (document.querySelector(selector) as HTMLElement | null)?.innerText ?? '';
+        const match = /(\d+)\s*字/.exec(text.replace(/\s+/g, ' '));
+        return match ? Number(match[1]) === expected : false;
+      },
+      { args: [SEL.statusBar, before.words + 7], message: '字数 +7' }
+    );
+
+    await page.press('Enter');
+    await page.type('二');
+    await page.waitFor(
+      (selector: string, expected: number) => {
+        const text = (document.querySelector(selector) as HTMLElement | null)?.innerText ?? '';
+        const match = /(\d+)\s*行/.exec(text.replace(/\s+/g, ' '));
+        return match ? Number(match[1]) === expected : false;
+      },
+      { args: [SEL.statusBar, before.lines + 1], message: '行数 +1' }
+    );
+
+    // 字数同时写入磁盘后再还原，避免影响后续用例
+    await page.waitUntil(
+      async () => (await readProjectFile(FIXTURE_CHAPTERS.second.file)).includes('脚步声'),
+      { timeout: 6_000, message: '输入后自动保存' }
+    );
+    await undoUntilGone(page, '脚步声');
+    await page.waitUntil(
+      async () => (await readProjectFile(FIXTURE_CHAPTERS.second.file)) === original,
+      { timeout: 6_000, message: '还原后自动保存' }
+    );
+  });
+
+  it('5. 右侧面板：各视图渲染无报错，专注模式下编辑器正常换行', async () => {
+    await openChapter('001-启程', '林舟背起行囊');
+    await ensureRightPanelOpen(page);
+
+    const views: Array<[string, string]> = [
+      ['本章大纲', '章纲'],
+      ['卷规划', '剧情板'],
+      ['三签卡', '三签创作法'],
+      ['成长', '角色成长记录器'],
+      ['目录', '启程'],
+    ];
+    for (const [label, marker] of views) {
+      await switchStorylineMode(page, label);
+      await page.waitForTarget({ text: marker, within: SEL.storyline });
+    }
+
+    // 人物 / 设定中枢通过文件树右键「查看详情」打开
+    await contextMenuAction(page, '角色', '查看详情');
+    await page.waitForTarget({ text: '人物与关系' });
+    await contextMenuAction(page, '设定', '查看详情');
+    await page.waitForTarget({ text: '设定' });
+
+    // 专注模式：长段落必须折行，不能出现横向滚动
+    await openChapter('001-启程', '林舟背起行囊');
+    const original = await readProjectFile(FIXTURE_CHAPTERS.first.file);
+    await focusEditorEnd(page);
+    await page.type('很长的一段话'.repeat(60));
+    const measure = () =>
+      page.evaluate<{ wrapping: boolean; overflow: number; lastLineHeight: number }>(() => {
+        const scroller = document.querySelector('.cm-scroller') as HTMLElement;
+        const lines = Array.from(document.querySelectorAll('.cm-content .cm-line'));
+        return {
+          wrapping:
+            document.querySelector('.cm-content')?.classList.contains('cm-lineWrapping') ?? false,
+          overflow: scroller.scrollWidth - scroller.clientWidth,
+          lastLineHeight: lines[lines.length - 1]?.getBoundingClientRect().height ?? 0,
+        };
+      });
+
+    await page.click('[title="进入专注模式 (F11)"]');
+    await page.waitForTarget('[title="退出聚焦模式 (F11)"]');
+    const focused = await measure();
+    expect(focused.wrapping).toBe(true);
+    expect(focused.overflow).toBeLessThanOrEqual(1);
+    expect(focused.lastLineHeight).toBeGreaterThan(40);
+
+    await page.click('[title="退出聚焦模式 (F11)"]');
+    await page.waitForTarget('[title="进入专注模式 (F11)"]');
+    const normal = await measure();
+    expect(normal.overflow).toBeLessThanOrEqual(1);
+
+    await undoUntilGone(page, '很长的一段话');
+    await page.waitUntil(
+      async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)) === original,
+      { timeout: 6_000, message: '还原后自动保存' }
+    );
+  });
+
+  it('6. 成长记录器：建卡、加经验写入 资料/记忆，子页可切换，AI 推演未配置时友好提示', async () => {
+    const memoryDir = fixture.resolve('资料/记忆');
+    await ensureRightPanelOpen(page);
+    await switchStorylineMode(page, '成长');
+
+    await page.click({ text: '创建记忆库', exact: true });
+    await page.waitUntil(() => existsSync(path.join(memoryDir, '规则.json')), {
+      message: '规则.json 已创建',
+    });
+
+    await page.click('input[aria-label="新角色名"]');
+    await page.type('林舟');
+    await page.press('Enter');
+    await page.waitForTarget({ text: '距下一级' });
+
+    await page.click('input[aria-label="数值"]');
+    await page.type('500');
+    await page.click('input[aria-label="章节"]');
+    await page.type('1');
+    await page.click({ text: '记录', exact: true });
+
+    await page.waitForTarget({ text: '林舟 升到 2 级' });
+    const sheetFile = path.join(memoryDir, '角色', '林舟.json');
+    const sheet = await page.waitUntil(
+      async () => {
+        const data = JSON.parse(await readFile(sheetFile, 'utf-8')) as {
+          name: string;
+          level: number;
+          exp: number;
+          events: Array<{ type: string; delta?: number; chapter?: number }>;
+        };
+        return data.exp === 500 ? data : null;
+      },
+      { message: '成长卡写入经验' }
+    );
+    expect(sheet).toMatchObject({ name: '林舟', level: 2, exp: 500 });
+    expect(sheet.events).toEqual([
+      expect.objectContaining({ type: 'exp', delta: 500, chapter: 1 }),
+    ]);
+    expect(existsSync(path.join(memoryDir, '角色', '林舟.md'))).toBe(true);
+    // 页面展示等级与经验条
+    await page.waitForTarget({ text: '经验 200 / 600' });
+
+    for (const [tab, marker] of [
+      ['队伍', '组队历史'],
+      ['地图', '地点'],
+      ['规则', '核心规则'],
+      ['角色卡', '距下一级'],
+    ]) {
+      await page.click({ text: tab, within: '[role="tablist"]', exact: true });
+      await page.waitForTarget({ text: marker });
+    }
+
+    await page.click({ text: 'AI 推演', within: '[role="tablist"]', exact: true });
+    await page.click({ text: '战士之道', exact: true });
+    await page.click({ text: '法师之道', exact: true });
+    await page.click({ text: '开始推演', exact: true });
+    await page.waitForTarget('[role="alert"]', 20_000);
+    const alertText = await page.evaluate<string>(
+      () => (document.querySelector('[role="alert"]') as HTMLElement).innerText
+    );
+    expect(alertText).toMatch(/AI/);
+    // 推演只产出提案，失败时不得改动成长卡
+    const after = JSON.parse(await readFile(sheetFile, 'utf-8')) as { exp: number };
+    expect(after.exp).toBe(500);
+  });
+
+  it('7. 记忆库同步生成 角色卡 / 设定 目录', async () => {
+    await ensureRightPanelOpen(page);
+    await switchStorylineMode(page, '成长');
+    await page.click({ text: '同步到记忆文件夹', exact: true });
+    await page.waitForTarget({ text: '已同步' });
+    const memoryDir = fixture.resolve('资料/记忆');
+    expect(existsSync(path.join(memoryDir, '角色卡'))).toBe(true);
+    expect(existsSync(path.join(memoryDir, '设定'))).toBe(true);
+  });
+
+  it('8. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
+    const other = await createFixtureProject('novel-editor-e2e-second-');
+    try {
+      await mkdir(other.resolve('novels/另一部作品'), { recursive: true });
+      await writeFile(other.resolve('novels/另一部作品/001-开端.md'), '# 开端\n', 'utf-8');
+
+      const second = spawnElectron([other.root], buildAppEnv(app.userDataDir));
+      const exited = await waitForExit(second, 15_000);
+      if (!exited) await stopProcess(second);
+      expect(exited, '第二个实例应在转发后立即退出').toBe(true);
+
+      await waitForWorkspace(page, path.basename(other.root));
+      await expandTreePath(page, ['未分卷', 'novels', '另一部作品', '001-开端']);
+      await page.waitForTarget({ text: '001-开端', within: SEL.workspaceTree, exact: true });
+      // 原 Electron 进程仍在运行
+      expect(app.process.exitCode).toBeNull();
+    } finally {
+      await other.dispose();
+    }
+  });
+});

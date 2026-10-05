@@ -37,7 +37,9 @@ describe('assistant generation status helpers', () => {
     expect(parsed?.completedSteps).toBe(3);
     expect(parsed?.scopeLabel).toBe('第一章');
     expect(formatAssistantGenerationProgress(parsed)).toBe('3/8');
-    expect(formatAssistantGenerationMetrics(parsed)).toBe('识别 2 项 · 角色库 5 人 · 新增 1 · 更新 1');
+    expect(formatAssistantGenerationMetrics(parsed)).toBe(
+      '识别 2 项 · 角色库 5 人 · 新增 1 · 更新 1'
+    );
   });
 
   it('会拒绝缺少关键字段的无效状态', () => {
