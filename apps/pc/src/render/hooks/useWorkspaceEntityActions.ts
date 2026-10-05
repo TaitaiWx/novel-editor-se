@@ -16,28 +16,27 @@ import {
   stringifyCharacterAttributes,
 } from '@/render/components/RightPanel/utils';
 import { findNodeInTree, getNodeDisplayName } from '@/render/app/fileTreeUtils';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { EntitiesState } from './state/useEntitiesState';
+import type { UiState } from './state/useUiState';
 import type { TabActions } from './useTabActions';
 import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 
-export type UseWorkspaceEntityActionsContext = Pick<
-  AppState,
-  | 'activeTabRef'
-  | 'bumpWorkspaceCharactersVersion'
-  | 'bumpWorkspaceLoreVersion'
-  | 'dialog'
-  | 'filesRef'
-  | 'folderPathRef'
-  | 'setActiveTab'
-  | 'setOpenTabs'
-  | 'setWorkspaceCharacters'
-  | 'setWorkspaceLoreEntries'
-  | 'setWorkspaceProjectName'
-  | 'toast'
-  | 'workspaceCharacters'
-  | 'workspaceLoreEntries'
-  | 'workspaceProjectName'
-> &
+export type UseWorkspaceEntityActionsContext = Pick<WorkspaceState, 'filesRef' | 'folderPathRef'> &
+  Pick<TabsState, 'activeTabRef' | 'setActiveTab' | 'setOpenTabs'> &
+  Pick<
+    EntitiesState,
+    | 'bumpWorkspaceCharactersVersion'
+    | 'bumpWorkspaceLoreVersion'
+    | 'setWorkspaceCharacters'
+    | 'setWorkspaceLoreEntries'
+    | 'setWorkspaceProjectName'
+    | 'workspaceCharacters'
+    | 'workspaceLoreEntries'
+    | 'workspaceProjectName'
+  > &
+  Pick<UiState, 'dialog' | 'toast'> &
   Pick<TabActions, 'closeTabsByPredicate' | 'openFileInTab'> &
   Pick<WorkspaceCreationApi, 'getCurrentNovelId'>;
 

@@ -7,12 +7,14 @@ import {
   getAIConfigStatus,
   mergeSettingsDraft,
 } from '@/render/utils/appSettings';
-import type { AppState } from './useAppState';
+import type { SettingsState } from './state/useSettingsState';
+import type { UiState } from './state/useUiState';
 
 export type UseAppSettingsActionsContext = Pick<
-  AppState,
-  'appSettingsRef' | 'setAppSettings' | 'toast'
->;
+  SettingsState,
+  'appSettingsRef' | 'setAppSettings'
+> &
+  Pick<UiState, 'toast'>;
 
 /**
  * 应用设置的读取、更新与持久化

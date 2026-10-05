@@ -11,7 +11,10 @@ import {
 } from '@/render/utils/workspace';
 import { findNodeInTree } from '@/render/app/fileTreeUtils';
 import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { EditorState } from './state/useEditorState';
+import type { EntitiesState } from './state/useEntitiesState';
 import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 import type { EditorInteractions } from './useEditorInteractions';
 import type { TabActions } from './useTabActions';
@@ -36,13 +39,11 @@ export type UseWorkspaceTabContentContext = Pick<
   | 'selectedVolumeNode'
   | 'selectedVolumePath'
 > &
+  Pick<WorkspaceState, 'files' | 'folderPath' | 'storyOrderMap'> &
+  Pick<TabsState, 'openTabs'> &
+  Pick<EditorState, 'editorContent'> &
   Pick<
-    AppState,
-    | 'editorContent'
-    | 'files'
-    | 'folderPath'
-    | 'openTabs'
-    | 'storyOrderMap'
+    EntitiesState,
     | 'workspaceCharacters'
     | 'workspaceCharactersVersion'
     | 'workspaceLoreEntries'

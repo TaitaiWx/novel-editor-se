@@ -22,7 +22,10 @@ import {
 import { moveStoryPathRelative, remapStoryOrderMapPaths } from '@/render/app/storyOrder';
 import { splitChapters } from '@/render/utils/chapterSplitter';
 import { isPathInside } from '@/render/utils/path';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { EntitiesState } from './state/useEntitiesState';
+import type { UiState } from './state/useUiState';
 import type { TabActions } from './useTabActions';
 import type { EditorSessionApi } from './useEditorSession';
 import type { StoryOrderSync } from './useStoryOrderSync';
@@ -31,21 +34,12 @@ import type { ProjectLoaderApi } from './useProjectLoader';
 import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
 
 export type UseFileOperationsContext = Pick<
-  AppState,
-  | 'activeTabRef'
-  | 'clipboard'
-  | 'dialog'
-  | 'filesRef'
-  | 'folderPathRef'
-  | 'setActiveTab'
-  | 'setChapterMaterialPaths'
-  | 'setClipboard'
-  | 'setOpenTabs'
-  | 'setStoryOrderMap'
-  | 'setUntitledTabContents'
-  | 'storyOrderMapRef'
-  | 'toast'
+  WorkspaceState,
+  'filesRef' | 'folderPathRef' | 'setStoryOrderMap' | 'storyOrderMapRef'
 > &
+  Pick<TabsState, 'activeTabRef' | 'setActiveTab' | 'setOpenTabs' | 'setUntitledTabContents'> &
+  Pick<EntitiesState, 'setChapterMaterialPaths'> &
+  Pick<UiState, 'clipboard' | 'dialog' | 'setClipboard' | 'toast'> &
   Pick<TabActions, 'closeTab' | 'closeTabsByPredicate' | 'openFileInTab'> &
   Pick<
     EditorSessionApi,

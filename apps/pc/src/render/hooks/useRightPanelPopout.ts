@@ -3,18 +3,16 @@ import { PortChannel } from '@/shared/portChannels';
 import { type ThrottledFunction, throttle } from '@/render/utils/throttle';
 import { useCrdtOpsSender } from '@/render/utils/useCrdtOpsChannel';
 import { useMessagePort } from '@/render/utils/useMessagePort';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { LayoutState } from './state/useLayoutState';
+import type { EditorState } from './state/useEditorState';
 import type { PaneLayoutApi } from './usePaneLayout';
 
-export type UseRightPanelPopoutContext = Pick<
-  AppState,
-  | 'activeTab'
-  | 'editorContent'
-  | 'editorContentRef'
-  | 'folderPath'
-  | 'rightPanelPoppedOut'
-  | 'setRightPanelPoppedOut'
-> &
+export type UseRightPanelPopoutContext = Pick<WorkspaceState, 'folderPath'> &
+  Pick<TabsState, 'activeTab'> &
+  Pick<LayoutState, 'rightPanelPoppedOut' | 'setRightPanelPoppedOut'> &
+  Pick<EditorState, 'editorContent' | 'editorContentRef'> &
   Pick<PaneLayoutApi, 'resolvePaneLayout'>;
 
 /**

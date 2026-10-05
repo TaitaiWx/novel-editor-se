@@ -12,7 +12,7 @@ interface HarnessOptions {
   rightPanelCollapsed?: boolean;
 }
 
-/** 用真实 useState 模拟 AppState 中与标签页相关的切片 */
+/** 用真实 useState 模拟 TabsState / LayoutState 中与标签页相关的切片 */
 function useHarness(options: HarnessOptions = {}) {
   const [openTabs, setOpenTabs] = useState<string[]>(options.openTabs ?? []);
   const [activeTab, setActiveTab] = useState<string | null>(options.activeTab ?? null);

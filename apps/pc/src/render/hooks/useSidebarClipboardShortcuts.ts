@@ -1,13 +1,19 @@
 import React from 'react';
 import { findNodeInTree } from '@/render/app/fileTreeUtils';
 import { isImeComposing } from '@/render/utils/ime';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { LayoutState } from './state/useLayoutState';
+import type { UiState } from './state/useUiState';
 import type { FileOperations } from './useFileOperations';
 
 export type UseSidebarClipboardShortcutsContext = Pick<
-  AppState,
-  'activeTabRef' | 'clipboard' | 'filesRef' | 'folderPathRef' | 'setClipboard' | 'sidebarFocusedRef'
+  WorkspaceState,
+  'filesRef' | 'folderPathRef'
 > &
+  Pick<TabsState, 'activeTabRef'> &
+  Pick<LayoutState, 'sidebarFocusedRef'> &
+  Pick<UiState, 'clipboard' | 'setClipboard'> &
   Pick<FileOperations, 'handlePasteFiles'>;
 
 /**

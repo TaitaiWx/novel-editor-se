@@ -1,22 +1,26 @@
 import { useCallback } from 'react';
 import { isUntitledTabPath } from '@/render/app/fileTreeUtils';
-import type { AppState } from './useAppState';
+import type { TabsState } from './state/useTabsState';
+import type { LayoutState } from './state/useLayoutState';
 
 export type UseTabActionsContext = Pick<
-  AppState,
+  TabsState,
   | 'activeTabRef'
   | 'openTabsRef'
-  | 'preFocusStateRef'
-  | 'rightPanelCollapsedRef'
   | 'setActiveTab'
-  | 'setFocusMode'
   | 'setOpenTabs'
-  | 'setRightPanelCollapsed'
-  | 'setSidebarCollapsed'
   | 'setUntitledTabContents'
-  | 'sidebarCollapsedRef'
   | 'untitledCounterRef'
->;
+> &
+  Pick<
+    LayoutState,
+    | 'preFocusStateRef'
+    | 'rightPanelCollapsedRef'
+    | 'setFocusMode'
+    | 'setRightPanelCollapsed'
+    | 'setSidebarCollapsed'
+    | 'sidebarCollapsedRef'
+  >;
 
 /**
  * 标签页操作：打开、关闭、新建未命名标签、专注模式切换等

@@ -2,20 +2,21 @@ import React, { useRef } from 'react';
 import { type AISessionSnapshot, parseAISessionSnapshot } from '@/render/state/aiSessionSnapshot';
 import { createAISessionChannel } from '@/render/utils/aiSessionChannel';
 import { fnv1a32 } from '@/render/components/RightPanel/utils';
-import type { AppState } from './useAppState';
+import type { TabsState } from './state/useTabsState';
+import type { EditorState } from './state/useEditorState';
+import type { AiSessionState } from './state/useAiSessionState';
 
-export type UseAiSessionSyncContext = Pick<
-  AppState,
-  | 'activeTabRef'
-  | 'aiSessionChannelRef'
-  | 'aiSessionKey'
-  | 'aiSessionRef'
-  | 'dispatchFixCommand'
-  | 'editorViewRef'
-  | 'inlineDiff'
-  | 'pendingApplyQueue'
-  | 'setScrollToLine'
->;
+export type UseAiSessionSyncContext = Pick<TabsState, 'activeTabRef'> &
+  Pick<EditorState, 'editorViewRef' | 'setScrollToLine'> &
+  Pick<
+    AiSessionState,
+    | 'aiSessionChannelRef'
+    | 'aiSessionKey'
+    | 'aiSessionRef'
+    | 'dispatchFixCommand'
+    | 'inlineDiff'
+    | 'pendingApplyQueue'
+  >;
 
 /**
  * AI 会话快照：跨窗口广播接收、恢复与节流持久化

@@ -1,12 +1,14 @@
 import React from 'react';
 import { loadLoreEntriesByFolder } from '@/render/components/RightPanel/lore-data';
 import { mapCharacterRows } from '@/render/components/RightPanel/utils';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { EntitiesState } from './state/useEntitiesState';
 
-export type UseWorkspaceEntitiesContext = Pick<
-  AppState,
-  'folderPath' | 'setWorkspaceCharacters' | 'setWorkspaceLoreEntries' | 'setWorkspaceProjectName'
->;
+export type UseWorkspaceEntitiesContext = Pick<WorkspaceState, 'folderPath'> &
+  Pick<
+    EntitiesState,
+    'setWorkspaceCharacters' | 'setWorkspaceLoreEntries' | 'setWorkspaceProjectName'
+  >;
 
 /**
  * 切换项目时加载作品名、人物与设定列表

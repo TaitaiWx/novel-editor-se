@@ -5,13 +5,15 @@ import { findNodeInTree, getNodeDisplayName } from '@/render/app/fileTreeUtils';
 import { flattenFileNodes, isStoryFilePath } from '@/render/utils/workspace';
 import { getAIGenerationScopeLabel } from '@/render/app/aiGeneration';
 import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { EditorState } from './state/useEditorState';
 
 export type UseScopedContentReaderContext = Pick<
   WorkspaceDerivedState,
   'activeDocumentTab' | 'rootVolumeNode' | 'storyFileNodes'
 > &
-  Pick<AppState, 'editorContentRef' | 'filesRef'>;
+  Pick<WorkspaceState, 'filesRef'> &
+  Pick<EditorState, 'editorContentRef'>;
 
 /**
  * 按作用域（章 / 卷 / 作品）读取正文内容，供 AI 生成使用

@@ -10,25 +10,24 @@ import {
   replacePathPrefix,
 } from '@/render/app/fileTreeUtils';
 import { parseEditorSessionSnapshot, sameViewportSnapshot } from '@/render/app/editorSession';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { EditorState } from './state/useEditorState';
 
-export type UseEditorSessionContext = Pick<
-  AppState,
-  | 'activeTab'
-  | 'activeTabRef'
-  | 'editorSessionHydratedRef'
-  | 'editorSessionKey'
-  | 'editorViewportSnapshotsRef'
-  | 'files'
-  | 'filesRef'
-  | 'openTabs'
-  | 'openTabsRef'
-  | 'persistEditorSessionTimerRef'
-  | 'restoredEditorSessionKeyRef'
-  | 'setActiveTab'
-  | 'setInitialViewportSnapshots'
-  | 'setOpenTabs'
->;
+export type UseEditorSessionContext = Pick<WorkspaceState, 'files' | 'filesRef'> &
+  Pick<
+    TabsState,
+    'activeTab' | 'activeTabRef' | 'openTabs' | 'openTabsRef' | 'setActiveTab' | 'setOpenTabs'
+  > &
+  Pick<
+    EditorState,
+    | 'editorSessionHydratedRef'
+    | 'editorSessionKey'
+    | 'editorViewportSnapshotsRef'
+    | 'persistEditorSessionTimerRef'
+    | 'restoredEditorSessionKeyRef'
+    | 'setInitialViewportSnapshots'
+  >;
 
 /**
  * 编辑器会话（打开的标签、活动标签、视口快照）的恢复与持久化

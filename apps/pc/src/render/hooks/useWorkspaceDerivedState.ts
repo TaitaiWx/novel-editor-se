@@ -18,17 +18,13 @@ import {
   shouldEnableChapterAssistant,
   splitWorkspaceFiles,
 } from '@/render/utils/workspace';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { EntitiesState } from './state/useEntitiesState';
 
-export type UseWorkspaceDerivedStateContext = Pick<
-  AppState,
-  | 'activeTab'
-  | 'chapterMaterialPaths'
-  | 'files'
-  | 'folderPath'
-  | 'untitledTabContents'
-  | 'workspaceProjectName'
->;
+export type UseWorkspaceDerivedStateContext = Pick<WorkspaceState, 'files' | 'folderPath'> &
+  Pick<TabsState, 'activeTab' | 'untitledTabContents'> &
+  Pick<EntitiesState, 'chapterMaterialPaths' | 'workspaceProjectName'>;
 
 /**
  * 基于当前 tab / 文件树计算的派生状态（纯 memo，无副作用）

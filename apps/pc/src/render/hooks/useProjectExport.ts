@@ -1,11 +1,10 @@
 import React, { useCallback } from 'react';
 import type { KnowledgeExportOptions } from '@/render/app/types';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { UiState } from './state/useUiState';
 
-export type UseProjectExportContext = Pick<
-  AppState,
-  'folderPathRef' | 'knowledgeExportOptions' | 'setShowKnowledgeExportDialog' | 'toast'
->;
+export type UseProjectExportContext = Pick<WorkspaceState, 'folderPathRef'> &
+  Pick<UiState, 'knowledgeExportOptions' | 'setShowKnowledgeExportDialog' | 'toast'>;
 
 /**
  * 导出项目与导出角色卡 / 设定 / 资料

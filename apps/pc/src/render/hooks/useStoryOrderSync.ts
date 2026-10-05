@@ -1,10 +1,10 @@
 import React, { useCallback } from 'react';
 import { type StoryOrderMap, createStoryOrderStorageKey } from '@/render/utils/workspace';
 import { parseStoryOrderMap } from '@/render/app/storyOrder';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
 
 export type UseStoryOrderSyncContext = Pick<
-  AppState,
+  WorkspaceState,
   'folderPathRef' | 'setStoryOrderMap' | 'storyOrderMapRef' | 'storyOrderStorageKey'
 >;
 

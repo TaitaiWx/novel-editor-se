@@ -27,31 +27,31 @@ import {
   stripExtension,
 } from '@/render/app/fileTreeUtils';
 import { loadLoreEntriesByFolder } from '@/render/components/RightPanel/lore-data';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { EditorState } from './state/useEditorState';
+import type { EntitiesState } from './state/useEntitiesState';
+import type { UiState } from './state/useUiState';
 import type { TabActions } from './useTabActions';
 import type { ProjectLoaderApi } from './useProjectLoader';
 
 export type UseWorkspaceCreationContext = Pick<
-  AppState,
-  | 'activeTab'
-  | 'activeTabRef'
-  | 'creatingType'
-  | 'dialog'
-  | 'files'
-  | 'filesRef'
-  | 'folderPath'
-  | 'folderPathRef'
-  | 'openTabsRef'
-  | 'setActiveTab'
-  | 'setCreatingType'
-  | 'setEditorContent'
-  | 'setOpenTabs'
-  | 'setUntitledTabContents'
-  | 'setWorkspaceCharacters'
-  | 'setWorkspaceLoreEntries'
-  | 'toast'
-  | 'untitledCounterRef'
+  WorkspaceState,
+  'files' | 'filesRef' | 'folderPath' | 'folderPathRef'
 > &
+  Pick<
+    TabsState,
+    | 'activeTab'
+    | 'activeTabRef'
+    | 'openTabsRef'
+    | 'setActiveTab'
+    | 'setOpenTabs'
+    | 'setUntitledTabContents'
+    | 'untitledCounterRef'
+  > &
+  Pick<EditorState, 'setEditorContent'> &
+  Pick<EntitiesState, 'setWorkspaceCharacters' | 'setWorkspaceLoreEntries'> &
+  Pick<UiState, 'creatingType' | 'dialog' | 'setCreatingType' | 'toast'> &
   Pick<TabActions, 'openFileInTab'> &
   Pick<ProjectLoaderApi, 'refreshCurrentFolder'>;
 

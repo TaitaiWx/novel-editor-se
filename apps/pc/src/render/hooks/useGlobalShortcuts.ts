@@ -3,17 +3,18 @@ import { cleanupKeyboardShortcuts } from '@/render/components/ShortcutsHelp/shor
 import { initKeyboardShortcuts } from '@/render/components/ShortcutsHelp/shortcuts/initKeyboardShortcuts';
 import { isImeComposing } from '@/render/utils/ime';
 import { matchShortcutEvent } from '@/render/utils/appSettings';
-import type { AppState } from './useAppState';
+import type { TabsState } from './state/useTabsState';
+import type { LayoutState } from './state/useLayoutState';
+import type { SettingsState } from './state/useSettingsState';
 import type { TabActions } from './useTabActions';
 import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 import type { EditorInteractions } from './useEditorInteractions';
 import type { ProjectLoaderApi } from './useProjectLoader';
 import type { PaneLayoutApi } from './usePaneLayout';
 
-export type UseGlobalShortcutsContext = Pick<
-  AppState,
-  'activeTabRef' | 'appSettings' | 'sidebarFocusedRef' | 'sidebarRef'
-> &
+export type UseGlobalShortcutsContext = Pick<TabsState, 'activeTabRef'> &
+  Pick<LayoutState, 'sidebarFocusedRef' | 'sidebarRef'> &
+  Pick<SettingsState, 'appSettings'> &
   Pick<TabActions, 'closeTab' | 'handleNewTab' | 'toggleFocusMode'> &
   Pick<WorkspaceCreationApi, 'handleCreateFile'> &
   Pick<EditorInteractions, 'handleFormatCurrentChapter'> &

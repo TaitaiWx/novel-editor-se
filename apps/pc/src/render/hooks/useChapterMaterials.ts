@@ -4,13 +4,15 @@ import { createChapterMaterialsStorageKey } from '@/render/utils/workspace';
 import { formatMaterialUsageLabel } from '@/render/app/aiGeneration';
 import { getNodeDisplayName, isPathInWorkspace } from '@/render/app/fileTreeUtils';
 import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { EntitiesState } from './state/useEntitiesState';
 
 export type UseChapterMaterialsContext = Pick<
   WorkspaceDerivedState,
   'activeDocumentTab' | 'chapterAssistantEnabled'
 > &
-  Pick<AppState, 'folderPath' | 'setChapterMaterialPaths' | 'setMaterialUsageMap'>;
+  Pick<WorkspaceState, 'folderPath'> &
+  Pick<EntitiesState, 'setChapterMaterialPaths' | 'setMaterialUsageMap'>;
 
 /**
  * 章节关联资料：资料使用情况统计与章节资料的增删持久化

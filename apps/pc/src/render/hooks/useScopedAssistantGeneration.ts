@@ -38,7 +38,10 @@ import {
   parseMaterialGenerationResult,
   selectChunksForAiAnalysis,
 } from '@/render/app/aiGeneration';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { AiSessionState } from './state/useAiSessionState';
+import type { EntitiesState } from './state/useEntitiesState';
+import type { UiState } from './state/useUiState';
 import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
 import type { AppSettingsActions } from './useAppSettingsActions';
 import type { WorkspaceCreationApi } from './useWorkspaceCreation';
@@ -47,19 +50,24 @@ import type { ProjectLoaderApi } from './useProjectLoader';
 import type { ScopedContentReader } from './useScopedContentReader';
 
 export type UseScopedAssistantGenerationContext = Pick<
-  AppState,
-  | 'bumpWorkspaceCharactersVersion'
-  | 'bumpWorkspaceLoreVersion'
-  | 'filesRef'
-  | 'folderPathRef'
-  | 'setAssistantCharacterGenerationStatus'
-  | 'setAssistantScopedCharacters'
-  | 'setAssistantScopedLoreEntries'
-  | 'setAssistantScopedMaterials'
-  | 'setWorkspaceCharacters'
-  | 'setWorkspaceLoreEntries'
-  | 'toast'
+  WorkspaceState,
+  'filesRef' | 'folderPathRef'
 > &
+  Pick<
+    AiSessionState,
+    | 'setAssistantCharacterGenerationStatus'
+    | 'setAssistantScopedCharacters'
+    | 'setAssistantScopedLoreEntries'
+    | 'setAssistantScopedMaterials'
+  > &
+  Pick<
+    EntitiesState,
+    | 'bumpWorkspaceCharactersVersion'
+    | 'bumpWorkspaceLoreVersion'
+    | 'setWorkspaceCharacters'
+    | 'setWorkspaceLoreEntries'
+  > &
+  Pick<UiState, 'toast'> &
   Pick<WorkspaceDerivedState, 'currentAssistantScope'> &
   Pick<AppSettingsActions, 'ensurePersistedAiReady'> &
   Pick<WorkspaceCreationApi, 'getCurrentNovelId'> &

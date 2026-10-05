@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { UiState } from './state/useUiState';
 
 export type UseGeneratedMaterialCleanupContext = Pick<
-  AppState,
-  'cleanedGeneratedMaterialFoldersRef' | 'folderPath' | 'refreshCurrentFolderRef' | 'toast'
->;
+  WorkspaceState,
+  'cleanedGeneratedMaterialFoldersRef' | 'folderPath' | 'refreshCurrentFolderRef'
+> &
+  Pick<UiState, 'toast'>;
 
 /**
  * 打开项目后在空闲时清理历史遗留的空资料目录

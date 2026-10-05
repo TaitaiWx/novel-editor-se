@@ -29,22 +29,23 @@ import {
   parseMaterialGenerationResult,
   selectChunksForAiAnalysis,
 } from '@/render/app/aiGeneration';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { EntitiesState } from './state/useEntitiesState';
+import type { UiState } from './state/useUiState';
 import type { AppSettingsActions } from './useAppSettingsActions';
 import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 import type { ProjectLoaderApi } from './useProjectLoader';
 import type { ScopedContentReader } from './useScopedContentReader';
 
-export type UseLibraryGenerationContext = Pick<
-  AppState,
-  | 'bumpWorkspaceCharactersVersion'
-  | 'bumpWorkspaceLoreVersion'
-  | 'filesRef'
-  | 'folderPathRef'
-  | 'setWorkspaceCharacters'
-  | 'setWorkspaceLoreEntries'
-  | 'toast'
-> &
+export type UseLibraryGenerationContext = Pick<WorkspaceState, 'filesRef' | 'folderPathRef'> &
+  Pick<
+    EntitiesState,
+    | 'bumpWorkspaceCharactersVersion'
+    | 'bumpWorkspaceLoreVersion'
+    | 'setWorkspaceCharacters'
+    | 'setWorkspaceLoreEntries'
+  > &
+  Pick<UiState, 'toast'> &
   Pick<AppSettingsActions, 'ensurePersistedAiReady'> &
   Pick<WorkspaceCreationApi, 'getCurrentNovelId'> &
   Pick<ProjectLoaderApi, 'refreshCurrentFolder'> &

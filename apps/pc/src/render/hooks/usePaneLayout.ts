@@ -8,10 +8,10 @@ import {
   RIGHT_COLLAPSE_THRESHOLD,
   RIGHT_MAX,
 } from '@/render/app/layoutConstants';
-import type { AppState } from './useAppState';
+import type { LayoutState } from './state/useLayoutState';
 
 export type UsePaneLayoutContext = Pick<
-  AppState,
+  LayoutState,
   | 'appMainRef'
   | 'leftPanelWidthRef'
   | 'rightPanelCollapsedRef'

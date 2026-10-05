@@ -4,18 +4,20 @@ import {
   preciseReplaceWithReport,
   normalizedSearch as normalizedSearchInDoc,
 } from '@/render/utils/preciseReplace';
-import type { AppState } from './useAppState';
+import type { TabsState } from './state/useTabsState';
+import type { EditorState } from './state/useEditorState';
+import type { AiSessionState } from './state/useAiSessionState';
 
-export type UseAssistantDialogHandlersContext = Pick<
-  AppState,
-  | 'activeTabRef'
-  | 'dispatchFixCommand'
-  | 'editorViewRef'
-  | 'setEditorContent'
-  | 'setEditorReloadToken'
-  | 'setScrollToLine'
-  | 'setTransientHighlightLine'
->;
+export type UseAssistantDialogHandlersContext = Pick<TabsState, 'activeTabRef'> &
+  Pick<
+    EditorState,
+    | 'editorViewRef'
+    | 'setEditorContent'
+    | 'setEditorReloadToken'
+    | 'setScrollToLine'
+    | 'setTransientHighlightLine'
+  > &
+  Pick<AiSessionState, 'dispatchFixCommand'>;
 
 /**
  * AI 助手对话框的修复应用与 diff 预览回调。

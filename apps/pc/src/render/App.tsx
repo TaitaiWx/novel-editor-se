@@ -12,155 +12,91 @@ import AppSettingsCenter from './components/AppSettingsCenter';
 import KnowledgeExportDialog from './components/KnowledgeExportDialog';
 import styles from './App.module.scss';
 import { CENTER_MIN, RIGHT_COLLAPSED_WIDTH } from '@/render/app/layoutConstants';
-import { useRendererReadyReporting } from '@/render/hooks/useRendererReadyReporting';
-import { useAppState } from '@/render/hooks/useAppState';
-import { useWorkspaceDerivedState } from '@/render/hooks/useWorkspaceDerivedState';
-import { useGeneratedMaterialCleanup } from '@/render/hooks/useGeneratedMaterialCleanup';
-import { useStoryOrderSync } from '@/render/hooks/useStoryOrderSync';
-import { useEditorSession } from '@/render/hooks/useEditorSession';
-import { useAiSessionSync } from '@/render/hooks/useAiSessionSync';
-import { usePaneLayout } from '@/render/hooks/usePaneLayout';
-import { useTabActions } from '@/render/hooks/useTabActions';
-import { useAppSettingsActions } from '@/render/hooks/useAppSettingsActions';
-import { useProjectLoader } from '@/render/hooks/useProjectLoader';
-import { useWorkspaceCreation } from '@/render/hooks/useWorkspaceCreation';
-import { useWorkspaceEntityActions } from '@/render/hooks/useWorkspaceEntityActions';
-import { useScopedContentReader } from '@/render/hooks/useScopedContentReader';
-import { useFileOperations } from '@/render/hooks/useFileOperations';
-import { useEditorInteractions } from '@/render/hooks/useEditorInteractions';
-import { useGlobalShortcuts } from '@/render/hooks/useGlobalShortcuts';
-import { useProjectExport } from '@/render/hooks/useProjectExport';
-import { useAiWindowBridge } from '@/render/hooks/useAiWindowBridge';
-import { useRightPanelPopout } from '@/render/hooks/useRightPanelPopout';
-import { useSidebarClipboardShortcuts } from '@/render/hooks/useSidebarClipboardShortcuts';
-import { useWorkspaceEntities } from '@/render/hooks/useWorkspaceEntities';
-import { useLibraryGeneration } from '@/render/hooks/useLibraryGeneration';
-import { useScopedAssistantGeneration } from '@/render/hooks/useScopedAssistantGeneration';
-import { useContextMenuItems } from '@/render/hooks/useContextMenuItems';
-import { useChapterMaterials } from '@/render/hooks/useChapterMaterials';
-import { useScopedAssistantArtifacts } from '@/render/hooks/useScopedAssistantArtifacts';
-import { useWorkspaceTabContent } from '@/render/hooks/useWorkspaceTabContent';
-import { useOpenSettingsTabListener } from '@/render/hooks/useOpenSettingsTabListener';
-import { useAssistantDialogHandlers } from '@/render/hooks/useAssistantDialogHandlers';
+import { useAppController } from '@/render/hooks/useAppController';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
 const RightPanel = lazy(() => import('./components/RightPanel'));
 
 /**
- * 应用根组件（组合根）。
+ * 应用根组件：只负责渲染。
  *
- * 注意：下列 hook 的调用顺序与拆分前 App.tsx 中代码块的顺序保持一致，
- * 以保证各 useEffect 的执行 / 清理顺序不变。新增或调整 hook 时请保持该顺序。
+ * 全部 hook 的调用（及其顺序约束）集中在 useAppController 中，见该文件注释。
  */
 const App: React.FC = () => {
-  // ─── 状态与派生状态 ─────────────────────────────────────────────
-  useRendererReadyReporting();
-  const state = useAppState();
-  const derived = useWorkspaceDerivedState(state);
-
-  // ─── 项目 / 会话同步（effect 顺序敏感） ─────────────────────────
-  useGeneratedMaterialCleanup(state);
-  const storyOrder = useStoryOrderSync(state);
-  const editorSession = useEditorSession(state);
-  useAiSessionSync(state);
-  const layout = usePaneLayout(state);
-
-  // ─── 动作（无 effect，仅 useCallback / useMemo） ───────────────
-  const tabs = useTabActions(state);
-  const settingsActions = useAppSettingsActions(state);
-  const loader = useProjectLoader({ ...state, ...tabs });
-  const creation = useWorkspaceCreation({ ...state, ...tabs, ...loader });
-  const entityActions = useWorkspaceEntityActions({ ...state, ...tabs, ...creation });
-  const contentReader = useScopedContentReader({ ...state, ...derived });
-  const fileOps = useFileOperations({
-    ...state,
-    ...derived,
-    ...tabs,
-    ...editorSession,
-    ...storyOrder,
-    ...loader,
-    ...contentReader,
-  });
-  const editor = useEditorInteractions({ ...state, ...layout, ...tabs, ...loader });
-
-  // ─── 全局事件 / 跨窗口通信 ─────────────────────────────────────
-  useGlobalShortcuts({ ...state, ...layout, ...tabs, ...loader, ...creation, ...editor });
-  const projectExport = useProjectExport(state);
-  useAiWindowBridge({ ...state, ...tabs });
-  const { handlePopOutRightPanel } = useRightPanelPopout({ ...state, ...layout });
-  useSidebarClipboardShortcuts({ ...state, ...fileOps });
-  useWorkspaceEntities(state);
-
-  // ─── AI 生成与右键菜单 ─────────────────────────────────────────
-  const libraryGeneration = useLibraryGeneration({
-    ...state,
-    ...settingsActions,
-    ...creation,
-    ...loader,
-    ...contentReader,
-  });
-  const scopedGeneration = useScopedAssistantGeneration({
-    ...state,
-    ...derived,
-    ...settingsActions,
-    ...creation,
-    ...tabs,
-    ...loader,
-    ...contentReader,
-  });
-  const { contextMenuItems } = useContextMenuItems({
-    ...state,
-    ...loader,
-    ...creation,
-    ...entityActions,
-    ...fileOps,
-    ...projectExport,
-    ...libraryGeneration,
-    ...scopedGeneration,
-  });
-
-  // ─── 章节资料 / 助手上下文 / 工作区标签内容 ─────────────────────
-  const { handleAddChapterMaterial, handleRemoveChapterMaterial } = useChapterMaterials({
-    ...state,
-    ...derived,
-  });
-  useScopedAssistantArtifacts({ ...state, ...derived });
-  const { workspaceTabLabels, editorCharacterHighlights, specialTabContent } =
-    useWorkspaceTabContent({
-      ...state,
-      ...derived,
-      ...tabs,
-      ...creation,
-      ...entityActions,
-      ...editor,
-    });
-  useOpenSettingsTabListener(state);
-  const { handleAssistantApplyFix, handleAssistantPreviewDiff } = useAssistantDialogHandlers(state);
+  const {
+    workspaceState,
+    tabsState,
+    layoutState,
+    editorState,
+    aiState,
+    entitiesState,
+    settingsState,
+    uiState,
+    derived,
+    layout,
+    tabs,
+    editorSession,
+    settingsActions,
+    loader,
+    creation,
+    entityActions,
+    fileOps,
+    editor,
+    projectExport,
+    handlePopOutRightPanel,
+    contextMenuItems,
+    handleAddChapterMaterial,
+    handleRemoveChapterMaterial,
+    workspaceTabLabels,
+    editorCharacterHighlights,
+    specialTabContent,
+    handleAssistantApplyFix,
+    handleAssistantPreviewDiff,
+  } = useAppController();
 
   // ─── 渲染所需字段 ──────────────────────────────────────────────
+  const { files, folderPath, isLoading, storyOrderMap, dbReady } = workspaceState;
+  const { openTabs, activeTab, setActiveTab } = tabsState;
   const {
-    files,
-    folderPath,
-    isLoading,
-    openTabs,
-    activeTab,
-    initialViewportSnapshots,
-    filePanelRevealRequest,
     sidebarCollapsed,
     rightPanelCollapsed,
     rightPanelPoppedOut,
     focusMode,
+    leftPanelWidth,
+    rightPanelWidth,
+    sidebarRef,
+    appMainRef,
+  } = layoutState;
+  const {
     editorContent,
     cursorPosition,
     encoding,
     setEncoding,
-    contextMenu,
-    clipboard,
-    creatingType,
     scrollToLine,
     replaceLineRequest,
     transientHighlightLine,
+    editorReloadToken,
+    initialViewportSnapshots,
+    editorViewRef,
+  } = editorState;
+  const {
+    inlineDiff,
+    diffState,
+    pendingApplyQueue,
+    assistantScopedCharacters,
+    assistantCharacterGenerationStatus,
+    assistantScopedLoreEntries,
+    assistantScopedMaterials,
+  } = aiState;
+  const { workspaceCharacters, workspaceLoreEntries, workspaceProjectName, materialUsageMap } =
+    entitiesState;
+  const { appSettings } = settingsState;
+  const {
+    contextMenu,
+    clipboard,
+    creatingType,
+    filePanelRevealRequest,
     showShortcuts,
     setShowShortcuts,
     showSettingsCenter,
@@ -169,34 +105,13 @@ const App: React.FC = () => {
     setShowAIAssistant,
     settingsCenterTab,
     setSettingsCenterTab,
-    appSettings,
-    workspaceCharacters,
-    workspaceLoreEntries,
-    workspaceProjectName,
-    storyOrderMap,
-    materialUsageMap,
-    assistantScopedCharacters,
-    assistantCharacterGenerationStatus,
-    assistantScopedLoreEntries,
-    assistantScopedMaterials,
     showVersionHistory,
     setShowVersionHistory,
     showKnowledgeExportDialog,
     setShowKnowledgeExportDialog,
     knowledgeExportOptions,
     setKnowledgeExportOptions,
-    editorReloadToken,
-    dbReady,
-    inlineDiff,
-    diffState,
-    pendingApplyQueue,
-    editorViewRef,
-    leftPanelWidth,
-    rightPanelWidth,
-    setActiveTab,
-    sidebarRef,
-    appMainRef,
-  } = state;
+  } = uiState;
   const {
     activeWorkspaceTab,
     activeUntitledVirtualContent,

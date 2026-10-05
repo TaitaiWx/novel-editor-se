@@ -1,9 +1,9 @@
 import React from 'react';
 import type { SettingsTab } from '@/render/components/AppSettingsCenter';
-import type { AppState } from './useAppState';
+import type { UiState } from './state/useUiState';
 
 export type UseOpenSettingsTabListenerContext = Pick<
-  AppState,
+  UiState,
   'setSettingsCenterTab' | 'setShowSettingsCenter'
 >;
 

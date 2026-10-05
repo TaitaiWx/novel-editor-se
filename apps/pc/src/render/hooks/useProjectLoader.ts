@@ -4,25 +4,28 @@ import {
   SETTINGS_STORAGE_KEY,
   mergeSettingsDraft,
 } from '@/render/utils/appSettings';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { TabsState } from './state/useTabsState';
+import type { LayoutState } from './state/useLayoutState';
+import type { EntitiesState } from './state/useEntitiesState';
+import type { SettingsState } from './state/useSettingsState';
+import type { UiState } from './state/useUiState';
 import type { TabActions } from './useTabActions';
 
 export type UseProjectLoaderContext = Pick<
-  AppState,
-  | 'appSettingsRef'
+  WorkspaceState,
   | 'folderPathRef'
   | 'refreshCurrentFolderRef'
-  | 'setActiveTab'
-  | 'setAppSettings'
   | 'setDbReady'
   | 'setFiles'
   | 'setFolderPath'
   | 'setIsLoading'
-  | 'setOpenTabs'
-  | 'setRightPanelCollapsed'
-  | 'setWorkspaceProjectName'
-  | 'toast'
 > &
+  Pick<TabsState, 'setActiveTab' | 'setOpenTabs'> &
+  Pick<LayoutState, 'setRightPanelCollapsed'> &
+  Pick<EntitiesState, 'setWorkspaceProjectName'> &
+  Pick<SettingsState, 'appSettingsRef' | 'setAppSettings'> &
+  Pick<UiState, 'toast'> &
   Pick<TabActions, 'openFileInTab'>;
 
 /**

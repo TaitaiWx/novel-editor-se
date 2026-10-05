@@ -5,21 +5,21 @@ import {
   preciseReplaceWithReport,
 } from '@/render/utils/preciseReplace';
 import { setInlineDiffEffect } from '@/render/components/TextEditor/inline-diff';
-import type { AppState } from './useAppState';
+import type { EditorState } from './state/useEditorState';
+import type { AiSessionState } from './state/useAiSessionState';
+import type { UiState } from './state/useUiState';
 import type { TabActions } from './useTabActions';
 
 export type UseAiWindowBridgeContext = Pick<
-  AppState,
-  | 'dispatchFixCommand'
+  EditorState,
   | 'editorViewRef'
   | 'setEditorContent'
   | 'setEditorReloadToken'
   | 'setScrollToLine'
-  | 'setSettingsCenterTab'
-  | 'setShowSettingsCenter'
   | 'setTransientHighlightLine'
-  | 'toast'
 > &
+  Pick<AiSessionState, 'dispatchFixCommand'> &
+  Pick<UiState, 'setSettingsCenterTab' | 'setShowSettingsCenter' | 'toast'> &
   Pick<TabActions, 'openFileInTab'>;
 
 /**

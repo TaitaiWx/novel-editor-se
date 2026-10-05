@@ -10,14 +10,14 @@ import {
   parseAssistantScopedMaterials,
 } from '@/render/app/aiGeneration';
 import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
-import type { AppState } from './useAppState';
+import type { AiSessionState } from './state/useAiSessionState';
 
 export type UseScopedAssistantArtifactsContext = Pick<
   WorkspaceDerivedState,
   'currentAssistantScope'
 > &
   Pick<
-    AppState,
+    AiSessionState,
     | 'setAssistantCharacterGenerationStatus'
     | 'setAssistantScopedCharacters'
     | 'setAssistantScopedLoreEntries'

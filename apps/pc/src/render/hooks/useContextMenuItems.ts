@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { isStoryFilePath } from '@/render/utils/workspace';
 import type { WorkspaceEntityActions } from './useWorkspaceEntityActions';
-import type { AppState } from './useAppState';
+import type { WorkspaceState } from './state/useWorkspaceState';
+import type { EntitiesState } from './state/useEntitiesState';
+import type { UiState } from './state/useUiState';
 import type { FileOperations } from './useFileOperations';
 import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 import type { LibraryGenerationApi } from './useLibraryGeneration';
@@ -25,7 +27,9 @@ export type UseContextMenuItemsContext = Pick<
   | 'handleOpenVolumeNode'
   | 'handleRenameProject'
 > &
-  Pick<AppState, 'contextMenu' | 'folderPath' | 'workspaceCharacters' | 'workspaceLoreEntries'> &
+  Pick<WorkspaceState, 'folderPath'> &
+  Pick<EntitiesState, 'workspaceCharacters' | 'workspaceLoreEntries'> &
+  Pick<UiState, 'contextMenu'> &
   Pick<
     FileOperations,
     | 'handleClearMaterials'

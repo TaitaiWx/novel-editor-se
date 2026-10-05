@@ -7,32 +7,35 @@ import type { ObjectContextMenuEvent } from '@/render/components/FilePanel';
 import { fnv1a32 } from '@/render/components/RightPanel/utils';
 import { formatChapterContent } from '@/render/utils/chapterFormatter';
 import { isUntitledTabPath } from '@/render/app/fileTreeUtils';
-import type { AppState } from './useAppState';
+import type { TabsState } from './state/useTabsState';
+import type { LayoutState } from './state/useLayoutState';
+import type { EditorState } from './state/useEditorState';
+import type { AiSessionState } from './state/useAiSessionState';
+import type { UiState } from './state/useUiState';
 import type { PaneLayoutApi } from './usePaneLayout';
 import type { TabActions } from './useTabActions';
 import type { ProjectLoaderApi } from './useProjectLoader';
 
 export type UseEditorInteractionsContext = Pick<
-  AppState,
-  | 'activeTabRef'
-  | 'dispatchFixCommand'
-  | 'editorViewRef'
-  | 'filePanelRevealCounterRef'
-  | 'focusMode'
-  | 'pendingApplyQueue'
-  | 'setContextMenu'
-  | 'setCursorPosition'
-  | 'setEditorContent'
-  | 'setEditorReloadToken'
-  | 'setFilePanelRevealRequest'
-  | 'setFocusMode'
-  | 'setReplaceLineRequest'
-  | 'setScrollToLine'
-  | 'setTransientHighlightLine'
-  | 'setUntitledTabContents'
-  | 'sidebarCollapsedRef'
-  | 'toast'
+  TabsState,
+  'activeTabRef' | 'setUntitledTabContents'
 > &
+  Pick<LayoutState, 'focusMode' | 'setFocusMode' | 'sidebarCollapsedRef'> &
+  Pick<
+    EditorState,
+    | 'editorViewRef'
+    | 'setCursorPosition'
+    | 'setEditorContent'
+    | 'setEditorReloadToken'
+    | 'setReplaceLineRequest'
+    | 'setScrollToLine'
+    | 'setTransientHighlightLine'
+  > &
+  Pick<AiSessionState, 'dispatchFixCommand' | 'pendingApplyQueue'> &
+  Pick<
+    UiState,
+    'filePanelRevealCounterRef' | 'setContextMenu' | 'setFilePanelRevealRequest' | 'toast'
+  > &
   Pick<PaneLayoutApi, 'handleExpandSidebar'> &
   Pick<TabActions, 'openFileInTab'> &
   Pick<ProjectLoaderApi, 'refreshCurrentFolder'>;
