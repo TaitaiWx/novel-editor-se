@@ -76,31 +76,6 @@
   background: #fff;
 }
 
-.previewVideo {
-  width: min(100%, 1100px);
-  max-height: min(72vh, 760px);
-  border-radius: 10px;
-  background: #0d0d0d;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.38);
-}
-
-.mediaPanel {
-  width: min(100%, 1080px);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.audioPlayer {
-  width: 100%;
-}
-
-.metaGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-
 .metaItem {
   display: flex;
   flex-direction: column;
@@ -125,117 +100,6 @@
 .previewPlaceholder {
   color: #9a9a9a;
   font-size: 12px;
-}
-
-.pdfPreviewLayout {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 16px;
-  width: min(100%, 1200px);
-  height: 100%;
-  min-height: 56vh;
-}
-
-.pdfSidebar {
-  overflow-y: auto;
-  padding-right: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.pdfThumbButton {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: #d4d4d4;
-  cursor: pointer;
-  text-align: left;
-}
-
-.pdfThumbButtonActive {
-  border-color: rgba(86, 156, 214, 0.55);
-  background: rgba(86, 156, 214, 0.12);
-}
-
-.pdfThumbNumber {
-  font-size: 11px;
-  color: #bdbdbd;
-}
-
-.pdfThumbImage {
-  width: 100%;
-  border-radius: 4px;
-  background: #fff;
-}
-
-.pdfThumbPlaceholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 120px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #8b8b8b;
-  font-size: 11px;
-}
-
-.pdfMainStage {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.pdfToolbar {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.pdfPageButton {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: #d4d4d4;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-}
-
-.pdfPageIndicator {
-  color: #cccccc;
-  font-size: 12px;
-}
-
-.pdfCanvasStage {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 8px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.pdfMainImage {
-  max-width: 100%;
-  border-radius: 4px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .binaryContentLayout {
@@ -297,12 +161,7 @@
 }
 
 @media (max-width: 900px) {
-  .pdfPreviewLayout,
   .binaryContentLayout {
     grid-template-columns: 1fr;
-  }
-
-  .pdfSidebar {
-    max-height: 220px;
   }
 }

@@ -1,0 +1,103 @@
+import React from 'react';
+import { AiOutlineKey } from 'react-icons/ai';
+import {
+  type SettingsDraft,
+  READONLY_SHORTCUTS,
+  SHORTCUT_FIELD_DEFINITIONS,
+  formatShortcutLabel,
+} from '../../../utils/appSettings';
+import type { SettingsFormApi } from '../useSettingsForm';
+import sharedStyles from '../styles.module.scss';
+import styles from './styles.module.scss';
+
+interface ShortcutsSectionProps {
+  settings: SettingsDraft;
+  setShortcuts: SettingsFormApi['setShortcuts'];
+  resetShortcut: SettingsFormApi['resetShortcut'];
+  onClose: () => void;
+  onOpenShortcuts?: () => void;
+}
+
+/** 快捷键设置分区 */
+const ShortcutsSection: React.FC<ShortcutsSectionProps> = ({
+  settings,
+  setShortcuts,
+  resetShortcut,
+  onClose,
+  onOpenShortcuts,
+}) => (
+  <div className={sharedStyles.panel}>
+    <h4>
+      <AiOutlineKey />
+      <span>快捷键</span>
+    </h4>
+    <p>可自定义的快捷键会在保存后立即生效。系统级快捷键保持默认，以避免与系统菜单冲突。</p>
+
+    <div className={sharedStyles.formSection}>
+      {SHORTCUT_FIELD_DEFINITIONS.map((field) => (
+        <div key={field.key} className={sharedStyles.formRowTopAligned}>
+          <div className={sharedStyles.formMeta}>
+            <div className={sharedStyles.formLabel}>{field.label}</div>
+            <div className={sharedStyles.formDesc}>{field.description}</div>
+          </div>
+          <div className={styles.shortcutEditor}>
+            <input
+              className={sharedStyles.input}
+              value={settings.shortcuts[field.key]}
+              onChange={(e) => setShortcuts(field.key, e.target.value)}
+              onBlur={(e) => setShortcuts(field.key, e.target.value)}
+              placeholder={field.placeholder}
+            />
+            <div className={styles.shortcutActions}>
+              <span className={styles.shortcutHint}>
+                当前显示：{formatShortcutLabel(settings.shortcuts[field.key])}
+              </span>
+              <button
+                className={sharedStyles.secondaryButton}
+                onClick={() => resetShortcut(field.key)}
+              >
+                恢复默认
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div className={sharedStyles.specCard}>
+      <div className={sharedStyles.specRow}>
+        <span className={sharedStyles.specLabel}>固定备用键</span>
+        <span className={sharedStyles.specValue}>F11 仍然可以切换专注模式</span>
+      </div>
+    </div>
+
+    <div className={styles.readonlyShortcutList}>
+      {READONLY_SHORTCUTS.map((item) => (
+        <div
+          key={`${item.description}-${item.accelerator}`}
+          className={styles.readonlyShortcutItem}
+        >
+          <div className={styles.readonlyShortcutMeta}>
+            <div className={sharedStyles.formLabel}>{item.description}</div>
+            <div className={sharedStyles.formDesc}>系统级快捷键，当前版本暂不支持修改。</div>
+          </div>
+          <span className={styles.readonlyShortcutValue}>
+            {formatShortcutLabel(item.accelerator)}
+          </span>
+        </div>
+      ))}
+    </div>
+
+    <button
+      className={sharedStyles.primaryButton}
+      onClick={() => {
+        onClose();
+        onOpenShortcuts?.();
+      }}
+    >
+      打开快捷键总览
+    </button>
+  </div>
+);
+
+export default ShortcutsSection;

@@ -1,0 +1,130 @@
+.dataGrid {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dataCard {
+  border: 1px solid var(--ui-border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px 16px;
+}
+
+.dataCardDanger {
+  border-color: rgba(220, 60, 60, 0.28);
+  background:
+    linear-gradient(180deg, rgba(220, 60, 60, 0.05) 0%, rgba(220, 60, 60, 0.015) 100%),
+    rgba(255, 255, 255, 0.02);
+}
+
+.dataCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dataCardTitle {
+  color: var(--ui-fg-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dataCardDesc {
+  margin-top: 6px;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.7;
+  max-width: 470px;
+}
+
+.dataClearButton,
+.dataClearDangerButton,
+.dataCancelButton,
+.dataDangerConfirmButton {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  word-break: keep-all;
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.dataClearButton,
+.dataCancelButton {
+  border: 1px solid var(--ui-border-strong);
+  background: #2f2f31;
+  color: var(--ui-fg-primary);
+
+  &:hover {
+    background: #38383b;
+    border-color: #4b4b50;
+  }
+}
+
+.dataClearDangerButton,
+.dataDangerConfirmButton {
+  border: 1px solid rgba(220, 60, 60, 0.58);
+  background: rgba(220, 60, 60, 0.12);
+  color: #ef9a9a;
+
+  &:hover {
+    border-color: rgba(220, 60, 60, 0.8);
+    background: rgba(220, 60, 60, 0.2);
+  }
+}
+
+.dataConfirmBox {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(220, 60, 60, 0.18);
+  background: rgba(220, 60, 60, 0.06);
+}
+
+.dataConfirmText {
+  color: #e3b4b4;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.dataConfirmActions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 880px) {
+  .dataCardHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dataClearButton,
+  .dataClearDangerButton {
+    width: 100%;
+  }
+}

@@ -1,0 +1,57 @@
+.shortcutEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcutActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.shortcutHint {
+  color: #9ca3af;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.readonlyShortcutList {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.readonlyShortcutItem {
+  border: 1px solid var(--ui-border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.readonlyShortcutMeta {
+  min-width: 0;
+}
+
+.readonlyShortcutValue {
+  flex-shrink: 0;
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  border: 1px solid var(--ui-border-strong);
+  background: #1f1f21;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+@media (max-width: 880px) {
+  .shortcutActions,
+  .readonlyShortcutItem {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
