@@ -6,15 +6,31 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "bin": {
+    "novel-editor": "./dist/index.mjs",
+    "ne": "./dist/index.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.10.0"
+  },
   "scripts": {
-    "build": "echo 'CLI build not yet configured'",
+    "build": "vite build",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.mjs",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@novel-editor/store": "workspace:*"
+    "@novel-editor/core": "workspace:*",
+    "@novel-editor/helpers": "workspace:*"
   },
   "devDependencies": {
-    "rimraf": "^6.0.1"
+    "@types/node": "^24.0.10",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.21.0",
+    "vite": "^6.2.0"
   }
 }

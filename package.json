@@ -14,6 +14,8 @@
     "build": "pnpm --filter @novel-editor/pc build",
     "start": "pnpm --filter @novel-editor/pc start",
     "package": "pnpm --filter @novel-editor/pc package",
+    "cli": "tsx apps/cli/src/index.ts",
+    "build:cli": "pnpm --filter @novel-editor/cli build",
     "lint": "eslint 'apps/*/src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}'",
     "lint:fix": "eslint 'apps/*/src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}' --fix",
     "format": "prettier --write 'apps/*/src/**/*.{ts,tsx,css,scss}' 'packages/*/src/**/*.{ts,tsx,css,scss}'",
@@ -22,33 +24,46 @@
     "test": "vitest run",
     "test:pc-updater": "vitest run apps/pc/test/main/auto-updater-state.test.ts",
     "test:watch": "vitest",
+    "test:e2e": "pnpm build && vitest run -c vitest.e2e.config.ts",
+    "test:e2e:only": "vitest run -c vitest.e2e.config.ts",
     "preflight:release": "pnpm test:pc-updater && pnpm --filter @novel-editor/pc preflight:release",
     "release:canary": "npm version prerelease --preid=alpha && git push origin main --follow-tags",
     "release:canary:minor": "npm version preminor --preid=alpha && git push origin main --follow-tags",
     "release:beta": "npm version prerelease --preid=beta && git push origin main --follow-tags",
     "release:minor": "npm version preminor --preid=beta && git push origin main --follow-tags",
-    "release:stable": "npm version minor && git push origin main --follow-tags"
+    "release:stable": "npm version minor && git push origin main --follow-tags",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.0.2",
     "eslint-plugin-prettier": "^5.2.3",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "happy-dom": "^20.14.5",
     "prettier": "^3.5.2",
     "typescript": "^5.7.3",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.11"
   },
   "pnpm": {
     "overrides": {
       "@electron/node-gyp": "10.2.0-electron.2",
-      "@electron/notarize": "^3.1.0"
+      "@electron/notarize": "^3.1.0",
+      "node-abi": "^4.31.0"
     },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
       "better-sqlite3",
       "electron",
       "esbuild"
-    ]
+    ],
+    "patchedDependencies": {
+      "better-sqlite3@12.10.0": "patches/better-sqlite3@12.10.0.patch"
+    }
   }
 }
