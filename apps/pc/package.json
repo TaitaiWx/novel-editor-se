@@ -23,7 +23,6 @@
     "start": "node ./scripts/run-electron.cjs .",
     "build:prod": "cross-env NODE_ENV=production pnpm build",
     "package": "pnpm build:prod && electron-builder",
-    "smoke:packaged": "node ./scripts/run-packaged-smoke-test.mjs",
     "preflight:release": "node ./scripts/preflight-release.mjs",
     "clean": "rimraf dist build out",
     "typecheck": "tsc --noEmit"

@@ -120,7 +120,10 @@ async function main() {
     throw new Error('目录打包产物中未找到解包后的 better-sqlite3 原生模块');
   }
 
-  runCommand('node', [join(appRoot, 'scripts', 'run-packaged-smoke-test.mjs')]);
+  // 打包产物烟雾测试（E2E 用例），dist 刚以发布配置构建过，跳过 E2E 自动构建
+  runCommand('pnpm', ['test:e2e', 'apps/pc/e2e/packaged-smoke.e2e.ts'], {
+    NOVEL_EDITOR_E2E_SKIP_BUILD: '1',
+  });
 
   console.log('发布前预检通过');
 }

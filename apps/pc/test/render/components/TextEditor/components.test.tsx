@@ -92,10 +92,13 @@ describe('TextEditor', () => {
         <TextEditor filePath="/novel/第一章.md" onContentChange={onContentChange} />
       </ToastProvider>
     );
-    await waitFor(() => expect(screen.getByText('第一章.md')).toBeTruthy());
-    expect(screen.getByText('markdown')).toBeTruthy();
-    expect(container.querySelector('.cm-content')?.textContent).toContain('你好，世界');
-    expect(onContentChange).toHaveBeenCalledWith('你好，世界');
+    // 文件名、语言标签与编辑器内容分别异步就绪（语言包懒加载），统一等待，避免覆盖率插桩变慢时偶发失败
+    await waitFor(() => {
+      expect(screen.getByText('第一章.md')).toBeTruthy();
+      expect(screen.getByText('markdown')).toBeTruthy();
+      expect(container.querySelector('.cm-content')?.textContent).toContain('你好，世界');
+      expect(onContentChange).toHaveBeenCalledWith('你好，世界');
+    });
     expect(invoke).toHaveBeenCalledWith('read-file', '/novel/第一章.md', 'UTF-8');
   });
 

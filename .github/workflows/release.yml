@@ -125,19 +125,19 @@ jobs:
         run: node ./scripts/prepare-update-metadata.mjs ./build ${{ steps.release_channel.outputs.publish_channel }}
         working-directory: apps/pc
 
-      - name: Print smoke script fingerprint
-        run: node ./scripts/run-packaged-smoke-test.mjs --fingerprint
-        working-directory: apps/pc
-
+      # 打包产物烟雾测试已集成为 E2E 用例（apps/pc/e2e/packaged-smoke.e2e.ts），
+      # dist 已由打包步骤以生产配置构建，跳过 E2E 的自动构建
       - name: Smoke test packaged app (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a node ./scripts/run-packaged-smoke-test.mjs
-        working-directory: apps/pc
+        run: xvfb-run -a pnpm test:e2e apps/pc/e2e/packaged-smoke.e2e.ts
+        env:
+          NOVEL_EDITOR_E2E_SKIP_BUILD: '1'
 
       - name: Smoke test packaged app (macOS/Windows)
         if: runner.os != 'Linux' && !(runner.os == 'Windows' && matrix.arch == 'arm64')
-        run: node ./scripts/run-packaged-smoke-test.mjs
-        working-directory: apps/pc
+        run: pnpm test:e2e apps/pc/e2e/packaged-smoke.e2e.ts
+        env:
+          NOVEL_EDITOR_E2E_SKIP_BUILD: '1'
 
       - name: Windows shortcut regression check
         if: runner.os == 'Windows' && matrix.arch != 'arm64'

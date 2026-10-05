@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { closeSplashWindow, setSplashHint } from './static/splash/splash-window';
 import { isRendererDevServerEnabled, loadRendererPage } from './renderer-entry';
+import { isE2ETestMode } from './launch-mode';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -173,6 +174,8 @@ function getWindowConfig() {
       contextIsolation: true,
       preload: join(__dirname, 'preload.js'),
       webSecurity: true,
+      // E2E 下窗口可能被其他窗口遮挡，关闭后台节流保证定时器与渲染按时执行
+      backgroundThrottling: !isE2ETestMode(),
     },
     show: false, // 等待页面加载完成后再显示
     backgroundColor: '#1e1e1e', // 避免窗口创建时白色闪烁

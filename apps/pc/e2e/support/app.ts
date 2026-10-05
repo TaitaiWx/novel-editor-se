@@ -164,7 +164,17 @@ export async function launchApp(options: LaunchOptions): Promise<ElectronApp> {
   await mkdir(userDataDir, { recursive: true });
   const port = await getFreePort();
   const env = buildAppEnv(userDataDir, options.env);
-  const child = spawnElectron([`--remote-debugging-port=${port}`, options.projectDir], env);
+  const child = spawnElectron(
+    [
+      `--remote-debugging-port=${port}`,
+      // 窗口被遮挡 / 失焦时 Chromium 会节流定时器并暂停 rAF，导致用例偶发变慢或超时
+      '--disable-renderer-backgrounding',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      options.projectDir,
+    ],
+    env
+  );
 
   const logs: string[] = [];
   const collect = (stream: NodeJS.ReadableStream | null, label: string) => {

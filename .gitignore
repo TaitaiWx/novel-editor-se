@@ -43,3 +43,4 @@ large-novel.txt
 *.db-wal
 # GUI E2E 失败截图与日志
 apps/pc/e2e/.artifacts/
+coverage/

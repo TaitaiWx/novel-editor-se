@@ -58,7 +58,7 @@
 3. 存储: SQLite（better-sqlite3，原生模块，由 `electron-rebuild` 针对 Electron ABI 重建；本地补丁见 `patches/`）
 4. 文档处理: docx / pptxgenjs / exceljs / mammoth / pdfjs-dist / marked / jszip
 5. 构建: Vite 6 + electron-builder 26（配置见 `apps/pc/electron-builder.yml`），自动更新基于 electron-updater
-6. 测试: Vitest 4（根目录 `vitest.config.ts`）
+6. 测试: Vitest 4（单测 `vitest.config.ts`、E2E `vitest.e2e.config.ts`，共享 `vitest.shared.ts`），组件测试用 happy-dom + Testing Library
 7. 代码规范: ESLint 8 + @typescript-eslint 8 + Prettier 3
 8. 包管理器: pnpm 10.12.4（monorepo，`pnpm-workspace.yaml`）
 9. Node 版本: 以 `.nvmrc` 为准（当前 v24.15.0），CI 与发布流程都读取 `.nvmrc`
@@ -74,7 +74,7 @@ apps/
     src/shared/           # 主进程与渲染进程共享的类型/协议（MessagePort、CRDT ops）
     test/                 # Vitest 测试（main / render）
     e2e/                  # GUI 端到端测试（Vitest + 极简 CDP 驱动，pnpm test:e2e）
-    scripts/              # 启动、发布预检、打包冒烟测试、公证等脚本
+    scripts/              # 启动、发布预检、公证等脚本
   cli/                    # 命令行工具 (@novel-editor/cli)
 packages/
   core/                   # GUI 与 CLI 共享的纯 Node 核心逻辑（文件、作品、章节、统计、导出）
@@ -146,8 +146,12 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - `pnpm lint` / `pnpm lint:fix`: ESLint 检查 / 自动修复
 - `pnpm format`: Prettier 格式化 apps 与 packages 下的 ts/tsx/css/scss
 - `pnpm typecheck`: 对所有 workspace 包执行 `tsc --noEmit`
-- `pnpm test` / `pnpm test:watch`: 运行 Vitest 测试
-- `pnpm test:e2e`: 构建后运行 GUI 端到端测试（启动真实 Electron 窗口，见下文「E2E 测试」）；`pnpm test:e2e:only` 跳过构建，直接使用现有 `apps/pc/dist`
+- 测试只有三个入口，全部由 Vitest 直接运行，不用 shell 串联命令：
+  - `pnpm test:ut`: 全部单元 / 组件测试，**默认输出覆盖率**（终端摘要 + `coverage/` HTML 报告）
+  - `pnpm test:e2e`: GUI 端到端测试 + 打包产物烟雾测试（见下文「E2E 测试」），应用构建在 Vitest globalSetup 中通过 Vite API 完成
+  - `pnpm test:pc-updater`: 只跑自动更新状态机测试（发布预检使用）
+  - 过滤 / 调试直接透传 Vitest 参数，例如 `pnpm test:ut apps/pc/test/main`、`pnpm test:e2e -t "成长"`；监听模式用 `pnpm exec vitest`
+- 测试产物自动清理：每次运行前 globalSetup 清空上次的测试临时目录（`<系统临时目录>/novel-editor-tests/{ut,e2e}`，用例里的 `os.tmpdir()` 已自动指向这里，Electron 子进程同样继承）与 `apps/pc/e2e/.artifacts/`；覆盖率报告由 `coverage.clean` 自动清空。新增测试的临时文件直接用 `os.tmpdir()` 即可，不要写到其他位置
 - `pnpm clean`: 清理各包构建产物与 node_modules
 - `pnpm preflight:release`: 发布前预检（自动更新状态机测试 + 打包检查）
 - `pnpm release:canary` / `release:canary:minor`: 发布 alpha 金丝雀版本（如 1.1.0-alpha.0）
@@ -155,28 +159,30 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - `pnpm release:minor`: 创建新的 minor beta 版本并推送 tag 触发发布（如 1.0.0 → 1.1.0-beta.0）
 - `pnpm release:stable`: 升级 minor 正式版本并推送 tag 触发发布（如 1.1.0-beta.3 → 1.1.0）
 
-`apps/pc` 内的细分命令：`build:main` / `build:preload` / `build:renderer` / `build:prod` / `rebuild:native` / `smoke:packaged`
+`apps/pc` 内的细分命令：`build:main` / `build:preload` / `build:renderer` / `build:prod` / `rebuild:native`
 
 ### E2E 测试
 
 轻量 GUI 端到端测试，不依赖 Playwright / WebdriverIO，零新增依赖：
 
-- 运行器: Vitest，独立配置 `vitest.e2e.config.ts`（node 环境、串行、较长超时），只收集 `apps/pc/e2e/**/*.e2e.ts`；`pnpm test` 不会执行这些用例
+- 运行器: Vitest，独立配置 `vitest.e2e.config.ts`（node 环境、串行、较长超时），只收集 `apps/pc/e2e/**/*.e2e.ts`；`pnpm test:ut` 不会执行这些用例
+- 构建: `vitest.e2e.global-setup.ts` 通过 Vite `build()` API 依次构建 main / preload / renderer；`apps/pc/dist` 比所有源码都新时自动跳过；`NOVEL_EDITOR_E2E_SKIP_BUILD=1` 强制跳过（发布流程已用生产配置构建过 dist 时使用）
+- 打包产物烟雾测试: `apps/pc/e2e/packaged-smoke.e2e.ts` 带 `--smoke-test` 启动 `apps/pc/build` 中的可执行文件，存活 5 秒或正常退出即通过；没有打包产物时自动跳过。发布流程与 `preflight:release` 用 `pnpm test:e2e apps/pc/e2e/packaged-smoke.e2e.ts` 单独运行
 - 驱动: `apps/pc/e2e/support/` 下的极简 CDP 客户端（Node 24 内置 `WebSocket` + `fetch`）
-  - `app.ts`: 用 `apps/pc/node_modules` 中的 electron 启动 `dist/main.mjs`，附加 `--remote-debugging-port=<空闲端口>`，最后一个参数是临时 fixture 项目目录（由 `launch-folder.ts` 打开）；环境变量 `NOVEL_EDITOR_E2E=1`（复用烟雾测试的 userData 隔离 `NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR`，但就绪后不自动退出）、`NOVEL_EDITOR_DISABLE_AUTO_UPDATER=1`；结束时整组杀进程并删除临时目录
+  - `app.ts`: 用 `apps/pc/node_modules` 中的 electron 启动 `dist/main.mjs`，附加 `--remote-debugging-port=<空闲端口>`，最后一个参数是临时 fixture 项目目录（由 `launch-folder.ts` 打开）；环境变量 `NOVEL_EDITOR_E2E=1`（复用烟雾测试的 userData 隔离 `NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR`，但就绪后不自动退出）、`NOVEL_EDITOR_DISABLE_AUTO_UPDATER=1`；附加 `--disable-renderer-backgrounding` 等参数并关闭窗口 `backgroundThrottling`（窗口被遮挡时 Chromium 会节流定时器、暂停 rAF，曾导致用例偶发变慢 / 超时）；结束时整组杀进程并删除临时目录
   - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
   - `workbench.ts`: 本应用的高层操作（展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
   - `fixture.ts`: 每次运行在临时目录生成全新的示例项目（中文作品/章节 + `资料/`）
 - 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、单实例转发）
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
-- 调试: 失败时自动把截图（`*.png`）和主进程 stdout/stderr（`*.log`）写入 `apps/pc/e2e/.artifacts/`（已 gitignore，CI 失败时作为 artifact 上传）；设置 `NOVEL_EDITOR_E2E_VERBOSE=1` 可实时输出主进程日志；可用 `pnpm test:e2e:only -t "<用例名>"` 过滤（用例共享同一窗口状态，单独运行靠后的用例时可能需要连同前置用例一起跑）
+- 调试: 失败时自动把截图（`*.png`）和主进程 stdout/stderr（`*.log`）写入 `apps/pc/e2e/.artifacts/`（已 gitignore，CI 失败时作为 artifact 上传）；设置 `NOVEL_EDITOR_E2E_VERBOSE=1` 可实时输出主进程日志；可用 `pnpm test:e2e -t "<用例名>"` 过滤；`NOVEL_EDITOR_E2E_TRACE=1` 打印每个等待的耗时（用例共享同一窗口状态，单独运行靠后的用例时可能需要连同前置用例一起跑）
 - 注意: macOS 上 `Cmd+A` 等依赖原生菜单的编辑命令不会被 CDP 按键触发，输入框全选请用 `input.select()`；快捷键作用于当前焦点元素，点击过按钮后需先把焦点还给编辑器
 
 ### CI
 
-- `.github/workflows/ci.yml`: push / PR 时执行 lint → typecheck → test → build；通过后 `e2e` job 在 ubuntu 上用 `xvfb-run -a pnpm test:e2e` 跑 GUI 端到端测试（Linux CI 自动加 `--no-sandbox`），失败时上传 `apps/pc/e2e/.artifacts/`
-- `.github/workflows/release.yml`: 推送 tag 后多平台（Windows/macOS/Linux × x64/arm64）打包并发布到 GitHub Release
+- `.github/workflows/ci.yml`: push / PR 时执行 lint → typecheck → test:ut（含覆盖率）→ build；通过后 `e2e` job 在 ubuntu 上用 `xvfb-run -a pnpm test:e2e` 跑 GUI 端到端测试（Linux CI 自动加 `--no-sandbox`），失败时上传 `apps/pc/e2e/.artifacts/`
+- `.github/workflows/release.yml`: 推送 tag 后多平台（Windows/macOS/Linux × x64/arm64）打包，用 `pnpm test:e2e apps/pc/e2e/packaged-smoke.e2e.ts` 对打包产物做烟雾测试，再发布到 GitHub Release
 - 发布与自动更新细节见 `docs/release-process.md`、`docs/version-management.md`
 
 ### CLI 命令
