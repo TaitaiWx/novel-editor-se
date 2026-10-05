@@ -30,6 +30,7 @@ import {
   type StoryIdeaGenerationConfig,
 } from './story-idea';
 import { createActBoardKey, createPlotStorageKey, mergeActBoard } from './utils';
+import type { PlotActBoard } from './types';
 
 function createStoryIdeaTermPoolKey(folderPath: string | null): string | null {
   return folderPath ? `novel-editor:story-idea-term-pool:${folderPath}` : null;
@@ -603,7 +604,9 @@ export function useStoryIdeaCards(
 
       const act = acts[actIndex].act;
       const raw = (await ipc.invoke('db-settings-get', storageKey)) as string | null;
-      const boards = raw ? (JSON.parse(raw) as Record<string, any>) : {};
+      const boards: Record<string, PlotActBoard> = raw
+        ? (JSON.parse(raw) as Record<string, PlotActBoard>)
+        : {};
       const boardKey = createActBoardKey(act, actIndex);
       const board = mergeActBoard(act, actIndex, boards[boardKey]);
       const meta = (() => {

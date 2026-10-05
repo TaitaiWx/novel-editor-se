@@ -28,6 +28,8 @@ export function useAiHistory(folderPath: string | null) {
 
   // ─── Load history from DB ────────────────────────────────────────────────
   useEffect(() => {
+    // 切换项目时取消旧请求：迟到的旧项目结果不得覆盖新项目历史
+    let cancelled = false;
     const load = async () => {
       const key = createHistoryStorageKey(folderPath);
       const ipc = window.electron?.ipcRenderer;
@@ -35,15 +37,19 @@ export function useAiHistory(folderPath: string | null) {
         setHistory([]);
         return;
       }
+      let next: HistoryRecord[] = [];
       try {
         const raw = await ipc.invoke('db-settings-get', key);
-        if (raw) setHistory(JSON.parse(raw as string) as HistoryRecord[]);
-        else setHistory([]);
+        next = raw ? (JSON.parse(raw as string) as HistoryRecord[]) : [];
       } catch {
-        setHistory([]);
+        next = [];
       }
+      if (!cancelled) setHistory(next);
     };
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [folderPath]);
 
   const persistHistory = useCallback(

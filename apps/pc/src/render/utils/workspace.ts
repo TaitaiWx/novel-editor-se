@@ -1,3 +1,4 @@
+import { parseChineseInteger } from '@novel-editor/basic-algorithm';
 import type { FileNode } from '../types';
 import type { Character, LoreEntry } from '../components/RightPanel/types';
 
@@ -80,13 +81,13 @@ export function isDraftLikeStoryName(name: string): boolean {
 }
 
 export function isChapterLikeStoryName(name: string): boolean {
-  return /(^第[一二三四五六七八九十百千万零〇\d]+[章幕节回篇集])|(^chapter\s*\d+)|(^scene\s*\d+)/i.test(
+  return /(^第[一二两三四五六七八九十百千万零〇\d]+[章幕节回篇集])|(^chapter\s*\d+)|(^scene\s*\d+)/i.test(
     stripStoryFileExtension(name)
   );
 }
 
 export function isVolumeLikeStoryName(name: string): boolean {
-  return /(^第[一二三四五六七八九十百千万零〇\d]+卷)|(^volume\s*\d+)|(^part\s*\d+)|(^act\s*\d+)|(^卷[\s_-]?\d+)/i.test(
+  return /(^第[一二两三四五六七八九十百千万零〇\d]+卷)|(^volume\s*\d+)|(^part\s*\d+)|(^act\s*\d+)|(^卷[\s_-]?\d+)/i.test(
     stripStoryFileExtension(name)
   );
 }
@@ -95,14 +96,26 @@ function extractStoryOrder(name: string, type: 'volume' | 'chapter'): number | n
   const normalized = stripStoryFileExtension(name).trim();
   const patterns =
     type === 'volume'
-      ? [/^第(\d+)卷/i, /^volume\s*(\d+)/i, /^part\s*(\d+)/i, /^act\s*(\d+)/i, /^卷[\s_-]?(\d+)/i]
-      : [/^第(\d+)[章幕节回篇集]/i, /^chapter\s*(\d+)/i, /^scene\s*(\d+)/i];
+      ? [
+          /^第([\d一二两三四五六七八九十百千万零〇]+)卷/i,
+          /^volume\s*(\d+)/i,
+          /^part\s*(\d+)/i,
+          /^act\s*(\d+)/i,
+          /^卷[\s_-]?(\d+)/i,
+        ]
+      : [
+          /^第([\d一二两三四五六七八九十百千万零〇]+)[章幕节回篇集]/i,
+          /^chapter\s*(\d+)/i,
+          /^scene\s*(\d+)/i,
+        ];
 
   for (const pattern of patterns) {
     const matched = normalized.match(pattern);
     if (!matched) continue;
-    const value = Number(matched[1]);
-    if (Number.isFinite(value)) return value;
+    // 同时支持阿拉伯数字与中文数字（第四章、第一百零三章、第两千章）
+    const raw = matched[1];
+    const value = /^\d+$/.test(raw) ? Number(raw) : parseChineseInteger(raw);
+    if (value !== undefined && Number.isFinite(value)) return value;
   }
   return null;
 }

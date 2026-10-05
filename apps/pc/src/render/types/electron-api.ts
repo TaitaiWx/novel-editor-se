@@ -3,6 +3,7 @@
  */
 
 import type { FileInfo, FileInfoBatchEntry, OpenLocalResult, ShortcutInfo } from './File';
+import type { GrowthInvokeOverloads } from './growth-api';
 
 export type UpdateChannel = 'stable' | 'beta' | 'canary';
 
@@ -20,6 +21,16 @@ export interface UpdateStatus {
   /** 下载完成后正在预缓存当前版本安装包（用于回滚） */
   preCaching: boolean;
   lastError: string | null;
+}
+
+export interface WebAuthnSupportInfo {
+  platform: NodeJS.Platform;
+  standardApiAvailable: boolean;
+  roamingAuthenticatorSupported: boolean;
+  touchIdConfigured: boolean;
+  touchIdAvailable: boolean;
+  keychainAccessGroup: string | null;
+  configurationError: string | null;
 }
 
 export interface PersistedOutlineRow {
@@ -116,7 +127,8 @@ export interface StoryIdeaOutputRow {
 
 export interface ElectronAPI {
   getLastDroppedPaths(): string[];
-  ipcRenderer: {
+  // 成长记录器通道的类型见 ./growth-api.ts
+  ipcRenderer: GrowthInvokeOverloads & {
     invoke(channel: 'open-local-folder'): Promise<OpenLocalResult | null>;
     invoke(channel: 'read-file', filePath: string): Promise<string>;
     invoke(channel: 'read-file', filePath: string, encoding: string): Promise<string>;
@@ -154,6 +166,7 @@ export interface ElectronAPI {
     invoke(channel: 'window-toggle-fullscreen'): Promise<void>;
     invoke(channel: 'get-shortcuts'): Promise<ShortcutInfo[]>;
     invoke(channel: 'get-app-version'): Promise<string>;
+    invoke(channel: 'get-webauthn-support'): Promise<WebAuthnSupportInfo>;
     invoke(channel: 'update-check'): Promise<void>;
     invoke(channel: 'update-status'): Promise<UpdateStatus>;
     invoke(channel: 'update-install'): Promise<void>;
@@ -341,8 +354,14 @@ export interface ElectronAPI {
       options?: { includeCharacters?: boolean; includeLore?: boolean; includeMaterials?: boolean }
     ): Promise<string | null>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
-    on(channel: string, listener: (...args: any[]) => void): (() => void) | void;
-    removeListener(channel: string, listener: (...args: any[]) => void): void;
+    on<TArgs extends unknown[]>(
+      channel: string,
+      listener: (...args: TArgs) => void
+    ): (() => void) | void;
+    removeListener<TArgs extends unknown[]>(
+      channel: string,
+      listener: (...args: TArgs) => void
+    ): void;
     removeAllListeners(channel: string): void;
   };
 }

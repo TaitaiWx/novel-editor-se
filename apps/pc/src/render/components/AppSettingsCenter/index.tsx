@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AiOutlineApi, AiOutlineDatabase, AiOutlineKey, AiOutlineSetting } from 'react-icons/ai';
 import { useToast } from '../Toast';
 import styles from './styles.module.scss';
@@ -97,6 +97,31 @@ const AI_PRESET_OPTIONS: Array<{
   },
 ];
 
+/**
+ * 把加载期间用户已做的修改（current 相对 baseline 变化的字段）叠加到存储中读出的设置上，
+ * 避免异步加载完成后覆盖用户的编辑
+ */
+function mergeUserEdits(
+  baseline: SettingsDraft,
+  current: SettingsDraft,
+  loaded: SettingsDraft
+): SettingsDraft {
+  if (current === baseline) return loaded;
+  const mergeSection = <T extends object>(base: T, cur: T, next: T): T => {
+    if (cur === base) return next;
+    const result = { ...next };
+    (Object.keys(cur) as Array<keyof T>).forEach((key) => {
+      if (cur[key] !== base[key]) result[key] = cur[key];
+    });
+    return result;
+  };
+  return {
+    general: mergeSection(baseline.general, current.general, loaded.general),
+    shortcuts: mergeSection(baseline.shortcuts, current.shortcuts, loaded.shortcuts),
+    ai: mergeSection(baseline.ai, current.ai, loaded.ai),
+  };
+}
+
 function normalizeTab(tab?: SettingsTab | string): SettingsTab {
   return VALID_TABS.includes(tab as SettingsTab) ? (tab as SettingsTab) : 'general';
 }
@@ -119,6 +144,9 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
   const [activeTab, setActiveTab] = useState<SettingsTab>(normalizeTab(initialTab));
   const [settings, setSettings] = useState<SettingsDraft>(DEFAULT_SETTINGS_DRAFT);
   const [loaded, setLoaded] = useState(false);
+  // 始终指向最新的设置草稿，供异步加载完成时判断用户是否已做修改
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const [aiSaveStatus, setAiSaveStatus] = useState('');
   const [clearConfirmScope, setClearConfirmScope] = useState<ClearDataScope | null>(null);
   const [systemProfile, setSystemProfile] = useState<SystemProfileInfo | null>(null);
@@ -152,9 +180,10 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
         setLoaded(true);
         return;
       }
+      const baseline = settingsRef.current;
       try {
         const raw = (await ipc.invoke('db-settings-get', SETTINGS_STORAGE_KEY)) as string | null;
-        const next = mergeSettingsDraft(raw);
+        const next = mergeUserEdits(baseline, settingsRef.current, mergeSettingsDraft(raw));
         setSettings(next);
         onSettingsChange?.(next);
       } catch {
@@ -852,7 +881,11 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
                       max="2"
                       step="0.1"
                       value={aiSettings.temperature}
-                      onChange={(e) => setAI('temperature', Number(e.target.value) || 1.3)}
+                      onChange={(e) => {
+                        // 只在无法解析（如清空输入）时回退默认值，0 是合法温度
+                        const value = Number.parseFloat(e.target.value);
+                        setAI('temperature', Number.isNaN(value) ? 1.3 : value);
+                      }}
                     />
                   </div>
 

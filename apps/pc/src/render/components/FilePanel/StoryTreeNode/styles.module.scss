@@ -1,0 +1,167 @@
+@use '../story-row' as row;
+
+.storyNode {
+  display: flex;
+  flex-direction: column;
+}
+
+.storyNodeRow {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  margin-right: 10px;
+}
+
+.storyNodeButton {
+  @include row.row-button;
+}
+
+.storyNodeButtonGroup {
+  @include row.row-button-group;
+}
+
+.storyNodeButtonLeaf {
+  &:hover {
+    background: rgba(0, 122, 204, 0.08);
+  }
+}
+
+.storyNodeButtonActive {
+  @include row.row-button-active;
+}
+
+.storyNodeButtonReveal {
+  box-shadow: inset 0 0 0 1px rgba(0, 122, 204, 0.32);
+}
+
+.storyNodeButtonGroup.storyNodeButtonActive {
+  @include row.row-button-group-active;
+}
+
+.storyNodeButtonLeaf.storyNodeButtonActive {
+  background: var(--ui-interaction-accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(0, 122, 204, 0.18);
+}
+
+.storyNodeDropTargetInside {
+  box-shadow:
+    inset 0 1px 0 rgba(0, 122, 204, 0.45),
+    inset 0 0 0 1px rgba(0, 122, 204, 0.24);
+  background: rgba(0, 122, 204, 0.12);
+}
+
+.storyNodeDropTargetBefore {
+  box-shadow: inset 0 2px 0 rgba(0, 122, 204, 0.55);
+}
+
+.storyNodeDropTargetAfter {
+  box-shadow: inset 0 -2px 0 rgba(0, 122, 204, 0.55);
+}
+
+.storyNodeType {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.04);
+  color: #9ca3ad;
+}
+
+.storyNodeTypeVolume {
+  background: rgba(0, 122, 204, 0.1);
+  border-color: rgba(0, 122, 204, 0.16);
+  color: #84bde8;
+}
+
+.storyNodeTypeChapter {
+  background: rgba(125, 176, 95, 0.1);
+  border-color: rgba(125, 176, 95, 0.16);
+  color: #a8d18a;
+}
+
+.storyNodeTypeDraftFolder,
+.storyNodeTypeDraft {
+  background: rgba(214, 168, 89, 0.1);
+  border-color: rgba(214, 168, 89, 0.16);
+  color: #d6b978;
+}
+
+.storyNodeTypeGroup {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: #9ca3ad;
+}
+
+.storyNodeIcon {
+  @include row.row-icon;
+}
+
+.storyNodeTitle {
+  @include row.row-title;
+}
+
+.storyNodePrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.storyNodeAction {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-fg-disabled);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--ui-fg-primary);
+  }
+}
+
+.storyNodeStats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.storyNodeStatBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #88bde8;
+  background: rgba(0, 122, 204, 0.08);
+  border: 1px solid rgba(0, 122, 204, 0.14);
+}
+
+.storyNodeStatBadgeMuted {
+  color: #d6b978;
+  background: rgba(214, 168, 89, 0.08);
+  border-color: rgba(214, 168, 89, 0.14);
+}

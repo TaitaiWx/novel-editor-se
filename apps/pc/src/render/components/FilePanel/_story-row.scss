@@ -1,0 +1,70 @@
+// 文件面板中"行级按钮"的共享样式片段（仅 mixin，不产出任何全局选择器），
+// 供正文树节点与分区标题行复用，保证两处视觉完全一致。
+
+@mixin row-button {
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  min-height: 32px;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ui-fg-primary);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    box-shadow 0.15s;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+  }
+
+  &[draggable='true'] {
+    cursor: grab;
+  }
+}
+
+@mixin row-button-group {
+  color: rgba(255, 255, 255, 0.9);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+@mixin row-button-active {
+  background: var(--ui-interaction-accent-soft);
+}
+
+@mixin row-button-group-active {
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+@mixin row-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #88a9cb;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@mixin row-title {
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

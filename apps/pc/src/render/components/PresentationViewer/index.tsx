@@ -3,6 +3,7 @@ import { VscLinkExternal, VscWand } from 'react-icons/vsc';
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import styles from './styles.module.scss';
+import { getPathBasename } from '@/render/utils/path';
 
 interface SlideData {
   index: number;
@@ -167,7 +168,7 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ filePath, setti
       <div className={styles.container}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <span className={styles.fileName}>{filePath?.split('/').pop() ?? ''}</span>
+            <span className={styles.fileName}>{filePath ? getPathBasename(filePath) : ''}</span>
             <span className={styles.badge}>PPTX</span>
           </div>
           <div className={styles.headerRight}>{settingsComponent}</div>

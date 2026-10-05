@@ -1,5 +1,6 @@
 import React from 'react';
 import ActionButtons from '../ActionButtons';
+import { getPathBasename } from '../../utils/path';
 import styles from './styles.module.scss';
 
 interface PanelHeaderProps {
@@ -33,10 +34,6 @@ const PanelHeader: React.FC<PanelHeaderProps> = ({
   indicator,
   settingsComponent,
 }) => {
-  const getFolderName = (path: string) => {
-    return path.split('/').pop() || path.split('\\').pop() || path;
-  };
-
   return (
     <div className={styles.panelHeader}>
       <div className={styles.headerContent}>
@@ -69,7 +66,7 @@ const PanelHeader: React.FC<PanelHeaderProps> = ({
       {folderInfo && (
         <div className={styles.folderInfo}>
           <span className={styles.folderPath} title={folderInfo.path}>
-            {getFolderName(folderInfo.path)}
+            {getPathBasename(folderInfo.path)}
           </span>
           {folderInfo.fileCount > 0 && (
             <span className={styles.fileCount}>{folderInfo.fileCount} 项</span>

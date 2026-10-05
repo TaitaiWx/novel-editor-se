@@ -32,12 +32,18 @@ interface ChapterSummary {
 
 /** 每个章节预览截取的字符数 */
 const SUMMARY_SLICE = 200;
-/** 关键词提取：每个章节取前 N 个高频词 */
-const TOP_KEYWORDS = 15;
-/** 中文分词用的简易正则（连续汉字 2-6 字） */
+/** 关键词提取：每个章节取前 N 个高频词（n-gram 会产生冗余，故比按整段切分时取得更多） */
+const TOP_KEYWORDS = 40;
+/** 连续汉字片段 */
+const CN_RUN_RE = /[\u4e00-\u9fff]+/g;
+/** 中文分词用的简易正则（连续汉字 2-6 字，用于标题整词索引） */
 const CN_WORD_RE = /[\u4e00-\u9fff]{2,6}/g;
+/** n-gram 长度范围：中文人名、地名多为 2-4 字 */
+const MIN_GRAM = 2;
+const MAX_GRAM = 4;
+/** 位于 n-gram 首尾时基本不可能构成实体词的虚词，用于过滤噪声片段 */
+const EDGE_STOP_CHARS = new Set([...'的了是在着和就也都把被又与及之而吗呢吧啊']);
 
-/** 中文常见停用词 */
 const STOP_WORDS = new Set([
   '的',
   '了',
@@ -111,17 +117,42 @@ const STOP_WORDS = new Set([
   '觉得',
 ]);
 
+/**
+ * 生成中文 n-gram（2-4 字）。
+ *
+ * 贪婪的 2-6 字切分会把“苏晴后来怎么样了”整段当成一个词，导致无法命中“苏晴”；
+ * 改为对每段连续汉字生成所有 2-4 字子串，使查询与正文中的实体名都能以子串形式对齐。
+ */
+function generateCjkNgrams(text: string): string[] {
+  const grams: string[] = [];
+  const runs = text.match(CN_RUN_RE) || [];
+  for (const run of runs) {
+    for (let start = 0; start < run.length; start += 1) {
+      for (let size = MIN_GRAM; size <= MAX_GRAM && start + size <= run.length; size += 1) {
+        const gram = run.slice(start, start + size);
+        if (EDGE_STOP_CHARS.has(gram[0]) || EDGE_STOP_CHARS.has(gram[gram.length - 1])) continue;
+        if (STOP_WORDS.has(gram)) continue;
+        grams.push(gram);
+      }
+    }
+  }
+  return grams;
+}
+
 function extractKeywords(text: string): string[] {
   const freq = new Map<string, number>();
-  const matches = text.match(CN_WORD_RE) || [];
-  for (const w of matches) {
-    if (STOP_WORDS.has(w)) continue;
+  for (const w of generateCjkNgrams(text)) {
     freq.set(w, (freq.get(w) || 0) + 1);
   }
   return [...freq.entries()]
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
     .slice(0, TOP_KEYWORDS)
     .map(([word]) => word);
+}
+
+/** 查询词：n-gram + 原始 2-6 字整段，去重 */
+function extractQueryTerms(query: string): string[] {
+  return [...new Set([...generateCjkNgrams(query), ...(query.match(CN_WORD_RE) || [])])];
 }
 
 function buildSummary(chapter: Chapter): ChapterSummary {
@@ -148,13 +179,13 @@ interface ContentIndex {
 }
 
 function simpleHash(text: string): string {
-  // FNV-1a 32-bit hash for fast change detection
+  // 对全部字符做 FNV-1a 32 位哈希，并拼接长度，O(n) 且任意位置修改都会改变结果
   let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i += 128) {
+  for (let i = 0; i < text.length; i += 1) {
     h ^= text.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
-  return (h >>> 0).toString(36);
+  return `${text.length.toString(36)}-${(h >>> 0).toString(36)}`;
 }
 
 export function buildContentIndex(text: string): ContentIndex {
@@ -166,11 +197,14 @@ export function buildContentIndex(text: string): ContentIndex {
   for (const summary of summaries) {
     for (const kw of summary.keywords) {
       const list = invertedIndex.get(kw) || [];
-      list.push(summary.index);
+      if (!list.includes(summary.index)) list.push(summary.index);
       invertedIndex.set(kw, list);
     }
-    // 也索引章节标题
-    const titleWords = summary.title.match(CN_WORD_RE) || [];
+    // 也索引章节标题（整段 + n-gram）
+    const titleWords = new Set([
+      ...(summary.title.match(CN_WORD_RE) || []),
+      ...generateCjkNgrams(summary.title),
+    ]);
     for (const tw of titleWords) {
       const list = invertedIndex.get(tw) || [];
       if (!list.includes(summary.index)) list.push(summary.index);
@@ -226,11 +260,8 @@ export function hybridRetrieve(
     return { context: text, matchedChapters: [0], totalChapters };
   }
 
-  // 1. 提取查询关键词
-  const queryKeywords = extractKeywords(query);
-  // 补充：从 query 中提取的原文关键词片段（2-4 字）
-  const queryFragments = query.match(CN_WORD_RE) || [];
-  const allQueryTerms = [...new Set([...queryKeywords, ...queryFragments])];
+  // 1. 提取查询词（n-gram，保证“苏晴后来怎么样了”也能命中“苏晴”）
+  const allQueryTerms = extractQueryTerms(query);
 
   // 2. 评分：倒排索引匹配 + IDF 加权
   const scores = new Map<number, number>();
@@ -288,7 +319,9 @@ function buildContext(
     if (!ch) continue;
 
     const header = `\n【${ch.title}】\n`;
-    const slice = ch.content.slice(0, Math.min(remaining - header.length, ch.content.length));
+    // 剩余预算连标题都放不下时停止，避免 slice 传入负数从尾部截取导致超出 maxChars
+    if (header.length > remaining) break;
+    const slice = ch.content.slice(0, remaining - header.length);
     parts.push(header + slice);
     remaining -= header.length + slice.length;
   }

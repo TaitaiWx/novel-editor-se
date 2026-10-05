@@ -2,7 +2,7 @@ import type { PersistedOutlineScopeInput } from '../../types/electron-api';
 
 export type TabType = 'storyline' | 'characters' | 'lore';
 
-export type StorylineViewMode = 'catalog' | 'outline' | 'acts' | 'ideas';
+export type StorylineViewMode = 'catalog' | 'outline' | 'acts' | 'ideas' | 'growth';
 
 export type LoreCategory = 'world' | 'faction' | 'system' | 'term';
 

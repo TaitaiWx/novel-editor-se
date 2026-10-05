@@ -9,14 +9,16 @@ const CATEGORY_KEYWORDS: Array<{ category: LoreCategory; keywords: string[] }> =
   { category: 'term', keywords: ['术语', '名词', '称谓', '地点', '物品', '专有'] },
 ];
 
-function inferCategory(text: string, fallback: LoreCategory): LoreCategory {
+/** 按关键词匹配分类，未命中返回 undefined */
+function matchCategory(text: string): LoreCategory | undefined {
   const normalized = text.trim();
-  for (const item of CATEGORY_KEYWORDS) {
-    if (item.keywords.some((keyword) => normalized.includes(keyword))) {
-      return item.category;
-    }
-  }
-  return fallback;
+  return CATEGORY_KEYWORDS.find((item) =>
+    item.keywords.some((keyword) => normalized.includes(keyword))
+  )?.category;
+}
+
+function inferCategory(text: string, fallback: LoreCategory): LoreCategory {
+  return matchCategory(text) ?? fallback;
 }
 
 function isPureCategoryHeading(text: string): boolean {
@@ -106,32 +108,44 @@ export function parseLoreDraftsFromImport(
   }
 
   const lines = content.split('\n');
+  /** 各标题层级的“生效分类”，子标题未声明分类时沿用最近的上级分类 */
   const categoryStack = new Map<number, LoreCategory>();
   const drafts: LoreDraft[] = [];
 
   for (let index = 0; index < outline.length; index += 1) {
     const current = outline[index];
     const next = outline[index + 1];
-    const currentCategory = inferCategory(current.text, fallbackCategory);
-    categoryStack.set(current.level, currentCategory);
+
+    // 进入新标题时，清掉同级及更深层级的分类，避免上一个分组的分类泄漏
     for (const key of Array.from(categoryStack.keys())) {
-      if (key > current.level) {
+      if (key >= current.level) {
         categoryStack.delete(key);
       }
     }
+    let ancestorCategory: LoreCategory | undefined;
+    for (let level = current.level - 1; level >= 0 && !ancestorCategory; level -= 1) {
+      ancestorCategory = categoryStack.get(level);
+    }
+
+    const pureCategoryHeading = isPureCategoryHeading(current.text);
+    const ownCategory = matchCategory(current.text);
+    // 纯分类标题（如“## 地点”）位于上级分类下时归属上级；
+    // 普通标题优先使用自身关键词，否则继承上级分类（如“# 势力”下的“## 魔教”）
+    const effectiveCategory = pureCategoryHeading
+      ? (ancestorCategory ?? ownCategory ?? fallbackCategory)
+      : (ownCategory ?? ancestorCategory ?? fallbackCategory);
+    categoryStack.set(current.level, effectiveCategory);
 
     const start = current.line;
     const end = next ? next.line - 1 : lines.length;
     const sectionBody = lines.slice(start, end).join('\n').trim();
-    const inheritedCategory =
-      categoryStack.get(current.level - 1) || categoryStack.get(current.level) || fallbackCategory;
 
-    if (!sectionBody && isPureCategoryHeading(current.text)) {
+    if (!sectionBody && pureCategoryHeading) {
       continue;
     }
 
     drafts.push({
-      category: isPureCategoryHeading(current.text) ? inheritedCategory : currentCategory,
+      category: effectiveCategory,
       title: current.text.trim(),
       summary: sectionBody,
     });

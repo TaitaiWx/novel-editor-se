@@ -13,8 +13,8 @@ interface EmptyStateProps {
 
 const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
-  title = '暂无内容',
-  description = '没有找到相关内容',
+  title,
+  description,
   actionText,
   onAction,
   variant = 'generic',
@@ -50,13 +50,18 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         };
       default:
         return {
-          title: title,
-          description: description,
+          title: '暂无内容',
+          description: '没有找到相关内容',
         };
     }
   };
 
-  const content = getDefaultContent();
+  // 显式传入的 title / description 优先于 variant 的默认文案
+  const defaults = getDefaultContent();
+  const content = {
+    title: title ?? defaults.title,
+    description: description ?? defaults.description,
+  };
 
   return (
     <div className={styles.emptyState}>

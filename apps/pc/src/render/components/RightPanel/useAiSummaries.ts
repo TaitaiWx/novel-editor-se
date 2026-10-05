@@ -26,6 +26,8 @@ export function useAiSummaries(
   const summaryQueueRef = useRef<OutlineEntry[]>([]);
   const summaryInFlightRef = useRef(0);
   const summaryGenerationRef = useRef(0);
+  // 每个 cacheKey 最近一次置为 loading 时所属的请求代次，用于过期响应复位
+  const loadingGenerationByKeyRef = useRef<Record<string, number>>({});
   const contentRef = useRef(content);
   contentRef.current = content;
   const outlineEntriesRef = useRef(outlineEntries);
@@ -66,7 +68,16 @@ export function useAiSummaries(
         return;
       }
 
+      loadingGenerationByKeyRef.current[cacheKey] = generation;
       setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'loading' }));
+      // 过期响应被丢弃时把本次请求持有的 loading 复位为 idle，悬浮时才能重新请求
+      const resetStaleLoading = () => {
+        if (loadingGenerationByKeyRef.current[cacheKey] !== generation) return;
+        delete loadingGenerationByKeyRef.current[cacheKey];
+        setAiSummaryStatesByKey((prev) =>
+          prev[cacheKey] === 'loading' ? { ...prev, [cacheKey]: 'idle' } : prev
+        );
+      };
       setAiSummaryErrorsByKey((prev) => {
         const next = { ...prev };
         delete next[cacheKey];
@@ -92,7 +103,10 @@ export function useAiSummaries(
           temperature: 0.7,
         })) as { ok: boolean; text?: string; error?: string };
 
-        if (generation !== summaryGenerationRef.current) return;
+        if (generation !== summaryGenerationRef.current) {
+          resetStaleLoading();
+          return;
+        }
 
         if (!response.ok) {
           setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'error' }));
@@ -124,7 +138,10 @@ export function useAiSummaries(
           return next;
         });
       } catch (error) {
-        if (generation !== summaryGenerationRef.current) return;
+        if (generation !== summaryGenerationRef.current) {
+          resetStaleLoading();
+          return;
+        }
         setAiSummaryStatesByKey((prev) => ({ ...prev, [cacheKey]: 'error' }));
         setAiSummaryErrorsByKey((prev) => ({
           ...prev,

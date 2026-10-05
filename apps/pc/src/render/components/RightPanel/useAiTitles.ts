@@ -65,6 +65,8 @@ export function useAiTitles(
   const inFlightRef = useRef(0);
   const debounceTimerRef = useRef<number | null>(null);
   const requestGenerationRef = useRef(0);
+  // 每个 cacheKey 最近一次置为 loading 时所属的请求代次，用于过期响应复位
+  const loadingGenerationByKeyRef = useRef<Record<string, number>>({});
   const contentRef = useRef(content);
   contentRef.current = content;
   const outlineEntriesRef = useRef(outlineEntries);
@@ -168,6 +170,29 @@ export function useAiTitles(
       if (!uncached.length) return;
 
       const cacheKeys = uncached.map((entry) => buildOutlineEntryCacheKey(entry));
+      cacheKeys.forEach((k) => {
+        loadingGenerationByKeyRef.current[k] = generation;
+      });
+      // 过期响应被丢弃时，把仍由本次请求持有的 loading 复位为 idle，
+      // 使其重新进入 pending，由自动预取再次请求，避免永久转圈
+      const resetStaleLoading = () => {
+        const owned = cacheKeys.filter((k) => loadingGenerationByKeyRef.current[k] === generation);
+        if (!owned.length) return;
+        owned.forEach((k) => {
+          delete loadingGenerationByKeyRef.current[k];
+        });
+        setAiStatesByKey((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          owned.forEach((k) => {
+            if (next[k] === 'loading') {
+              next[k] = 'idle';
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      };
       setAiStatesByKey((prev) => {
         const next = { ...prev };
         cacheKeys.forEach((k) => {
@@ -202,7 +227,10 @@ export function useAiTitles(
           temperature: 1.3,
         })) as { ok: boolean; text?: string; error?: string };
 
-        if (generation !== requestGenerationRef.current) return;
+        if (generation !== requestGenerationRef.current) {
+          resetStaleLoading();
+          return;
+        }
 
         if (!response.ok) {
           const message = response.error || 'AI 标题补全失败';
@@ -262,7 +290,10 @@ export function useAiTitles(
           return next;
         });
       } catch (error) {
-        if (generation !== requestGenerationRef.current) return;
+        if (generation !== requestGenerationRef.current) {
+          resetStaleLoading();
+          return;
+        }
         const message = error instanceof Error ? error.message : 'AI 标题补全失败';
         setAiStatesByKey((prev) => {
           const next = { ...prev };

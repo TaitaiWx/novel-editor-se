@@ -1,0 +1,372 @@
+import { useCallback } from 'react';
+import type { AssistantScopeTarget } from '@/render/app/types';
+import type { Character, LoreEntry } from '@/render/components/RightPanel/types';
+import type { FileNode } from '@/render/types';
+import {
+  WORKSPACE_TAB_CHARACTERS,
+  WORKSPACE_TAB_LORE,
+  createCharacterWorkspaceTab,
+  createLoreWorkspaceTab,
+  createVolumeWorkspaceTab,
+} from '@/render/utils/workspace';
+import { areCharactersEqual, areLoreEntriesEqual } from '@/render/app/entityEquality';
+import {
+  createGraphLayoutStorageKey,
+  createRelationStorageKey,
+  stringifyCharacterAttributes,
+} from '@/render/components/RightPanel/utils';
+import { findNodeInTree, getNodeDisplayName } from '@/render/app/fileTreeUtils';
+import type { AppState } from './useAppState';
+import type { TabActions } from './useTabActions';
+import type { WorkspaceCreationApi } from './useWorkspaceCreation';
+
+export type UseWorkspaceEntityActionsContext = Pick<
+  AppState,
+  | 'activeTabRef'
+  | 'bumpWorkspaceCharactersVersion'
+  | 'bumpWorkspaceLoreVersion'
+  | 'dialog'
+  | 'filesRef'
+  | 'folderPathRef'
+  | 'setActiveTab'
+  | 'setOpenTabs'
+  | 'setWorkspaceCharacters'
+  | 'setWorkspaceLoreEntries'
+  | 'setWorkspaceProjectName'
+  | 'toast'
+  | 'workspaceCharacters'
+  | 'workspaceLoreEntries'
+  | 'workspaceProjectName'
+> &
+  Pick<TabActions, 'closeTabsByPredicate' | 'openFileInTab'> &
+  Pick<WorkspaceCreationApi, 'getCurrentNovelId'>;
+
+/**
+ * 工作区对象（人物、设定、卷、作品名）的导航、重命名、删除与清空
+ */
+export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext) {
+  const {
+    activeTabRef,
+    bumpWorkspaceCharactersVersion,
+    bumpWorkspaceLoreVersion,
+    closeTabsByPredicate,
+    dialog,
+    filesRef,
+    folderPathRef,
+    getCurrentNovelId,
+    openFileInTab,
+    setActiveTab,
+    setOpenTabs,
+    setWorkspaceCharacters,
+    setWorkspaceLoreEntries,
+    setWorkspaceProjectName,
+    toast,
+    workspaceCharacters,
+    workspaceLoreEntries,
+    workspaceProjectName,
+  } = ctx;
+
+  const handleFileSelect = useCallback(
+    (filePath: string) => {
+      openFileInTab(filePath);
+    },
+    [openFileInTab]
+  );
+  const handleOpenCharacters = useCallback(() => {
+    openFileInTab(WORKSPACE_TAB_CHARACTERS);
+  }, [openFileInTab]);
+  const handleOpenLore = useCallback(() => {
+    openFileInTab(WORKSPACE_TAB_LORE);
+  }, [openFileInTab]);
+  const handleOpenCharacterNode = useCallback(
+    (characterId: number) => {
+      openFileInTab(createCharacterWorkspaceTab({ id: characterId }));
+    },
+    [openFileInTab]
+  );
+  const handleOpenLoreNode = useCallback(
+    (entryId: number) => {
+      openFileInTab(createLoreWorkspaceTab({ id: entryId }));
+    },
+    [openFileInTab]
+  );
+
+  const handleRenameProject = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const folder = folderPathRef.current;
+    if (!ipc || !folder) return;
+    const novel = (await ipc.invoke('db-novel-get-by-folder', folder)) as {
+      id: number;
+      name?: string | null;
+    } | null;
+    if (!novel?.id) return;
+    const currentName = (
+      workspaceProjectName ||
+      novel.name ||
+      folder.split('/').pop() ||
+      ''
+    ).trim();
+    const nextName = await dialog.prompt('修改作品名', '请输入新的作品名', currentName);
+    if (!nextName?.trim() || nextName.trim() === currentName) return;
+
+    try {
+      await ipc.invoke('db-novel-update', novel.id, { name: nextName.trim() });
+      setWorkspaceProjectName(nextName.trim());
+      toast.success('作品名已更新');
+    } catch (error) {
+      toast.error(`修改作品名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [dialog, toast, workspaceProjectName]);
+
+  const syncWorkspaceCharacters = useCallback((nextCharacters: Character[]) => {
+    setWorkspaceCharacters((prev) =>
+      areCharactersEqual(prev, nextCharacters) ? prev : nextCharacters
+    );
+  }, []);
+
+  const syncWorkspaceLoreEntries = useCallback((nextEntries: LoreEntry[]) => {
+    setWorkspaceLoreEntries((prev) =>
+      areLoreEntriesEqual(prev, nextEntries) ? prev : nextEntries
+    );
+  }, []);
+  const handleOpenVolumeNode = useCallback(
+    (volumePath: string) => {
+      openFileInTab(createVolumeWorkspaceTab(volumePath));
+    },
+    [openFileInTab]
+  );
+
+  const buildProjectAssistantScope = useCallback((): AssistantScopeTarget | null => {
+    const folder = folderPathRef.current;
+    if (!folder) return null;
+    return {
+      kind: 'project',
+      path: folder,
+      label: workspaceProjectName?.trim() || getNodeDisplayName(folder),
+    };
+  }, [workspaceProjectName]);
+
+  const buildVolumeAssistantScope = useCallback((volumePath: string): AssistantScopeTarget => {
+    const node = findNodeInTree(filesRef.current, volumePath) as FileNode | null;
+    return {
+      kind: 'volume',
+      path: volumePath,
+      label:
+        node?.name ||
+        (folderPathRef.current === volumePath ? '未分卷' : getNodeDisplayName(volumePath)),
+    };
+  }, []);
+
+  const buildChapterAssistantScope = useCallback(
+    (chapterPath: string): AssistantScopeTarget => ({
+      kind: 'chapter',
+      path: chapterPath,
+      label: getNodeDisplayName(chapterPath),
+    }),
+    []
+  );
+
+  const handleDeleteCharacterNode = useCallback(
+    async (characterId: number) => {
+      const ipc = window.electron?.ipcRenderer;
+      const target = workspaceCharacters.find((item) => item.id === characterId);
+      if (!ipc || !target) return;
+      const confirmed = await dialog.confirm('删除人物', `确定要删除人物 "${target.name}" 吗？`);
+      if (!confirmed) return;
+
+      try {
+        await ipc.invoke('db-character-delete', characterId);
+        setWorkspaceCharacters((prev) => prev.filter((item) => item.id !== characterId));
+        const workspaceTab = createCharacterWorkspaceTab({ id: characterId });
+        setOpenTabs((prev) => prev.filter((tab) => tab !== workspaceTab));
+        if (activeTabRef.current === workspaceTab) {
+          setActiveTab(WORKSPACE_TAB_CHARACTERS);
+        }
+        toast.success(`已删除人物 "${target.name}"`);
+      } catch (error) {
+        toast.error(`删除人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, toast, workspaceCharacters]
+  );
+
+  const handleRenameCharacterNode = useCallback(
+    async (characterId: number) => {
+      const ipc = window.electron?.ipcRenderer;
+      const target = workspaceCharacters.find((item) => item.id === characterId);
+      if (!ipc || !target) return;
+      const nextName = await dialog.prompt('修改人物名', '请输入新的人物名', target.name);
+      const normalizedName = nextName?.trim();
+      if (!normalizedName || normalizedName === target.name) return;
+
+      try {
+        const novelId = await getCurrentNovelId();
+        const existingRows = novelId
+          ? ((await ipc.invoke('db-character-list', novelId)) as Array<{
+              id: number;
+              name: string;
+              role: string;
+              description: string;
+              attributes: string;
+            }>)
+          : [];
+        const matchedRow = existingRows.find((item) => item.id === characterId);
+        await ipc.invoke('db-character-update', characterId, {
+          name: normalizedName,
+          role: target.role,
+          description: target.description,
+          attributes:
+            matchedRow?.attributes ||
+            stringifyCharacterAttributes(
+              {
+                avatar: target.avatar,
+                aliases: target.aliases,
+                category: target.category,
+                highlightColor: target.highlightColor,
+                highlightFirstMentionOnly: target.highlightFirstMentionOnly,
+              },
+              target.role
+            ),
+        });
+        setWorkspaceCharacters((prev) =>
+          prev.map((item) => (item.id === characterId ? { ...item, name: normalizedName } : item))
+        );
+        toast.success(`人物已更名为 "${normalizedName}"`);
+      } catch (error) {
+        toast.error(`修改人物名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, getCurrentNovelId, toast, workspaceCharacters]
+  );
+
+  const handleDeleteLoreNode = useCallback(
+    async (entryId: number) => {
+      const ipc = window.electron?.ipcRenderer;
+      const target = workspaceLoreEntries.find((item) => item.id === entryId);
+      if (!ipc || !target) return;
+      const confirmed = await dialog.confirm('删除设定', `确定要删除设定 "${target.title}" 吗？`);
+      if (!confirmed) return;
+
+      try {
+        await ipc.invoke('db-world-setting-delete', entryId);
+        setWorkspaceLoreEntries((prev) => prev.filter((item) => item.id !== entryId));
+        const workspaceTab = createLoreWorkspaceTab({ id: entryId });
+        setOpenTabs((prev) => prev.filter((tab) => tab !== workspaceTab));
+        if (activeTabRef.current === workspaceTab) {
+          setActiveTab(WORKSPACE_TAB_LORE);
+        }
+        toast.success(`已删除设定 "${target.title}"`);
+      } catch (error) {
+        toast.error(`删除设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, toast, workspaceLoreEntries]
+  );
+
+  const handleRenameLoreNode = useCallback(
+    async (entryId: number) => {
+      const ipc = window.electron?.ipcRenderer;
+      const target = workspaceLoreEntries.find((item) => item.id === entryId);
+      if (!ipc || !target) return;
+      const nextTitle = await dialog.prompt('修改设定名', '请输入新的设定名', target.title);
+      const normalizedTitle = nextTitle?.trim();
+      if (!normalizedTitle || normalizedTitle === target.title) return;
+
+      try {
+        await ipc.invoke('db-world-setting-update', entryId, {
+          title: normalizedTitle,
+          content: target.summary,
+          tags: JSON.stringify(target.tags),
+        });
+        setWorkspaceLoreEntries((prev) =>
+          prev.map((item) => (item.id === entryId ? { ...item, title: normalizedTitle } : item))
+        );
+        toast.success(`设定已更名为 "${normalizedTitle}"`);
+      } catch (error) {
+        toast.error(`修改设定名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, toast, workspaceLoreEntries]
+  );
+
+  const handleClearCharacters = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const novelId = await getCurrentNovelId();
+    const folder = folderPathRef.current;
+    if (!ipc || !novelId || !folder) return;
+    if (workspaceCharacters.length === 0) {
+      toast.info('当前作品没有可清空的人物');
+      return;
+    }
+    const confirmed = await dialog.confirm(
+      '清空人物',
+      `确定要清空当前作品的 ${workspaceCharacters.length} 个人物吗？这会同时清空人物关系图。`
+    );
+    if (!confirmed) return;
+
+    try {
+      await ipc.invoke('db-character-clear-by-novel', novelId);
+      const prefixes = [
+        createRelationStorageKey(folder),
+        createGraphLayoutStorageKey(folder),
+      ].filter((item): item is string => Boolean(item));
+      if (prefixes.length > 0) {
+        await ipc.invoke('db-settings-delete-prefixes', prefixes);
+      }
+      setWorkspaceCharacters([]);
+      bumpWorkspaceCharactersVersion();
+      closeTabsByPredicate((tab) => tab.startsWith('__workspace__:character:'));
+      toast.success('人物已清空');
+    } catch (error) {
+      toast.error(`清空人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [closeTabsByPredicate, dialog, getCurrentNovelId, toast, workspaceCharacters.length]);
+
+  const handleClearLoreEntries = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const folder = folderPathRef.current;
+    if (!ipc || !folder) return;
+    if (workspaceLoreEntries.length === 0) {
+      toast.info('当前作品没有可清空的设定');
+      return;
+    }
+    const confirmed = await dialog.confirm(
+      '清空设定',
+      `确定要清空当前作品的 ${workspaceLoreEntries.length} 条设定吗？`
+    );
+    if (!confirmed) return;
+
+    try {
+      await ipc.invoke('db-world-setting-clear-by-folder', folder);
+      setWorkspaceLoreEntries([]);
+      bumpWorkspaceLoreVersion();
+      closeTabsByPredicate((tab) => tab.startsWith('__workspace__:lore-entry:'));
+      toast.success('设定已清空');
+    } catch (error) {
+      toast.error(`清空设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [closeTabsByPredicate, dialog, toast, workspaceLoreEntries.length]);
+
+  return {
+    handleFileSelect,
+    handleOpenCharacters,
+    handleOpenLore,
+    handleOpenCharacterNode,
+    handleOpenLoreNode,
+    handleRenameProject,
+    syncWorkspaceCharacters,
+    syncWorkspaceLoreEntries,
+    handleOpenVolumeNode,
+    buildProjectAssistantScope,
+    buildVolumeAssistantScope,
+    buildChapterAssistantScope,
+    handleDeleteCharacterNode,
+    handleRenameCharacterNode,
+    handleDeleteLoreNode,
+    handleRenameLoreNode,
+    handleClearCharacters,
+    handleClearLoreEntries,
+  };
+}
+
+export type WorkspaceEntityActions = ReturnType<typeof useWorkspaceEntityActions>;

@@ -510,5 +510,9 @@ export const LoreView: React.FC<{
       </div>
     );
   },
-  (prev, next) => prev.folderPath === next.folderPath && prev.initialEntryId === next.initialEntryId
+  // content 必须参与比较：诊断等 AI 操作通过 contentRef 读取正文，跳过重渲染会让其停留在过期内容
+  (prev, next) =>
+    prev.folderPath === next.folderPath &&
+    prev.initialEntryId === next.initialEntryId &&
+    prev.content === next.content
 );

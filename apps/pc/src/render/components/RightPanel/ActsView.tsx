@@ -197,6 +197,22 @@ export const ActsView: React.FC<{
     [updateSelectedBoard]
   );
 
+  // ── Memoize act strip progress data（必须位于提前 return 之前，否则幕结构清空时 hooks 数量变化导致崩溃）──
+  const actStripData = useMemo(
+    () =>
+      acts.map((act, idx) => {
+        const boardKey = createActBoardKey(act, idx);
+        const board = mergeActBoard(act, idx, plotBoards[boardKey]);
+        const doneCount = board.sceneBoards.filter((s) => s.status === 'done').length;
+        return {
+          color: ACT_COLORS[idx % ACT_COLORS.length],
+          doneCount,
+          total: board.sceneBoards.length,
+        };
+      }),
+    [acts, plotBoards]
+  );
+
   // ── Early returns (ALL hooks above — React Rules of Hooks satisfied) ───────
   if (!content) {
     return <div className={styles.emptyHint}>打开文件后查看幕剧结构</div>;
@@ -248,22 +264,6 @@ export const ActsView: React.FC<{
         );
     }
   };
-
-  // ── Memoize act strip progress data ─────────────────────────────────────────
-  const actStripData = useMemo(
-    () =>
-      acts.map((act, idx) => {
-        const boardKey = createActBoardKey(act, idx);
-        const board = mergeActBoard(act, idx, plotBoards[boardKey]);
-        const doneCount = board.sceneBoards.filter((s) => s.status === 'done').length;
-        return {
-          color: ACT_COLORS[idx % ACT_COLORS.length],
-          doneCount,
-          total: board.sceneBoards.length,
-        };
-      }),
-    [acts, plotBoards]
-  );
 
   return (
     <div className={styles.actsViewRoot}>

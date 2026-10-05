@@ -1,0 +1,56 @@
+// 视频预览卡片（外框沿用音频卡片样式）
+.audioComparePane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 220px;
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.audioCompareLabel {
+  color: #dcdcdc;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.videoMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.videoMetaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.videoMetaLabel {
+  color: #8d8d8d;
+  font-size: 11px;
+}
+
+.videoMetaValue {
+  color: #f0f0f0;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.videoPlayer {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  background: #090b0f;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.previewPlaceholder {
+  color: #9a9a9a;
+  font-size: 12px;
+}

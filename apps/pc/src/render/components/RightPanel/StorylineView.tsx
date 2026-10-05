@@ -5,6 +5,7 @@ import { OutlineView } from './OutlineView';
 import { ActsView } from './ActsView';
 import { AiCacheProvider } from './AiCacheContext';
 import { ThreeSignView } from './ThreeSignView';
+import { GrowthView } from './GrowthView';
 import type {
   PersistedOutlineScopeInput,
   PersistedOutlineScopeKind,
@@ -89,6 +90,13 @@ export const StorylineView: React.FC<{
             >
               三签卡
             </button>
+            <button
+              className={`${styles.storylineToggle} ${viewMode === 'growth' ? styles.storylineToggleActive : ''}`}
+              onClick={() => setViewMode('growth')}
+              title="角色成长记录器：等级、技能、抉择、队伍、地图与 AI 推演（资料/记忆/）"
+            >
+              成长
+            </button>
           </div>
           {viewMode === 'catalog' ? (
             <OutlineView
@@ -112,6 +120,8 @@ export const StorylineView: React.FC<{
               onScrollToLine={onScrollToLine}
               onReplaceLineText={onReplaceLineText}
             />
+          ) : viewMode === 'growth' ? (
+            <GrowthView folderPath={folderPath} dbReady={dbReady} />
           ) : viewMode === 'ideas' ? (
             <ThreeSignView
               content={content}

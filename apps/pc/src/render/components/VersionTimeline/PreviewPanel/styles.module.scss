@@ -1,0 +1,208 @@
+// 版本预览面板
+.previewPanel {
+  margin: 16px;
+  margin-bottom: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #151515;
+}
+
+.previewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.previewTitle {
+  color: #e4e4e4;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.previewMeta {
+  margin-top: 4px;
+  color: #8b8b8b;
+  font-size: 11px;
+}
+
+.previewActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.previewActionButton,
+.previewCloseButton {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d4d4d4;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.previewActionButton {
+  color: #4ec9b0;
+  border-color: rgba(78, 201, 176, 0.35);
+}
+
+.previewBody {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  max-height: 55vh;
+  padding: 16px;
+  background: #101010;
+  overflow: hidden;
+}
+
+.previewImage {
+  max-width: 100%;
+  max-height: 50vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.imageCompareLayout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.audioCompareLayout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.videoCompareLayout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.imageComparePane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 320px;
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.binaryInfoCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 220px;
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.imageCompareLabel {
+  align-self: flex-start;
+  color: #dcdcdc;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.binaryInfoTitle {
+  color: #dcdcdc;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.imageCompareMeta {
+  align-self: flex-start;
+  color: #8d8d8d;
+  font-size: 11px;
+}
+
+.binaryInfoLabel {
+  color: #8d8d8d;
+  font-size: 11px;
+}
+
+.binaryInfoValue {
+  color: #f0f0f0;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.binaryInfoLayout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.binaryInfoRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.binaryInfoHint {
+  margin-top: auto;
+  color: #8b8b8b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.previewPlaceholder {
+  color: #9a9a9a;
+  font-size: 12px;
+}
+
+.pdfCompareLayout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  min-height: 50vh;
+}
+
+.pdfComparePane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 900px) {
+  .imageCompareLayout,
+  .pdfCompareLayout,
+  .audioCompareLayout,
+  .videoCompareLayout,
+  .binaryInfoLayout {
+    grid-template-columns: 1fr;
+  }
+}

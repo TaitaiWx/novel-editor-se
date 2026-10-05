@@ -1,0 +1,50 @@
+// 人物当前状态卡片（从 RightPanel 共享样式迁移，仅本组件使用）
+
+.characterCurrentStateList,
+.characterCurrentStateEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.characterCurrentStateItem {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.characterCurrentStateItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.characterCurrentStateLabel {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.characterCurrentStateValue {
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.characterCurrentStateEditorRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .characterCurrentStateItem,
+  .characterCurrentStateEditorRow {
+    grid-template-columns: 1fr;
+  }
+}

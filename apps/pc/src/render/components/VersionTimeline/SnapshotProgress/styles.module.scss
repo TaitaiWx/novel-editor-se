@@ -1,0 +1,51 @@
+// 保存版本进度面板
+.progressPanel {
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #cfcfcf;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.progressBarTrack {
+  position: relative;
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.progressBarFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #569cd6 0%, #4ec9b0 100%);
+  transition: width 0.2s ease;
+}
+
+.progressBarIndeterminate {
+  width: 35%;
+  animation: indeterminateSlide 1.2s ease-in-out infinite;
+}
+
+.progressMeta {
+  margin-top: 6px;
+  color: #7f7f7f;
+  font-size: 11px;
+}
+
+@keyframes indeterminateSlide {
+  from {
+    transform: translateX(-120%);
+  }
+
+  to {
+    transform: translateX(320%);
+  }
+}

@@ -4,6 +4,7 @@ import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
 import styles from './styles.module.scss';
+import { getPathBasename } from '@/render/utils/path';
 
 type PdfJsModule = typeof import('pdfjs-dist');
 type PdfLoadingTask = ReturnType<PdfJsModule['getDocument']>;
@@ -434,6 +435,8 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({ filePath, settingsCompo
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // 快速切换文件时忽略旧请求的结果，避免旧文件内容覆盖新文件
+    let cancelled = false;
     const loadResource = async () => {
       if (!filePath) {
         setResource(null);
@@ -458,6 +461,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({ filePath, settingsCompo
             'read-file',
             filePath
           )) as string;
+          if (cancelled) return;
           setResource({
             kind: 'image',
             mimeType,
@@ -471,6 +475,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({ filePath, settingsCompo
           'read-file-binary',
           filePath
         )) as BinaryReadResult;
+        if (cancelled) return;
 
         const resolvedMimeType = binary.mimeType || mimeType;
         let kind: ResourceKind = 'binary';
@@ -491,19 +496,21 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({ filePath, settingsCompo
           dataUrl: buildDataUrl(resolvedMimeType, binary.base64Content),
         });
       } catch (err) {
+        if (cancelled) return;
         setResource(null);
         setError(err instanceof Error ? err.message : '资源预览加载失败');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     void loadResource();
+    return () => {
+      cancelled = true;
+    };
   }, [filePath]);
 
-  const fileName = filePath
-    ? filePath.split('/').pop() || filePath.split('\\').pop() || filePath
-    : '';
+  const fileName = filePath ? getPathBasename(filePath) : '';
   const descriptor = useMemo(
     () => getResourceLabel(resource?.mimeType ?? guessMimeTypeByPath(filePath)),
     [filePath, resource?.mimeType]
@@ -586,6 +593,8 @@ const BinaryContentViewer: React.FC<BinaryContentViewerProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // 快速切换文件时忽略旧请求的结果
+    let cancelled = false;
     const loadBinaryContent = async () => {
       if (!filePath) {
         setBinaryResult(null);
@@ -601,21 +610,24 @@ const BinaryContentViewer: React.FC<BinaryContentViewerProps> = ({
           'read-file-binary',
           filePath
         )) as BinaryReadResult;
+        if (cancelled) return;
         setBinaryResult(result);
       } catch (err) {
+        if (cancelled) return;
         setBinaryResult(null);
         setError(err instanceof Error ? err.message : '无法读取资源内容');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     void loadBinaryContent();
+    return () => {
+      cancelled = true;
+    };
   }, [filePath]);
 
-  const fileName = filePath
-    ? filePath.split('/').pop() || filePath.split('\\').pop() || filePath
-    : '';
+  const fileName = filePath ? getPathBasename(filePath) : '';
   const dataPreview = useMemo(() => {
     if (!binaryResult) {
       return { text: '', truncated: false };

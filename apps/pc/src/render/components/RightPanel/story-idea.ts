@@ -634,15 +634,20 @@ export function parseStoryIdeaSeedResponse(raw: string): Partial<StoryIdeaCardDr
 
   try {
     const parsed = JSON.parse(jsonBlock) as StoryIdeaSeedResponse;
-    return {
-      title: cleanText(parsed.title, 32) || undefined,
-      premise: cleanText(parsed.premise, 80) || undefined,
-      tags: parsed.tags ? normalizeIdeaTags(parsed.tags) : undefined,
-      themeTerms: parsed.themeTerms ? normalizeIdeaTerms(parsed.themeTerms) : undefined,
-      conflictTerms: parsed.conflictTerms ? normalizeIdeaTerms(parsed.conflictTerms) : undefined,
-      twistTerms: parsed.twistTerms ? normalizeIdeaTerms(parsed.twistTerms) : undefined,
-      note: cleanText(parsed.note, 200) || undefined,
-    };
+    // 只返回 AI 实际给出的字段：缺失字段不能以显式 undefined 出现，
+    // 否则调用方 `{ ...draft, ...parsed }` 合并时会把草稿里的已有值覆盖掉
+    const result: Partial<StoryIdeaCardDraft> = {};
+    const title = cleanText(parsed.title, 32);
+    if (title) result.title = title;
+    const premise = cleanText(parsed.premise, 80);
+    if (premise) result.premise = premise;
+    if (parsed.tags) result.tags = normalizeIdeaTags(parsed.tags);
+    if (parsed.themeTerms) result.themeTerms = normalizeIdeaTerms(parsed.themeTerms);
+    if (parsed.conflictTerms) result.conflictTerms = normalizeIdeaTerms(parsed.conflictTerms);
+    if (parsed.twistTerms) result.twistTerms = normalizeIdeaTerms(parsed.twistTerms);
+    const note = cleanText(parsed.note, 200);
+    if (note) result.note = note;
+    return result;
   } catch {
     return null;
   }
@@ -674,6 +679,11 @@ function sanitizeOutlineTree(
     .filter((node) => node.title);
 }
 
+/** 过滤空项之后再标记首项为选中，避免首个原始项为空时没有任何选中项 */
+function markFirstSelected<T extends { isSelected: boolean }>(items: T[]): T[] {
+  return items.map((item, index) => ({ ...item, isSelected: index === 0 }));
+}
+
 export function parseStoryIdeaOutputsResponse(raw: string): {
   loglines: Array<{ content: string; metaJson: string; isSelected: boolean }>;
   sceneHooks: Array<{ content: string; metaJson: string; isSelected: boolean }>;
@@ -685,31 +695,31 @@ export function parseStoryIdeaOutputsResponse(raw: string): {
   try {
     const parsed = JSON.parse(jsonBlock) as StoryIdeaOutputsResponse;
     const loglines = (parsed.loglines || [])
-      .map((item, index) => {
+      .map((item) => {
         const content = cleanText(item.content, 120);
         if (!content) return null;
         return {
           content,
           metaJson: JSON.stringify({ reason: cleanText(item.reason, 80) }),
-          isSelected: index === 0,
+          isSelected: false,
         };
       })
       .filter((item): item is { content: string; metaJson: string; isSelected: boolean } => !!item);
 
     const sceneHooks = (parsed.sceneHooks || [])
-      .map((item, index) => {
+      .map((item) => {
         const content = cleanText(item.content, 160);
         if (!content) return null;
         return {
           content,
           metaJson: JSON.stringify({ focus: cleanText(item.focus, 80) }),
-          isSelected: index === 0,
+          isSelected: false,
         };
       })
       .filter((item): item is { content: string; metaJson: string; isSelected: boolean } => !!item);
 
     const outlineDirections = (parsed.outlineDirections || [])
-      .map((item, index) => {
+      .map((item) => {
         const title = cleanText(item.title, 32);
         const summary = cleanText(item.summary, 160);
         const beats = Array.isArray(item.beats)
@@ -725,12 +735,16 @@ export function parseStoryIdeaOutputsResponse(raw: string): {
         return {
           content: title ? `${title}：${summary || beats[0] || '可转为大纲草案'}` : summary,
           metaJson: JSON.stringify({ title, summary, beats, outlineTree }),
-          isSelected: index === 0,
+          isSelected: false,
         };
       })
       .filter((item): item is { content: string; metaJson: string; isSelected: boolean } => !!item);
 
-    return { loglines, sceneHooks, outlineDirections };
+    return {
+      loglines: markFirstSelected(loglines),
+      sceneHooks: markFirstSelected(sceneHooks),
+      outlineDirections: markFirstSelected(outlineDirections),
+    };
   } catch {
     return null;
   }

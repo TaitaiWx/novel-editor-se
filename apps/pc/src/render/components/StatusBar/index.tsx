@@ -3,6 +3,7 @@ import { VscHistory, VscSync, VscError, VscCheck } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
 import type { UpdateStatus } from '@/render/types/electron-api';
 import { analyzeContentStats } from '../../utils/contentStats';
+import { getPathBasename } from '../../utils/path';
 import Tooltip from '../Tooltip';
 import CopyTooltip from '../CopyTooltip';
 import styles from './styles.module.scss';
@@ -376,7 +377,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
               ? filePath.replace('__untitled__:', '')
               : isChangelog
                 ? filePath.replace('__changelog__:', '')
-                : filePath.split('/').pop() || filePath.split('\\').pop() || '';
+                : getPathBasename(filePath);
             const dotIdx = name.lastIndexOf('.');
             const ext = isChangelog
               ? 'MD'

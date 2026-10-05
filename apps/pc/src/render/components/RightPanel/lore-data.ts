@@ -71,8 +71,12 @@ export async function loadLoreEntriesByFolder(folderPath: string | null): Promis
     return [];
   }
 
-  const rows = (await ipc.invoke('db-world-setting-list-by-folder', folderPath)) as LoreRow[];
-  return rows.map(mapLoreRow);
+  const rows = (await ipc.invoke('db-world-setting-list-by-folder', folderPath)) as
+    | LoreRow[]
+    | null
+    | undefined;
+  // 数据库未就绪等情况下可能返回空值，按无设定处理
+  return (rows ?? []).map(mapLoreRow);
 }
 
 export function buildLoreDedupKey(entry: Pick<LoreDraft, 'category' | 'title'>): string {

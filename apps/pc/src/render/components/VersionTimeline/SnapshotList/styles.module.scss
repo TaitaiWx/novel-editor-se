@@ -1,0 +1,162 @@
+// 文件类型徽标（与父组件头部徽标保持一致）
+.commitTypeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+.fileTypeimage {
+  color: #79c0ff;
+  background: rgba(121, 192, 255, 0.12);
+  border-color: rgba(121, 192, 255, 0.2);
+}
+
+.fileTypeaudio {
+  color: #4ec9b0;
+  background: rgba(78, 201, 176, 0.12);
+  border-color: rgba(78, 201, 176, 0.2);
+}
+
+.fileTypevideo {
+  color: #7ec9ff;
+  background: rgba(126, 201, 255, 0.12);
+  border-color: rgba(126, 201, 255, 0.2);
+}
+
+.fileTypepdf {
+  color: #ff9b8f;
+  background: rgba(255, 120, 117, 0.12);
+  border-color: rgba(255, 120, 117, 0.2);
+}
+
+.fileTypetext {
+  color: #d7ba7d;
+  background: rgba(215, 186, 125, 0.12);
+  border-color: rgba(215, 186, 125, 0.2);
+}
+
+.fileTypebinary {
+  color: #b4b4b4;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+// 时间线列表
+.timeline {
+  padding: 4px 0;
+}
+
+.commitItem {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+  gap: 10px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+
+    .commitActions {
+      opacity: 1;
+    }
+  }
+}
+
+.timelineDot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  color: #569cd6;
+  font-size: 14px;
+  padding-top: 2px;
+  position: relative;
+}
+
+.timelineLine {
+  width: 1px;
+  height: 100%;
+  min-height: 16px;
+  background: #333;
+  margin-top: 2px;
+}
+
+.commitInfo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.commitMessageRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.commitMessage {
+  font-size: 12px;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commitMeta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.commitAuthor {
+  color: #666;
+}
+
+.commitDate {
+  color: #555;
+  flex-shrink: 0;
+}
+
+.commitActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.commitActionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 3px;
+  font-size: 13px;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #d4d4d4;
+  }
+}
+
+.dangerBtn {
+  &:hover {
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff3b30;
+  }
+}

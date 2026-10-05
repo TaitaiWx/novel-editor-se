@@ -56,8 +56,10 @@ export function migrateCacheKey(oldKey: string): string | null {
 }
 
 export function sanitizeAiSummary(raw: string): string {
+  // 先 trim 再剥引号：否则首尾空白会挡住引号，'  ""  ' 这类结果无法被识别为空
   return raw
-    .replace(/^['"""]|['"""]$/g, '')
+    .trim()
+    .replace(/^['"“”‘’「」『』]+|['"“”‘’「」『』]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -139,11 +141,67 @@ export function splitTextIntoChunks(content: string, maxChars: number): string[]
   return chunks;
 }
 
+/**
+ * 从 start 位置（必须是 `{` 或 `[`）开始做括号配对，跳过字符串内的括号，
+ * 返回配对完整的 JSON 片段；无法配对时返回 null
+ */
+function sliceBalancedJson(raw: string, start: number): string | null {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < raw.length; i += 1) {
+    const char = raw[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{' || char === '[') {
+      stack.push(char === '{' ? '}' : ']');
+    } else if (char === '}' || char === ']') {
+      if (stack.pop() !== char) return null;
+      if (stack.length === 0) return raw.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/** 无代码块时最多尝试的 JSON 起点数量，避免超长文本反复解析 */
+const MAX_JSON_CANDIDATES = 20;
+
+function nextJsonOpener(raw: string, from: number): number {
+  const offset = raw.slice(from).search(/[[{]/);
+  return offset === -1 ? -1 : from + offset;
+}
+
 export function extractJsonBlock(raw: string): string | null {
   const fenced = raw.match(/```json\s*([\s\S]*?)```/i) || raw.match(/```\s*([\s\S]*?)```/i);
   if (fenced?.[1]) return fenced[1].trim();
 
+  // 无代码块时：从先出现的 `{` / `[` 起按字符串感知的括号配对截取（支持裸 JSON 数组），
+  // 并跳过“[注]”之类配对完整但不是合法 JSON 的片段
+  let attempts = 0;
+  for (
+    let start = raw.search(/[[{]/);
+    start !== -1 && attempts < MAX_JSON_CANDIDATES;
+    start = nextJsonOpener(raw, start + 1)
+  ) {
+    attempts += 1;
+    const balanced = sliceBalancedJson(raw, start);
+    if (!balanced) continue;
+    try {
+      JSON.parse(balanced);
+      return balanced.trim();
+    } catch {
+      /* 不是合法 JSON，继续尝试下一个起点 */
+    }
+  }
+
   const objectStart = raw.indexOf('{');
+  // 兜底：括号不配对（如被截断）时沿用首尾截取，交给调用方 JSON.parse 判定
   const objectEnd = raw.lastIndexOf('}');
   if (objectStart !== -1 && objectEnd > objectStart) {
     return raw.slice(objectStart, objectEnd + 1).trim();
@@ -210,12 +268,16 @@ export function mergeCharacterGraphResults(
   const relationMap = new Map<string, CharacterGraphAIRelation>();
   const summaries: string[] = [];
 
+  /** 规范化名字/别名 → characterMap 中的主键，使后续分块可通过任一别名合并到同一人物 */
+  const nameIndex = new Map<string, string>();
+
   const resolveCharacterKey = (character: CharacterGraphAICharacter) => {
     const candidates = [character.name, ...(character.aliases || [])]
       .map((item) => normalizePersonName(item || ''))
       .filter(Boolean);
     for (const candidate of candidates) {
-      if (characterMap.has(candidate)) return candidate;
+      const indexed = nameIndex.get(candidate);
+      if (indexed) return indexed;
     }
     return normalizePersonName(character.name);
   };
@@ -239,6 +301,13 @@ export function mergeCharacterGraphResults(
         .map((item) => item.trim())
         .filter(Boolean)
         .forEach((item) => aliasSet.add(item));
+
+      // 登记主名与全部别名，供后续分块按别名命中
+      for (const alias of [name, ...aliasSet]) {
+        const normalized = normalizePersonName(alias);
+        if (normalized && !nameIndex.has(normalized)) nameIndex.set(normalized, key);
+      }
+      if (!nameIndex.has(key)) nameIndex.set(key, key);
 
       characterMap.set(key, {
         name: existing?.name || name,
@@ -368,15 +437,6 @@ function normalizeCharacterHighlightColor(value: unknown): string {
   return DEFAULT_CHARACTER_HIGHLIGHT_COLOR;
 }
 
-export function parseCharacterAttributes(attributes: string): {
-  avatar?: string;
-  aliases: string[];
-  category: CharacterCategory;
-  highlightColor: string;
-  highlightFirstMentionOnly: boolean;
-  currentState: CharacterCurrentStateItem[];
-};
-
 export function parseCharacterAttributes(
   attributes: string,
   role: string = ''
@@ -485,7 +545,7 @@ export function parseCharacterTimelineItems(
     if (!Array.isArray(parsed)) return [];
 
     return parsed
-      .map((item) => {
+      .map((item): CharacterTimelineItem | null => {
         if (!item || typeof item !== 'object') return null;
         const candidate = item as Record<string, unknown>;
         const id = normalizeTimelineText(candidate.id);
@@ -518,7 +578,7 @@ export function parseCharacterTimelineItems(
               ? candidate.mentionCount
               : undefined,
           sourceLabel: normalizeTimelineText(candidate.sourceLabel) || undefined,
-        } satisfies CharacterTimelineItem;
+        };
       })
       .filter((item): item is CharacterTimelineItem => Boolean(item));
   } catch {

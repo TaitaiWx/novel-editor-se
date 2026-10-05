@@ -1,0 +1,47 @@
+@use '../story-row' as row;
+
+.objectSectionRow {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  margin-right: 10px;
+}
+
+.storyNodeButton {
+  @include row.row-button;
+}
+
+.storyNodeButtonGroup {
+  @include row.row-button-group;
+}
+
+.storyNodeButtonActive {
+  @include row.row-button-active;
+}
+
+.storyNodeButtonGroup.storyNodeButtonActive {
+  @include row.row-button-group-active;
+}
+
+.storyNodeIcon {
+  @include row.row-icon;
+}
+
+.storyNodeTitle {
+  @include row.row-title;
+}
+
+.supportNodeCount {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #8d8d8d;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

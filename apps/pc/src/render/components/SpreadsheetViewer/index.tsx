@@ -3,6 +3,7 @@ import { VscLinkExternal } from 'react-icons/vsc';
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import styles from './styles.module.scss';
+import { getPathBasename } from '@/render/utils/path';
 
 /** 单元格样式 */
 interface CellStyle {
@@ -151,7 +152,7 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ filePath, setting
       <div className={styles.container}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <span className={styles.fileName}>{filePath?.split('/').pop() ?? ''}</span>
+            <span className={styles.fileName}>{filePath ? getPathBasename(filePath) : ''}</span>
             <span className={styles.badge}>XLSX</span>
           </div>
           <div className={styles.headerRight}>{settingsComponent}</div>
@@ -170,7 +171,7 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ filePath, setting
   }
 
   if (error || !data || !currentSheet) {
-    const fileName = filePath?.replace(/\\/g, '/').split('/').pop() ?? '';
+    const fileName = filePath ? getPathBasename(filePath) : '';
     return (
       <div className={styles.container}>
         <div className={styles.header}>

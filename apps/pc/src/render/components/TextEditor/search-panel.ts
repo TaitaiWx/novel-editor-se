@@ -102,7 +102,8 @@ function createSearchPanel(view: EditorView): Panel {
 
   // ── 开关状态 ──
   let caseSensitive = query.caseSensitive;
-  let wholeWord = false;
+  // 从已有查询初始化，避免外部设置的全字匹配在面板上丢失并在下次输入时被重置
+  let wholeWord = query.wholeWord;
   let regexp = query.regexp;
 
   const toggleBtn = (label: string, title: string, active: boolean): HTMLButtonElement =>
@@ -263,6 +264,10 @@ function createSearchPanel(view: EditorView): Panel {
     if (q.regexp !== regexp) {
       regexp = q.regexp;
       regexBtn.classList.toggle('cm-sp-toggle-active', regexp);
+    }
+    if (q.wholeWord !== wholeWord) {
+      wholeWord = q.wholeWord;
+      wordBtn.classList.toggle('cm-sp-toggle-active', wholeWord);
     }
   }
 

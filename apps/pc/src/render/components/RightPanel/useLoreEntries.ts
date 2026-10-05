@@ -71,6 +71,9 @@ export function useLoreEntries(folderPath: string | null) {
         nextEntries = await loadLoreEntriesByFolder(folderPath);
       }
       setEntries(nextEntries);
+    } catch (error) {
+      // 数据库读取失败时保留当前条目，避免未处理的 Promise 拒绝
+      console.error('[lore] 加载设定条目失败:', error);
     } finally {
       setLoading(false);
     }

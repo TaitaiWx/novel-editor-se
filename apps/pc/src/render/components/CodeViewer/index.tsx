@@ -3,6 +3,7 @@ import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
 import EmptyState from '../EmptyState';
 import styles from './styles.module.scss';
+import { getPathBasename } from '@/render/utils/path';
 
 interface CodeViewerProps {
   filePath: string | null;
@@ -155,7 +156,7 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
   }
 
   const language = getLanguageFromPath(filePath);
-  const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || '';
+  const fileName = getPathBasename(filePath);
   const lines = content.split('\n');
 
   return (
