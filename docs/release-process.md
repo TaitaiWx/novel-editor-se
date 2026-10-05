@@ -165,7 +165,7 @@ pnpm release:stable
 
 ## 与代码的对应关系
 
-- 主进程更新逻辑：[apps/pc/src/main/auto-updater.ts](../apps/pc/src/main/auto-updater.ts)
+- 主进程更新逻辑：[apps/pc/src/main/auto-updater/](../apps/pc/src/main/auto-updater/)（入口 `index.ts`；灰度分桶见 `rollout.ts`，回滚判定见 `policy.ts`）
 - Electron Builder 配置：[apps/pc/electron-builder.yml](../apps/pc/electron-builder.yml)
 - 灰度元数据构建钩子：[apps/pc/scripts/prepare-update-metadata.mjs](../apps/pc/scripts/prepare-update-metadata.mjs)
 - 发布流水线：[.github/workflows/release.yml](../.github/workflows/release.yml)

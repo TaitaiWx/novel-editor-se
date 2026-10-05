@@ -65,30 +65,23 @@ pnpm build
 ## 项目结构
 
 ```
-src/
-├── main/                    # 主进程
-│   ├── index.ts            # 主进程入口
-│   ├── window.ts           # 窗口管理
-│   ├── ipc-handlers.ts     # IPC 通信处理
-│   └── shortcuts/          # 快捷键系统
-│       ├── index.ts        # 快捷键管理器
-│       ├── window.ts       # 窗口相关快捷键
-│       ├── devtools.ts     # 开发者工具快捷键
-│       └── file.ts         # 文件操作快捷键
-├── render/                  # 渲染进程
-│   ├── App.tsx             # 主应用组件
-│   ├── components/         # 组件
-│   ├── shortcuts/          # 快捷键处理
-│   │   ├── index.ts        # 快捷键管理器
-│   │   └── file.ts         # 文件操作处理
-│   └── utils/              # 工具函数
-└── types/                   # 类型定义
+apps/
+  pc/        # Electron 桌面应用（main / preload / render）
+  cli/       # 命令行工具 novel-editor / ne
+packages/
+  core/             # GUI 与 CLI 共享的核心逻辑
+  store/            # SQLite 持久化与版本快照
+  basic-algorithm/  # 大纲、人物、diff 等算法
+  helpers/          # 通用工具
+  components/       # 共享 UI 组件
 ```
+
+完整的技术规范、目录约定与命令说明见 [agents.md](agents.md)。
 
 ## 技术栈
 
-- **前端**: React + TypeScript + Vite
-- **后端**: Electron
+- **前端**: React 18 + TypeScript + Vite 6 + CodeMirror 6
+- **桌面端**: Electron 42
 - **存储**: SQLite (`better-sqlite3`)
 - **样式**: SCSS Modules
 - **构建**: Vite + Electron Builder
