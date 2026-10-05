@@ -55,6 +55,7 @@ describe('TitleBar', () => {
       onOpenSettings: vi.fn(),
       onShowShortcuts: vi.fn(),
       onOpenSampleData: vi.fn(),
+      onShowAbout: vi.fn(),
       onExportProject: vi.fn(),
     };
     render(<TitleBar {...fns} />);
@@ -63,6 +64,7 @@ describe('TitleBar', () => {
       ['设置中心', fns.onOpenSettings],
       ['键盘快捷键', fns.onShowShortcuts],
       ['打开示例项目', fns.onOpenSampleData],
+      ['关于小说编辑器', fns.onShowAbout],
       ['导出项目', fns.onExportProject],
     ];
     for (const [label, fn] of cases) {
@@ -79,6 +81,7 @@ describe('TitleBar', () => {
     expect(screen.getByText('软件设置')).toBeTruthy();
     expect(screen.queryByText('设置中心')).toBeNull();
     expect(screen.queryByText('导出项目')).toBeNull();
+    expect(screen.queryByText('关于小说编辑器')).toBeNull();
     // 没有回调时点击快捷键项也不抛错
     expect(() => fireEvent.click(screen.getByText('键盘快捷键'))).not.toThrow();
   });

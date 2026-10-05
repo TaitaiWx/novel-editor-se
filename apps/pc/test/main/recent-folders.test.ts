@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,6 +26,12 @@ describe('recent-folders', () => {
   });
 
   const filePath = () => join(state.userData, 'recent-folders.json');
+  /** 创建真实存在的工作区目录（getLastFolder 会校验目录是否存在） */
+  const realDir = (name: string) => {
+    const dir = join(state.userData, name);
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  };
 
   it('无记录文件时返回空', () => {
     expect(getLastFolder()).toBeNull();
@@ -33,22 +39,34 @@ describe('recent-folders', () => {
   });
 
   it('添加后更新 lastFolder 并持久化', () => {
-    addRecentFolder('/a');
-    expect(getLastFolder()).toBe('/a');
-    expect(getRecentFolders()).toEqual(['/a']);
+    const a = realDir('a');
+    addRecentFolder(a);
+    expect(getLastFolder()).toBe(a);
+    expect(getRecentFolders()).toEqual([a]);
     expect(existsSync(filePath())).toBe(true);
     expect(JSON.parse(readFileSync(filePath(), 'utf-8'))).toEqual({
-      lastFolder: '/a',
-      folders: ['/a'],
+      lastFolder: a,
+      folders: [a],
     });
   });
 
   it('重复添加时去重并移到最前', () => {
-    addRecentFolder('/a');
-    addRecentFolder('/b');
-    addRecentFolder('/a');
-    expect(getRecentFolders()).toEqual(['/a', '/b']);
-    expect(getLastFolder()).toBe('/a');
+    const a = realDir('a');
+    const b = realDir('b');
+    addRecentFolder(a);
+    addRecentFolder(b);
+    addRecentFolder(a);
+    expect(getRecentFolders()).toEqual([a, b]);
+    expect(getLastFolder()).toBe(a);
+  });
+
+  it('上次目录已被删除时返回 null（启动回退到示例数据）', () => {
+    const gone = realDir('gone');
+    addRecentFolder(gone);
+    rmSync(gone, { recursive: true, force: true });
+    expect(getLastFolder()).toBeNull();
+    // 历史记录本身保留，不因目录暂时不可用而丢失
+    expect(getRecentFolders()).toEqual([gone]);
   });
 
   it('最多保留 10 条', () => {

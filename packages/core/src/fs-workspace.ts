@@ -260,12 +260,28 @@ export async function copyProjectTo(folderPath: string, destParent: string): Pro
  * 确保 targetDir 存在：首次调用时从 sourceDir 复制种子数据（例如示例项目），
  * 种子不存在或复制失败时创建空目录。已存在时不做任何改动。
  */
+/** 目录是否没有任何可见内容（忽略 .novel-editor 等隐藏项） */
+async function hasNoVisibleEntries(dirPath: string): Promise<boolean> {
+  try {
+    return (await readdir(dirPath)).every((name) => name.startsWith('.'));
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * 确保 targetDir 存在并带有 sourceDir 的示例内容：
+ * - 不存在：整体拷贝
+ * - 已存在但没有可见内容（例如此前源路径错误只建了空目录）：补拷贝，不覆盖已有文件
+ * - 已有用户内容：保持不动
+ */
 export async function ensureSeededDirectory(targetDir: string, sourceDir: string): Promise<string> {
-  if (await pathExists(targetDir)) return targetDir;
+  const exists = await pathExists(targetDir);
+  if (exists && !(await hasNoVisibleEntries(targetDir))) return targetDir;
   try {
     await access(sourceDir);
     await mkdir(path.dirname(targetDir), { recursive: true });
-    await cp(sourceDir, targetDir, { recursive: true });
+    await cp(sourceDir, targetDir, { recursive: true, force: false, errorOnExist: false });
   } catch {
     await mkdir(targetDir, { recursive: true });
   }

@@ -26,6 +26,7 @@ interface MenuItemTemplate {
 
 const state = vi.hoisted(() => ({
   focused: null as unknown,
+  windows: [] as unknown[],
   isPackaged: false,
   quit: vi.fn(),
   buildFromTemplate: vi.fn((template: unknown) => ({ template })),
@@ -42,6 +43,7 @@ vi.mock('electron', () => ({
   },
   BrowserWindow: {
     getFocusedWindow: () => state.focused,
+    getAllWindows: () => state.windows,
   },
   Menu: {
     buildFromTemplate: state.buildFromTemplate,
@@ -72,6 +74,7 @@ function setPlatform(platform: NodeJS.Platform) {
 
 beforeEach(() => {
   state.focused = null;
+  state.windows = [];
   state.isPackaged = false;
   state.quit.mockReset();
   state.buildFromTemplate.mockClear();
@@ -253,6 +256,9 @@ describe('registerAllShortcuts', () => {
       'editMenu',
     ]);
     expect(template[0].submenu?.some((i) => i.role === 'quit')).toBe(true);
+    // 不再使用原生 about 面板
+    expect(template[0].submenu?.some((i) => i.role === 'about')).toBe(false);
+    expect(template[0].submenu?.[0].label).toBe('关于 小说编辑器');
     const shortcutItems = template[1].submenu ?? [];
     expect(shortcutItems.map((i) => i.accelerator)).toEqual([
       'CommandOrControl+M',
@@ -268,7 +274,7 @@ describe('registerAllShortcuts', () => {
     const { registerAllShortcuts } = await loadFresh('win32', true);
     registerAllShortcuts();
     const template = lastTemplate();
-    expect(template.map((t) => t.label ?? t.role)).toEqual(['快捷键', '文件', 'editMenu']);
+    expect(template.map((t) => t.label ?? t.role)).toEqual(['快捷键', '文件', 'editMenu', '帮助']);
     expect(template[0].submenu?.[0]).toMatchObject({
       label: '退出应用',
       accelerator: 'CommandOrControl+Q',
@@ -290,5 +296,34 @@ describe('registerAllShortcuts', () => {
     state.focused = win;
     exportItem?.click?.();
     expect(win.webContents.send).toHaveBeenCalledWith('menu-export-project');
+  });
+
+  it('「关于」菜单项通知渲染进程打开应用内对话框', async () => {
+    const { registerAllShortcuts } = await loadFresh('darwin', true);
+    registerAllShortcuts();
+    const aboutItem = lastTemplate()[0].submenu?.[0];
+    expect(() => aboutItem?.click?.()).not.toThrow(); // 没有任何窗口
+
+    // 无聚焦窗口时发给第一个窗口
+    const first = createWindow();
+    state.windows = [first];
+    aboutItem?.click?.();
+    expect(first.webContents.send).toHaveBeenCalledWith('menu-open-about');
+
+    const focused = createWindow();
+    state.focused = focused;
+    aboutItem?.click?.();
+    expect(focused.webContents.send).toHaveBeenCalledWith('menu-open-about');
+  });
+
+  it('Windows / Linux 在帮助菜单中提供「关于」', async () => {
+    const { registerAllShortcuts } = await loadFresh('linux', true);
+    registerAllShortcuts();
+    const help = lastTemplate().find((t) => t.label === '帮助');
+    const win = createWindow();
+    state.focused = win;
+    help?.submenu?.[0].click?.();
+    expect(help?.submenu?.[0].label).toBe('关于 小说编辑器');
+    expect(win.webContents.send).toHaveBeenCalledWith('menu-open-about');
   });
 });

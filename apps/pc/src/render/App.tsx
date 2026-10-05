@@ -10,9 +10,13 @@ import ContextMenu from './components/ContextMenu';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import AppSettingsCenter from './components/AppSettingsCenter';
 import KnowledgeExportDialog from './components/KnowledgeExportDialog';
+import AboutDialog from './components/AboutDialog';
 import styles from './App.module.scss';
 import { CENTER_MIN, RIGHT_COLLAPSED_WIDTH } from '@/render/app/layoutConstants';
 import { useAppController } from '@/render/hooks/useAppController';
+
+/** 更新日志虚拟标签 */
+const CHANGELOG_TAB = '__changelog__:更新日志';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
@@ -110,6 +114,8 @@ const App: React.FC = () => {
     setShowVersionHistory,
     showKnowledgeExportDialog,
     setShowKnowledgeExportDialog,
+    showAboutDialog,
+    setShowAboutDialog,
     knowledgeExportOptions,
     setKnowledgeExportOptions,
   } = uiState;
@@ -204,6 +210,7 @@ const App: React.FC = () => {
               setShowSettingsCenter(true);
             }}
             onShowShortcuts={() => setShowShortcuts(true)}
+            onShowAbout={() => setShowAboutDialog(true)}
             onOpenSampleData={handleOpenSampleData}
             onOpenAIAssistant={() => setShowAIAssistant(true)}
             onExportProject={handleExportProject}
@@ -463,6 +470,17 @@ const App: React.FC = () => {
           initialTab={settingsCenterTab}
           onSettingsChange={handleAppSettingsChange}
           onOpenShortcuts={() => setShowShortcuts(true)}
+          onOpenChangelog={() => openFileInTab(CHANGELOG_TAB)}
+        />
+
+        <AboutDialog
+          visible={showAboutDialog}
+          onClose={() => setShowAboutDialog(false)}
+          onOpenChangelog={() => openFileInTab(CHANGELOG_TAB)}
+          onOpenUpdateSettings={() => {
+            setSettingsCenterTab('about');
+            setShowSettingsCenter(true);
+          }}
         />
 
         {showKnowledgeExportDialog && (

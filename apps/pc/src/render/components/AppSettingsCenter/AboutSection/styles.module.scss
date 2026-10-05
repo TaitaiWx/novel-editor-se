@@ -1,0 +1,112 @@
+.stack {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.headerCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.textButton {
+  // 抵消内边距，让文字与分组内容右边缘对齐
+  margin-right: -6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  cursor: pointer;
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  &:hover {
+    color: var(--ui-fg-primary);
+    background: var(--ui-interaction-hover-bg);
+  }
+}
+
+.channelControl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.channelButton {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border-strong);
+  background: #1f1f21;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+
+  &:hover:not(:disabled) {
+    color: var(--ui-fg-primary);
+    background: var(--ui-interaction-hover-bg);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.channelActive {
+  color: var(--ui-fg-primary);
+  border-color: rgba(0, 122, 204, 0.35);
+  background: var(--ui-interaction-accent-soft);
+}
+
+.channelHint {
+  margin-top: 8px;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.rollout {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+}
+
+.rolloutValue {
+  color: var(--ui-fg-primary);
+}
+
+@media (max-width: 880px) {
+  .headerCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .channelControl {
+    grid-template-columns: 1fr;
+  }
+}

@@ -295,6 +295,14 @@ describe('ensureSeededDirectory', () => {
     expect(await readFile(existing, 'utf-8')).toBe('mine');
   });
 
+  it('已存在但只有隐藏项（此前误建的空目录）时补齐示例内容，保留已有隐藏数据', async () => {
+    await touch('seed/第1卷/001.md', 'seed');
+    const marker = await touch('target/.novel-editor/novel-editor.db', 'db');
+    await ensureSeededDirectory(path.join(dir, 'target'), path.join(dir, 'seed'));
+    expect(await readFile(path.join(dir, 'target', '第1卷', '001.md'), 'utf-8')).toBe('seed');
+    expect(await readFile(marker, 'utf-8')).toBe('db');
+  });
+
   it('种子不存在时创建空目录', async () => {
     const target = path.join(dir, 'x', 'sample-data');
     await ensureSeededDirectory(target, path.join(dir, 'no-seed'));

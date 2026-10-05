@@ -1,0 +1,128 @@
+// 与设置中心弹窗保持一致的外观（遮罩、圆角、标题栏）
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  width: min(560px, 92vw);
+  max-height: min(720px, 88vh);
+  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-bg-elevated);
+  box-shadow:
+    0 24px 52px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--ui-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2d2d2d;
+
+  h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ui-fg-primary);
+  }
+}
+
+.closeButton {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-fg-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+    color: var(--ui-fg-primary);
+  }
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footer {
+  flex-shrink: 0;
+  padding: 12px 18px;
+  border-top: 1px solid var(--ui-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #232324;
+}
+
+.textButton {
+  // 抵消内边距，让文字与分组内容右边缘对齐
+  margin-right: -6px;
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #8cc4ec;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+    color: var(--ui-fg-primary);
+  }
+}
+
+.summary {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.summaryRow {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  dt {
+    color: var(--ui-fg-muted);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--ui-fg-primary);
+  }
+}

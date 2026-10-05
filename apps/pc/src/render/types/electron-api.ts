@@ -5,6 +5,9 @@
 import type { FileInfo, FileInfoBatchEntry, OpenLocalResult, ShortcutInfo } from './File';
 import type { GrowthInvokeOverloads } from './growth-api';
 import type { GuiSessionSnapshot } from '@novel-editor/core/gui-session';
+import type { AboutInfo, AboutLinkKey } from '../../shared/about';
+
+export type { AboutInfo, AboutLinkKey } from '../../shared/about';
 
 export type UpdateChannel = 'stable' | 'beta' | 'canary';
 
@@ -172,6 +175,19 @@ export interface ElectronAPI {
     invoke(channel: 'window-toggle-fullscreen'): Promise<void>;
     invoke(channel: 'get-shortcuts'): Promise<ShortcutInfo[]>;
     invoke(channel: 'get-app-version'): Promise<string>;
+    invoke(channel: 'get-device-id'): Promise<string>;
+    /** 关于小说编辑器：版本、通道、灰度分组、设备 ID、运行时与数据目录 */
+    invoke(channel: 'get-about-info'): Promise<AboutInfo>;
+    /** 只允许打开 get-about-info 返回的目录 */
+    invoke(
+      channel: 'about-open-directory',
+      dirPath: string
+    ): Promise<{ success: boolean; error?: string }>;
+    invoke(
+      channel: 'about-open-link',
+      key: AboutLinkKey
+    ): Promise<{ success: boolean; error?: string }>;
+    invoke(channel: 'about-copy-text', text: string): Promise<{ success: boolean }>;
     invoke(channel: 'get-webauthn-support'): Promise<WebAuthnSupportInfo>;
     invoke(channel: 'update-check'): Promise<void>;
     invoke(channel: 'update-status'): Promise<UpdateStatus>;

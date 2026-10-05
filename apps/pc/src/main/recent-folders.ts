@@ -55,9 +55,10 @@ export function addRecentFolder(folderPath: string): void {
   write(data);
 }
 
-/** Get the last opened folder path, or null if none. */
+/** 上次打开的目录；没有记录或目录已被删除 / 移走时返回 null（启动时回退到示例数据） */
 export function getLastFolder(): string | null {
-  return read().lastFolder;
+  const lastFolder = read().lastFolder;
+  return lastFolder && existsSync(lastFolder) ? lastFolder : null;
 }
 
 /** Get the list of recently opened folders. */

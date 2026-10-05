@@ -34,6 +34,7 @@ import { useChapterMaterials } from './useChapterMaterials';
 import { useScopedAssistantArtifacts } from './useScopedAssistantArtifacts';
 import { useWorkspaceTabContent } from './useWorkspaceTabContent';
 import { useOpenSettingsTabListener } from './useOpenSettingsTabListener';
+import { useAboutDialogListener } from './useAboutDialogListener';
 import { useAssistantDialogHandlers } from './useAssistantDialogHandlers';
 import { useGrowthEntry } from './useGrowthEntry';
 import { useGuiSessionPublisher } from './useGuiSessionPublisher';
@@ -209,6 +210,8 @@ export function useAppController() {
       ...editor,
     });
   useOpenSettingsTabListener(uiState);
+  // 应用菜单「关于」/ 状态栏「关于…」打开关于对话框；只设置显隐，无顺序依赖
+  useAboutDialogListener(uiState);
   const { handleAssistantApplyFix, handleAssistantPreviewDiff } = useAssistantDialogHandlers({
     ...tabsState,
     ...editorState,

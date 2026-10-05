@@ -7,14 +7,7 @@
  * 这里只保留 Electron 专属能力（dialog / shell / clipboard / app 路径 / fs.watch 推送）
  * 并负责保持 IPC 通道名、参数与返回结构不变。
  */
-import {
-  ipcMain,
-  dialog,
-  BrowserWindow,
-  app,
-  clipboard as electronClipboard,
-  shell,
-} from 'electron';
+import { ipcMain, dialog, BrowserWindow, clipboard as electronClipboard, shell } from 'electron';
 import { watch, type FSWatcher, existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -39,6 +32,7 @@ import {
   saveTextFile,
 } from '@novel-editor/core';
 import { addRecentFolder } from '../recent-folders';
+import { getSampleDataPaths } from '../sample-data';
 import { getWorkspaceRootForSender } from './session';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -52,14 +46,6 @@ function errorMessage(error: unknown): string {
 }
 
 /** 示例数据：用户文档目录下的副本，以及随应用分发的种子目录 */
-function getSampleDataPaths(): { userSamplePath: string; sourcePath: string } {
-  const userSamplePath = path.join(app.getPath('documents'), 'Novel Editor', 'sample-data');
-  const sourcePath = app.isPackaged
-    ? path.join(process.resourcesPath, 'sample-data')
-    : path.join(path.resolve(app.getAppPath(), '..'), 'sample-data');
-  return { userSamplePath, sourcePath };
-}
-
 /** 读取保存前的文件内容；文件不存在（新建）时返回 null */
 async function readPreviousContent(filePath: string): Promise<string | null> {
   try {

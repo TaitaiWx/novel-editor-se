@@ -1,6 +1,6 @@
 import type { AIPresetKey, AIProvider } from '../../utils/appSettings';
 
-export type SettingsTab = 'general' | 'ai' | 'data' | 'shortcuts';
+export type SettingsTab = 'general' | 'ai' | 'data' | 'shortcuts' | 'about';
 export type ClearDataScope = 'document' | 'ai' | 'all';
 
 export interface SystemProfileInfo {
@@ -11,7 +11,7 @@ export interface SystemProfileInfo {
   reasons: string[];
 }
 
-export const VALID_TABS: SettingsTab[] = ['general', 'ai', 'data', 'shortcuts'];
+export const VALID_TABS: SettingsTab[] = ['general', 'ai', 'data', 'shortcuts', 'about'];
 
 /** AI 服务预设 */
 export interface AIPresetOption {
@@ -77,4 +77,5 @@ export const TAB_LABELS: Record<SettingsTab, string> = {
   ai: 'AI',
   data: '数据与缓存',
   shortcuts: '快捷键',
+  about: '关于',
 };

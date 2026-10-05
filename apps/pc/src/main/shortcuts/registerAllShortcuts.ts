@@ -1,5 +1,12 @@
 import { Menu, app, BrowserWindow } from 'electron';
 import { shortcutConfigs } from './config';
+import { APP_DISPLAY_NAME } from '../../shared/about';
+
+/** 通知渲染进程打开应用内「关于」对话框（无聚焦窗口时发给第一个窗口） */
+export const openAboutDialog = () => {
+  const target = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  target?.webContents.send('menu-open-about');
+};
 
 /**
  * 通过应用菜单注册快捷键（仅在应用聚焦时生效，不影响其他程序）
@@ -32,7 +39,8 @@ export const registerAllShortcuts = () => {
     template.push({
       label: app.name,
       submenu: [
-        { role: 'about', label: `关于 ${app.name}` },
+        // 不使用原生 role: 'about'，改为打开应用内的「关于」对话框
+        { label: `关于 ${APP_DISPLAY_NAME}`, click: openAboutDialog },
         { type: 'separator' },
         { role: 'hide', label: `隐藏 ${app.name}` },
         { role: 'hideOthers', label: '隐藏其他' },
@@ -65,6 +73,14 @@ export const registerAllShortcuts = () => {
 
   // 编辑菜单（Cmd+C / V / X / A 等）
   template.push({ role: 'editMenu' });
+
+  // Windows / Linux：「关于」放在帮助菜单（macOS 已在应用菜单中）
+  if (process.platform !== 'darwin') {
+    template.push({
+      label: '帮助',
+      submenu: [{ label: `关于 ${APP_DISPLAY_NAME}`, click: openAboutDialog }],
+    });
+  }
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };

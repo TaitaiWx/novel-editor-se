@@ -120,15 +120,35 @@ describe('useProjectLoader · 启动恢复', () => {
     expect(b.ctx.openFileInTab).not.toHaveBeenCalled();
   });
 
-  it('无上次工作区时清空状态；已存在小说记录时不重复创建', async () => {
+  it('无上次工作区时默认打开示例数据', async () => {
+    const samplePath = '/docs/Novel Editor/sample-data';
     const { ctx, electron } = setup({
-      handler: (channel) => (channel === 'check-just-updated' ? { updated: false } : undefined),
+      handler: (channel) => {
+        if (channel === 'check-just-updated') return { updated: false };
+        if (channel === 'open-sample-data') return samplePath;
+        if (channel === 'refresh-folder') return { path: samplePath, files: [] };
+        return undefined;
+      },
+    });
+    await flushStartup();
+    expect(electron?.invoke).toHaveBeenCalledWith('open-sample-data');
+    expect(electron?.invoke).toHaveBeenCalledWith('refresh-folder', samplePath);
+    expect(electron?.invoke).toHaveBeenCalledWith('add-recent-folder', samplePath);
+    expect(ctx.setFolderPath).toHaveBeenCalledWith(samplePath);
+    expect(ctx.setWorkspaceProjectName).toHaveBeenCalledWith(null);
+  });
+
+  it('示例数据刷新失败时清空工作区状态', async () => {
+    const { ctx } = setup({
+      handler: (channel) => {
+        if (channel === 'check-just-updated') return { updated: false };
+        if (channel === 'open-sample-data') return '/docs/sample-data';
+        return undefined;
+      },
     });
     await flushStartup();
     expect(ctx.setFolderPath).toHaveBeenCalledWith(null);
     expect(ctx.setFiles).toHaveBeenCalledWith([]);
-    expect(ctx.setWorkspaceProjectName).toHaveBeenCalledWith(null);
-    expect(electron?.invoke).not.toHaveBeenCalledWith('db-novel-create', expect.anything());
   });
 
   it('读取设置失败时回退默认设置', async () => {

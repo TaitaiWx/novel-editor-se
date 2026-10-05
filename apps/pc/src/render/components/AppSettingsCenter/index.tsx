@@ -7,6 +7,7 @@ import GeneralSection from './GeneralSection';
 import ShortcutsSection from './ShortcutsSection';
 import DataSection from './DataSection';
 import AiSection from './AiSection';
+import AboutSection from './AboutSection';
 
 export type { SettingsTab } from './constants';
 
@@ -16,6 +17,8 @@ interface AppSettingsCenterProps {
   initialTab?: SettingsTab;
   onSettingsChange?: (settings: SettingsDraft) => void;
   onOpenShortcuts?: () => void;
+  /** 打开更新日志标签（「关于」分区使用） */
+  onOpenChangelog?: () => void;
 }
 
 const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
@@ -24,6 +27,7 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
   initialTab = 'general',
   onSettingsChange,
   onOpenShortcuts,
+  onOpenChangelog,
 }) => {
   const {
     activeTab,
@@ -106,6 +110,20 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
                 applyAIPreset={applyAIPreset}
                 aiSaveStatus={aiSaveStatus}
                 handleSaveAISettings={handleSaveAISettings}
+              />
+            )}
+
+            {activeTab === 'about' && (
+              <AboutSection
+                active={visible}
+                onOpenChangelog={
+                  onOpenChangelog
+                    ? () => {
+                        onClose();
+                        onOpenChangelog();
+                      }
+                    : undefined
+                }
               />
             )}
           </section>

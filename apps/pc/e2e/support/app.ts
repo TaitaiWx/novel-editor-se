@@ -32,8 +32,8 @@ interface CdpTarget {
 }
 
 export interface LaunchOptions {
-  /** 启动时打开的项目目录 */
-  projectDir: string;
+  /** 启动时打开的项目目录；不传则模拟首次启动（无上次工作区） */
+  projectDir?: string;
   /** 复用的 userData 目录（不传则新建临时目录，关闭时删除） */
   userDataDir?: string;
   /** 额外环境变量 */
@@ -171,7 +171,7 @@ export async function launchApp(options: LaunchOptions): Promise<ElectronApp> {
       '--disable-renderer-backgrounding',
       '--disable-background-timer-throttling',
       '--disable-backgrounding-occluded-windows',
-      options.projectDir,
+      ...(options.projectDir ? [options.projectDir] : []),
     ],
     env
   );

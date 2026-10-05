@@ -143,9 +143,21 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
           }
         }
       } else {
-        setFolderPath(null);
-        setFiles([]);
-        setWorkspaceProjectName(null);
+        // 首次启动 / 上次目录已不存在：与 VS Code 打开欢迎页类似，默认打开示例数据
+        const samplePath = await ipc.invoke('open-sample-data');
+        await initializeProjectStore(samplePath);
+        const result = await ipc.invoke('refresh-folder', samplePath);
+        if (isLatestLoad(gen)) {
+          void ipc.invoke('add-recent-folder', samplePath);
+          setWorkspaceProjectName(null);
+          if (result) {
+            setFolderPath(result.path);
+            setFiles(result.files);
+          } else {
+            setFolderPath(null);
+            setFiles([]);
+          }
+        }
       }
 
       // 更新检查不阻塞首屏渲染。

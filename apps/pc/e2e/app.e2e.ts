@@ -568,7 +568,58 @@ describe('小说编辑器 GUI', () => {
     );
   });
 
-  it('11. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
+  it('11. 关于：设置中心「关于」分区显示版本与设备 ID，复制诊断信息；状态栏打开关于对话框', async () => {
+    const pkg = JSON.parse(await readFile(path.resolve(__dirname, '../package.json'), 'utf-8')) as {
+      version: string;
+    };
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const readText = (selector: string) =>
+      page.evaluate<string>(
+        (sel: string) => document.querySelector(sel)?.textContent?.trim() ?? '',
+        selector
+      );
+
+    // 设置中心 →「关于」分区
+    await page.click('[aria-label="打开设置中心"]');
+    await page.waitForTarget({ text: '设置中心', exact: true });
+    await page.click({ text: '关于', within: '[class*="sidebar"]', exact: true });
+    await page.waitForTarget('[data-testid="about-device-id"]');
+    expect(await readText('[data-testid="about-version"]')).toBe(`版本 ${pkg.version}`);
+    const deviceId = await readText('[data-testid="about-device-id"]');
+    expect(deviceId).toMatch(UUID);
+    // 设备 ID 与 userData/device-id 文件一致
+    expect((await readFile(path.join(app.userDataDir, 'device-id'), 'utf-8')).trim()).toBe(
+      deviceId
+    );
+
+    await page.click({ text: '复制诊断信息', exact: true });
+    await page.waitForTarget({ text: '已复制诊断信息', exact: true });
+    await captureForReview('about-section');
+    await page.evaluate(() => {
+      const content = document.querySelector('[data-testid="about-device-id"]')?.closest('section');
+      content?.parentElement?.lastElementChild?.scrollIntoView();
+    });
+    await captureForReview('about-section-bottom');
+    await page.click('[aria-label="关闭设置"]');
+    await page.waitForGone('[data-testid="about-device-id"]');
+
+    // 状态栏版本面板 →「关于…」→ 关于对话框
+    await page.click({ text: `v${pkg.version}`, exact: true });
+    await page.waitForTarget({ text: `设备 ID: ${deviceId.slice(0, 8)}…`, exact: true });
+    await page.click({ text: '关于…', exact: true });
+    await page.waitForTarget('[role="dialog"][aria-label="关于小说编辑器"]');
+    await page.waitForTarget('[data-testid="about-device-id"]');
+    expect(await readText('[data-testid="about-device-id"]')).toBe(deviceId);
+    await captureForReview('about-dialog');
+    await page.evaluate(() => {
+      document.querySelector('[role="dialog"] [class*="body"]')?.scrollTo(0, 10_000);
+    });
+    await captureForReview('about-dialog-bottom');
+    await page.click('[aria-label="关闭关于"]');
+    await page.waitForGone('[role="dialog"][aria-label="关于小说编辑器"]');
+  });
+
+  it('12. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
     const other = await createFixtureProject('novel-editor-e2e-second-');
     try {
       await mkdir(other.resolve('novels/另一部作品'), { recursive: true });

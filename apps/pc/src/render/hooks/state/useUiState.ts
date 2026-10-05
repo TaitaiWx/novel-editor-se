@@ -12,7 +12,7 @@ export type DialogApi = Pick<RawDialogApi, keyof RawDialogApi>;
 
 /**
  * 界面交互领域状态：提示/对话框 API、右键菜单、内联新建、文件剪贴板、文件树定位请求，
- * 以及各弹窗（快捷键、设置中心、AI 助手、版本历史、知识导出）的显隐（只声明，不含副作用）
+ * 以及各弹窗（快捷键、设置中心、AI 助手、版本历史、知识导出、关于）的显隐（只声明，不含副作用）
  */
 export function useUiState() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -28,6 +28,7 @@ export function useUiState() {
   const [settingsCenterTab, setSettingsCenterTab] = useState<SettingsTab>('general');
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showKnowledgeExportDialog, setShowKnowledgeExportDialog] = useState(false);
+  const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [knowledgeExportOptions, setKnowledgeExportOptions] = useState<KnowledgeExportOptions>({
     includeCharacters: true,
     includeLore: true,
@@ -62,6 +63,8 @@ export function useUiState() {
     setShowVersionHistory,
     showKnowledgeExportDialog,
     setShowKnowledgeExportDialog,
+    showAboutDialog,
+    setShowAboutDialog,
     knowledgeExportOptions,
     setKnowledgeExportOptions,
   };

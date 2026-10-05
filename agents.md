@@ -173,7 +173,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
   - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
   - `workbench.ts`: 本应用的高层操作（展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
   - `fixture.ts`: 每次运行在临时目录生成全新的示例项目（中文作品/章节 + `资料/`）
-- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、GUI 与 CLI 共享写作日志和会话状态、单实例转发）
+- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、GUI 与 CLI 共享写作日志和会话状态、关于页与设备 ID、单实例转发）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
 - 调试: 失败时自动把截图（`*.png`）和主进程 stdout/stderr（`*.log`）写入 `apps/pc/e2e/.artifacts/`（已 gitignore，CI 失败时作为 artifact 上传）；设置 `NOVEL_EDITOR_E2E_VERBOSE=1` 可实时输出主进程日志；可用 `pnpm test:e2e -t "<用例名>"` 过滤；`NOVEL_EDITOR_E2E_TRACE=1` 打印每个等待的耗时（用例共享同一窗口状态，单独运行靠后的用例时可能需要连同前置用例一起跑）
