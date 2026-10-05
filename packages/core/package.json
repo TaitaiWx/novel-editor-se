@@ -1,0 +1,25 @@
+{
+  "name": "@novel-editor/core",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pure Node core logic shared by Novel Editor CLI and GUI (file ops, project model, stats, export)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "docx": "^9.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "rimraf": "^6.0.1"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./text-stats": "./src/text-stats.ts",
+    "./growth": "./src/growth/index.ts"
+  }
+}
