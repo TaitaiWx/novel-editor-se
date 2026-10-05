@@ -42,14 +42,17 @@ export function useStoryOrderSync(ctx: UseStoryOrderSyncContext) {
     return () => {
       cancelled = true;
     };
-  }, [storyOrderStorageKey]);
+  }, [setStoryOrderMap, storyOrderMapRef, storyOrderStorageKey]);
 
-  const persistStoryOrderMap = useCallback(async (nextStoryOrderMap: StoryOrderMap) => {
-    const ipc = window.electron?.ipcRenderer;
-    const storageKey = createStoryOrderStorageKey(folderPathRef.current);
-    if (!ipc || !storageKey) return;
-    await ipc.invoke('db-settings-set', storageKey, JSON.stringify(nextStoryOrderMap));
-  }, []);
+  const persistStoryOrderMap = useCallback(
+    async (nextStoryOrderMap: StoryOrderMap) => {
+      const ipc = window.electron?.ipcRenderer;
+      const storageKey = createStoryOrderStorageKey(folderPathRef.current);
+      if (!ipc || !storageKey) return;
+      await ipc.invoke('db-settings-set', storageKey, JSON.stringify(nextStoryOrderMap));
+    },
+    [folderPathRef]
+  );
 
   return {
     persistStoryOrderMap,

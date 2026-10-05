@@ -173,7 +173,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
   - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
   - `workbench.ts`: 本应用的高层操作（展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
   - `fixture.ts`: 每次运行在临时目录生成全新的示例项目（中文作品/章节 + `资料/`）
-- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、单实例转发）
+- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、GUI 与 CLI 共享写作日志和会话状态、单实例转发）
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
 - 调试: 失败时自动把截图（`*.png`）和主进程 stdout/stderr（`*.log`）写入 `apps/pc/e2e/.artifacts/`（已 gitignore，CI 失败时作为 artifact 上传）；设置 `NOVEL_EDITOR_E2E_VERBOSE=1` 可实时输出主进程日志；可用 `pnpm test:e2e -t "<用例名>"` 过滤；`NOVEL_EDITOR_E2E_TRACE=1` 打印每个等待的耗时（用例共享同一窗口状态，单独运行靠后的用例时可能需要连同前置用例一起跑）
@@ -202,7 +202,8 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 ```
 <project>/
 ├── .novel-editor/config.json        # schemaVersion、name、novelsDir、chapterExtension
-├── .novel-editor/writing-log.json   # CLI 写作日志（stats today/history 数据源，目前只记录 CLI/daemon 写入）
+├── .novel-editor/writing-log.json   # 写作日志（stats today/history 数据源，CLI/daemon 写入与 GUI 保存共同记录）
+├── .novel-editor/session.json       # GUI 会话（打开的文件、当前文件、未保存文件、pid、updatedAt；ne status 读取）
 └── novels/<作品名>/001-标题.md       # 每部作品一个目录，子目录视为「卷」，数字前缀决定章节顺序
 ```
 
@@ -217,8 +218,12 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 ```bash
 ne init [path]                  # 初始化新项目（创建目录结构、配置文件）
 ne open <path>                  # 用 GUI 打开指定文件夹/项目
-ne status                       # 输出当前项目状态（打开的文件、未保存变更等）
+ne status                       # 输出当前项目状态（作品/字数、今日写作、GUI 打开的文件与未保存变更、daemon）
 ```
+
+- `ne status` 读取 `<project>/.novel-editor/session.json`（core `readGuiSession`）：GUI 渲染进程经 `gui-session-publish` IPC 防抖（500ms）上报打开的标签、当前文件、未保存文件，并每 60 秒心跳刷新；主进程补全 pid/版本/时间后写入。窗口销毁、切换文件夹时标记 `closed`
+- `--json` 下 `data.gui = { status, reason?, pid, appVersion, updatedAt, activeFile, openFiles, unsavedFiles }`；`status`: `active`（GUI 正在使用）/ `closed`（已关闭）/ `stale`（`reason`: `pid-not-alive` 进程已退出，或 `outdated` 超过 5 分钟未刷新）/ `none`（从未打开）。路径相对项目根，未命名标签为 `__untitled__:<名称>`
+- 未 `ne init` 的文件夹被 GUI 打开时，会话文件位于该文件夹的 `.novel-editor/`，在该目录执行 `ne status` 同样能看到
 
 #### 文件操作
 
@@ -265,6 +270,13 @@ ne stats [file|novel]           # 输出字数、行数、段落数等统计
 ne stats today                  # 今日写作统计（字数、时间）
 ne stats history [--days=7]     # 历史写作统计
 ```
+
+- `stats today` / `stats history` 的数据源是 `<project>/.novel-editor/writing-log.json`（core `writing-log.ts`，CLI 与 GUI 共用同一实现）：
+  - CLI：`file write`、`chapter create` 等写入类命令（`recordProjectWrites`）
+  - GUI：主进程 `write-file` 每次成功保存正文文件后（`recordStoryFileSave`），用保存前磁盘内容与新内容的字数差（与状态栏同一口径，不计空白）记录；内容未变化不记录；只读当前文件，不扫描项目，日志写入不阻塞保存
+  - 只统计正文文件（.md/.markdown/.txt），排除 `资料/` 与 `.novel-editor/`；项目根按 `.novel-editor/config.json` 向上查找，GUI 打开的文件夹未 `ne init` 时回退到该文件夹（`ne init` 后 CLI 即可读取）
+  - 写作时长为估算：同一天相邻两次写入间隔不超过 10 分钟即计入（GUI 自动保存 2 秒一次，持续输入会被连续计时）
+- SQLite `writing_stats` 表与 `db-stats-*` IPC 为历史遗留，GUI 未使用；跨工具的每日写作统计以 writing-log.json 为唯一数据源
 
 #### 应用控制（daemon 模式）
 

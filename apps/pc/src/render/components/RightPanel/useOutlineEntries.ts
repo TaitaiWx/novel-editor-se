@@ -210,6 +210,18 @@ export function useOutlineEntries(
   aiReady: boolean,
   scope?: PersistedOutlineScopeInput | null
 ) {
+  // 按 kind / path 归一化作用域：调用方每次渲染可能传入新对象，
+  // 只有字段真正变化时才更新引用，避免重复触发大纲 / 版本加载
+  const scopeKind = scope?.kind;
+  const scopePath = scope?.path;
+  const outlineScope = useMemo<PersistedOutlineScopeInput | null>(
+    () =>
+      scopeKind !== undefined && scopePath !== undefined
+        ? { kind: scopeKind, path: scopePath }
+        : null,
+    [scopeKind, scopePath]
+  );
+
   // Debounce content changes for liveEntries (300ms) to avoid re-parsing on every keystroke
   const debouncedContent = useDebounce(content, 300);
 
@@ -245,7 +257,7 @@ export function useOutlineEntries(
       const rows = await window.electron.ipcRenderer.invoke(
         'db-outline-list-by-folder',
         folderPath,
-        scope ?? undefined
+        outlineScope ?? undefined
       );
       setPersistedRows(rows);
       setStatusMessage('');
@@ -255,7 +267,7 @@ export function useOutlineEntries(
     } finally {
       setLoading(false);
     }
-  }, [dbReady, folderPath, scope?.kind, scope?.path]);
+  }, [dbReady, folderPath, outlineScope]);
 
   useEffect(() => {
     void loadPersisted();
@@ -270,13 +282,13 @@ export function useOutlineEntries(
       const rows = await window.electron.ipcRenderer.invoke(
         'db-outline-version-list-by-folder',
         folderPath,
-        scope ?? undefined
+        outlineScope ?? undefined
       );
       setVersions(rows);
     } catch {
       setVersions([]);
     }
-  }, [dbReady, folderPath, scope?.kind, scope?.path]);
+  }, [dbReady, folderPath, outlineScope]);
 
   useEffect(() => {
     void loadVersions();
@@ -304,13 +316,13 @@ export function useOutlineEntries(
           note,
           entries: targetEntries,
         },
-        scope ?? undefined
+        outlineScope ?? undefined
       );
       await loadVersions();
       if (!silentStatus) setStatusMessage(`已保存大纲版本：${name}`);
       return true;
     },
-    [dbReady, folderPath, loadVersions, persistedTree, scope?.kind, scope?.path]
+    [dbReady, folderPath, loadVersions, persistedTree, outlineScope]
   );
 
   const importOutline = useCallback(async () => {
@@ -333,7 +345,7 @@ export function useOutlineEntries(
         return;
       }
 
-      await writeOutlineTree(folderPath, tree, scope);
+      await writeOutlineTree(folderPath, tree, outlineScope);
       await loadPersisted();
       let versionSaved = false;
       try {
@@ -357,7 +369,7 @@ export function useOutlineEntries(
     } finally {
       setImporting(false);
     }
-  }, [aiReady, dbReady, folderPath, loadPersisted, saveOutlineVersion, scope?.kind, scope?.path]);
+  }, [aiReady, dbReady, folderPath, loadPersisted, saveOutlineVersion, outlineScope]);
 
   const rebuildFromContent = useCallback(async () => {
     if (!folderPath || !dbReady) {
@@ -373,7 +385,7 @@ export function useOutlineEntries(
 
     setImporting(true);
     try {
-      await writeOutlineTree(folderPath, tree, scope);
+      await writeOutlineTree(folderPath, tree, outlineScope);
       await loadPersisted();
       let versionSaved = false;
       try {
@@ -395,16 +407,7 @@ export function useOutlineEntries(
     } finally {
       setImporting(false);
     }
-  }, [
-    aiReady,
-    content,
-    dbReady,
-    folderPath,
-    loadPersisted,
-    saveOutlineVersion,
-    scope?.kind,
-    scope?.path,
-  ]);
+  }, [aiReady, content, dbReady, folderPath, loadPersisted, saveOutlineVersion, outlineScope]);
 
   const clearPersisted = useCallback(async () => {
     if (!folderPath || !dbReady) {
@@ -417,7 +420,7 @@ export function useOutlineEntries(
       await window.electron.ipcRenderer.invoke(
         'db-outline-clear-by-folder',
         folderPath,
-        scope ?? undefined
+        outlineScope ?? undefined
       );
       setPersistedRows([]);
       setStatusMessage('已清空已入库大纲，目录将回退为正文实时解析');
@@ -426,7 +429,7 @@ export function useOutlineEntries(
     } finally {
       setImporting(false);
     }
-  }, [dbReady, folderPath, scope?.kind, scope?.path]);
+  }, [dbReady, folderPath, outlineScope]);
 
   const applyOutlineVersion = useCallback(
     async (versionId: number) => {
@@ -440,7 +443,7 @@ export function useOutlineEntries(
           'db-outline-version-apply-by-folder',
           folderPath,
           versionId,
-          scope ?? undefined
+          outlineScope ?? undefined
         );
         await loadPersisted();
         await loadVersions();
@@ -451,7 +454,7 @@ export function useOutlineEntries(
         setImporting(false);
       }
     },
-    [dbReady, folderPath, loadPersisted, loadVersions, scope?.kind, scope?.path]
+    [dbReady, folderPath, loadPersisted, loadVersions, outlineScope]
   );
 
   const updateOutlineVersion = useCallback(
@@ -517,7 +520,7 @@ export function useOutlineEntries(
           return;
         }
 
-        await writeOutlineTree(folderPath, tree, scope);
+        await writeOutlineTree(folderPath, tree, outlineScope);
         await loadPersisted();
         let versionSaved = false;
         const optionsSummary = options
@@ -543,16 +546,7 @@ export function useOutlineEntries(
         setImporting(false);
       }
     },
-    [
-      aiReady,
-      content,
-      dbReady,
-      folderPath,
-      loadPersisted,
-      saveOutlineVersion,
-      scope?.kind,
-      scope?.path,
-    ]
+    [aiReady, content, dbReady, folderPath, loadPersisted, saveOutlineVersion, outlineScope]
   );
 
   const reorderEntries = useCallback(

@@ -120,8 +120,10 @@
 
 .panelContent {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
-  padding: 14px;
+  // 面板很窄时收缩水平内边距，给正文留出空间
+  padding: 14px clamp(8px, 5%, 14px);
   background: #1e1e1e;
 
   &::-webkit-scrollbar {
@@ -237,10 +239,14 @@
   color: #efefef;
   font-size: 12px;
   font-weight: 650;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .scopeContextMeta {
   margin-top: 4px;
+  overflow-wrap: break-word;
   color: rgba(255, 255, 255, 0.58);
   font-size: 11px;
   line-height: 1.55;
@@ -269,13 +275,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
   margin-bottom: 8px;
+
+  // 标题在窄面板下单行省略，不被挤成一字一行
+  > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
   font-size: 12px;
   font-weight: 650;
   color: #f0f0f0;
 }
 
 .chapterMaterialsCount {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 11px;
   color: #8c8c8c;
 }
@@ -311,6 +330,8 @@
 }
 
 .chapterMaterialAction {
+  flex-shrink: 0;
+  white-space: nowrap;
   border: none;
   background: none;
   color: #9a9a9a;
@@ -335,6 +356,8 @@
 }
 
 .chapterMaterialPrimary {
+  flex-shrink: 0;
+  white-space: nowrap;
   border: 1px solid rgba(0, 122, 204, 0.35);
   background: rgba(0, 122, 204, 0.18);
   color: #dff0ff;
@@ -358,10 +381,30 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+  --storyline-fade: 20px;
 
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+// 溢出时在被遮住的一侧做柔和渐隐，提示可以横向滚动
+.storylineToolbarFadeEnd {
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--storyline-fade)), transparent);
+}
+
+.storylineToolbarFadeStart {
+  mask-image: linear-gradient(to left, #000 calc(100% - var(--storyline-fade)), transparent);
+}
+
+.storylineToolbarFadeStart.storylineToolbarFadeEnd {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--storyline-fade),
+    #000 calc(100% - var(--storyline-fade)),
+    transparent
+  );
 }
 
 .storylineToggle {
@@ -2481,7 +2524,9 @@
   text-align: center;
   color: #6b7d91;
   font-size: 12px;
-  padding: 48px 20px;
+  // 窄面板下水平内边距随宽度收缩，避免提示文字被挤成一两个字一行
+  padding: 48px clamp(4px, 6%, 20px);
+  overflow-wrap: break-word;
   line-height: 2;
   border-radius: 12px;
 }

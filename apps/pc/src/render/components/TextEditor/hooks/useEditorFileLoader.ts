@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Compartment } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import {
@@ -70,10 +70,44 @@ export function useEditorFileLoader({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLargeFile, setIsLargeFile] = useState(false);
+  // 专注模式只影响加载时的换行配置，切换专注模式不应重新读取文件（由 useCodeMirrorView 负责重配），
+  // 因此通过最新值 ref 读取，而不放入加载 effect 的依赖
+  const focusModeRef = useRef(focusMode);
+  focusModeRef.current = focusMode;
 
-  // Load file content
+  // 加载阶段需要的展示配置与回调统一走「最新值 ref」：只读 / 换行变化由 useCodeMirrorView
+  // 的 reconfigure effect 负责，回调身份变化也不应触发重新读盘（否则会覆盖未保存的输入）
+  const loaderDepsRef = useRef({
+    readOnly,
+    wordWrap,
+    emitCursorPosition,
+    restoreViewportSnapshot,
+    saveViewportSnapshot,
+    onContentChange,
+    onCursorChange,
+  });
+  loaderDepsRef.current = {
+    readOnly,
+    wordWrap,
+    emitCursorPosition,
+    restoreViewportSnapshot,
+    saveViewportSnapshot,
+    onContentChange,
+    onCursorChange,
+  };
+
+  // Load file content：仅在文件 / 编码 / 重载信号 / 虚拟内容变化时重新加载
   useEffect(() => {
     if (!editorReady) return;
+    const {
+      readOnly,
+      wordWrap,
+      emitCursorPosition,
+      restoreViewportSnapshot,
+      saveViewportSnapshot,
+      onContentChange,
+      onCursorChange,
+    } = loaderDepsRef.current;
 
     const loadContent = async () => {
       const view = viewRef.current;
@@ -134,7 +168,7 @@ export function useEditorFileLoader({
               effects: [
                 readOnlyCompartment.current.reconfigure(EditorView.editable.of(!readOnly)),
                 wordWrapCompartment.current.reconfigure(
-                  createWordWrapExtension(wordWrap, focusMode)
+                  createWordWrapExtension(wordWrap, focusModeRef.current)
                 ),
               ],
             });
@@ -216,7 +250,9 @@ export function useEditorFileLoader({
             effects: [
               readOnlyCompartment.current.reconfigure(EditorView.editable.of(!readOnly)),
               // 专注模式下强制换行，与 wordWrap 重配 effect 保持一致
-              wordWrapCompartment.current.reconfigure(createWordWrapExtension(wordWrap, focusMode)),
+              wordWrapCompartment.current.reconfigure(
+                createWordWrapExtension(wordWrap, focusModeRef.current)
+              ),
             ],
           });
           restoreViewportSnapshot(filePath, fileContent.length);
@@ -245,13 +281,16 @@ export function useEditorFileLoader({
     encoding,
     reloadToken,
     virtualContent,
-    readOnly,
-    wordWrap,
-    emitCursorPosition,
-    restoreViewportSnapshot,
-    saveViewportSnapshot,
-    onContentChange,
-    onCursorChange,
+    // 以下均为稳定引用（ref / Compartment ref / useState setter），不会引起额外加载
+    viewRef,
+    currentFilePathRef,
+    currentContentRef,
+    currentOriginalContentRef,
+    readOnlyRef,
+    readOnlyCompartment,
+    wordWrapCompartment,
+    setHasChanges,
+    setLastSaved,
   ]);
 
   /** 错误态"重试"：运行时初始化失败则刷新页面，否则重新读取当前文件 */
@@ -289,7 +328,14 @@ export function useEditorFileLoader({
       };
       retryLoad();
     }
-  }, [editorInitError, filePath]);
+  }, [
+    currentContentRef,
+    currentOriginalContentRef,
+    editorInitError,
+    filePath,
+    setHasChanges,
+    viewRef,
+  ]);
 
   return { loading, error, isLargeFile, handleRetry };
 }

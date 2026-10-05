@@ -36,7 +36,7 @@ export function useProjectExport(ctx: UseProjectExportContext) {
     } catch (error) {
       toast.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [toast]);
+  }, [folderPathRef, toast]);
 
   // 导出角色卡、设定与资料：数据源直接来自 SQLite，避免依赖组件临时状态。
   const handleExportKnowledgeText = useCallback(
@@ -64,17 +64,17 @@ export function useProjectExport(ctx: UseProjectExportContext) {
         );
       }
     },
-    [toast]
+    [folderPathRef, toast]
   );
 
   const handleOpenKnowledgeExportDialog = useCallback(() => {
     setShowKnowledgeExportDialog(true);
-  }, []);
+  }, [setShowKnowledgeExportDialog]);
 
   const handleConfirmKnowledgeExport = useCallback(async () => {
     await handleExportKnowledgeText(knowledgeExportOptions);
     setShowKnowledgeExportDialog(false);
-  }, [handleExportKnowledgeText, knowledgeExportOptions]);
+  }, [handleExportKnowledgeText, knowledgeExportOptions, setShowKnowledgeExportDialog]);
 
   // 监听原生菜单的导出项目快捷键
   React.useEffect(() => {

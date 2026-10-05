@@ -181,7 +181,7 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
 
       await ipc.invoke('db-settings-set', key, JSON.stringify(nextStatus));
     },
-    [isViewingScope]
+    [isViewingScope, setAssistantCharacterGenerationStatus]
   );
 
   const handleGenerateScopedCharacters = useCallback(
@@ -438,13 +438,17 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
       }
     },
     [
+      folderPathRef,
       ensurePersistedAiReady,
-      isViewingScope,
-      getCurrentNovelId,
-      persistScopedAssistantArtifacts,
-      persistScopedAssistantGenerationStatus,
-      resolveScopeTargetContext,
       toast,
+      resolveScopeTargetContext,
+      getCurrentNovelId,
+      persistScopedAssistantGenerationStatus,
+      persistScopedAssistantArtifacts,
+      isViewingScope,
+      setWorkspaceCharacters,
+      bumpWorkspaceCharactersVersion,
+      setAssistantScopedCharacters,
     ]
   );
 
@@ -522,11 +526,15 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
       }
     },
     [
+      bumpWorkspaceLoreVersion,
       ensurePersistedAiReady,
+      folderPathRef,
       isViewingScope,
       openFileInTab,
       persistScopedAssistantArtifacts,
       resolveScopeTargetContext,
+      setAssistantScopedLoreEntries,
+      setWorkspaceLoreEntries,
       toast,
     ]
   );
@@ -649,10 +657,13 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
     },
     [
       ensurePersistedAiReady,
+      filesRef,
+      folderPathRef,
       isViewingScope,
       persistScopedAssistantArtifacts,
       refreshCurrentFolder,
       resolveScopeTargetContext,
+      setAssistantScopedMaterials,
       toast,
     ]
   );

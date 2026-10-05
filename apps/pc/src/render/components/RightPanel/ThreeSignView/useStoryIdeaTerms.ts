@@ -132,7 +132,7 @@ export function useStoryIdeaTerms({
         if (nextDraft) setDraft(nextDraft);
       });
     },
-    [divergentGenerationConfig, draft, redrawIdeaTermRandomly]
+    [divergentGenerationConfig, draft, redrawIdeaTermRandomly, setDraft]
   );
 
   const handleContinueDiverging = useCallback(() => {

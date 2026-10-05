@@ -33,11 +33,14 @@ export const OutlinePopover: React.FC<OutlinePopoverProps> = React.memo(
     const [visible, setVisible] = useState(false);
     const showTimerRef = useRef<number | null>(null);
     const lastAnchorLineRef = useRef<number | null>(null);
+    // 最新可见状态：effect 只应随 anchor / entry 变化执行，不能因 visible 翻转而重启防抖计时
+    const visibleRef = useRef(visible);
+    visibleRef.current = visible;
 
     useEffect(() => {
       if (anchor && entry) {
         // Same line — keep visible, skip debounce (e.g. re-entering popover itself)
-        if (lastAnchorLineRef.current === anchor.line && visible) return;
+        if (lastAnchorLineRef.current === anchor.line && visibleRef.current) return;
 
         lastAnchorLineRef.current = anchor.line;
         setVisible(false);

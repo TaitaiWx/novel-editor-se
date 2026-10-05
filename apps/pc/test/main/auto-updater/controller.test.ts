@@ -305,12 +305,17 @@ describe('auto-updater controller', () => {
       expect(updater.checkForUpdates.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
 
-    it('重复调用不会重复注册监听，并替换定时器', async () => {
+    it('重复调用不会重复注册监听，并替换定时器（含首次检查 timeout）', async () => {
       const { controller } = await loadController();
       await controller.setupAutoUpdater();
       await controller.setupAutoUpdater();
       expect(fakeUpdater().listenerCount('update-available')).toBe(1);
-      expect(vi.getTimerCount()).toBe(3); // 1 个 interval + 2 个首次检查 timeout
+      expect(vi.getTimerCount()).toBe(2); // 1 个 interval + 1 个首次检查 timeout
+
+      // 首次检查只触发一次
+      await vi.advanceTimersByTimeAsync(10_000);
+      await flush();
+      expect(fakeUpdater().checkForUpdates).toHaveBeenCalledTimes(1);
     });
 
     it('清理残留下载失败时不抛错', async () => {

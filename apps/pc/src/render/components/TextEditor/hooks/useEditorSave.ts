@@ -56,7 +56,7 @@ export function useEditorSave({
     } finally {
       setAutoSaving(false);
     }
-  }, []);
+  }, [currentContentRef, currentFilePathRef, currentOriginalContentRef, filePathRef, readOnlyRef]);
 
   const scheduleAutoSave = useCallback(() => {
     if (autoSaveTimeoutRef.current) {
@@ -67,7 +67,7 @@ export function useEditorSave({
         autoSaveFile();
       }, AUTO_SAVE_DELAY);
     }
-  }, [autoSaveFile]);
+  }, [autoSaveFile, autoSaveTimeoutRef, readOnlyRef]);
 
   const handleManualSave = useCallback(async () => {
     const targetPath = currentFilePathRef.current;
@@ -102,7 +102,15 @@ export function useEditorSave({
     } finally {
       setAutoSaving(false);
     }
-  }, [toast]);
+  }, [
+    currentContentRef,
+    currentFilePathRef,
+    currentOriginalContentRef,
+    filePathRef,
+    onSaveUntitledRef,
+    readOnlyRef,
+    toast,
+  ]);
 
   useEffect(() => {
     handleManualSaveRef.current = handleManualSave;

@@ -171,6 +171,23 @@ describe('runCli end-to-end', () => {
     expect(update.json).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED' } });
   });
 
+  it('file list 默认隐藏 dotfile 与系统文件，--all 显示（.novel-editor 始终隐藏）', async () => {
+    await ne(['file', 'write', 'a.md', '正文']);
+    await ne(['file', 'write', '.gitignore', 'dist']);
+    await ne(['file', 'write', 'Thumbs.db', 'x']);
+    await ne(['file', 'write', '.novel-editor/state.json', '{}']);
+    const childNames = (output: RunOutput): string[] =>
+      (data<{ children: Array<{ name: string }> }>(output).children ?? []).map(
+        (node) => node.name
+      );
+
+    const hidden = await ne(['file', 'list', '--json']);
+    expect(childNames(hidden)).toEqual(['a.md']);
+
+    const all = await ne(['file', 'list', '--all', '--json']);
+    expect(childNames(all).sort()).toEqual(['.gitignore', 'Thumbs.db', 'a.md']);
+  });
+
   it('--quiet 抑制提示信息，--json 帮助返回命令清单', async () => {
     await ne(['file', 'write', 'a.md', '张三']);
     const quiet = await ne(['file', 'search', '张三', '-q']);

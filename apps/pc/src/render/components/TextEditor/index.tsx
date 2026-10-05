@@ -21,6 +21,7 @@ import { useEditorSave } from './hooks/useEditorSave';
 import { useCodeMirrorView } from './hooks/useCodeMirrorView';
 import { useEditorFileLoader } from './hooks/useEditorFileLoader';
 import { useEditorRequests } from './hooks/useEditorRequests';
+import { useDirtyStateBroadcast } from './hooks/useDirtyStateBroadcast';
 import EditorFileHeader from './EditorFileHeader';
 import styles from './styles.module.scss';
 
@@ -29,6 +30,43 @@ const DEFAULT_SHOW_LINE_NUMBERS = false;
 export type { EditorViewportSnapshot } from './types';
 export type { InlineDiffRange };
 export type { CharacterHighlightPattern };
+
+interface UnmountFlushRefs {
+  autoSaveTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
+  transientHighlightTimerRef: React.MutableRefObject<number | null>;
+  appliedLineMarkerTimerRef: React.MutableRefObject<number | null>;
+  currentFilePathRef: React.MutableRefObject<string | null>;
+  currentContentRef: React.MutableRefObject<string>;
+  currentOriginalContentRef: React.MutableRefObject<string>;
+  readOnlyRef: React.MutableRefObject<boolean>;
+}
+
+/**
+ * 编辑器卸载时清理定时器，并把未保存的内容写回磁盘。
+ * 刻意在调用时才读取 ref.current，确保拿到卸载那一刻的最新文件路径与内容。
+ */
+function flushEditorOnUnmount(refs: UnmountFlushRefs) {
+  if (refs.autoSaveTimeoutRef.current) {
+    clearTimeout(refs.autoSaveTimeoutRef.current);
+  }
+  if (refs.transientHighlightTimerRef.current) {
+    window.clearTimeout(refs.transientHighlightTimerRef.current);
+  }
+  if (refs.appliedLineMarkerTimerRef.current) {
+    window.clearTimeout(refs.appliedLineMarkerTimerRef.current);
+  }
+  const filePath = refs.currentFilePathRef.current;
+  const content = refs.currentContentRef.current;
+  if (
+    isPersistablePath(filePath) &&
+    content !== refs.currentOriginalContentRef.current &&
+    !refs.readOnlyRef.current
+  ) {
+    window.electron.ipcRenderer.invoke('write-file', filePath, content).catch((err) => {
+      console.error('Failed to save on unmount:', err);
+    });
+  }
+}
 
 const TextEditor: React.FC<TextEditorProps> = ({
   filePath,
@@ -87,15 +125,18 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
   const { editorRuntime, editorInitError } = useEditorRuntime();
 
-  const emitCursorPosition = useCallback((view: EditorView | null) => {
-    if (!view) return;
-    const pos = view.state.selection.main.head;
-    const line = view.state.doc.lineAt(pos);
-    onCursorChangeRef.current?.({
-      line: line.number,
-      column: pos - line.from + 1,
-    });
-  }, []);
+  const emitCursorPosition = useCallback(
+    (view: EditorView | null) => {
+      if (!view) return;
+      const pos = view.state.selection.main.head;
+      const line = view.state.doc.lineAt(pos);
+      onCursorChangeRef.current?.({
+        line: line.number,
+        column: pos - line.from + 1,
+      });
+    },
+    [onCursorChangeRef]
+  );
 
   const {
     autoSaving,
@@ -116,6 +157,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
     autoSaveTimeoutRef,
     toast,
   });
+  useDirtyStateBroadcast(filePath, hasChanges);
 
   const { editorReady, readOnlyCompartment, wordWrapCompartment } = useCodeMirrorView({
     editorContainerRef,
@@ -141,31 +183,19 @@ const TextEditor: React.FC<TextEditorProps> = ({
     characterHighlights,
   });
 
-  // Save on unmount
+  // Save on unmount：卸载时读取各 ref 的最新值（而非挂载时快照），交由模块级函数处理
   useEffect(() => {
-    return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-      if (transientHighlightTimerRef.current) {
-        window.clearTimeout(transientHighlightTimerRef.current);
-      }
-      if (appliedLineMarkerTimerRef.current) {
-        window.clearTimeout(appliedLineMarkerTimerRef.current);
-      }
-      if (
-        isPersistablePath(currentFilePathRef.current) &&
-        currentContentRef.current !== currentOriginalContentRef.current &&
-        !readOnlyRef.current
-      ) {
-        window.electron.ipcRenderer
-          .invoke('write-file', currentFilePathRef.current, currentContentRef.current)
-          .catch((err) => {
-            console.error('Failed to save on unmount:', err);
-          });
-      }
-    };
-  }, []);
+    return () =>
+      flushEditorOnUnmount({
+        autoSaveTimeoutRef,
+        transientHighlightTimerRef,
+        appliedLineMarkerTimerRef,
+        currentFilePathRef,
+        currentContentRef,
+        currentOriginalContentRef,
+        readOnlyRef,
+      });
+  }, [readOnlyRef]);
 
   const { loading, error, isLargeFile, handleRetry } = useEditorFileLoader({
     editorReady,

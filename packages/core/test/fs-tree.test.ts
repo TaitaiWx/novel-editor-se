@@ -142,17 +142,21 @@ describe('listTree（CLI）', () => {
 });
 
 describe('readFolderTree（GUI 文件浏览器）', () => {
-  it('返回 { path, files }，节点无 size，目录总有 children，包含隐藏文件', async () => {
+  it('返回 { path, files }，节点无 size，目录总有 children，默认隐藏 dotfile 与系统文件', async () => {
     await touch('正文/第一章.md', '内容');
     await mkdir(path.join(dir, '空目录'));
     await touch('.novelrc');
+    await touch('.gitignore');
     await touch('.git/HEAD');
+    await touch('.novel-editor/state.json');
     await touch('.DS_Store');
+    await touch('Thumbs.db');
+    await touch('desktop.ini');
     await touch('dist/a.js');
 
     const tree = await readFolderTree(dir);
     expect(tree.path).toBe(dir);
-    expect(names(tree.files)).toEqual(['.novelrc', '正文', '空目录']);
+    expect(names(tree.files)).toEqual(['正文', '空目录']);
     const empty = tree.files.find((node) => node.name === '空目录');
     expect(empty).toEqual({
       name: '空目录',
@@ -166,6 +170,17 @@ describe('readFolderTree（GUI 文件浏览器）', () => {
       path: path.join(dir, '正文', '第一章.md'),
       type: 'file',
     });
+  });
+
+  it('includeHidden 时显示隐藏文件，但 .novel-editor / .git / .DS_Store 等仍始终排除', async () => {
+    await touch('a.md');
+    await touch('.gitignore');
+    await touch('Thumbs.db');
+    await touch('.git/HEAD');
+    await touch('.novel-editor/state.json');
+    await touch('.DS_Store');
+    const tree = await readFolderTree(dir, { includeHidden: true });
+    expect(names(tree.files)).toEqual(['.gitignore', 'Thumbs.db', 'a.md']);
   });
 
   it('排除规则按名称精确匹配，不误伤 outline / about / build 前缀的普通文件', async () => {

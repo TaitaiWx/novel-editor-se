@@ -154,7 +154,7 @@ export function useCharacterListEditor({
       setDragIndex(null);
       setDropIndex(null);
     },
-    [dragIndex]
+    [dragIndex, setCharacters]
   );
 
   const handleKeyDown = useCallback(

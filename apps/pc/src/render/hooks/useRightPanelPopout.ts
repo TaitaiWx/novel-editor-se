@@ -40,7 +40,7 @@ export function useRightPanelPopout(ctx: UseRightPanelPopoutContext) {
     return () => {
       dispose?.();
     };
-  }, [resolvePaneLayout]);
+  }, [resolvePaneLayout, setRightPanelPoppedOut]);
 
   const handlePopOutRightPanel = useCallback(() => {
     const ipc = window.electron?.ipcRenderer;
@@ -48,7 +48,7 @@ export function useRightPanelPopout(ctx: UseRightPanelPopoutContext) {
     const hasTab = !!activeTab;
     void ipc.invoke('open-right-panel-window', folderPath, editorContentRef.current, hasTab);
     setRightPanelPoppedOut(true);
-  }, [folderPath, activeTab]);
+  }, [folderPath, activeTab, editorContentRef, setRightPanelPoppedOut]);
 
   // MessagePort 直连：当独立窗口建立端口通道后，内容变化直接 postMessage 到面板
   // 数据驱动 —— 主窗口是唯一数据源，零 main-process 开销

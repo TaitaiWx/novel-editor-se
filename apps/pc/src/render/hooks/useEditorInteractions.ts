@@ -104,54 +104,75 @@ export function useEditorInteractions(ctx: UseEditorInteractionsContext) {
     toast.success(
       `已格式化当前章节：整理 ${result.paragraphCount} 段，合并 ${result.mergedLineCount} 处换行`
     );
-  }, [toast]);
+  }, [activeTabRef, editorViewRef, toast]);
 
-  const handleFileContextMenu = useCallback((event: ContextMenuEvent) => {
-    setContextMenu({ x: event.x, y: event.y, target: { kind: 'file', node: event.node } });
-  }, []);
+  const handleFileContextMenu = useCallback(
+    (event: ContextMenuEvent) => {
+      setContextMenu({ x: event.x, y: event.y, target: { kind: 'file', node: event.node } });
+    },
+    [setContextMenu]
+  );
 
-  const handleObjectContextMenu = useCallback((event: ObjectContextMenuEvent) => {
-    setContextMenu({ x: event.x, y: event.y, target: { kind: 'object', target: event.target } });
-  }, []);
+  const handleObjectContextMenu = useCallback(
+    (event: ObjectContextMenuEvent) => {
+      setContextMenu({ x: event.x, y: event.y, target: { kind: 'object', target: event.target } });
+    },
+    [setContextMenu]
+  );
 
-  const handleBackgroundContextMenu = useCallback((pos: { x: number; y: number }) => {
-    setContextMenu({ x: pos.x, y: pos.y, target: { kind: 'background' } });
-  }, []);
+  const handleBackgroundContextMenu = useCallback(
+    (pos: { x: number; y: number }) => {
+      setContextMenu({ x: pos.x, y: pos.y, target: { kind: 'background' } });
+    },
+    [setContextMenu]
+  );
 
-  const handleContentChange = useCallback((content: string) => {
-    setEditorContent(content);
-    const tab = activeTabRef.current;
-    if (tab && isUntitledTabPath(tab)) {
-      setUntitledTabContents((prev) => {
-        if (prev[tab] === content) return prev;
-        return { ...prev, [tab]: content };
-      });
-    }
-  }, []);
+  const handleContentChange = useCallback(
+    (content: string) => {
+      setEditorContent(content);
+      const tab = activeTabRef.current;
+      if (tab && isUntitledTabPath(tab)) {
+        setUntitledTabContents((prev) => {
+          if (prev[tab] === content) return prev;
+          return { ...prev, [tab]: content };
+        });
+      }
+    },
+    [activeTabRef, setEditorContent, setUntitledTabContents]
+  );
 
-  const handleCursorChange = useCallback((pos: CursorPosition) => {
-    setCursorPosition(pos);
-  }, []);
+  const handleCursorChange = useCallback(
+    (pos: CursorPosition) => {
+      setCursorPosition(pos);
+    },
+    [setCursorPosition]
+  );
 
   const handleCloseContextMenu = useCallback(() => {
     setContextMenu(null);
-  }, []);
+  }, [setContextMenu]);
 
   const handleScrollProcessed = useCallback(() => {
     setScrollToLine(null);
-  }, []);
+  }, [setScrollToLine]);
 
   const handleTransientHighlightProcessed = useCallback(() => {
     setTransientHighlightLine(null);
-  }, []);
+  }, [setTransientHighlightLine]);
 
-  const handleScrollToLine = useCallback((line: number, contentKey?: string) => {
-    setScrollToLine({ line, id: fnv1a32(contentKey ?? `line:${line}`) });
-  }, []);
+  const handleScrollToLine = useCallback(
+    (line: number, contentKey?: string) => {
+      setScrollToLine({ line, id: fnv1a32(contentKey ?? `line:${line}`) });
+    },
+    [setScrollToLine]
+  );
 
-  const handleTransientHighlightLine = useCallback((line: number) => {
-    setTransientHighlightLine({ line, id: fnv1a32(`line:${line}`) });
-  }, []);
+  const handleTransientHighlightLine = useCallback(
+    (line: number) => {
+      setTransientHighlightLine({ line, id: fnv1a32(`line:${line}`) });
+    },
+    [setTransientHighlightLine]
+  );
 
   const handleOpenSourceLocation = useCallback(
     (filePath: string, line: number, contentKey?: string) => {
@@ -173,30 +194,37 @@ export function useEditorInteractions(ctx: UseEditorInteractionsContext) {
       handleTransientHighlightLine(line);
     },
     [
-      focusMode,
-      handleExpandSidebar,
-      openFileInTab,
       handleScrollToLine,
       handleTransientHighlightLine,
+      focusMode,
+      sidebarCollapsedRef,
+      setFilePanelRevealRequest,
+      filePanelRevealCounterRef,
+      openFileInTab,
+      setFocusMode,
+      handleExpandSidebar,
     ]
   );
 
   const replaceIdRef = useRef(0);
-  const handleReplaceLineText = useCallback((line: number, text: string) => {
-    setReplaceLineRequest({ line, text, id: ++replaceIdRef.current });
-  }, []);
+  const handleReplaceLineText = useCallback(
+    (line: number, text: string) => {
+      setReplaceLineRequest({ line, text, id: ++replaceIdRef.current });
+    },
+    [setReplaceLineRequest]
+  );
 
   const handleDiffRequest = useCallback(
     (original: string, modified: string, originalLabel: string, modifiedLabel: string) => {
       const nextDiff: FixDiffState = { original, modified, originalLabel, modifiedLabel };
       dispatchFixCommand({ type: 'FIX_DIFF_VIEW_OPEN', diffState: nextDiff });
     },
-    []
+    [dispatchFixCommand]
   );
 
   const handleCloseDiff = useCallback(() => {
     dispatchFixCommand({ type: 'FIX_CLEAR' });
-  }, []);
+  }, [dispatchFixCommand]);
 
   // 接受 AI 修复：写入文件并刷新编辑器
   const handleAcceptFix = useCallback(async () => {
@@ -221,7 +249,15 @@ export function useEditorInteractions(ctx: UseEditorInteractionsContext) {
       return;
     }
     dispatchFixCommand({ type: 'FIX_APPLY_SUCCEEDED' });
-  }, [openFileInTab, handleScrollToLine, handleTransientHighlightLine, pendingApplyQueue]);
+  }, [
+    pendingApplyQueue,
+    dispatchFixCommand,
+    openFileInTab,
+    setEditorContent,
+    setEditorReloadToken,
+    handleScrollToLine,
+    handleTransientHighlightLine,
+  ]);
 
   const handleVersionRestore = useCallback(
     async (restoredFilePath: string) => {
@@ -230,7 +266,7 @@ export function useEditorInteractions(ctx: UseEditorInteractionsContext) {
         setEditorReloadToken((prev) => prev + 1);
       }
     },
-    [refreshCurrentFolder]
+    [activeTabRef, refreshCurrentFolder, setEditorReloadToken]
   );
 
   return {

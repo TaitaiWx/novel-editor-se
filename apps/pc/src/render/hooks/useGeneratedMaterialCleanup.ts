@@ -63,5 +63,5 @@ export function useGeneratedMaterialCleanup(ctx: UseGeneratedMaterialCleanupCont
         window.clearTimeout(timeoutHandle);
       }
     };
-  }, [folderPath, toast]);
+  }, [cleanedGeneratedMaterialFoldersRef, folderPath, refreshCurrentFolderRef, toast]);
 }

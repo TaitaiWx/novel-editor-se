@@ -85,12 +85,12 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
   const handleCreateFile = useCallback(() => {
     if (!folderPathRef.current) return;
     setCreatingType('file');
-  }, []);
+  }, [folderPathRef, setCreatingType]);
 
   const handleCreateDirectory = useCallback(() => {
     if (!folderPathRef.current) return;
     setCreatingType('directory');
-  }, []);
+  }, [folderPathRef, setCreatingType]);
 
   const handleCreateMaterialDirectory = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
@@ -120,7 +120,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     } catch (error) {
       toast.error(`新建资料目录失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [dialog, refreshCurrentFolder, toast]);
+  }, [dialog, filesRef, folderPathRef, refreshCurrentFolder, toast]);
 
   const getCurrentNovelId = useCallback(async (): Promise<number | null> => {
     const ipc = window.electron?.ipcRenderer;
@@ -128,7 +128,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     if (!ipc || !folder) return null;
     const novel = (await ipc.invoke('db-novel-get-by-folder', folder)) as { id: number } | null;
     return novel?.id ?? null;
-  }, []);
+  }, [folderPathRef]);
 
   const handleCreateCharacter = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
@@ -180,7 +180,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     } catch (error) {
       toast.error(`新建人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [dialog, getCurrentNovelId, openFileInTab, toast]);
+  }, [dialog, getCurrentNovelId, openFileInTab, setWorkspaceCharacters, toast]);
 
   const handleCreateLoreEntry = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
@@ -211,74 +211,80 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     } catch (error) {
       toast.error(`新建设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [dialog, openFileInTab, toast]);
+  }, [dialog, folderPathRef, openFileInTab, setWorkspaceLoreEntries, toast]);
 
-  const resolveStoryCreateTargetDir = useCallback((kind: StoryCreateKind): string | null => {
-    const folder = folderPathRef.current;
-    if (!folder) return null;
-    const currentTab = activeTabRef.current;
-    const activeVolumePath = parseVolumeWorkspaceTab(currentTab);
-    const selectedStoryNode = currentTab
-      ? findNodeInTree(splitWorkspaceFiles(filesRef.current).storyNodes, currentTab)
-      : null;
+  const resolveStoryCreateTargetDir = useCallback(
+    (kind: StoryCreateKind): string | null => {
+      const folder = folderPathRef.current;
+      if (!folder) return null;
+      const currentTab = activeTabRef.current;
+      const activeVolumePath = parseVolumeWorkspaceTab(currentTab);
+      const selectedStoryNode = currentTab
+        ? findNodeInTree(splitWorkspaceFiles(filesRef.current).storyNodes, currentTab)
+        : null;
 
-    if (kind === 'volume') return folder;
+      if (kind === 'volume') return folder;
 
-    if (kind === 'chapter') {
-      if (activeVolumePath) return activeVolumePath;
-      if (selectedStoryNode?.type === 'directory' && !isDraftLikeName(selectedStoryNode.name)) {
-        return selectedStoryNode.path;
+      if (kind === 'chapter') {
+        if (activeVolumePath) return activeVolumePath;
+        if (selectedStoryNode?.type === 'directory' && !isDraftLikeName(selectedStoryNode.name)) {
+          return selectedStoryNode.path;
+        }
+        if (selectedStoryNode?.type === 'file') {
+          const parentDir = getParentDirectory(selectedStoryNode.path);
+          if (parentDir) return parentDir;
+        }
+        return folder;
       }
-      if (selectedStoryNode?.type === 'file') {
-        const parentDir = getParentDirectory(selectedStoryNode.path);
-        if (parentDir) return parentDir;
+
+      if (kind === 'draft-folder' || kind === 'draft') {
+        if (selectedStoryNode?.type === 'directory') return selectedStoryNode.path;
+        if (selectedStoryNode?.type === 'file') {
+          const parentDir = getParentDirectory(selectedStoryNode.path);
+          if (parentDir) return parentDir;
+        }
+        if (activeVolumePath) return activeVolumePath;
+        return folder;
       }
+
       return folder;
-    }
+    },
+    [activeTabRef, filesRef, folderPathRef]
+  );
 
-    if (kind === 'draft-folder' || kind === 'draft') {
-      if (selectedStoryNode?.type === 'directory') return selectedStoryNode.path;
-      if (selectedStoryNode?.type === 'file') {
-        const parentDir = getParentDirectory(selectedStoryNode.path);
-        if (parentDir) return parentDir;
+  const suggestStoryCreateName = useCallback(
+    (kind: StoryCreateKind, targetDir: string): string => {
+      const childNodes =
+        targetDir === folderPathRef.current
+          ? splitWorkspaceFiles(filesRef.current).storyNodes
+          : findNodeInTree(filesRef.current, targetDir)?.children || [];
+      if (kind === 'volume') {
+        const volumeCount = childNodes.filter(
+          (node) => node.type === 'directory' && !isDraftLikeName(node.name)
+        ).length;
+        return `第${volumeCount + 1}卷`;
       }
-      if (activeVolumePath) return activeVolumePath;
-      return folder;
-    }
-
-    return folder;
-  }, []);
-
-  const suggestStoryCreateName = useCallback((kind: StoryCreateKind, targetDir: string): string => {
-    const childNodes =
-      targetDir === folderPathRef.current
-        ? splitWorkspaceFiles(filesRef.current).storyNodes
-        : findNodeInTree(filesRef.current, targetDir)?.children || [];
-    if (kind === 'volume') {
-      const volumeCount = childNodes.filter(
-        (node) => node.type === 'directory' && !isDraftLikeName(node.name)
+      if (kind === 'chapter') {
+        const chapterCount = childNodes.filter(
+          (node) =>
+            node.type === 'file' &&
+            (!isDraftLikeName(node.name) || /第.+[章节幕回篇集]/.test(node.name))
+        ).length;
+        return `第${chapterCount + 1}章 未命名`;
+      }
+      if (kind === 'draft-folder') {
+        const draftDirCount = childNodes.filter(
+          (node) => node.type === 'directory' && isDraftLikeName(node.name)
+        ).length;
+        return draftDirCount === 0 ? '样稿' : `样稿${draftDirCount + 1}`;
+      }
+      const draftCount = childNodes.filter(
+        (node) => node.type === 'file' && isDraftLikeName(node.name)
       ).length;
-      return `第${volumeCount + 1}卷`;
-    }
-    if (kind === 'chapter') {
-      const chapterCount = childNodes.filter(
-        (node) =>
-          node.type === 'file' &&
-          (!isDraftLikeName(node.name) || /第.+[章节幕回篇集]/.test(node.name))
-      ).length;
-      return `第${chapterCount + 1}章 未命名`;
-    }
-    if (kind === 'draft-folder') {
-      const draftDirCount = childNodes.filter(
-        (node) => node.type === 'directory' && isDraftLikeName(node.name)
-      ).length;
-      return draftDirCount === 0 ? '样稿' : `样稿${draftDirCount + 1}`;
-    }
-    const draftCount = childNodes.filter(
-      (node) => node.type === 'file' && isDraftLikeName(node.name)
-    ).length;
-    return draftCount === 0 ? '样稿' : `样稿-${draftCount + 1}`;
-  }, []);
+      return draftCount === 0 ? '样稿' : `样稿-${draftCount + 1}`;
+    },
+    [filesRef, folderPathRef]
+  );
 
   const handleCreateStoryItem = useCallback(
     async (kind: StoryCreateKind) => {
@@ -373,12 +379,12 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
         setCreatingType(null);
       }
     },
-    [toast, refreshCurrentFolder, createTargetPath]
+    [createTargetPath, folderPathRef, toast, setCreatingType, refreshCurrentFolder]
   );
 
   const handleCancelCreate = useCallback(() => {
     setCreatingType(null);
-  }, []);
+  }, [setCreatingType]);
 
   const handleImportFile = useCallback(async () => {
     if (!window.electron?.ipcRenderer) return;
@@ -415,7 +421,15 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     } catch (error) {
       toast.error(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [toast]);
+  }, [
+    openTabsRef,
+    setActiveTab,
+    setEditorContent,
+    setOpenTabs,
+    setUntitledTabContents,
+    toast,
+    untitledCounterRef,
+  ]);
 
   return {
     handleCreateFile,

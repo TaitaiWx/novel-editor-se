@@ -12,6 +12,7 @@
  * - versioning:   Git-like version snapshots
  * - window-app:   Window controls, shortcuts, updates, app info
  * - growth/memory: 成长记录器与记忆资料快照（资料/记忆/）
+ * - session:      GUI 会话文件（供 CLI ne status 读取）
  */
 import {
   registerFileSystemHandlers,
@@ -22,6 +23,7 @@ import {
   registerWindowAppHandlers,
   registerGrowthHandlers,
   registerMemoryHandlers,
+  registerSessionHandlers,
 } from './handlers';
 
 export { type FileNode } from './handlers';
@@ -35,4 +37,5 @@ export function setupIPC() {
   registerWindowAppHandlers();
   registerGrowthHandlers();
   registerMemoryHandlers();
+  registerSessionHandlers();
 }

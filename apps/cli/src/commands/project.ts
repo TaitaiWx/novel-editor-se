@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import {
   getTodayStats,
   initProject,
+  readGuiSession,
+  type GuiSessionReadResult,
   listNovels,
   pathExists,
   type InitProjectOptions,
@@ -18,6 +20,62 @@ import { getRunningDaemon } from '../daemon';
 import { displayPath, formatDuration, formatNumber } from '../output';
 import type { CommandSpec } from '../types';
 import { bool, resolvePath, str } from './util';
+
+/** `ne status` 中 GUI 部分的输出（--json 下的 data.gui） */
+export interface GuiStatus {
+  /** active：GUI 正在使用该项目；closed：已关闭；stale：进程已退出或长时间未刷新；none：从未打开过 */
+  status: GuiSessionReadResult['status'];
+  reason?: GuiSessionReadResult['reason'];
+  pid: number | null;
+  appVersion: string | null;
+  updatedAt: string | null;
+  activeFile: string | null;
+  openFiles: string[];
+  /** 有未保存修改的文件（仅 active 时可信） */
+  unsavedFiles: string[];
+}
+
+export async function readGuiStatus(root: string): Promise<GuiStatus> {
+  const { status, reason, session } = await readGuiSession(root);
+  const display = (file: { path: string; relativePath: string | null }) =>
+    file.relativePath ?? file.path;
+  return {
+    status,
+    ...(reason ? { reason } : {}),
+    pid: session?.pid ?? null,
+    appVersion: session?.appVersion ?? null,
+    updatedAt: session?.updatedAt ?? null,
+    activeFile: session?.activeFile
+      ? display(
+          session.openFiles.find((file) => file.path === session.activeFile) ?? {
+            path: session.activeFile,
+            relativePath: null,
+          }
+        )
+      : null,
+    openFiles: session ? session.openFiles.map(display) : [],
+    unsavedFiles: session ? session.openFiles.filter((file) => file.dirty).map(display) : [],
+  };
+}
+
+function renderGuiStatus(gui: GuiStatus): string[] {
+  if (gui.status === 'none') return ['GUI: 未打开该项目'];
+  if (gui.status === 'closed') return [`GUI: 已关闭（最后更新 ${gui.updatedAt ?? '未知'}）`];
+  if (gui.status === 'stale') {
+    const why = gui.reason === 'pid-not-alive' ? '进程已退出' : '长时间未刷新';
+    return [`GUI: 会话已失效（${why}，pid ${gui.pid ?? '?'}）`];
+  }
+  const lines = [
+    `GUI: 运行中 (pid ${gui.pid}${gui.appVersion ? `, v${gui.appVersion}` : ''})，打开 ${gui.openFiles.length} 个文件`,
+  ];
+  if (gui.activeFile) lines.push(`  当前文件: ${gui.activeFile}`);
+  lines.push(
+    gui.unsavedFiles.length
+      ? `  未保存: ${gui.unsavedFiles.join(', ')}`
+      : '  未保存: 无（所有修改已写入磁盘）'
+  );
+  return lines;
+}
 
 interface GuiLaunchPlan {
   command: string;
@@ -168,9 +226,10 @@ export const projectCommands: CommandSpec[] = [
   },
   {
     path: ['status'],
-    summary: '输出当前项目状态（作品、字数、今日写作、daemon）',
+    summary: '输出当前项目状态（作品、字数、今日写作、GUI 打开的文件与未保存变更、daemon）',
     description:
-      '输出当前项目状态。注意：CLI 无法读取 GUI 中打开的文件与未保存变更，这里只反映磁盘上的项目数据。',
+      '输出当前项目状态。GUI 打开项目时会把打开的标签、当前文件与未保存文件写入 .novel-editor/session.json，' +
+      '这里据此报告 GUI 状态（进程已退出或超过 5 分钟未刷新视为失效）。今日写作统计同时包含 CLI 与 GUI 的保存。',
     async run(ctx) {
       const project = await ctx.getProject();
       const daemon = await getRunningDaemon();
@@ -178,11 +237,14 @@ export const projectCommands: CommandSpec[] = [
         ? { running: true, pid: daemon.state.pid, url: daemon.state.url }
         : { running: false };
       if (!project) {
+        // 未 `ne init` 的文件夹也可能被 GUI 打开：会话文件位于 <cwd>/.novel-editor/
+        const gui = await readGuiStatus(ctx.cwd);
         return {
-          data: { cwd: ctx.cwd, project: null, daemon: daemonInfo },
+          data: { cwd: ctx.cwd, project: null, gui, daemon: daemonInfo },
           text: [
             `当前目录不在项目中: ${ctx.cwd}`,
             '运行 `ne init` 初始化项目',
+            ...(gui.status === 'none' ? [] : renderGuiStatus(gui)),
             `daemon: ${daemon ? `运行中 (${daemon.state.url})` : '未运行'}`,
           ].join('\n'),
         };
@@ -191,6 +253,7 @@ export const projectCommands: CommandSpec[] = [
       const today = await getTodayStats(project.root);
       const totalChars = novels.reduce((sum, novel) => sum + novel.chars, 0);
       const totalChapters = novels.reduce((sum, novel) => sum + novel.chapterCount, 0);
+      const gui = await readGuiStatus(project.root);
       return {
         data: {
           cwd: ctx.cwd,
@@ -198,12 +261,14 @@ export const projectCommands: CommandSpec[] = [
           novels,
           totals: { novels: novels.length, chapters: totalChapters, chars: totalChars },
           today,
+          gui,
           daemon: daemonInfo,
         },
         text: [
           `项目: ${project.config.name} (${project.root})`,
           `作品: ${novels.length} 部 / ${totalChapters} 章 / ${formatNumber(totalChars)} 字`,
-          `今日(CLI): +${formatNumber(today.added)} / -${formatNumber(today.removed)} 字，${today.writes} 次写入，约 ${formatDuration(today.activeMs)}`,
+          `今日: +${formatNumber(today.added)} / -${formatNumber(today.removed)} 字，${today.writes} 次写入，约 ${formatDuration(today.activeMs)}`,
+          ...renderGuiStatus(gui),
           `daemon: ${daemon ? `运行中 (${daemon.state.url})` : '未运行'}`,
         ].join('\n'),
       };

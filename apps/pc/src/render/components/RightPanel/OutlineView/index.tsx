@@ -85,6 +85,8 @@ export const OutlineView: React.FC<{
       () => (activeIndex !== null ? (outlineEntries[activeIndex]?.line ?? null) : null),
       [activeIndex, outlineEntries]
     );
+    // visibleLinesRef 由 IntersectionObserver 原地修改，visibleVersion 作为变更信号触发快照重建
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- visibleVersion 是 ref 原地变更的版本号信号，必须保留以重建可见行快照
     const visibleLines = useMemo(() => new Set(visibleLinesRef.current), [visibleVersion]);
 
     // --- Extracted hooks (hooks 内部从 AiConfigContext 读取 aiReady，无需外部传参) ---

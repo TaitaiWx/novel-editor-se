@@ -55,7 +55,7 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
       editorViewportSnapshotsRef.current = next;
       setInitialViewportSnapshots(next);
     },
-    []
+    [editorViewportSnapshotsRef, setInitialViewportSnapshots]
   );
 
   const isPersistableTabPath = useCallback((path: string | null, nodes: FileNode[]): boolean => {
@@ -95,7 +95,16 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
     persistEditorSessionTimerRef.current = window.setTimeout(() => {
       ipc.invoke('db-settings-set', editorSessionKey, JSON.stringify(nextSession)).catch(() => {});
     }, 180);
-  }, [editorSessionKey, isPersistableTabPath]);
+  }, [
+    activeTabRef,
+    editorSessionHydratedRef,
+    editorSessionKey,
+    editorViewportSnapshotsRef,
+    filesRef,
+    isPersistableTabPath,
+    openTabsRef,
+    persistEditorSessionTimerRef,
+  ]);
 
   const remapPathReferences = useCallback(
     (oldPath: string, newPath: string) => {
@@ -125,7 +134,14 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
         schedulePersistEditorSession();
       }
     },
-    [schedulePersistEditorSession, syncInitialViewportSnapshots]
+    [
+      activeTabRef,
+      editorViewportSnapshotsRef,
+      schedulePersistEditorSession,
+      setActiveTab,
+      setOpenTabs,
+      syncInitialViewportSnapshots,
+    ]
   );
 
   const moveViewportSnapshot = useCallback(
@@ -139,7 +155,7 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
       syncInitialViewportSnapshots(next);
       schedulePersistEditorSession();
     },
-    [schedulePersistEditorSession, syncInitialViewportSnapshots]
+    [editorViewportSnapshotsRef, schedulePersistEditorSession, syncInitialViewportSnapshots]
   );
 
   const removeViewportSnapshots = useCallback(
@@ -158,7 +174,7 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
         schedulePersistEditorSession();
       }
     },
-    [schedulePersistEditorSession, syncInitialViewportSnapshots]
+    [editorViewportSnapshotsRef, schedulePersistEditorSession, syncInitialViewportSnapshots]
   );
 
   const handleViewportSnapshotChange = useCallback(
@@ -171,7 +187,7 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
       };
       schedulePersistEditorSession();
     },
-    [schedulePersistEditorSession]
+    [editorViewportSnapshotsRef, schedulePersistEditorSession]
   );
 
   React.useEffect(() => {
@@ -185,7 +201,12 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
     restoredEditorSessionKeyRef.current = null;
     editorSessionHydratedRef.current = false;
     syncInitialViewportSnapshots({});
-  }, [editorSessionKey, syncInitialViewportSnapshots]);
+  }, [
+    editorSessionHydratedRef,
+    editorSessionKey,
+    restoredEditorSessionKeyRef,
+    syncInitialViewportSnapshots,
+  ]);
 
   React.useEffect(() => {
     const ipc = window.electron?.ipcRenderer;
@@ -232,7 +253,16 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
     return () => {
       cancelled = true;
     };
-  }, [editorSessionKey, files, isPersistableTabPath, syncInitialViewportSnapshots]);
+  }, [
+    editorSessionHydratedRef,
+    editorSessionKey,
+    files,
+    isPersistableTabPath,
+    restoredEditorSessionKeyRef,
+    setActiveTab,
+    setOpenTabs,
+    syncInitialViewportSnapshots,
+  ]);
 
   React.useEffect(() => {
     schedulePersistEditorSession();
@@ -244,7 +274,7 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
         window.clearTimeout(persistEditorSessionTimerRef.current);
       }
     };
-  }, []);
+  }, [persistEditorSessionTimerRef]);
 
   return {
     syncInitialViewportSnapshots,

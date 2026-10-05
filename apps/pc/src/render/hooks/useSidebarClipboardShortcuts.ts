@@ -78,5 +78,13 @@ export function useSidebarClipboardShortcuts(ctx: UseSidebarClipboardShortcutsCo
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [clipboard, handlePasteFiles]);
+  }, [
+    activeTabRef,
+    clipboard,
+    filesRef,
+    folderPathRef,
+    handlePasteFiles,
+    setClipboard,
+    sidebarFocusedRef,
+  ]);
 }

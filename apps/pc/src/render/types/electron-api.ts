@@ -4,6 +4,7 @@
 
 import type { FileInfo, FileInfoBatchEntry, OpenLocalResult, ShortcutInfo } from './File';
 import type { GrowthInvokeOverloads } from './growth-api';
+import type { GuiSessionSnapshot } from '@novel-editor/core/gui-session';
 
 export type UpdateChannel = 'stable' | 'beta' | 'canary';
 
@@ -133,6 +134,11 @@ export interface ElectronAPI {
     invoke(channel: 'read-file', filePath: string): Promise<string>;
     invoke(channel: 'read-file', filePath: string, encoding: string): Promise<string>;
     invoke(channel: 'write-file', filePath: string, content: string): Promise<{ success: boolean }>;
+    /** 上报 GUI 会话（null 表示已关闭文件夹），主进程写入 <folder>/.novel-editor/session.json */
+    invoke(
+      channel: 'gui-session-publish',
+      snapshot: GuiSessionSnapshot | null
+    ): Promise<{ success: boolean }>;
     invoke(channel: 'get-file-info', filePath: string): Promise<FileInfo>;
     invoke(channel: 'get-file-info-batch', filePaths: string[]): Promise<FileInfoBatchEntry[]>;
     invoke(channel: 'get-default-data-path'): Promise<string>;

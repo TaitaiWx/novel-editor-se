@@ -122,7 +122,15 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
         toast.error(`删除目录失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [toast, dialog, refreshCurrentFolder, removeViewportSnapshots]
+    [
+      dialog,
+      setOpenTabs,
+      removeViewportSnapshots,
+      activeTabRef,
+      refreshCurrentFolder,
+      toast,
+      setActiveTab,
+    ]
   );
 
   const handleDeleteVolumeNode = useCallback(
@@ -178,7 +186,16 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
         toast.error(`重命名失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [toast, dialog, persistStoryOrderMap, refreshCurrentFolder, remapPathReferences]
+    [
+      filesRef,
+      dialog,
+      toast,
+      storyOrderMapRef,
+      setStoryOrderMap,
+      persistStoryOrderMap,
+      remapPathReferences,
+      refreshCurrentFolder,
+    ]
   );
 
   const handleReorderStoryNode = useCallback(
@@ -291,12 +308,24 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
         toast.error(`移动正文失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [persistStoryOrderMap, refreshCurrentFolder, remapPathReferences, toast]
+    [
+      filesRef,
+      folderPathRef,
+      persistStoryOrderMap,
+      refreshCurrentFolder,
+      remapPathReferences,
+      setStoryOrderMap,
+      storyOrderMapRef,
+      toast,
+    ]
   );
 
-  const handleCopyFile = useCallback((filePath: string) => {
-    setClipboard([filePath]);
-  }, []);
+  const handleCopyFile = useCallback(
+    (filePath: string) => {
+      setClipboard([filePath]);
+    },
+    [setClipboard]
+  );
 
   const handlePasteFiles = useCallback(
     async (targetDir: string) => {
@@ -335,7 +364,7 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
         toast.error(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [toast, refreshCurrentFolder]
+    [folderPathRef, toast, refreshCurrentFolder]
   );
 
   // Save untitled file: prompt for name, write to disk, replace tab
@@ -368,7 +397,17 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
         toast.error(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [toast, dialog, refreshCurrentFolder, moveViewportSnapshot]
+    [
+      folderPathRef,
+      dialog,
+      toast,
+      setOpenTabs,
+      setUntitledTabContents,
+      moveViewportSnapshot,
+      activeTabRef,
+      refreshCurrentFolder,
+      setActiveTab,
+    ]
   );
 
   const handleClearMaterials = useCallback(async () => {
@@ -417,7 +456,15 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
     } catch (error) {
       toast.error(`清空资料失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [closeTabsByPredicate, dialog, refreshCurrentFolder, toast, workspaceMaterialNodes]);
+  }, [
+    closeTabsByPredicate,
+    dialog,
+    folderPathRef,
+    refreshCurrentFolder,
+    setChapterMaterialPaths,
+    toast,
+    workspaceMaterialNodes,
+  ]);
 
   const handleSplitStoryFile = useCallback(
     async (filePath: string) => {
@@ -476,7 +523,15 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
         toast.error(`按章节拆分失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [dialog, openFileInTab, readStoryDocumentText, refreshCurrentFolder, toast]
+    [
+      dialog,
+      filesRef,
+      folderPathRef,
+      openFileInTab,
+      readStoryDocumentText,
+      refreshCurrentFolder,
+      toast,
+    ]
   );
 
   return {

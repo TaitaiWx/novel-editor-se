@@ -2,14 +2,19 @@
  * 写作日志（stats today / history 的数据来源）
  *
  * 存储位置：<project>/.novel-editor/writing-log.json
- * 记录方式：每当 CLI（或 daemon）对项目内的正文文件执行写入类操作时追加一条按天聚合的记录。
- * 注意：目前只反映 CLI 侧的写入活动，GUI 中的编辑不会写入该日志。
+ * 记录方式：CLI（含 daemon）与 GUI 共用本模块，对项目内的正文文件执行写入时追加一条按天聚合的记录：
+ *   - CLI：file write / chapter create 等写入类命令（recordProjectWrites）
+ *   - GUI：主进程 write-file 每次成功保存正文文件时（recordStoryFileSave，按保存前后的字数差计入）
+ * 只统计正文文件（.md/.markdown/.txt），排除 `资料/`（AI 生成资料、记忆库）与 `.novel-editor/` 元数据目录。
  *
  * 写作时长为估算值：同一天内两次写入间隔不超过 ACTIVE_GAP_MS 时，把间隔计为活跃时间。
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { PROJECT_META_DIR } from './project';
+import { isStoryFile } from './fs-ops';
+import { isGeneratedMaterialPath } from './material';
+import { findProjectRoot, isInside, PROJECT_META_DIR } from './project';
+import { analyzeContentStats } from './text-stats';
 
 export const WRITING_LOG_FILE = 'writing-log.json';
 const ACTIVE_GAP_MS = 10 * 60 * 1000;
@@ -91,9 +96,32 @@ async function saveWritingLog(projectRoot: string, log: WritingLog): Promise<voi
   await rename(temp, target);
 }
 
+/**
+ * 同一进程内按项目串行化日志的读-改-写，避免并发保存（GUI 多个标签同时自动保存）互相覆盖。
+ * 跨进程（CLI 与 GUI 同时写）仍可能丢失极少量记录，统计场景可以接受。
+ */
+const writeQueues = new Map<string, Promise<void>>();
+
+function enqueue(projectRoot: string, task: () => Promise<void>): Promise<void> {
+  const key = path.resolve(projectRoot);
+  const previous = writeQueues.get(key) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(task);
+  writeQueues.set(key, next);
+  void next
+    .catch(() => undefined)
+    .then(() => {
+      if (writeQueues.get(key) === next) writeQueues.delete(key);
+    });
+  return next;
+}
+
 /** 记录一批写入事件（同一次命令的多个文件只读写一次日志） */
 export async function recordWrites(projectRoot: string, events: WriteEvent[]): Promise<void> {
   if (events.length === 0) return;
+  await enqueue(projectRoot, () => applyWrites(projectRoot, events));
+}
+
+async function applyWrites(projectRoot: string, events: WriteEvent[]): Promise<void> {
   const log = await readWritingLog(projectRoot);
   for (const event of events) {
     const at = event.at ?? new Date();
@@ -117,6 +145,100 @@ export async function recordWrites(projectRoot: string, events: WriteEvent[]): P
     log.days[key] = day;
   }
   await saveWritingLog(projectRoot, log);
+}
+
+/** 是否为需要计入写作日志的正文文件：正文扩展名，且不在 `资料/` 与 `.novel-editor/` 中 */
+export function isTrackedStoryPath(filePath: string, projectRoot: string): boolean {
+  if (!isStoryFile(filePath)) return false;
+  if (isInside(path.join(projectRoot, PROJECT_META_DIR), filePath)) return false;
+  return !isGeneratedMaterialPath(path.resolve(filePath), path.resolve(projectRoot));
+}
+
+/**
+ * 解析写入事件所属的写作日志根目录：
+ * 1. 向上查找 `ne init` 创建的项目（.novel-editor/config.json）
+ * 2. 找不到时回退到 fallbackRoot（GUI 当前打开的文件夹），前提是文件位于其中
+ */
+export async function resolveWritingLogRoot(
+  filePath: string,
+  fallbackRoot?: string | null
+): Promise<string | null> {
+  const projectRoot = await findProjectRoot(path.dirname(path.resolve(filePath)));
+  if (projectRoot) return projectRoot;
+  if (fallbackRoot && isInside(fallbackRoot, filePath)) return path.resolve(fallbackRoot);
+  return null;
+}
+
+export interface ProjectWritesResult {
+  root: string;
+  count: number;
+  error?: Error;
+}
+
+/**
+ * 把写入事件按所属项目分组、过滤非正文文件后写入各自的写作日志（CLI 与 GUI 共用）。
+ * 单个项目写日志失败不会抛出，而是在结果中返回 error，统计失败不应影响主操作。
+ */
+export async function recordProjectWrites(
+  events: WriteEvent[],
+  options: { fallbackRoot?: string | null } = {}
+): Promise<ProjectWritesResult[]> {
+  const groups = new Map<string, WriteEvent[]>();
+  for (const event of events) {
+    if (!isStoryFile(event.path)) continue;
+    const root = await resolveWritingLogRoot(event.path, options.fallbackRoot);
+    if (!root || !isTrackedStoryPath(event.path, root)) continue;
+    const list = groups.get(root) ?? [];
+    list.push(event);
+    groups.set(root, list);
+  }
+  const results: ProjectWritesResult[] = [];
+  for (const [root, list] of groups) {
+    try {
+      await recordWrites(root, list);
+      results.push({ root, count: list.length });
+    } catch (error) {
+      results.push({
+        root,
+        count: 0,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }
+  return results;
+}
+
+export interface StoryFileSave {
+  /** 被保存文件的绝对路径 */
+  path: string;
+  /** 保存前的磁盘内容；新建文件为 null */
+  previousContent: string | null;
+  /** 保存后的内容 */
+  content: string;
+  at?: Date;
+  /** GUI 当前打开的文件夹：文件不在 `ne init` 项目内时，日志写入该文件夹的 .novel-editor/ */
+  workspaceRoot?: string | null;
+}
+
+/**
+ * GUI 保存正文文件后调用：用与状态栏一致的字数口径计算增量并写入写作日志。
+ * 内容未变化时不记录（避免无改动的重复保存虚增写入次数与时长）。
+ */
+export async function recordStoryFileSave(save: StoryFileSave): Promise<ProjectWritesResult[]> {
+  if (save.previousContent === save.content) return [];
+  if (!isStoryFile(save.path)) return [];
+  return recordProjectWrites(
+    [
+      {
+        path: path.resolve(save.path),
+        previousChars:
+          save.previousContent === null ? 0 : analyzeContentStats(save.previousContent).charCount,
+        chars: analyzeContentStats(save.content).charCount,
+        at: save.at,
+      },
+    ],
+    { fallbackRoot: save.workspaceRoot }
+  );
 }
 
 export async function getTodayStats(projectRoot: string, now = new Date()): Promise<WritingDay> {

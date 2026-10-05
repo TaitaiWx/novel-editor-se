@@ -5,11 +5,7 @@
  */
 import path from 'node:path';
 import {
-  findProjectRoot,
-  isInside,
-  isStoryFile,
-  PROJECT_META_DIR,
-  recordWrites,
+  recordProjectWrites,
   resolveProject,
   type Project,
   type WriteEvent,
@@ -62,24 +58,14 @@ function createLogger(io: CliIO, globals: GlobalOptions, silent: boolean): Logge
   };
 }
 
-/** 把写入事件按所属项目分组后写入各自的写作日志 */
-async function recordProjectWrites(events: WriteEvent[], logger: Logger): Promise<void> {
-  const groups = new Map<string, WriteEvent[]>();
-  for (const event of events) {
-    if (!isStoryFile(event.path)) continue;
-    const root = await findProjectRoot(path.dirname(event.path));
-    if (!root || isInside(path.join(root, PROJECT_META_DIR), event.path)) continue;
-    const list = groups.get(root) ?? [];
-    list.push(event);
-    groups.set(root, list);
-  }
-  for (const [root, list] of groups) {
-    try {
-      await recordWrites(root, list);
-      logger.debug(`写作日志已更新: ${root} (+${list.length})`);
-    } catch (error) {
+/** 把写入事件按所属项目分组后写入各自的写作日志（分组/过滤逻辑与 GUI 共用 core 实现） */
+async function recordCliWrites(events: WriteEvent[], logger: Logger): Promise<void> {
+  for (const result of await recordProjectWrites(events)) {
+    if (result.error) {
       // 统计失败不影响主操作
-      logger.warn(`写作日志更新失败: ${error instanceof Error ? error.message : String(error)}`);
+      logger.warn(`写作日志更新失败: ${result.error.message}`);
+    } else {
+      logger.debug(`写作日志已更新: ${result.root} (+${result.count})`);
     }
   }
 }
@@ -185,7 +171,7 @@ export async function runCli(
         }
         return project;
       },
-      recordWrites: (events) => recordProjectWrites(events, logger),
+      recordWrites: (events) => recordCliWrites(events, logger),
       invoke: (request: RpcRequest) =>
         runCli(request.argv, {
           io: {

@@ -6,6 +6,7 @@ import { ActsView } from './ActsView';
 import { AiCacheProvider } from './AiCacheContext';
 import { ThreeSignView } from './ThreeSignView';
 import { GrowthView } from './GrowthView';
+import { useHorizontalOverflow } from './useHorizontalOverflow';
 import type {
   PersistedOutlineScopeInput,
   PersistedOutlineScopeKind,
@@ -47,6 +48,15 @@ export const StorylineView: React.FC<{
     outlineScope = null,
   }) => {
     const [viewMode, setViewMode] = useState<StorylineViewMode>('catalog');
+    // 面板过窄时模式切换栏可横向滚动，用边缘渐隐提示还有被遮住的按钮
+    const { ref: toolbarRef, overflow: toolbarOverflow } = useHorizontalOverflow<HTMLDivElement>();
+    const toolbarClassName = [
+      styles.storylineToolbar,
+      toolbarOverflow.start ? styles.storylineToolbarFadeStart : '',
+      toolbarOverflow.end ? styles.storylineToolbarFadeEnd : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     React.useEffect(() => {
       const handleOpenMode = (event: Event) => {
@@ -65,7 +75,12 @@ export const StorylineView: React.FC<{
     return (
       <AiCacheProvider dbReady={dbReady}>
         <div className={styles.storylineView}>
-          <div className={styles.storylineToolbar}>
+          <div
+            ref={toolbarRef}
+            className={toolbarClassName}
+            data-overflow-start={toolbarOverflow.start || undefined}
+            data-overflow-end={toolbarOverflow.end || undefined}
+          >
             <button
               className={`${styles.storylineToggle} ${viewMode === 'catalog' ? styles.storylineToggleActive : ''}`}
               onClick={() => setViewMode('catalog')}

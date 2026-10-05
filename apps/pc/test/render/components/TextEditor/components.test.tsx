@@ -7,6 +7,7 @@ import EditorFileHeader, {
 } from '@/render/components/TextEditor/EditorFileHeader';
 import TextEditor from '@/render/components/TextEditor';
 import { ToastProvider } from '@/render/components/Toast';
+import { EditorView } from '@codemirror/view';
 
 describe('getSaveStatusLabel', () => {
   it('按优先级返回保存状态', () => {
@@ -112,5 +113,32 @@ describe('TextEditor', () => {
     );
     await waitFor(() => expect(screen.getByText('文件加载失败')).toBeTruthy());
     errorSpy.mockRestore();
+  });
+
+  it('编辑后切换自动换行 / 只读不重新读盘，未保存的输入不会丢失', async () => {
+    invoke.mockResolvedValue('原始内容');
+    const renderEditor = (wordWrap: boolean, readOnly: boolean) => (
+      <ToastProvider>
+        <TextEditor filePath="/novel/第二章.md" wordWrap={wordWrap} readOnly={readOnly} />
+      </ToastProvider>
+    );
+    const { container, rerender } = render(renderEditor(true, false));
+    await waitFor(() =>
+      expect(container.querySelector('.cm-content')?.textContent).toContain('原始内容')
+    );
+    const readCalls = () => invoke.mock.calls.filter(([channel]) => channel === 'read-file').length;
+    expect(readCalls()).toBe(1);
+
+    const contentDom = container.querySelector('.cm-content') as HTMLElement;
+    const view = EditorView.findFromDOM(contentDom);
+    expect(view).toBeTruthy();
+    view?.dispatch({ changes: { from: view.state.doc.length, insert: '，新增未保存' } });
+
+    rerender(renderEditor(false, false));
+    rerender(renderEditor(false, true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(readCalls()).toBe(1);
+    expect(container.querySelector('.cm-content')?.textContent).toContain('原始内容，新增未保存');
   });
 });

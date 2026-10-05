@@ -16,6 +16,7 @@ import {
   shell,
 } from 'electron';
 import { watch, type FSWatcher, existsSync } from 'fs';
+import { readFile } from 'fs/promises';
 import path from 'path';
 import {
   cleanupEmptyGeneratedMaterialDirectories,
@@ -28,14 +29,17 @@ import {
   getFileInfo,
   getFileInfoBatch,
   isCoreError,
+  isStoryFile,
   pastePaths,
   readFileBinary,
   readFolderTree,
   readTextFileWithEncoding,
+  recordStoryFileSave,
   renamePath,
   saveTextFile,
 } from '@novel-editor/core';
 import { addRecentFolder } from '../recent-folders';
+import { getWorkspaceRootForSender } from './session';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +58,15 @@ function getSampleDataPaths(): { userSamplePath: string; sourcePath: string } {
     ? path.join(process.resourcesPath, 'sample-data')
     : path.join(path.resolve(app.getAppPath(), '..'), 'sample-data');
   return { userSamplePath, sourcePath };
+}
+
+/** 读取保存前的文件内容；文件不存在（新建）时返回 null */
+async function readPreviousContent(filePath: string): Promise<string | null> {
+  try {
+    return await readFile(filePath, 'utf-8');
+  } catch {
+    return null;
+  }
 }
 
 // ─── File watchers ──────────────────────────────────────────────────────────
@@ -92,14 +105,35 @@ export function registerFileSystemHandlers(): void {
     }
   });
 
-  ipcMain.handle('write-file', async (_event, filePath: string, content: string) => {
-    try {
-      await saveTextFile(filePath, content);
+  ipcMain.handle(
+    'write-file',
+    async (event: { sender?: { id: number } }, filePath: string, content: string) => {
+      // 正文文件保存前读取旧内容，用于计算写作日志的字数增量（只读当前文件，不扫描项目）
+      const trackWriting = isStoryFile(filePath);
+      const previousContent = trackWriting ? await readPreviousContent(filePath) : null;
+      try {
+        await saveTextFile(filePath, content);
+      } catch {
+        throw new Error(`Failed to write file: ${filePath}`);
+      }
+      if (trackWriting) {
+        // 与 CLI 共用 core 写作日志（ne stats today/history）；不阻塞保存，失败只打日志
+        void recordStoryFileSave({
+          path: filePath,
+          previousContent,
+          content,
+          workspaceRoot: getWorkspaceRootForSender(event?.sender?.id),
+        })
+          .then((results) => {
+            for (const result of results) {
+              if (result.error) console.warn('[writing-log] record failed:', result.error.message);
+            }
+          })
+          .catch((error) => console.warn('[writing-log] record failed:', errorMessage(error)));
+      }
       return { success: true };
-    } catch {
-      throw new Error(`Failed to write file: ${filePath}`);
     }
-  });
+  );
 
   ipcMain.handle('get-file-info', async (_event, filePath: string) => {
     try {

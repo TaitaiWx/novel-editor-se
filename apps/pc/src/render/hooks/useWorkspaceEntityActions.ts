@@ -115,19 +115,25 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     } catch (error) {
       toast.error(`修改作品名失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [dialog, toast, workspaceProjectName]);
+  }, [dialog, folderPathRef, setWorkspaceProjectName, toast, workspaceProjectName]);
 
-  const syncWorkspaceCharacters = useCallback((nextCharacters: Character[]) => {
-    setWorkspaceCharacters((prev) =>
-      areCharactersEqual(prev, nextCharacters) ? prev : nextCharacters
-    );
-  }, []);
+  const syncWorkspaceCharacters = useCallback(
+    (nextCharacters: Character[]) => {
+      setWorkspaceCharacters((prev) =>
+        areCharactersEqual(prev, nextCharacters) ? prev : nextCharacters
+      );
+    },
+    [setWorkspaceCharacters]
+  );
 
-  const syncWorkspaceLoreEntries = useCallback((nextEntries: LoreEntry[]) => {
-    setWorkspaceLoreEntries((prev) =>
-      areLoreEntriesEqual(prev, nextEntries) ? prev : nextEntries
-    );
-  }, []);
+  const syncWorkspaceLoreEntries = useCallback(
+    (nextEntries: LoreEntry[]) => {
+      setWorkspaceLoreEntries((prev) =>
+        areLoreEntriesEqual(prev, nextEntries) ? prev : nextEntries
+      );
+    },
+    [setWorkspaceLoreEntries]
+  );
   const handleOpenVolumeNode = useCallback(
     (volumePath: string) => {
       openFileInTab(createVolumeWorkspaceTab(volumePath));
@@ -143,18 +149,21 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
       path: folder,
       label: workspaceProjectName?.trim() || getNodeDisplayName(folder),
     };
-  }, [workspaceProjectName]);
+  }, [folderPathRef, workspaceProjectName]);
 
-  const buildVolumeAssistantScope = useCallback((volumePath: string): AssistantScopeTarget => {
-    const node = findNodeInTree(filesRef.current, volumePath) as FileNode | null;
-    return {
-      kind: 'volume',
-      path: volumePath,
-      label:
-        node?.name ||
-        (folderPathRef.current === volumePath ? '未分卷' : getNodeDisplayName(volumePath)),
-    };
-  }, []);
+  const buildVolumeAssistantScope = useCallback(
+    (volumePath: string): AssistantScopeTarget => {
+      const node = findNodeInTree(filesRef.current, volumePath) as FileNode | null;
+      return {
+        kind: 'volume',
+        path: volumePath,
+        label:
+          node?.name ||
+          (folderPathRef.current === volumePath ? '未分卷' : getNodeDisplayName(volumePath)),
+      };
+    },
+    [filesRef, folderPathRef]
+  );
 
   const buildChapterAssistantScope = useCallback(
     (chapterPath: string): AssistantScopeTarget => ({
@@ -186,7 +195,15 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
         toast.error(`删除人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [dialog, toast, workspaceCharacters]
+    [
+      activeTabRef,
+      dialog,
+      setActiveTab,
+      setOpenTabs,
+      setWorkspaceCharacters,
+      toast,
+      workspaceCharacters,
+    ]
   );
 
   const handleRenameCharacterNode = useCallback(
@@ -235,7 +252,7 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
         toast.error(`修改人物名失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [dialog, getCurrentNovelId, toast, workspaceCharacters]
+    [dialog, getCurrentNovelId, setWorkspaceCharacters, toast, workspaceCharacters]
   );
 
   const handleDeleteLoreNode = useCallback(
@@ -259,7 +276,15 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
         toast.error(`删除设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [dialog, toast, workspaceLoreEntries]
+    [
+      activeTabRef,
+      dialog,
+      setActiveTab,
+      setOpenTabs,
+      setWorkspaceLoreEntries,
+      toast,
+      workspaceLoreEntries,
+    ]
   );
 
   const handleRenameLoreNode = useCallback(
@@ -285,7 +310,7 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
         toast.error(`修改设定名失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [dialog, toast, workspaceLoreEntries]
+    [dialog, setWorkspaceLoreEntries, toast, workspaceLoreEntries]
   );
 
   const handleClearCharacters = useCallback(async () => {
@@ -319,7 +344,16 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     } catch (error) {
       toast.error(`清空人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [closeTabsByPredicate, dialog, getCurrentNovelId, toast, workspaceCharacters.length]);
+  }, [
+    bumpWorkspaceCharactersVersion,
+    closeTabsByPredicate,
+    dialog,
+    folderPathRef,
+    getCurrentNovelId,
+    setWorkspaceCharacters,
+    toast,
+    workspaceCharacters.length,
+  ]);
 
   const handleClearLoreEntries = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
@@ -344,7 +378,15 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     } catch (error) {
       toast.error(`清空设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [closeTabsByPredicate, dialog, toast, workspaceLoreEntries.length]);
+  }, [
+    bumpWorkspaceLoreVersion,
+    closeTabsByPredicate,
+    dialog,
+    folderPathRef,
+    setWorkspaceLoreEntries,
+    toast,
+    workspaceLoreEntries.length,
+  ]);
 
   return {
     handleFileSelect,

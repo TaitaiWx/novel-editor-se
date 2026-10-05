@@ -60,7 +60,8 @@ export function useEditorRequests({
     });
     view.focus();
     onScrollProcessed?.();
-  }, [scrollToLine]);
+    // 请求按 id 去重，回调引用变化导致的重跑会在上方 id 校验处直接返回
+  }, [scrollToLine, onScrollProcessed, viewRef]);
 
   // Transient highlight line (flash once for 1.5s)
   useEffect(() => {
@@ -107,7 +108,14 @@ export function useEditorRequests({
         appliedLineMarkerTimerRef.current = null;
       }, APPLIED_MARKER_DURATION);
     }, TRANSIENT_HIGHLIGHT_DURATION);
-  }, [transientHighlightLine]);
+    // 请求按 id 去重；其余依赖为稳定 ref 或回调，变化时重跑会在 id 校验处直接返回
+  }, [
+    transientHighlightLine,
+    onTransientHighlightProcessed,
+    viewRef,
+    transientHighlightTimerRef,
+    appliedLineMarkerTimerRef,
+  ]);
 
   // Inline diff decoration
   useEffect(() => {
@@ -124,7 +132,7 @@ export function useEditorRequests({
     } else {
       view.dispatch({ effects: setInlineDiffEffect.of(null) });
     }
-  }, [inlineDiff]);
+  }, [inlineDiff, viewRef]);
 
   // Replace line text (append AI title etc.)
   useEffect(() => {
@@ -140,5 +148,5 @@ export function useEditorRequests({
       scrollIntoView: true,
     });
     view.focus();
-  }, [replaceLineRequest]);
+  }, [replaceLineRequest, viewRef]);
 }

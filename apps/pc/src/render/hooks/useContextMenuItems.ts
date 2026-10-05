@@ -6,7 +6,6 @@ import type { EntitiesState } from './state/useEntitiesState';
 import type { UiState } from './state/useUiState';
 import type { FileOperations } from './useFileOperations';
 import type { WorkspaceCreationApi } from './useWorkspaceCreation';
-import type { LibraryGenerationApi } from './useLibraryGeneration';
 import type { ScopedAssistantGenerationApi } from './useScopedAssistantGeneration';
 import type { ProjectExportApi } from './useProjectExport';
 import type { ProjectLoaderApi } from './useProjectLoader';
@@ -46,16 +45,10 @@ export type UseContextMenuItemsContext = Pick<
   Pick<
     WorkspaceCreationApi,
     | 'handleCreateCharacter'
-    | 'handleCreateDirectory'
-    | 'handleCreateFile'
     | 'handleCreateLoreEntry'
     | 'handleCreateMaterialDirectory'
     | 'handleCreateStoryItem'
     | 'handleImportFile'
-  > &
-  Pick<
-    LibraryGenerationApi,
-    'handleGenerateCharacters' | 'handleGenerateLoreEntries' | 'handleGenerateMaterials'
   > &
   Pick<
     ScopedAssistantGenerationApi,
@@ -79,8 +72,6 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleClearMaterials,
     handleCopyFile,
     handleCreateCharacter,
-    handleCreateDirectory,
-    handleCreateFile,
     handleCreateGrowthSheet,
     handleCreateLoreEntry,
     handleCreateMaterialDirectory,
@@ -90,9 +81,6 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleDeleteFile,
     handleDeleteLoreNode,
     handleDeleteVolumeNode,
-    handleGenerateCharacters,
-    handleGenerateLoreEntries,
-    handleGenerateMaterials,
     handleGenerateScopedCharacters,
     handleGenerateScopedLore,
     handleGenerateScopedMaterials,
@@ -307,8 +295,6 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleClearMaterials,
     handleCopyFile,
     handleCreateCharacter,
-    handleCreateDirectory,
-    handleCreateFile,
     handleCreateGrowthSheet,
     handleCreateLoreEntry,
     handleCreateMaterialDirectory,
@@ -319,9 +305,6 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleDeleteLoreNode,
     handleDeleteVolumeNode,
     handleOpenKnowledgeExportDialog,
-    handleGenerateCharacters,
-    handleGenerateLoreEntries,
-    handleGenerateMaterials,
     handleGenerateScopedCharacters,
     handleGenerateScopedLore,
     handleGenerateScopedMaterials,

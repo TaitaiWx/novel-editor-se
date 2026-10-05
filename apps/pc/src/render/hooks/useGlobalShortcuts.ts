@@ -115,13 +115,17 @@ export function useGlobalShortcuts(ctx: UseGlobalShortcutsContext) {
       document.removeEventListener('drop', preventDefaultDrag);
     };
   }, [
+    activeTabRef,
     appSettings.shortcuts,
     closeTab,
+    handleCreateFile,
     handleFormatCurrentChapter,
     handleNewTab,
     handleOpenGrowth,
     handleOpenLocal,
     handleToggleSidebar,
+    sidebarFocusedRef,
+    sidebarRef,
     toggleFocusMode,
   ]);
 }

@@ -93,7 +93,7 @@ export function useChapterMaterials(ctx: UseChapterMaterialsContext) {
       cancelled = true;
       dispose?.();
     };
-  }, [folderPath]);
+  }, [folderPath, setMaterialUsageMap]);
 
   React.useEffect(() => {
     const ipc = window.electron?.ipcRenderer;
@@ -121,7 +121,7 @@ export function useChapterMaterials(ctx: UseChapterMaterialsContext) {
     return () => {
       cancelled = true;
     };
-  }, [activeDocumentTab, chapterAssistantEnabled]);
+  }, [activeDocumentTab, chapterAssistantEnabled, setChapterMaterialPaths]);
 
   const persistChapterMaterials = useCallback(
     async (nextPaths: string[]) => {
@@ -142,7 +142,7 @@ export function useChapterMaterials(ctx: UseChapterMaterialsContext) {
         return next;
       });
     },
-    [persistChapterMaterials]
+    [persistChapterMaterials, setChapterMaterialPaths]
   );
 
   const handleRemoveChapterMaterial = useCallback(
@@ -153,7 +153,7 @@ export function useChapterMaterials(ctx: UseChapterMaterialsContext) {
         return next;
       });
     },
-    [persistChapterMaterials]
+    [persistChapterMaterials, setChapterMaterialPaths]
   );
 
   return {

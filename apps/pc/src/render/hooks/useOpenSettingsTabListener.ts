@@ -22,5 +22,5 @@ export function useOpenSettingsTabListener(ctx: UseOpenSettingsTabListenerContex
     };
     window.addEventListener('open-settings-tab', handler);
     return () => window.removeEventListener('open-settings-tab', handler);
-  }, []);
+  }, [setSettingsCenterTab, setShowSettingsCenter]);
 }

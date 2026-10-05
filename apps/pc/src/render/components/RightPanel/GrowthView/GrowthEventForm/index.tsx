@@ -88,6 +88,7 @@ export const GrowthEventForm: React.FC<GrowthEventFormProps> = ({
     const result = await onSubmit(event, force);
     setError(result);
     if (!result) {
+      // 成功后清空数值与原因；章节保留（作者常在同一章连续记录多笔成长）
       setDelta('');
       setNote('');
     }
@@ -153,6 +154,8 @@ export const GrowthEventForm: React.FC<GrowthEventFormProps> = ({
           aria-label="章节"
           placeholder="第几章"
           title="记录发生的章节，用于暴涨检查与配角提醒"
+          // 聚焦时全选，方便直接输入新章节号覆盖
+          onFocus={(event) => event.currentTarget.select()}
           onChange={(event) => setChapter(event.target.value)}
         />
       </div>

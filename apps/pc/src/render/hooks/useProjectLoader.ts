@@ -93,7 +93,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [folderPathRef, setFiles, setIsLoading, toast]);
   // 同步最新引用，供声明顺序靠前的 effect 通过 ref 访问
   refreshCurrentFolderRef.current = refreshCurrentFolder;
 
@@ -164,7 +164,20 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     } finally {
       if (isLatestLoad(gen)) setIsLoading(false);
     }
-  }, [initializeProjectStore, openFileInTab, beginLoad, isLatestLoad]);
+  }, [
+    beginLoad,
+    setIsLoading,
+    setDbReady,
+    isLatestLoad,
+    appSettingsRef,
+    setAppSettings,
+    setRightPanelCollapsed,
+    initializeProjectStore,
+    setFolderPath,
+    setFiles,
+    setWorkspaceProjectName,
+    openFileInTab,
+  ]);
 
   const handleOpenLocal = useCallback(async () => {
     setIsLoading(true);
@@ -192,7 +205,18 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     } finally {
       setIsLoading(false);
     }
-  }, [toast, initializeProjectStore, beginLoad, isLatestLoad]);
+  }, [
+    setIsLoading,
+    toast,
+    beginLoad,
+    initializeProjectStore,
+    isLatestLoad,
+    setFolderPath,
+    setFiles,
+    setWorkspaceProjectName,
+    setOpenTabs,
+    setActiveTab,
+  ]);
 
   const handleOpenSampleData = useCallback(async () => {
     setIsLoading(true);
@@ -216,7 +240,17 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     } finally {
       setIsLoading(false);
     }
-  }, [initializeProjectStore, beginLoad, isLatestLoad]);
+  }, [
+    setIsLoading,
+    beginLoad,
+    initializeProjectStore,
+    isLatestLoad,
+    setFolderPath,
+    setFiles,
+    setWorkspaceProjectName,
+    setOpenTabs,
+    setActiveTab,
+  ]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -255,7 +289,18 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     return () => {
       if (typeof dispose === 'function') dispose();
     };
-  }, [initializeProjectStore, toast, beginLoad, isLatestLoad]);
+  }, [
+    initializeProjectStore,
+    toast,
+    beginLoad,
+    isLatestLoad,
+    setIsLoading,
+    setFolderPath,
+    setFiles,
+    setWorkspaceProjectName,
+    setOpenTabs,
+    setActiveTab,
+  ]);
 
   return {
     initializeProjectStore,

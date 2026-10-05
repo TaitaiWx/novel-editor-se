@@ -86,11 +86,41 @@ export function useCodeMirrorView({
   const activeLineCompartment = useRef(new Compartment());
   const thousandCharMarkerCompartment = useRef(new Compartment());
 
+  // 创建 EditorView 时使用的初始展示配置：通过最新值 ref 读取，
+  // 避免这些配置变化时销毁重建 EditorView（后续变化由下方各 reconfigure effect 下发）
+  const initialConfigRef = useRef({
+    readOnly,
+    wordWrap,
+    focusMode,
+    showLineNumbers,
+    showThousandCharMarkers,
+    thousandCharMarkerStep,
+    characterHighlights,
+  });
+  initialConfigRef.current = {
+    readOnly,
+    wordWrap,
+    focusMode,
+    showLineNumbers,
+    showThousandCharMarkers,
+    thousandCharMarkerStep,
+    characterHighlights,
+  };
+
   // Create / destroy EditorView
   useEffect(() => {
     if (!editorContainerRef.current || !editorRuntime) return;
 
     setEditorReady(false);
+    const {
+      readOnly,
+      wordWrap,
+      focusMode,
+      showLineNumbers,
+      showThousandCharMarkers,
+      thousandCharMarkerStep,
+      characterHighlights,
+    } = initialConfigRef.current;
 
     const view = new EditorView({
       state: EditorState.create({
@@ -177,7 +207,22 @@ export function useCodeMirrorView({
       viewRef.current = null;
       if (editorViewRef) editorViewRef.current = null;
     };
-  }, [editorRuntime, editorViewRef, saveViewportSnapshot]);
+    // 除 editorRuntime / editorViewRef / saveViewportSnapshot 外，其余依赖均为稳定引用
+    // （ref、useState setter、空依赖 useCallback），不会导致 EditorView 重建
+  }, [
+    editorRuntime,
+    editorViewRef,
+    saveViewportSnapshot,
+    editorContainerRef,
+    viewRef,
+    currentContentRef,
+    currentOriginalContentRef,
+    onContentChangeRef,
+    onCursorChangeRef,
+    handleManualSaveRef,
+    setHasChanges,
+    scheduleAutoSave,
+  ]);
 
   // Update readOnly
   useEffect(() => {
@@ -186,7 +231,7 @@ export function useCodeMirrorView({
     view.dispatch({
       effects: readOnlyCompartment.current.reconfigure(EditorView.editable.of(!readOnly)),
     });
-  }, [readOnly]);
+  }, [readOnly, viewRef]);
 
   // Update word wrap
   useEffect(() => {
@@ -197,7 +242,7 @@ export function useCodeMirrorView({
         createWordWrapExtension(wordWrap, focusMode)
       ),
     });
-  }, [wordWrap, focusMode]);
+  }, [wordWrap, focusMode, viewRef]);
 
   // Update language extension when filePath changes
   useEffect(() => {
@@ -226,7 +271,7 @@ export function useCodeMirrorView({
     return () => {
       cancelled = true;
     };
-  }, [editorReady, filePath, isUntitled]);
+  }, [editorReady, filePath, isUntitled, viewRef]);
 
   // Update writing decorations when character highlight rules change
   useEffect(() => {
@@ -235,7 +280,7 @@ export function useCodeMirrorView({
     view.dispatch({
       effects: writingDecoCompartment.current.reconfigure(writingDecorations(characterHighlights)),
     });
-  }, [characterHighlights]);
+  }, [characterHighlights, viewRef]);
 
   // 中文说明：这里统一重配与编辑器展示相关的动态扩展，
   // 保证千字标记、行号和专注模式都直接由根配置驱动。
@@ -258,7 +303,7 @@ export function useCodeMirrorView({
         ),
       ],
     });
-  }, [focusMode, showLineNumbers, showThousandCharMarkers, thousandCharMarkerStep]);
+  }, [focusMode, showLineNumbers, showThousandCharMarkers, thousandCharMarkerStep, viewRef]);
 
   return {
     editorReady,

@@ -6,7 +6,8 @@
  *   <project>/
  *   ├── .novel-editor/
  *   │   ├── config.json          项目配置（ProjectConfig）
- *   │   ├── writing-log.json     CLI 写作日志（stats today/history 使用）
+ *   │   ├── writing-log.json     写作日志（CLI 与 GUI 共同写入，stats today/history 使用）
+ *   │   ├── session.json         GUI 会话（打开的文件、未保存变更，ne status 读取）
  *   │   └── novel-editor.db      GUI 打开项目后创建的 SQLite 数据库（CLI 不读写）
  *   └── novels/                  作品根目录（config.novelsDir，可配置为 "." 表示项目根）
  *       └── <作品名>/            一个目录就是一部作品

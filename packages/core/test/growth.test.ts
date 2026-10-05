@@ -324,6 +324,52 @@ describe('战力一致性检查', () => {
     ).toEqual([]);
   });
 
+  it('DND 模板默认每升一级全属性 +1，且符合每级合理上限', () => {
+    const ruleset = createDndRuleset();
+    for (const attr of ruleset.attributes) {
+      expect(attr.growthPerLevel).toBe(1);
+      expect(attr.perLevelCap).toBeGreaterThanOrEqual(attr.growthPerLevel);
+    }
+    // 1 → 3 级（300 + 600 经验），分两章升级，不触发连升警告
+    const { sheet } = applyGrowthEvents(ruleset, createSheet(ruleset, '阿尔'), [
+      { type: 'exp', delta: 300, chapter: 1 },
+      { type: 'exp', delta: 600, chapter: 2 },
+      { type: 'choice', target: 'path', value: 'warrior', chapter: 2 },
+      // 剧情奖励的手动加点也在每级上限之内
+      { type: 'attribute', target: 'dex', delta: 2, chapter: 3 },
+    ]);
+    expect(sheet.level).toBe(3);
+    expect(sheet.attributes).toMatchObject({ str: 14, con: 13, dex: 14, int: 12, wis: 12 });
+    expect(checkSheetConsistency(ruleset, sheet)).toEqual([]);
+
+    // 满级后属性不超过上限
+    const maxed = applyGrowthEvent(
+      ruleset,
+      createSheet(ruleset, '满级'),
+      {
+        type: 'exp',
+        delta: totalExpForLevel(ruleset, 20),
+      },
+      { strict: false }
+    ).sheet;
+    expect(maxed.level).toBe(20);
+    expect(maxed.attributes.str).toBe(29);
+  });
+
+  it('已有规则文件缺少 growthPerLevel 时仍按 0 处理（不追溯改变旧角色卡）', () => {
+    const legacy = normalizeRuleset({
+      ...createDndRuleset(),
+      attributes: [{ key: 'str', name: '力量', initial: 10, min: 1, max: 30, perLevelCap: 1 }],
+    });
+    expect(legacy.attributes[0].growthPerLevel).toBe(0);
+    const sheet = applyGrowthEvent(legacy, createSheet(legacy, '旧'), {
+      type: 'exp',
+      delta: 300,
+    }).sheet;
+    expect(sheet.level).toBe(2);
+    expect(sheet.attributes.str).toBe(10);
+  });
+
   it('同一章暴涨：等级、属性、技能', () => {
     const ruleset = tableRuleset();
     ruleset.limits.maxLevelsPerChapter = 1;

@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { getTodayStats, readGuiSession } from '@novel-editor/core';
 import {
   buildAppEnv,
   launchApp,
@@ -526,7 +527,48 @@ describe('小说编辑器 GUI', () => {
     await captureForReview('growth-entry-filepanel');
   });
 
-  it('10. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
+  it('10. GUI 与 CLI 共享：保存计入写作日志，会话文件反映打开 / 未保存的文件', async () => {
+    // 前面场景的自动保存已经写入 .novel-editor/writing-log.json（ne stats today 读取同一份）
+    const today = await getTodayStats(fixture.root);
+    expect(today.writes).toBeGreaterThan(0);
+
+    await openChapter('001-启程', '林舟背起行囊');
+    const chapterPath = path.join(fixture.root, FIXTURE_CHAPTERS.first.file);
+    const original = await readProjectFile(FIXTURE_CHAPTERS.first.file);
+    const readSession = () => readGuiSession(fixture.root);
+
+    // 会话文件：GUI 运行中，当前文件在打开列表里（ne status 读取同一份）
+    await page.waitUntil(
+      async () => {
+        const { status, session } = await readSession();
+        return status === 'active' && session?.activeFile === chapterPath;
+      },
+      { timeout: 5_000, message: '会话文件记录当前文件' }
+    );
+
+    // 输入后、自动保存前：会话里标记为未保存
+    await focusEditorEnd(page);
+    await page.type('会话测试。');
+    await page.waitUntil(
+      async () => (await readSession()).session?.dirtyFiles.includes(chapterPath) ?? false,
+      { timeout: 3_000, message: '会话标记未保存文件' }
+    );
+    // 自动保存后：未保存列表清空，写作日志写入次数增加
+    await page.waitUntil(async () => (await readSession()).session?.dirtyFiles.length === 0, {
+      timeout: 6_000,
+      message: '保存后会话清除未保存标记',
+    });
+    expect((await getTodayStats(fixture.root)).writes).toBeGreaterThan(today.writes);
+
+    // 还原 fixture
+    await undoUntilGone(page, '会话测试。');
+    await page.waitUntil(
+      async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)) === original,
+      { timeout: 6_000, message: '还原后自动保存' }
+    );
+  });
+
+  it('11. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
     const other = await createFixtureProject('novel-editor-e2e-second-');
     try {
       await mkdir(other.resolve('novels/另一部作品'), { recursive: true });

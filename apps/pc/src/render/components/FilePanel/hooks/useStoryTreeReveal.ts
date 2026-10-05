@@ -63,29 +63,29 @@ export function useStoryTreeReveal({
     });
   }, [activeVolumePath, storyDisplayNodes]);
 
+  // 生成状态签名：仅在 scopePath / state / 起止时间变化时触发 effect，忽略对象引用变化
+  const characterStatusSignature = characterGenerationStatus
+    ? [
+        characterGenerationStatus.scopePath,
+        characterGenerationStatus.state,
+        characterGenerationStatus.startedAt,
+        characterGenerationStatus.finishedAt || '',
+      ].join(':')
+    : null;
+  const characterStatusRunning = characterGenerationStatus?.state === 'running';
+
   useEffect(() => {
-    if (!characterGenerationStatus) return;
-    const signature = [
-      characterGenerationStatus.scopePath,
-      characterGenerationStatus.state,
-      characterGenerationStatus.startedAt,
-      characterGenerationStatus.finishedAt || '',
-    ].join(':');
+    if (characterStatusSignature === null) return;
     const previousSignature = lastCharacterStatusSignatureRef.current;
-    lastCharacterStatusSignatureRef.current = signature;
+    lastCharacterStatusSignatureRef.current = characterStatusSignature;
 
     const shouldReveal =
-      characterGenerationStatus.state === 'running' ||
-      (previousSignature !== null && previousSignature !== signature);
+      characterStatusRunning ||
+      (previousSignature !== null && previousSignature !== characterStatusSignature);
     if (!shouldReveal) return;
 
     setCollapsedSections((prev) => (prev.characters ? { ...prev, characters: false } : prev));
-  }, [
-    characterGenerationStatus?.scopePath,
-    characterGenerationStatus?.startedAt,
-    characterGenerationStatus?.finishedAt,
-    characterGenerationStatus?.state,
-  ]);
+  }, [characterStatusSignature, characterStatusRunning]);
 
   const toggleSection = useCallback((section: FilePanelSection) => {
     setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -131,8 +131,14 @@ export function useStoryTreeReveal({
       return next;
     });
     triggerRevealPath(revealFileRequest.path);
-    // closeSearch 为稳定回调（useCallback 空依赖），无需加入依赖
-  }, [revealFileRequest?.id, revealFileRequest?.path, storyDisplayNodes, triggerRevealPath]);
+    // closeSearch 为稳定回调（useCallback 空依赖），加入依赖不会导致额外触发
+  }, [
+    closeSearch,
+    revealFileRequest?.id,
+    revealFileRequest?.path,
+    storyDisplayNodes,
+    triggerRevealPath,
+  ]);
 
   useEffect(() => {
     if (!revealPath) return;

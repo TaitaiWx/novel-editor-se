@@ -192,7 +192,15 @@ export function useCharacterGraphAI({
     } finally {
       setAiGenerating(false);
     }
-  }, [content, folderPath, loadCharactersFromDb, novelId, persistRelations]);
+  }, [
+    content,
+    folderPath,
+    loadCharactersFromDb,
+    novelId,
+    persistRelations,
+    setRelations,
+    setSelectedCharacterId,
+  ]);
 
   return { aiGenerating, aiStatus, handleGenerateCharacterGraph };
 }

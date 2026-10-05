@@ -53,6 +53,8 @@ import { loadUpdaterState, persistUpdaterState, syncStatusFromUpdateInfo } from 
 import { broadcast, emitStatus, markConnectivity, updaterStatus } from './status';
 
 let scheduledUpdateTimer: NodeJS.Timeout | null = null;
+/** 启动后延迟的首次检查；需要跟踪，重复 setup 时先清除，避免出现多次提前检查 */
+let firstCheckTimer: NodeJS.Timeout | null = null;
 let listenersRegistered = false;
 let consecutiveCheckFailures = 0;
 let consecutiveDownloadFailures = 0;
@@ -368,7 +370,13 @@ export async function setupAutoUpdater() {
   log.info(`定时更新检查已启动，间隔: ${intervalMin}min`);
 
   // 延迟首次更新检查，避免与启动渲染竞争 CPU / 网络 / IO
-  setTimeout(() => void checkForUpdatesManually(), FIRST_CHECK_DELAY_MS);
+  if (firstCheckTimer) {
+    clearTimeout(firstCheckTimer);
+  }
+  firstCheckTimer = setTimeout(() => {
+    firstCheckTimer = null;
+    void checkForUpdatesManually();
+  }, FIRST_CHECK_DELAY_MS);
 }
 
 export async function downloadUpdate() {

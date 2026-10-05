@@ -235,7 +235,15 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
         toast.error(`AI 生成人物失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [ensurePersistedAiReady, getCurrentNovelId, resolveAIGenerationContext, toast]
+    [
+      bumpWorkspaceCharactersVersion,
+      ensurePersistedAiReady,
+      folderPathRef,
+      getCurrentNovelId,
+      resolveAIGenerationContext,
+      setWorkspaceCharacters,
+      toast,
+    ]
   );
 
   const handleGenerateLoreEntries = useCallback(
@@ -301,7 +309,14 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
         toast.error(`AI 生成设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [ensurePersistedAiReady, resolveAIGenerationContext, toast]
+    [
+      bumpWorkspaceLoreVersion,
+      ensurePersistedAiReady,
+      folderPathRef,
+      resolveAIGenerationContext,
+      setWorkspaceLoreEntries,
+      toast,
+    ]
   );
 
   const handleGenerateMaterials = useCallback(
@@ -404,7 +419,14 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
         toast.error(`AI 生成资料失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [ensurePersistedAiReady, resolveAIGenerationContext, refreshCurrentFolder, toast]
+    [
+      folderPathRef,
+      ensurePersistedAiReady,
+      toast,
+      resolveAIGenerationContext,
+      filesRef,
+      refreshCurrentFolder,
+    ]
   );
 
   return {

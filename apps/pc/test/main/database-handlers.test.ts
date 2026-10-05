@@ -46,7 +46,9 @@ vi.mock('electron', () => ({
   },
 }));
 
-const { registerDatabaseHandlers } = await import('../../src/main/handlers/database');
+const { registerDatabaseHandlers, isPathInWorkspace } = await import(
+  '../../src/main/handlers/database'
+);
 const store = await import('@novel-editor/store');
 registerDatabaseHandlers();
 
@@ -642,8 +644,8 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
       );
       await call(
         'db-settings-set',
-        `${MAT}project:${FOLDER.toUpperCase()}`,
-        JSON.stringify([{ title: '大小写不敏感匹配' }])
+        `${MAT}project:${FOLDER}`,
+        JSON.stringify([{ title: '项目资料' }])
       );
       await call(
         'db-settings-set',
@@ -715,7 +717,7 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
       const matSection = md.slice(md.indexOf('## 资料卡'));
       expect(matSection).toContain('古剑图谱\n- 类型：reference\n- 作用域：章节');
       expect(matSection).toContain('- 关联章节：第1章\n- 内容：记载');
-      expect(matSection).toContain('大小写不敏感匹配\n- 类型：reference\n- 作用域：项目');
+      expect(matSection).toContain('项目资料\n- 类型：reference\n- 作用域：项目');
       expect(matSection).toContain('卷资料\n- 类型：map\n- 作用域：卷');
       expect(matSection).toContain('- 关联章节：未填写\n- 内容：未填写');
       for (const ignored of ['外部', '未知作用域', '空作用域', '空路径', '不是数组', 'no title']) {
@@ -743,5 +745,21 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
       expect(loreOnly).toContain('（暂无设定）');
       expect(loreOnly).not.toContain('## 角色卡');
     });
+  });
+});
+
+describe('isPathInWorkspace', () => {
+  it('统一分隔符，匹配根目录本身与子路径，不误匹配同前缀目录', () => {
+    expect(isPathInWorkspace('/a/书', '/a/书/', 'linux')).toBe(true);
+    expect(isPathInWorkspace('/a/书/第1章.md', '/a/书', 'linux')).toBe(true);
+    expect(isPathInWorkspace('/a/书2/x.md', '/a/书', 'linux')).toBe(false);
+    expect(isPathInWorkspace('C:\\Novels\\书\\a.md', 'C:/Novels/书', 'win32')).toBe(true);
+  });
+
+  it('仅在 win32 / darwin 上忽略大小写，Linux 大小写敏感', () => {
+    expect(isPathInWorkspace('/Users/Me/Book/a.md', '/users/me/book', 'darwin')).toBe(true);
+    expect(isPathInWorkspace('C:\\BOOK\\a.md', 'c:\\book', 'win32')).toBe(true);
+    expect(isPathInWorkspace('/home/me/Book/a.md', '/home/me/book', 'linux')).toBe(false);
+    expect(isPathInWorkspace('/home/me/book/a.md', '/home/me/book', 'linux')).toBe(true);
   });
 });

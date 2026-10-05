@@ -66,8 +66,8 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
         pollTimerRef.current = null;
       }
     }
-    // setSnapshotJob / pollTimerRef 均为稳定引用，与原实现一致仅依赖 visible
-  }, [visible]);
+    // setSnapshotJob / pollTimerRef 均为稳定引用，实际只随 visible 变化重新执行
+  }, [pollTimerRef, setSnapshotJob, visible]);
 
   useEffect(() => {
     setPdfComparePage(1);

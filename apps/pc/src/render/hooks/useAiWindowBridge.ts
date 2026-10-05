@@ -211,5 +211,16 @@ export function useAiWindowBridge(ctx: UseAiWindowBridgeContext) {
       disposeOpenSettings?.();
       disposeApplyFix?.();
     };
-  }, [openFileInTab, toast]);
+  }, [
+    dispatchFixCommand,
+    editorViewRef,
+    openFileInTab,
+    setEditorContent,
+    setEditorReloadToken,
+    setScrollToLine,
+    setSettingsCenterTab,
+    setShowSettingsCenter,
+    setTransientHighlightLine,
+    toast,
+  ]);
 }

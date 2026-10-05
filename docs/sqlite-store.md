@@ -100,6 +100,8 @@
 
 ### writing_stats — 写作统计
 
+> 历史遗留表，GUI 目前不写入也不读取。每日写作统计（GUI 保存与 CLI 写入）统一记录在 `<project>/.novel-editor/writing-log.json`（`@novel-editor/core` writing-log），`ne stats today/history` 读取该文件。
+
 | 字段             | 类型       | 说明           |
 | ---------------- | ---------- | -------------- |
 | id               | INTEGER PK | 自增主键       |

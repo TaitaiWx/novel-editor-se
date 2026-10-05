@@ -58,7 +58,14 @@ export function useAiSessionSync(ctx: UseAiSessionSyncContext) {
       }
     });
     return () => ch.close();
-  }, [aiSessionKey]);
+  }, [
+    aiSessionChannelRef,
+    aiSessionKey,
+    aiSessionRef,
+    dispatchFixCommand,
+    editorViewRef,
+    setScrollToLine,
+  ]);
 
   React.useEffect(() => {
     const ipc = window.electron?.ipcRenderer;
@@ -83,7 +90,7 @@ export function useAiSessionSync(ctx: UseAiSessionSyncContext) {
     return () => {
       cancelled = true;
     };
-  }, [aiSessionKey]);
+  }, [aiSessionKey, aiSessionRef, dispatchFixCommand]);
 
   const persistSessionTimerRef = useRef<number | null>(null);
   React.useEffect(() => {
@@ -118,5 +125,5 @@ export function useAiSessionSync(ctx: UseAiSessionSyncContext) {
         persistSessionTimerRef.current = null;
       }
     };
-  }, [inlineDiff, pendingApplyQueue, aiSessionKey]);
+  }, [inlineDiff, pendingApplyQueue, aiSessionKey, aiSessionRef, activeTabRef]);
 }

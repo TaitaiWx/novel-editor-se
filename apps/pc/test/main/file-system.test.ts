@@ -137,8 +137,15 @@ function convertLegacy(node: dirTree.DirectoryTree): LegacyNode {
   };
 }
 
+/** 新实现默认隐藏 dotfile 与系统文件：从旧实现输出中剔除这些条目再对照 */
+function withoutHidden(nodes: LegacyNode[]): LegacyNode[] {
+  return nodes
+    .filter((node) => !node.name.startsWith('.') && node.name !== 'Thumbs.db')
+    .map((node) => (node.children ? { ...node, children: withoutHidden(node.children) } : node));
+}
+
 describe('文件树：open-local-folder / refresh-folder', () => {
-  it('refresh-folder 与旧 directory-tree 实现输出完全一致（常规项目）', async () => {
+  it('refresh-folder 与旧 directory-tree 实现输出一致（除默认隐藏的 dotfile / 系统文件）', async () => {
     await touch('正文/第一卷/第一章.md', '内容');
     await touch('正文/第一卷/第二章.md');
     await mkdir(path.join(dir, '正文', '空卷'));
@@ -147,14 +154,22 @@ describe('文件树：open-local-folder / refresh-folder', () => {
     await touch('.git/HEAD');
     await touch('node_modules/x/index.js');
     await touch('.DS_Store');
+    await touch('.gitignore');
+    await touch('设定/.hidden-note.md');
+    await touch('Thumbs.db');
     await touch('封面.png', Buffer.from([1, 2, 3]));
 
     const legacyTree = dirTree(dir, { exclude: LEGACY_EXCLUDE, attributes: ['type'] });
     const legacy = {
       path: dir,
-      files: legacyTree?.children ? legacyTree.children.map(convertLegacy) : [],
+      files: withoutHidden(legacyTree?.children ? legacyTree.children.map(convertLegacy) : []),
     };
-    expect(await invoke('refresh-folder', dir)).toEqual(legacy);
+    const result = await invoke<{ files: LegacyNode[] }>('refresh-folder', dir);
+    expect(result).toEqual(legacy);
+    const rootNames = result.files.map((node) => node.name);
+    for (const hidden of ['.novelrc', '.gitignore', '.git', '.DS_Store', 'Thumbs.db']) {
+      expect(rootNames).not.toContain(hidden);
+    }
   });
 
   it('不再误隐藏 outline.md 等名称中含排除关键词的条目', async () => {

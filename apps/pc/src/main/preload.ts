@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('electron', {
         'read-file-binary',
         'read-xlsx-data',
         'write-file',
+        // GUI 会话文件（供 CLI ne status 读取打开的文件与未保存变更）
+        'gui-session-publish',
         'get-file-info',
         'get-file-info-batch',
         'get-default-data-path',

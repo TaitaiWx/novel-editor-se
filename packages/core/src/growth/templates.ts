@@ -37,12 +37,18 @@ const DND_ATTRIBUTES: Array<[string, string, string]> = [
   ['cha', '魅力', '感染力、领导与交涉'],
 ];
 
+/** DND 模板默认每级自动成长 */
+export const DND_GROWTH_PER_LEVEL = 1;
+/** DND 模板每级允许的最大成长（自动成长 + 手动加点） */
+export const DND_PER_LEVEL_CAP = 2;
+
 /** DND 风格模板：六维属性 + 经典经验表 + 示例技能与三选一 */
 export function createDndRuleset(): GrowthRuleset {
   return {
     schemaVersion: GROWTH_SCHEMA_VERSION,
     name: 'DND 风格规则之书',
-    description: '六维属性、20 级经验表。可按作品需要增删属性、技能与核心规则。',
+    description:
+      '六维属性（每升一级全属性 +1，单级合理成长上限 +2）、20 级经验表。可按作品需要增删属性、技能与核心规则。',
     attributes: DND_ATTRIBUTES.map(([key, name, description]) => ({
       key,
       name,
@@ -50,8 +56,9 @@ export function createDndRuleset(): GrowthRuleset {
       initial: 10,
       min: 1,
       max: 30,
-      growthPerLevel: 0,
-      perLevelCap: 1,
+      // 默认每升一级全属性 +1；上限 +2 为剧情奖励 / 手动加点留出余量，与一致性检查的等级上限一致
+      growthPerLevel: DND_GROWTH_PER_LEVEL,
+      perLevelCap: DND_PER_LEVEL_CAP,
     })),
     levels: {
       maxLevel: 20,

@@ -21,6 +21,7 @@
     ".": "./src/index.ts",
     "./text-stats": "./src/text-stats.ts",
     "./growth": "./src/growth/index.ts",
-    "./material": "./src/material.ts"
+    "./material": "./src/material.ts",
+    "./gui-session": "./src/gui-session.ts"
   }
 }

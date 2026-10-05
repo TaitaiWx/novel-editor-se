@@ -98,7 +98,6 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onCopyFile,
     onPasteFiles,
     onDropFiles,
-    hasClipboard,
     creatingType,
     createTargetPath,
     onInlineCreate,
@@ -225,7 +224,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
           if (targetDir) onPasteFiles?.(targetDir);
         }
       },
-      [selectedFile, files, onCopyFile, onPasteFiles, hasClipboard]
+      [selectedFile, files, onCopyFile, onPasteFiles]
     );
 
     const createMenuItems = buildCreateMenuItems({

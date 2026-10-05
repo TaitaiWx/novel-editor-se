@@ -36,6 +36,7 @@ import { useWorkspaceTabContent } from './useWorkspaceTabContent';
 import { useOpenSettingsTabListener } from './useOpenSettingsTabListener';
 import { useAssistantDialogHandlers } from './useAssistantDialogHandlers';
 import { useGrowthEntry } from './useGrowthEntry';
+import { useGuiSessionPublisher } from './useGuiSessionPublisher';
 
 /**
  * 应用组合根的全部 hook 调用：声明各领域状态，并按依赖把状态与动作接到各业务 hook。
@@ -148,6 +149,8 @@ export function useAppController() {
     ...fileOps,
   });
   useWorkspaceEntities({ ...workspaceState, ...entitiesState });
+  // GUI 会话发布（.novel-editor/session.json，供 CLI ne status 读取）；只读状态，无顺序依赖
+  useGuiSessionPublisher({ ...workspaceState, ...tabsState });
 
   // ─── AI 生成与右键菜单 ─────────────────────────────────────────
   const libraryGeneration = useLibraryGeneration({

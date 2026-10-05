@@ -61,5 +61,5 @@ export function useWorkspaceEntities(ctx: UseWorkspaceEntitiesContext) {
     return () => {
       cancelled = true;
     };
-  }, [folderPath]);
+  }, [folderPath, setWorkspaceCharacters, setWorkspaceLoreEntries, setWorkspaceProjectName]);
 }

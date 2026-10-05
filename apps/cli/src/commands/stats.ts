@@ -2,7 +2,7 @@
  * 统计命令：ne stats [target]、ne stats today、ne stats history
  *
  * today / history 数据来自 <project>/.novel-editor/writing-log.json，
- * 只记录 CLI（含 daemon）执行的写入操作，GUI 内的编辑不会计入。
+ * 由 CLI（含 daemon）写入类命令与 GUI 保存正文文件共同记录（只统计正文，排除 资料/ 与 .novel-editor/）。
  */
 import { readFile } from 'node:fs/promises';
 import {
@@ -18,7 +18,7 @@ import type { CommandSpec } from '../types';
 import { bool, num, str } from './util';
 
 const LOG_NOTE =
-  '注: 今日/历史统计只包含 CLI 写入（file write、chapter create 等），不含 GUI 编辑。';
+  '注: 统计包含 CLI 写入与 GUI 保存（只计正文文件）；写作时长按相邻两次写入间隔不超过 10 分钟估算。';
 
 export const statsCommands: CommandSpec[] = [
   {
@@ -68,7 +68,7 @@ export const statsCommands: CommandSpec[] = [
   },
   {
     path: ['stats', 'today'],
-    summary: '今日写作统计（字数、时间；仅统计 CLI 写入）',
+    summary: '今日写作统计（字数、时间；包含 CLI 写入与 GUI 保存）',
     async run(ctx) {
       const project = await ctx.requireProject();
       const today = await getTodayStats(project.root);

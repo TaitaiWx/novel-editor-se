@@ -42,33 +42,39 @@ export function useTabActions(ctx: UseTabActionsContext) {
   } = ctx;
 
   // Tab helpers
-  const openFileInTab = useCallback((filePath: string) => {
-    setOpenTabs((prev) => {
-      if (prev.includes(filePath)) return prev;
-      return [...prev, filePath];
-    });
-    setActiveTab(filePath);
-  }, []);
-
-  const closeTab = useCallback((filePath: string) => {
-    setOpenTabs((prev) => {
-      const newTabs = prev.filter((t) => t !== filePath);
-      // If we're closing the active tab, activate adjacent tab
-      if (activeTabRef.current === filePath) {
-        const closedIndex = prev.indexOf(filePath);
-        const nextTab = newTabs[Math.min(closedIndex, newTabs.length - 1)] || null;
-        setActiveTab(nextTab);
-      }
-      return newTabs;
-    });
-    if (isUntitledTabPath(filePath)) {
-      setUntitledTabContents((prev) => {
-        if (!(filePath in prev)) return prev;
-        const { [filePath]: _removed, ...rest } = prev;
-        return rest;
+  const openFileInTab = useCallback(
+    (filePath: string) => {
+      setOpenTabs((prev) => {
+        if (prev.includes(filePath)) return prev;
+        return [...prev, filePath];
       });
-    }
-  }, []);
+      setActiveTab(filePath);
+    },
+    [setActiveTab, setOpenTabs]
+  );
+
+  const closeTab = useCallback(
+    (filePath: string) => {
+      setOpenTabs((prev) => {
+        const newTabs = prev.filter((t) => t !== filePath);
+        // If we're closing the active tab, activate adjacent tab
+        if (activeTabRef.current === filePath) {
+          const closedIndex = prev.indexOf(filePath);
+          const nextTab = newTabs[Math.min(closedIndex, newTabs.length - 1)] || null;
+          setActiveTab(nextTab);
+        }
+        return newTabs;
+      });
+      if (isUntitledTabPath(filePath)) {
+        setUntitledTabContents((prev) => {
+          if (!(filePath in prev)) return prev;
+          const { [filePath]: _removed, ...rest } = prev;
+          return rest;
+        });
+      }
+    },
+    [activeTabRef, setActiveTab, setOpenTabs, setUntitledTabContents]
+  );
 
   // Create new untitled tab (Cmd+N, like VS Code)
   const handleNewTab = useCallback(() => {
@@ -77,7 +83,7 @@ export function useTabActions(ctx: UseTabActionsContext) {
     setOpenTabs((prev) => [...prev, untitledPath]);
     setUntitledTabContents((prev) => ({ ...prev, [untitledPath]: '' }));
     setActiveTab(untitledPath);
-  }, []);
+  }, [setActiveTab, setOpenTabs, setUntitledTabContents, untitledCounterRef]);
 
   // Focus mode toggle (uses refs for stable closure — no deps on panel state)
   const toggleFocusMode = useCallback(() => {
@@ -103,26 +109,44 @@ export function useTabActions(ctx: UseTabActionsContext) {
       }
       return !prev;
     });
-  }, []);
+  }, [
+    openTabsRef,
+    preFocusStateRef,
+    rightPanelCollapsedRef,
+    setActiveTab,
+    setFocusMode,
+    setOpenTabs,
+    setRightPanelCollapsed,
+    setSidebarCollapsed,
+    setUntitledTabContents,
+    sidebarCollapsedRef,
+    untitledCounterRef,
+  ]);
 
   // ─── Tab 右键菜单操作 ─────────────────────────────────────────────
-  const handleCloseOtherTabs = useCallback((filePath: string) => {
-    setOpenTabs([filePath]);
-    setActiveTab(filePath);
-  }, []);
+  const handleCloseOtherTabs = useCallback(
+    (filePath: string) => {
+      setOpenTabs([filePath]);
+      setActiveTab(filePath);
+    },
+    [setActiveTab, setOpenTabs]
+  );
 
   const handleCloseAllTabs = useCallback(() => {
     setOpenTabs([]);
     setUntitledTabContents({});
     setActiveTab(null);
-  }, []);
+  }, [setActiveTab, setOpenTabs, setUntitledTabContents]);
 
-  const closeTabsByPredicate = useCallback((predicate: (tab: string) => boolean) => {
-    setOpenTabs((prev) => prev.filter((tab) => !predicate(tab)));
-    if (activeTabRef.current && predicate(activeTabRef.current)) {
-      setActiveTab(null);
-    }
-  }, []);
+  const closeTabsByPredicate = useCallback(
+    (predicate: (tab: string) => boolean) => {
+      setOpenTabs((prev) => prev.filter((tab) => !predicate(tab)));
+      if (activeTabRef.current && predicate(activeTabRef.current)) {
+        setActiveTab(null);
+      }
+    },
+    [activeTabRef, setActiveTab, setOpenTabs]
+  );
 
   const handleCloseAllAndSave = useCallback(() => {
     // 先触发保存当前文件
@@ -134,7 +158,7 @@ export function useTabActions(ctx: UseTabActionsContext) {
       setOpenTabs([]);
       setActiveTab(null);
     }, 200);
-  }, []);
+  }, [setActiveTab, setOpenTabs]);
 
   return {
     openFileInTab,

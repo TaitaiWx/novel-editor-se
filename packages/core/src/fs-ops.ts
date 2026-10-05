@@ -102,9 +102,24 @@ export interface BuildTreeOptions extends ListTreeOptions {
   skipUnreadable?: boolean;
 }
 
+/** 操作系统自动生成、对作者无意义的系统文件（不以 `.` 开头，但同样视为隐藏） */
+export const SYSTEM_HIDDEN_NAMES: ReadonlySet<string> = new Set([
+  'Thumbs.db',
+  'ehthumbs.db',
+  'desktop.ini',
+  '$RECYCLE.BIN',
+  'System Volume Information',
+  'Icon\r',
+]);
+
+/** 是否为隐藏条目：以 `.` 开头的 dotfile，或系统自动生成的文件 */
+export function isHiddenEntryName(name: string): boolean {
+  return name.startsWith('.') || SYSTEM_HIDDEN_NAMES.has(name);
+}
+
 function shouldSkip(name: string, options: ListTreeOptions, extra: Set<string>): boolean {
   if (DEFAULT_EXCLUDED_NAMES.has(name) || extra.has(name)) return true;
-  return !options.includeHidden && name.startsWith('.');
+  return !options.includeHidden && isHiddenEntryName(name);
 }
 
 function sortNodes(nodes: FileNode[]): FileNode[] {
@@ -205,12 +220,18 @@ export interface FolderTree {
   files: FileNode[];
 }
 
+/** readFolderTree 选项 */
+export interface ReadFolderTreeOptions {
+  /** 是否显示隐藏文件（dotfile 与 Thumbs.db 等系统文件），默认 false；DEFAULT_EXCLUDED_NAMES 始终排除 */
+  includeHidden?: boolean;
+}
+
 /**
  * 读取 GUI 文件浏览器的文件树（open-local-folder / refresh-folder 共用）。
  *
  * 与 GUI 早期基于 directory-tree 的行为保持一致：
  * - 保持文件系统返回顺序（排序由渲染进程负责）
- * - 包含隐藏文件（仅排除 DEFAULT_EXCLUDED_NAMES）
+ * - 默认隐藏 dotfile 与系统文件（与 CLI `ne file list` 一致，`includeHidden` 可显示）
  * - 跟随符号链接、跳过无权限目录
  * - 节点不带 size；目录节点总有 children 数组
  * - 根目录不存在或不是目录时返回空列表而不是抛错
@@ -218,7 +239,10 @@ export interface FolderTree {
  * 唯一有意的差异：排除规则按条目名称精确匹配，而不是对整条路径做子串正则匹配，
  * 避免 `outline.md`、`.github`、或根路径中含 `build`/`out` 的目录被误隐藏。
  */
-export async function readFolderTree(folderPath: string): Promise<FolderTree> {
+export async function readFolderTree(
+  folderPath: string,
+  options: ReadFolderTreeOptions = {}
+): Promise<FolderTree> {
   try {
     const info = await stat(folderPath);
     if (!info.isDirectory()) return { path: folderPath, files: [] };
@@ -226,7 +250,7 @@ export async function readFolderTree(folderPath: string): Promise<FolderTree> {
     return { path: folderPath, files: [] };
   }
   const files = await buildFileTree(folderPath, {
-    includeHidden: true,
+    includeHidden: options.includeHidden === true,
     sort: 'none',
     includeSize: false,
     followSymlinks: true,

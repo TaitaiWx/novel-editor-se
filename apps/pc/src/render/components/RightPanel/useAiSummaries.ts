@@ -162,7 +162,8 @@ export function useAiSummaries(
         processSummaryQueue();
       });
     }
-  }, []);
+    // summaryCache 为 AiCacheProvider 持有的稳定 Map 引用
+  }, [summaryCache]);
 
   const requestAiSummary = useCallback(
     (entry: OutlineEntry) => {
@@ -200,7 +201,7 @@ export function useAiSummaries(
       summaryQueueRef.current.push(entry);
       processSummaryQueue();
     },
-    [processSummaryQueue]
+    [processSummaryQueue, summaryCache]
   );
 
   // Stale-while-revalidate on content change:

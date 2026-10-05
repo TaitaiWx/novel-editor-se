@@ -110,5 +110,11 @@ export function useScopedAssistantArtifacts(ctx: UseScopedAssistantArtifactsCont
       cancelled = true;
       dispose?.();
     };
-  }, [currentAssistantScope]);
+  }, [
+    currentAssistantScope,
+    setAssistantCharacterGenerationStatus,
+    setAssistantScopedCharacters,
+    setAssistantScopedLoreEntries,
+    setAssistantScopedMaterials,
+  ]);
 }

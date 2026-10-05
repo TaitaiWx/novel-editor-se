@@ -43,7 +43,7 @@ export function useScopedContentReader(ctx: UseScopedContentReaderContext) {
 
       return storyFileNodes;
     },
-    [rootVolumeNode, storyFileNodes]
+    [filesRef, rootVolumeNode, storyFileNodes]
   );
 
   const readStoryDocumentText = useCallback(
@@ -57,7 +57,7 @@ export function useScopedContentReader(ctx: UseScopedContentReaderContext) {
       }
       return (await ipc.invoke('read-file', filePath)) as string;
     },
-    [activeDocumentTab]
+    [activeDocumentTab, editorContentRef]
   );
 
   const resolveAIGenerationContext = useCallback(
@@ -105,7 +105,7 @@ export function useScopedContentReader(ctx: UseScopedContentReaderContext) {
       }
       return { content: merged, label: getAIGenerationScopeLabel(scope) };
     },
-    [activeDocumentTab, readStoryDocumentText, storyFileNodes]
+    [activeDocumentTab, editorContentRef, readStoryDocumentText, storyFileNodes]
   );
 
   const resolveScopeTargetContext = useCallback(

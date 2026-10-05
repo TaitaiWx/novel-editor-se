@@ -125,4 +125,61 @@ describe('GrowthEventForm', () => {
     await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
     expect(onSubmit.mock.calls[1][1]).toBe(true);
   });
+
+  it('记录成功后清空数值与原因、保留章节；章节输入框聚焦时全选', async () => {
+    const snapshot = buildSnapshot();
+    const onSubmit = vi
+      .fn<(event: unknown, force: boolean) => Promise<string | null>>()
+      .mockResolvedValue(null);
+    render(
+      <GrowthEventForm
+        ruleset={snapshot.ruleset}
+        busy={false}
+        defaultChapter={3}
+        onSubmit={onSubmit}
+      />
+    );
+    const delta = screen.getByLabelText('数值') as HTMLInputElement;
+    const note = screen.getByLabelText('备注') as HTMLInputElement;
+    const chapter = screen.getByLabelText('章节') as HTMLInputElement;
+
+    fireEvent.change(delta, { target: { value: '120' } });
+    fireEvent.change(note, { target: { value: '击败哥布林' } });
+    fireEvent.change(chapter, { target: { value: '7' } });
+    fireEvent.click(screen.getByText('记录'));
+    await vi.waitFor(() => expect(delta.value).toBe(''));
+    expect(onSubmit).toHaveBeenLastCalledWith(
+      { type: 'exp', delta: 120, chapter: 7, note: '击败哥布林' },
+      false
+    );
+    expect(note.value).toBe('');
+    expect(chapter.value).toBe('7');
+
+    // 同一章再记一笔：章节沿用
+    fireEvent.change(delta, { target: { value: '30' } });
+    fireEvent.click(screen.getByText('记录'));
+    await vi.waitFor(() =>
+      expect(onSubmit).toHaveBeenLastCalledWith({ type: 'exp', delta: 30, chapter: 7 }, false)
+    );
+
+    chapter.setSelectionRange(1, 1);
+    fireEvent.focus(chapter);
+    expect(chapter.selectionStart).toBe(0);
+    expect(chapter.selectionEnd).toBe(chapter.value.length);
+  });
+
+  it('记录失败时保留数值与原因', async () => {
+    const snapshot = buildSnapshot();
+    const onSubmit = vi
+      .fn<(event: unknown, force: boolean) => Promise<string | null>>()
+      .mockResolvedValue('违反规则');
+    render(<GrowthEventForm ruleset={snapshot.ruleset} busy={false} onSubmit={onSubmit} />);
+    const delta = screen.getByLabelText('数值') as HTMLInputElement;
+    fireEvent.change(delta, { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('备注'), { target: { value: '奇遇' } });
+    fireEvent.click(screen.getByText('记录'));
+    expect(await screen.findByText('违反规则')).toBeTruthy();
+    expect(delta.value).toBe('5');
+    expect((screen.getByLabelText('备注') as HTMLInputElement).value).toBe('奇遇');
+  });
 });

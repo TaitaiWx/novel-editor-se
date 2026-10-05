@@ -37,10 +37,13 @@ export function useAppSettingsActions(ctx: UseAppSettingsActionsContext) {
     await ipc.invoke('db-settings-set', SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   }, []);
 
-  const handleAppSettingsChange = useCallback((settings: SettingsDraft) => {
-    appSettingsRef.current = settings;
-    setAppSettings(settings);
-  }, []);
+  const handleAppSettingsChange = useCallback(
+    (settings: SettingsDraft) => {
+      appSettingsRef.current = settings;
+      setAppSettings(settings);
+    },
+    [appSettingsRef, setAppSettings]
+  );
 
   const updateAppSettings = useCallback(
     (updater: (current: SettingsDraft) => SettingsDraft) => {
@@ -49,7 +52,7 @@ export function useAppSettingsActions(ctx: UseAppSettingsActionsContext) {
       setAppSettings(nextSettings);
       void persistSettingsDraft(nextSettings);
     },
-    [persistSettingsDraft]
+    [appSettingsRef, persistSettingsDraft, setAppSettings]
   );
 
   const ensurePersistedAiReady = useCallback(async (): Promise<SettingsDraft | null> => {
