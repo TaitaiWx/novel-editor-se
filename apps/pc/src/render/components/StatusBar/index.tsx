@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { VscHistory, VscSync, VscError, VscCheck, VscCopy } from 'react-icons/vsc';
+import { VscHistory, VscSync, VscError, VscCheck } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
 import type { UpdateStatus } from '@/render/types/electron-api';
 import { analyzeContentStats } from '../../utils/contentStats';
 import { getPathBasename } from '../../utils/path';
 import Tooltip from '../Tooltip';
-import { writeClipboard } from '../../hooks/useAboutInfo';
 import { requestOpenAboutDialog } from '../../hooks/useAboutDialogListener';
 import styles from './styles.module.scss';
 
@@ -134,8 +133,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
   const [networkStatus, setNetworkStatus] = useState<NetworkStatusState>(() =>
     createNetworkStatusState()
   );
-  const [deviceId, setDeviceId] = useState('');
-  const [deviceIdCopied, setDeviceIdCopied] = useState(false);
   const [upToDate, setUpToDate] = useState(false);
   const prevCheckingRef = useRef(false);
   const encodingMenuRef = useRef<HTMLDivElement>(null);
@@ -180,10 +177,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
       .catch((error) => {
         console.error('Failed to get update status:', error);
       });
-    ipc
-      .invoke('get-device-id')
-      .then((id) => setDeviceId(id as string))
-      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -261,18 +254,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
       console.error('Failed to check updates:', error);
     }
   }, []);
-
-  const handleCopyDeviceId = useCallback(async () => {
-    if (!deviceId) return;
-    if (await writeClipboard(deviceId)) setDeviceIdCopied(true);
-  }, [deviceId]);
-
-  // 「已复制」提示短暂显示后复原
-  useEffect(() => {
-    if (!deviceIdCopied) return;
-    const timer = setTimeout(() => setDeviceIdCopied(false), 1500);
-    return () => clearTimeout(timer);
-  }, [deviceIdCopied]);
 
   const handleOpenAbout = useCallback(() => {
     setShowUpdatePanel(false);
@@ -463,23 +444,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
                     关于…
                   </button>
                 </div>
-                {deviceId && (
-                  <div className={styles.panelMetaRow}>
-                    <span className={styles.panelDeviceId} title={deviceId}>
-                      设备 ID: {deviceId.slice(0, 8)}…
-                    </span>
-                    <button
-                      type="button"
-                      className={styles.panelLink}
-                      onClick={() => void handleCopyDeviceId()}
-                      aria-label="复制设备 ID"
-                      title="复制完整设备 ID"
-                    >
-                      {deviceIdCopied ? <VscCheck /> : <VscCopy />}
-                      <span>{deviceIdCopied ? '已复制' : '复制'}</span>
-                    </button>
-                  </div>
-                )}
                 {/* Progress bar */}
                 {typeof downloadPercent === 'number' && updateStatus?.availableVersion && (
                   <div className={styles.progressSection}>

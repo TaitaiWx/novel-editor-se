@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AboutDialog from '@/render/components/AboutDialog';
 import AboutSection from '@/render/components/AppSettingsCenter/AboutSection';
-import { getRevealLabel } from '@/render/components/AboutContent';
-import { buildAboutLinks, formatAboutDiagnostics, type AboutInfo } from '@/shared/about';
+import UpdateGroup from '@/render/components/AppSettingsCenter/UpdateGroup';
+import ToastProvider from '@/render/components/Toast';
+import type { AboutInfo } from '@/shared/about';
+import type { LogUploadResult, LogUploadSettingsState } from '@/shared/log-upload';
 import {
   installElectronMock,
   uninstallElectronMock,
@@ -13,6 +15,8 @@ import {
 } from '../hooks/electronMock';
 
 const DEVICE_ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
+const MINUTE = 60_000;
+const NOW = new Date(2026, 9, 6, 12, 0).getTime();
 
 function makeInfo(overrides: Partial<AboutInfo> = {}): AboutInfo {
   return {
@@ -23,23 +27,8 @@ function makeInfo(overrides: Partial<AboutInfo> = {}): AboutInfo {
     updateChannel: 'beta',
     rollout: { bucket: 12, percentage: null, eligible: null, canaryEnrolled: false },
     deviceId: DEVICE_ID,
-    firstRunAt: '2026-01-02T03:04:00.000Z',
-    runtime: {
-      electron: '42.0.0',
-      chrome: '140.0.0.0',
-      node: '24.15.0',
-      v8: '14.0',
-      platform: 'darwin',
-      arch: 'arm64',
-      osRelease: '24.6.0',
-      isPackaged: false,
-    },
-    directories: [
-      { key: 'userData', label: '用户数据', path: '/u/data' },
-      { key: 'logs', label: '日志', path: '/u/logs' },
-      { key: 'sampleData', label: '示例项目', path: '/u/docs/sample-data' },
-    ],
-    links: buildAboutLinks('1.1.0-beta.43'),
+    firstRunAt: new Date(2026, 2, 17, 10, 0).toISOString(),
+    startedAt: new Date(NOW - (2 * 60 + 13) * MINUTE).toISOString(),
     ...overrides,
   };
 }
@@ -47,21 +36,39 @@ function makeInfo(overrides: Partial<AboutInfo> = {}): AboutInfo {
 interface MockOptions {
   info?: AboutInfo;
   copyResult?: { success: boolean };
-  openDirResult?: { success: boolean; error?: string };
+  upload?: () => LogUploadResult | Promise<LogUploadResult>;
+  settings?: LogUploadSettingsState;
+  setSettingsFails?: boolean;
 }
 
 function mockIpc(opts: MockOptions = {}): { mock: ElectronMock; state: { info: AboutInfo } } {
   const state = { info: opts.info ?? makeInfo() };
+  let settings: LogUploadSettingsState = opts.settings ?? {
+    autoUploadOnCrash: true,
+    endpointConfigured: false,
+  };
   const mock = installElectronMock((channel, ...args) => {
     switch (channel) {
       case 'get-about-info':
         return state.info;
       case 'about-copy-text':
         return opts.copyResult ?? { success: true };
-      case 'about-open-directory':
-        return opts.openDirResult ?? { success: true };
-      case 'about-open-link':
-        return { success: true };
+      case 'log-upload-run':
+        return opts.upload
+          ? opts.upload()
+          : {
+              status: 'saved',
+              fileName: 'novel-editor-logs-20261006-120000-0f8fad5b.zip',
+              filePath: '/u/Downloads/novel-editor-logs-20261006-120000-0f8fad5b.zip',
+              uploadError: null,
+              bytes: 1024,
+            };
+      case 'log-upload-get-settings':
+        return settings;
+      case 'log-upload-set-settings':
+        if (opts.setSettingsFails) throw new Error('disk full');
+        settings = { ...settings, ...(args[0] as Partial<LogUploadSettingsState>) };
+        return settings;
       case 'update-set-channel': {
         const channel = args[0] as AboutInfo['updateChannel'];
         state.info = {
@@ -82,105 +89,154 @@ function callsOf(mock: ElectronMock, channel: string): unknown[][] {
   return mock.invoke.mock.calls.filter((call) => call[0] === channel).map((call) => call.slice(1));
 }
 
+function renderWithToast(ui: React.ReactElement) {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+}
+
 afterEach(() => {
   uninstallElectronMock();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
-describe('AboutDialog', () => {
-  it('显示版本、通道徽标、完整设备 ID 与运行环境', async () => {
+describe('AboutDialog（精简小窗口）', () => {
+  it('只显示名称、版本与通道、运行时间、完整设备 ID 与上传日志按钮', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW });
     mockIpc();
-    render(<AboutDialog visible onClose={vi.fn()} />);
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
     expect(await screen.findByTestId('about-device-id')).toHaveProperty('textContent', DEVICE_ID);
+    expect(screen.getByText('小说编辑器')).toBeTruthy();
     expect(screen.getByTestId('about-version').textContent).toBe('版本 1.1.0-beta.43');
     expect(screen.getByText('测试版')).toBeTruthy();
-    expect(screen.getByText('用于灰度更新分组与问题排查，不包含个人信息')).toBeTruthy();
-    expect(screen.getByText('macOS 24.6.0 (arm64)')).toBeTruthy();
-    expect(screen.getByText('42.0.0')).toBeTruthy();
-    expect(screen.getByText('开发模式')).toBeTruthy();
-    expect(screen.getByText('分桶 12 · 当前为全量发布')).toBeTruthy();
-    expect(screen.getByText('未加入')).toBeTruthy();
+    expect(screen.getByTestId('about-runtime').textContent).toBe(
+      '首次运行 2026-03-17 · 本次已运行 2 小时 13 分'
+    );
+    expect(screen.getByTestId('about-device-id').getAttribute('title')).toBe('点击复制');
+    expect(screen.getByText('点击复制')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '上传日志' })).toBeTruthy();
+
+    // 诊断信息、目录、链接、更新通道都不再展示
+    for (const text of ['Electron', '数据目录', 'GitHub', '更新日志', '问题反馈', '复制诊断信息']) {
+      expect(screen.queryByText(text)).toBeNull();
+    }
+    expect(screen.queryByText(/更新通道|灰度分组|金丝雀计划/)).toBeNull();
+    expect(screen.queryByRole('button', { name: '复制设备 ID' })).toBeNull();
   });
 
-  it('复制设备 ID 与诊断信息走主进程剪贴板，并显示「已复制」', async () => {
+  it('「本次已运行」每分钟刷新', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW });
+    mockIpc();
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
+    await screen.findByTestId('about-runtime');
+    await act(async () => {
+      vi.advanceTimersByTime(MINUTE);
+    });
+    expect(screen.getByTestId('about-runtime').textContent).toContain('本次已运行 2 小时 14 分');
+  });
+
+  it('点击设备 ID 复制并提示「设备 ID 已复制」', async () => {
     const { mock } = mockIpc();
-    render(<AboutDialog visible onClose={vi.fn()} />);
-    await screen.findByTestId('about-device-id');
-
-    fireEvent.click(screen.getByRole('button', { name: '复制设备 ID' }));
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByTestId('about-device-id'));
     await waitFor(() => expect(callsOf(mock, 'about-copy-text')).toEqual([[DEVICE_ID]]));
-    await screen.findByText('已复制');
-
-    fireEvent.click(screen.getByRole('button', { name: '复制诊断信息' }));
-    await screen.findByText('已复制诊断信息');
-    const diagnostics = callsOf(mock, 'about-copy-text')[1][0] as string;
-    expect(diagnostics).toBe(formatAboutDiagnostics(makeInfo()));
-    expect(diagnostics).toContain(`设备 ID: ${DEVICE_ID}`);
-    expect(diagnostics).toContain('Electron: 42.0.0');
+    await screen.findByText('设备 ID 已复制');
   });
 
   it('主进程剪贴板失败时退回 navigator.clipboard；两者都失败时提示', async () => {
     const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error());
-    Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText },
-      configurable: true,
-    });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     mockIpc({ copyResult: { success: false } });
-    render(<AboutDialog visible onClose={vi.fn()} />);
-    await screen.findByTestId('about-device-id');
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
+    const id = await screen.findByTestId('about-device-id');
 
-    fireEvent.click(screen.getByRole('button', { name: '复制设备 ID' }));
-    await screen.findByText('已复制');
+    fireEvent.click(id);
+    await screen.findByText('设备 ID 已复制');
     expect(writeText).toHaveBeenCalledWith(DEVICE_ID);
 
-    fireEvent.click(screen.getByRole('button', { name: '复制诊断信息' }));
+    fireEvent.click(id);
     await screen.findByText('复制失败，请手动选择文本复制');
   });
 
-  it('打开数据目录与外部链接，失败时显示原因', async () => {
-    const { mock } = mockIpc({ openDirResult: { success: false, error: '示例项目尚未创建' } });
-    const onClose = vi.fn();
-    const onOpenChangelog = vi.fn();
-    render(<AboutDialog visible onClose={onClose} onOpenChangelog={onOpenChangelog} />);
+  it('上传日志：未配置地址时提示已打包到下载目录，打包中按钮禁用', async () => {
+    let resolve: (value: LogUploadResult) => void = () => undefined;
+    const { mock } = mockIpc({
+      upload: () =>
+        new Promise<LogUploadResult>((r) => {
+          resolve = r;
+        }),
+    });
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
     await screen.findByTestId('about-device-id');
 
-    fireEvent.click(screen.getByRole('button', { name: '在访达中打开：示例项目' }));
-    await screen.findByText('示例项目尚未创建');
-    expect(callsOf(mock, 'about-open-directory')).toEqual([['/u/docs/sample-data']]);
+    fireEvent.click(screen.getByRole('button', { name: '上传日志' }));
+    const busy = (await screen.findByRole('button', {
+      name: '正在打包日志…',
+    })) as HTMLButtonElement;
+    expect(busy.disabled).toBe(true);
+    fireEvent.click(busy);
+    expect(callsOf(mock, 'log-upload-run')).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'GitHub' }));
-    fireEvent.click(screen.getByRole('button', { name: '问题反馈' }));
-    await waitFor(() =>
-      expect(callsOf(mock, 'about-open-link')).toEqual([['repository'], ['issues']])
+    await act(async () => {
+      resolve({
+        status: 'saved',
+        fileName: 'novel-editor-logs-x.zip',
+        filePath: '/d/novel-editor-logs-x.zip',
+        uploadError: '服务器返回 502',
+        bytes: 1,
+      });
+    });
+    expect(screen.getByTestId('about-upload-status').textContent).toContain(
+      '日志已打包到 下载/novel-editor-logs-x.zip，可发送给我们'
     );
-
-    fireEvent.click(screen.getByRole('button', { name: '更新日志' }));
-    expect(onClose).toHaveBeenCalled();
-    expect(onOpenChangelog).toHaveBeenCalled();
+    expect(screen.getByText('上传失败（服务器返回 502），已改为本地保存')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '上传日志' })).toBeTruthy();
   });
 
-  it('更新设置、关闭按钮、Esc 与遮罩点击', async () => {
-    mockIpc();
-    const onClose = vi.fn();
-    const onOpenUpdateSettings = vi.fn();
-    const { container, rerender } = render(
-      <AboutDialog visible onClose={onClose} onOpenUpdateSettings={onOpenUpdateSettings} />
-    );
+  it('上传日志：成功显示编号，失败显示原因', async () => {
+    const results: LogUploadResult[] = [
+      { status: 'uploaded', ticketId: 'T-42', bytes: 1 },
+      { status: 'failed', error: '磁盘已满' },
+    ];
+    mockIpc({ upload: () => results.shift() as LogUploadResult });
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
     await screen.findByTestId('about-device-id');
 
-    fireEvent.click(screen.getByRole('button', { name: '更新设置…' }));
-    expect(onOpenUpdateSettings).toHaveBeenCalledOnce();
-    expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: '上传日志' }));
+    await screen.findByText('日志已上传（编号 T-42）');
+    fireEvent.click(screen.getByRole('button', { name: '上传日志' }));
+    await screen.findByText('日志打包失败：磁盘已满');
+  });
+
+  it('IPC 异常时显示失败', async () => {
+    mockIpc({
+      upload: () => {
+        throw new Error('主进程无响应');
+      },
+    });
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
+    await screen.findByTestId('about-device-id');
+    fireEvent.click(screen.getByRole('button', { name: '上传日志' }));
+    await screen.findByText('日志打包失败：主进程无响应');
+  });
+
+  it('关闭按钮、Esc 与遮罩点击', async () => {
+    mockIpc();
+    const onClose = vi.fn();
+    const { container, rerender } = renderWithToast(<AboutDialog visible onClose={onClose} />);
+    await screen.findByTestId('about-device-id');
 
     fireEvent.click(screen.getByRole('button', { name: '关闭关于' }));
     fireEvent.keyDown(document, { key: 'Escape' });
-    fireEvent.click(container.firstChild as HTMLElement);
+    fireEvent.click(container.querySelector('[role="dialog"]')?.parentElement as HTMLElement);
     // 点击对话框内部不关闭
     fireEvent.click(screen.getByRole('dialog'));
-    expect(onClose).toHaveBeenCalledTimes(4);
+    expect(onClose).toHaveBeenCalledTimes(3);
 
-    rerender(<AboutDialog visible={false} onClose={onClose} />);
+    rerender(
+      <ToastProvider>
+        <AboutDialog visible={false} onClose={onClose} />
+      </ToastProvider>
+    );
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -189,21 +245,32 @@ describe('AboutDialog', () => {
       if (channel === 'get-about-info') throw new Error('主进程未就绪');
       return undefined;
     });
-    render(<AboutDialog visible onClose={vi.fn()} />);
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
     await screen.findByText('主进程未就绪');
   });
 });
 
 describe('AboutSection', () => {
+  it('与关于窗口展示同样的精简内容，不再包含更新通道', async () => {
+    mockIpc();
+    renderWithToast(<AboutSection active />);
+    await screen.findByTestId('about-device-id');
+    expect(screen.getByTestId('about-runtime').textContent).toMatch(/^首次运行 2026-03-17 · /);
+    expect(screen.getByRole('button', { name: '上传日志' })).toBeTruthy();
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(screen.queryByText('运行环境')).toBeNull();
+  });
+});
+
+describe('UpdateGroup（通用 → 更新与诊断）', () => {
   it('切换更新通道：加入金丝雀计划后刷新信息', async () => {
     const { mock } = mockIpc();
-    render(<AboutSection active />);
-    await screen.findByTestId('about-device-id');
-
-    const canary = screen.getByRole('radio', { name: '金丝雀（canary）' });
+    renderWithToast(<UpdateGroup />);
+    const canary = await screen.findByRole('radio', { name: '金丝雀（canary）' });
     expect(screen.getByRole('radio', { name: '测试版（beta）' }).getAttribute('aria-checked')).toBe(
       'true'
     );
+    expect(screen.getByText('分桶 12 · 当前为全量发布')).toBeTruthy();
     fireEvent.click(canary);
     await waitFor(() => expect(canary.getAttribute('aria-checked')).toBe('true'));
     expect(callsOf(mock, 'update-set-channel')).toEqual([['canary']]);
@@ -214,52 +281,55 @@ describe('AboutSection', () => {
     expect(callsOf(mock, 'update-set-channel')).toHaveLength(1);
   });
 
-  it('检查更新、复制诊断信息、打开目录、更新日志', async () => {
+  it('检查更新与灰度描述', async () => {
     const { mock } = mockIpc({
       info: makeInfo({
-        runtime: { ...makeInfo().runtime, platform: 'win32' },
         rollout: { bucket: 3, percentage: 10, eligible: false, canaryEnrolled: false },
       }),
     });
-    const onOpenChangelog = vi.fn();
-    render(<AboutSection active onOpenChangelog={onOpenChangelog} />);
-    await screen.findByTestId('about-device-id');
-
-    expect(screen.getByText('分桶 3 · 灰度 10% · 未命中')).toBeTruthy();
+    renderWithToast(<UpdateGroup />);
+    await screen.findByText('分桶 3 · 灰度 10% · 未命中');
     fireEvent.click(screen.getByRole('button', { name: '检查更新' }));
     expect(callsOf(mock, 'update-check')).toHaveLength(1);
-
-    fireEvent.click(screen.getByRole('button', { name: '在资源管理器中打开：日志' }));
-    await waitFor(() => expect(callsOf(mock, 'about-open-directory')).toEqual([['/u/logs']]));
-
-    fireEvent.click(screen.getByRole('button', { name: '复制诊断信息' }));
-    await screen.findByText('已复制诊断信息');
-    expect(callsOf(mock, 'about-copy-text')[0][0]).toContain('操作系统: Windows 24.6.0 (arm64)');
-
-    fireEvent.click(screen.getByRole('button', { name: '更新日志' }));
-    expect(onOpenChangelog).toHaveBeenCalledOnce();
   });
 
-  it('「已复制」提示在一段时间后复原', async () => {
-    mockIpc();
-    render(<AboutSection active />);
-    await screen.findByTestId('about-device-id');
-    vi.useFakeTimers();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '复制设备 ID' }));
+  it('切换通道失败时提示', async () => {
+    installElectronMock((channel) => {
+      if (channel === 'get-about-info') return makeInfo();
+      if (channel === 'update-set-channel') throw new Error('x');
+      if (channel === 'log-upload-get-settings')
+        return { autoUploadOnCrash: true, endpointConfigured: true };
+      return undefined;
     });
-    expect(screen.getByText('已复制')).toBeTruthy();
-    await act(async () => {
-      vi.advanceTimersByTime(2000);
-    });
-    expect(screen.queryByText('已复制')).toBeNull();
+    renderWithToast(<UpdateGroup />);
+    fireEvent.click(await screen.findByRole('radio', { name: '正式版（stable）' }));
+    await screen.findByText('切换更新通道失败');
   });
-});
 
-describe('getRevealLabel', () => {
-  it('按平台返回文件管理器名称', () => {
-    expect(getRevealLabel('darwin')).toBe('在访达中打开');
-    expect(getRevealLabel('win32')).toBe('在资源管理器中打开');
-    expect(getRevealLabel('linux')).toBe('在文件管理器中打开');
+  it('「崩溃时自动上传日志」默认开启，可关闭并保存到主进程', async () => {
+    const { mock } = mockIpc();
+    renderWithToast(<UpdateGroup />);
+    const toggle = await screen.findByRole('switch', { name: '崩溃时自动上传日志' });
+    await waitFor(() => expect((toggle as HTMLButtonElement).disabled).toBe(false));
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText(/当前未配置上传服务，崩溃日志只保存在本机/)).toBeTruthy();
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('false'));
+    expect(callsOf(mock, 'log-upload-set-settings')).toEqual([[{ autoUploadOnCrash: false }]]);
+  });
+
+  it('保存开关失败时回滚并提示', async () => {
+    mockIpc({
+      setSettingsFails: true,
+      settings: { autoUploadOnCrash: true, endpointConfigured: true },
+    });
+    renderWithToast(<UpdateGroup />);
+    const toggle = await screen.findByRole('switch', { name: '崩溃时自动上传日志' });
+    await waitFor(() => expect((toggle as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByText(/当前未配置上传服务/)).toBeNull();
+    fireEvent.click(toggle);
+    await screen.findByText('保存失败，请重试');
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
   });
 });

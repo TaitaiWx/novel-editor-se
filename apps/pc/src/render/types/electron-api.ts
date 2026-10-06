@@ -5,9 +5,11 @@
 import type { FileInfo, FileInfoBatchEntry, OpenLocalResult, ShortcutInfo } from './File';
 import type { GrowthInvokeOverloads } from './growth-api';
 import type { GuiSessionSnapshot } from '@novel-editor/core/gui-session';
-import type { AboutInfo, AboutLinkKey } from '../../shared/about';
+import type { AboutInfo } from '../../shared/about';
+import type { LogUploadResult, LogUploadSettingsState } from '../../shared/log-upload';
 
-export type { AboutInfo, AboutLinkKey } from '../../shared/about';
+export type { AboutInfo } from '../../shared/about';
+export type { LogUploadResult, LogUploadSettingsState } from '../../shared/log-upload';
 
 export type UpdateChannel = 'stable' | 'beta' | 'canary';
 
@@ -176,18 +178,16 @@ export interface ElectronAPI {
     invoke(channel: 'get-shortcuts'): Promise<ShortcutInfo[]>;
     invoke(channel: 'get-app-version'): Promise<string>;
     invoke(channel: 'get-device-id'): Promise<string>;
-    /** 关于小说编辑器：版本、通道、灰度分组、设备 ID、运行时与数据目录 */
+    /** 关于小说编辑器：版本、通道、灰度分组、设备 ID、首次运行与本次启动时间 */
     invoke(channel: 'get-about-info'): Promise<AboutInfo>;
-    /** 只允许打开 get-about-info 返回的目录 */
-    invoke(
-      channel: 'about-open-directory',
-      dirPath: string
-    ): Promise<{ success: boolean; error?: string }>;
-    invoke(
-      channel: 'about-open-link',
-      key: AboutLinkKey
-    ): Promise<{ success: boolean; error?: string }>;
     invoke(channel: 'about-copy-text', text: string): Promise<{ success: boolean }>;
+    /** 打包日志并上传；未配置上传地址或失败时保存到「下载」目录 */
+    invoke(channel: 'log-upload-run'): Promise<LogUploadResult>;
+    invoke(channel: 'log-upload-get-settings'): Promise<LogUploadSettingsState>;
+    invoke(
+      channel: 'log-upload-set-settings',
+      patch: Partial<Pick<LogUploadSettingsState, 'autoUploadOnCrash'>>
+    ): Promise<LogUploadSettingsState>;
     invoke(channel: 'get-webauthn-support'): Promise<WebAuthnSupportInfo>;
     invoke(channel: 'update-check'): Promise<void>;
     invoke(channel: 'update-status'): Promise<UpdateStatus>;

@@ -1,39 +1,22 @@
-// 「关于」展示块：与设置中心保持一致的深色、低饱和配色
+// 关于小说编辑器：居中的紧凑卡片，与设置中心保持一致的深色、低饱和配色
 $mono: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-.header {
+.card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
-}
-
-.headerCompact {
-  .appIcon {
-    width: 48px;
-    height: 48px;
-  }
-
-  .appName {
-    font-size: 15px;
-  }
+  text-align: center;
 }
 
 .appIcon {
-  width: 56px;
-  height: 56px;
-  flex-shrink: 0;
-  border-radius: 12px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-}
-
-.headerMeta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
 .appName {
+  margin-top: 12px;
   color: var(--ui-fg-primary);
   font-size: 16px;
   font-weight: 600;
@@ -41,10 +24,11 @@ $mono: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 .versionRow {
+  margin-top: 6px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .version {
@@ -84,75 +68,85 @@ $mono: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   background: rgba(241, 194, 125, 0.1);
 }
 
-.subtle {
+.runtime {
+  margin-top: 8px;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.deviceField {
+  width: 100%;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border-subtle);
+  text-align: left;
+
+  &:hover .copyHint,
+  &:focus-within .copyHint {
+    opacity: 1;
+  }
+}
+
+.deviceLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
   color: var(--ui-fg-muted);
   font-size: 12px;
 }
 
-.block {
-  border: 1px solid var(--ui-border-subtle);
-  background: rgba(255, 255, 255, 0.02);
-  padding: 12px 14px;
-}
-
-.blockHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 24px;
-  margin-bottom: 8px;
-}
-
-.blockTitle {
-  color: var(--ui-fg-primary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.deviceRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.copyHint {
+  opacity: 0;
+  color: #8cc4ec;
+  font-size: 11px;
+  transition: opacity 0.15s;
 }
 
 .deviceId {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 8px;
+  width: 100%;
+  padding: 7px 10px;
   border: 1px solid var(--ui-border-subtle);
+  border-radius: 4px;
   background: #1f1f21;
   color: var(--ui-fg-primary);
   font-family: $mono;
   font-size: 12px;
   line-height: 18px;
-  user-select: all;
+  text-align: left;
   overflow-wrap: anywhere;
+  cursor: copy;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+
+  &:hover {
+    border-color: rgba(0, 122, 204, 0.45);
+    background: #232327;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--ui-interaction-focus-ring);
+  }
 }
 
-.hint {
-  margin-top: 6px;
-  color: #9ca3af;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.iconButton,
-.linkButton,
 .primaryButton {
+  width: 100%;
+  margin-top: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  flex-shrink: 0;
-  border: 1px solid var(--ui-border-strong);
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(0, 122, 204, 0.45);
   border-radius: 4px;
-  background: #252527;
+  background: rgba(0, 122, 204, 0.18);
   color: var(--ui-fg-primary);
   font-size: 12px;
-  white-space: nowrap;
+  font-weight: 500;
   cursor: pointer;
   transition:
     background-color 0.15s,
@@ -162,16 +156,12 @@ $mono: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-    color: var(--ui-fg-muted);
+    color: #8cc4ec;
   }
 
-  &:hover {
-    background: #2d2d30;
-    border-color: #4b4b50;
-
-    svg {
-      color: var(--ui-fg-primary);
-    }
+  &:hover:not(:disabled) {
+    border-color: rgba(0, 122, 204, 0.65);
+    background: rgba(0, 122, 204, 0.26);
   }
 
   &:focus-visible {
@@ -181,98 +171,40 @@ $mono: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
   &:disabled {
     cursor: default;
-    opacity: 0.6;
+    opacity: 0.7;
   }
 }
 
-.primaryButton {
-  border-color: rgba(0, 122, 204, 0.4);
-  background: var(--ui-interaction-accent-soft);
+.spin {
+  animation: about-spin 1s linear infinite;
+}
 
-  svg {
-    color: #8cc4ec;
-  }
-
-  &:hover {
-    border-color: rgba(0, 122, 204, 0.6);
-    background: rgba(0, 122, 204, 0.22);
+@keyframes about-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-.table {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.tableRow {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.tableLabel {
+.uploadStatus {
+  width: 100%;
+  margin-top: 10px;
   color: var(--ui-fg-muted);
   font-size: 12px;
-}
-
-.tableValue {
-  margin: 0;
-  min-width: 0;
-  color: var(--ui-fg-primary);
-  font-family: $mono;
-  font-size: 12px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
-.dirRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-
-  &:first-child {
-    padding-top: 0;
-  }
-
-  &:last-child {
-    padding-bottom: 0;
-    border-bottom: none;
-  }
+.statusOk {
+  color: #8ce0b9;
 }
 
-.dirMeta {
-  min-width: 0;
-  flex: 1;
+.statusWarn {
+  color: #f1c27d;
 }
 
-.dirLabel {
-  color: var(--ui-fg-primary);
-  font-size: 12px;
-}
-
-.dirPath {
-  margin-top: 2px;
-  color: var(--ui-fg-muted);
-  font-family: $mono;
+.uploadHint {
+  color: var(--ui-fg-disabled);
   font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .notice {

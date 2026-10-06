@@ -3,6 +3,7 @@ import { AiOutlineSetting } from 'react-icons/ai';
 import { type SettingsDraft, THOUSAND_CHAR_MARKER_STEP_OPTIONS } from '../../../utils/appSettings';
 import type { SystemProfileInfo } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
+import UpdateGroup from '../UpdateGroup';
 import sharedStyles from '../styles.module.scss';
 import styles from './styles.module.scss';
 
@@ -117,6 +118,8 @@ const GeneralSection: React.FC<GeneralSectionProps> = ({ settings, setGeneral, s
         </button>
       </div>
     </div>
+
+    <UpdateGroup />
 
     {systemProfile && (
       <div className={sharedStyles.statusCard}>

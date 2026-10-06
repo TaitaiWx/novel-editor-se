@@ -29,8 +29,7 @@ type Props = React.ComponentProps<typeof StatusBar>;
 
 function setup(
   status: Partial<UpdateStatus> | null = {},
-  props: Partial<Props> = {},
-  deviceId = 'device-1234567890'
+  props: Partial<Props> = {}
 ): {
   mock: ElectronMock;
   onEncodingChange: ReturnType<typeof vi.fn>;
@@ -38,8 +37,6 @@ function setup(
 } {
   const mock = installElectronMock((channel) => {
     if (channel === 'update-status') return status ? { ...baseStatus, ...status } : null;
-    if (channel === 'get-device-id') return deviceId;
-    if (channel === 'about-copy-text') return { success: true };
     return undefined;
   });
   const onEncodingChange = vi.fn();
@@ -146,29 +143,23 @@ describe('StatusBar', () => {
     delete (navigator as unknown as { connection?: unknown }).connection;
   });
 
-  it('更新面板：显示版本、设备 ID，点击检查更新', async () => {
+  it('更新面板：显示版本，点击检查更新；设备 ID 只在关于窗口展示', async () => {
     const { mock } = setup();
     await waitFor(() => expect(screen.getByText('v1.2.3')).toBeTruthy());
     fireEvent.click(screen.getByText('v1.2.3'));
     expect(screen.getByText('当前版本 1.2.3')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('设备 ID: device-1…')).toBeTruthy());
+    expect(screen.queryByText(/设备 ID/)).toBeNull();
+    expect(mock.invoke).not.toHaveBeenCalledWith('get-device-id');
     fireEvent.click(screen.getByText('检查更新', { selector: 'button' }));
     expect(mock.invoke).toHaveBeenCalledWith('update-check');
     fireEvent.mouseDown(document.body);
     expect(screen.queryByText('当前版本 1.2.3')).toBeNull();
   });
 
-  it('更新面板：复制完整设备 ID，「关于…」打开关于对话框', async () => {
-    const { mock } = setup();
+  it('更新面板：「关于…」打开关于对话框', async () => {
+    setup();
     await waitFor(() => expect(screen.getByText('v1.2.3')).toBeTruthy());
     fireEvent.click(screen.getByText('v1.2.3'));
-    await waitFor(() => expect(screen.getByText('设备 ID: device-1…')).toBeTruthy());
-
-    fireEvent.click(screen.getByRole('button', { name: '复制设备 ID' }));
-    await waitFor(() =>
-      expect(mock.invoke).toHaveBeenCalledWith('about-copy-text', 'device-1234567890')
-    );
-    await waitFor(() => expect(screen.getByText('已复制')).toBeTruthy());
 
     const onOpenAbout = vi.fn();
     window.addEventListener('open-about-dialog', onOpenAbout);

@@ -74,9 +74,11 @@ contextBridge.exposeInMainWorld('electron', {
         'get-device-id',
         // 关于小说编辑器
         'get-about-info',
-        'about-open-directory',
-        'about-open-link',
         'about-copy-text',
+        // 日志上传
+        'log-upload-run',
+        'log-upload-get-settings',
+        'log-upload-set-settings',
         'get-system-profile',
         'get-webauthn-support',
         'update-check',

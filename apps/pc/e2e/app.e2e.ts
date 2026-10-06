@@ -6,8 +6,10 @@
  * 运行：pnpm test:e2e（会先构建）或 pnpm test:e2e:only（使用现有 dist）。
  */
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import JSZip from 'jszip';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { getTodayStats, readGuiSession } from '@novel-editor/core';
 import {
@@ -568,58 +570,236 @@ describe('小说编辑器 GUI', () => {
     );
   });
 
-  it('11. 关于：设置中心「关于」分区显示版本与设备 ID，复制诊断信息；状态栏打开关于对话框', async () => {
+  it('11. 关于：精简小窗口显示版本 / 运行时间 / 设备 ID，点击复制，上传日志兜底保存到下载目录', async () => {
     const pkg = JSON.parse(await readFile(path.resolve(__dirname, '../package.json'), 'utf-8')) as {
       version: string;
     };
     const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const RUNNING =
+      /^首次运行 \d{4}-\d{2}-\d{2} · 本次已运行 (不到 1 分钟|\d+ 分钟|\d+ 小时( \d+ 分)?)$/;
+    const DIALOG = '[role="dialog"][aria-label="关于小说编辑器"]';
     const readText = (selector: string) =>
       page.evaluate<string>(
         (sel: string) => document.querySelector(sel)?.textContent?.trim() ?? '',
         selector
       );
 
-    // 设置中心 →「关于」分区
+    // 设置中心 →「关于」分区：与关于窗口相同的精简内容
     await page.click('[aria-label="打开设置中心"]');
     await page.waitForTarget({ text: '设置中心', exact: true });
     await page.click({ text: '关于', within: '[class*="sidebar"]', exact: true });
     await page.waitForTarget('[data-testid="about-device-id"]');
     expect(await readText('[data-testid="about-version"]')).toBe(`版本 ${pkg.version}`);
+    expect(await readText('[data-testid="about-runtime"]')).toMatch(RUNNING);
     const deviceId = await readText('[data-testid="about-device-id"]');
     expect(deviceId).toMatch(UUID);
     // 设备 ID 与 userData/device-id 文件一致
     expect((await readFile(path.join(app.userDataDir, 'device-id'), 'utf-8')).trim()).toBe(
       deviceId
     );
-
-    await page.click({ text: '复制诊断信息', exact: true });
-    await page.waitForTarget({ text: '已复制诊断信息', exact: true });
     await captureForReview('about-section');
-    await page.evaluate(() => {
-      const content = document.querySelector('[data-testid="about-device-id"]')?.closest('section');
-      content?.parentElement?.lastElementChild?.scrollIntoView();
-    });
-    await captureForReview('about-section-bottom');
-    await page.click('[aria-label="关闭设置"]');
-    await page.waitForGone('[data-testid="about-device-id"]');
 
-    // 状态栏版本面板 →「关于…」→ 关于对话框
+    // 更新通道与崩溃自动上传开关移到「通用 → 更新与诊断」
+    await page.click({ text: '通用', within: '[class*="sidebar"]', exact: true });
+    await page.waitForTarget('[role="radiogroup"][aria-label="更新通道"]');
+    await page.waitForTarget(
+      '[role="switch"][aria-label="崩溃时自动上传日志"][aria-checked="true"]'
+    );
+    await page.evaluate(() => {
+      document.querySelector('[role="radiogroup"][aria-label="更新通道"]')?.scrollIntoView();
+    });
+    await captureForReview('settings-update-group');
+    await page.click('[aria-label="关闭设置"]');
+    await page.waitForGone({ text: '设置中心', exact: true });
+
+    // 状态栏版本面板 →「关于…」→ 关于小窗口
     await page.click({ text: `v${pkg.version}`, exact: true });
-    await page.waitForTarget({ text: `设备 ID: ${deviceId.slice(0, 8)}…`, exact: true });
     await page.click({ text: '关于…', exact: true });
-    await page.waitForTarget('[role="dialog"][aria-label="关于小说编辑器"]');
+    await page.waitForTarget(DIALOG);
     await page.waitForTarget('[data-testid="about-device-id"]');
     expect(await readText('[data-testid="about-device-id"]')).toBe(deviceId);
+    expect(await readText('[data-testid="about-runtime"]')).toMatch(RUNNING);
+    // 小窗口：宽度不超过 400px、内容不滚动，不再展示运行环境 / 目录 / 链接
+    const layout = await page.evaluate<{ width: number; scrolls: boolean; text: string }>(
+      (sel: string) => {
+        const dialog = document.querySelector(sel) as HTMLElement;
+        const scrolls = [dialog, ...Array.from(dialog.querySelectorAll<HTMLElement>('*'))].some(
+          (el) =>
+            el.scrollHeight > el.clientHeight + 1 && getComputedStyle(el).overflowY !== 'visible'
+        );
+        return { width: dialog.getBoundingClientRect().width, scrolls, text: dialog.innerText };
+      },
+      DIALOG
+    );
+    expect(layout.width).toBeLessThanOrEqual(400);
+    expect(layout.scrolls).toBe(false);
+    for (const hidden of ['Electron', '数据目录', 'GitHub', '复制诊断信息', '更新通道']) {
+      expect(layout.text).not.toContain(hidden);
+    }
     await captureForReview('about-dialog');
-    await page.evaluate(() => {
-      document.querySelector('[role="dialog"] [class*="body"]')?.scrollTo(0, 10_000);
+
+    // 点击设备 ID 复制（E2E 模式下主进程不写系统剪贴板）
+    await page.click('[data-testid="about-device-id"]');
+    await page.waitForTarget({ text: '设备 ID 已复制', exact: true });
+    await captureForReview('about-dialog-copied');
+
+    // 上传日志：E2E 未配置上传地址 → 打包保存到（重定向到测试 userData 的）下载目录
+    await page.click({ text: '上传日志', within: DIALOG, exact: true });
+    const status = await page.waitFor<string>(
+      () => {
+        const text = document.querySelector('[data-testid="about-upload-status"]')?.textContent;
+        return text && text.includes('日志已打包到') ? text : null;
+      },
+      { timeout: 15_000, message: '日志打包完成' }
+    );
+    const fileName = /下载\/(novel-editor-logs-\d{8}-\d{6}-[0-9a-f]{8}\.zip)/.exec(status)?.[1];
+    expect(fileName, status).toBeTruthy();
+    expect(fileName).toContain(deviceId.slice(0, 8));
+    const zipPath = path.join(app.userDataDir, 'downloads', fileName as string);
+    expect(existsSync(zipPath)).toBe(true);
+    const zip = await JSZip.loadAsync(await readFile(zipPath));
+    const entries = Object.keys(zip.files);
+    expect(entries).toContain('diagnostics.json');
+    expect(entries.some((name) => /\.(db|sqlite|md)$/i.test(name))).toBe(false);
+    const diagnostics = JSON.parse(
+      (await zip.file('diagnostics.json')?.async('string')) ?? '{}'
+    ) as { deviceId: string; app: { version: string }; reason: string };
+    expect(diagnostics).toMatchObject({
+      deviceId,
+      reason: 'manual',
+      app: { version: pkg.version },
     });
-    await captureForReview('about-dialog-bottom');
+    await captureForReview('about-dialog-uploaded');
+
     await page.click('[aria-label="关闭关于"]');
-    await page.waitForGone('[role="dialog"][aria-label="关于小说编辑器"]');
+    await page.waitForGone(DIALOG);
   });
 
-  it('12. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
+  it('12. 资料：哈希 / GUID 文件名中间省略并保留扩展名，按类型显示图标、类型标签与悬停信息', async () => {
+    await waitForWorkspace(page, path.basename(fixture.root));
+    const materialDir = fixture.resolve('资料');
+    const exts = ['png', 'jpg', 'mp4', 'mov', 'mp3', 'pdf', 'docx', 'xlsx', 'pptx', 'zip'];
+    const moreExts = ['txt', 'md', 'json', 'webp', 'gif', 'wav', 'csv', 'heic', 'bin', 'm4a'];
+    const names = [...exts, ...moreExts].map((ext, index) => {
+      const hex = createHash('md5').update(`material-${index}`).digest('hex');
+      if (index % 5 === 1) {
+        // 带花括号的大写 GUID（Windows 剪贴板 / 微信导出常见）
+        const guid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        return `{${guid.toUpperCase()}}.${ext}`;
+      }
+      return `${hex}.${ext}`;
+    });
+    await Promise.all(
+      names.map((name, index) =>
+        writeFile(path.join(materialDir, name), 'x'.repeat(256 * (index + 1)), 'utf-8')
+      )
+    );
+
+    interface RowReport {
+      name: string;
+      found: boolean;
+      tail: string;
+      tailFullyVisible: boolean;
+      headTruncated: boolean;
+      kindLabel: string;
+      title: string;
+    }
+    const inspectRows = () =>
+      page.evaluate<RowReport[]>((expected: string[]) => {
+        const rows = Array.from(document.querySelectorAll<HTMLElement>('[class*="itemHeader"]'));
+        return expected.map((name) => {
+          const row = rows.find((element) => element.title.split('\n')[0] === name);
+          const tail = row?.querySelector<HTMLElement>('[class*="itemNameTail"]');
+          const head = row?.querySelector<HTMLElement>('[class*="itemNameHead"]');
+          // 以文件名容器为边界：尾部被容器裁掉同样算不可见
+          const rowRect = row?.querySelector('[class*="itemName"]')?.getBoundingClientRect();
+          const tailRect = tail?.getBoundingClientRect();
+          return {
+            name,
+            found: Boolean(row),
+            tail: tail?.textContent ?? '',
+            tailFullyVisible: Boolean(
+              tail &&
+                rowRect &&
+                tailRect &&
+                tail.scrollWidth <= tail.clientWidth + 1 &&
+                tailRect.right <= rowRect.right + 0.5 &&
+                tailRect.left >= rowRect.left - 0.5 &&
+                tailRect.width > 0
+            ),
+            headTruncated: Boolean(head && head.scrollWidth > head.clientWidth),
+            kindLabel: row?.querySelector('[class*="itemKind"]')?.textContent ?? '',
+            title: row?.title ?? '',
+          };
+        });
+      }, names);
+
+    try {
+      await contextMenuAction(page, '资料', '刷新资料');
+      // 资料分区下是「资料」目录节点（目录行的悬停提示就是目录名），未展开时先展开
+      const hashRowVisible = () =>
+        page.evaluate<boolean>(
+          (first: string) =>
+            Array.from(document.querySelectorAll<HTMLElement>('[class*="itemHeader"]')).some(
+              (row) => row.title.split('\n')[0] === first
+            ),
+          names[0]
+        );
+      if (!(await hashRowVisible())) {
+        await page.click('[class*="itemHeader"][title="资料"]');
+      }
+      await page.waitFor(
+        (first: string) =>
+          Array.from(document.querySelectorAll<HTMLElement>('[class*="itemHeader"]')).some(
+            (row) => row.title.split('\n')[0] === first
+          ),
+        { args: [names[0]], message: '资料列表出现哈希文件' }
+      );
+      // 文件大小 / 修改时间异步到达后写入悬停提示
+      await page.waitFor(
+        (first: string) =>
+          Array.from(document.querySelectorAll<HTMLElement>('[class*="itemHeader"]')).some(
+            (row) => row.title.startsWith(`${first}\n`) && row.title.includes('修改于')
+          ),
+        { args: [names[0]], message: '悬停提示包含修改时间' }
+      );
+
+      const reports = await inspectRows();
+      for (const report of reports) {
+        const ext = report.name.slice(report.name.lastIndexOf('.'));
+        expect(report.found, `${report.name} 应出现在资料列表`).toBe(true);
+        // 尾部 = 主名末 6 位 + 扩展名，且完整可见（扩展名不再被截掉）
+        expect(report.tail.endsWith(ext), `${report.name} 尾部保留扩展名`).toBe(true);
+        expect(report.tailFullyVisible, `${report.name} 扩展名完整可见`).toBe(true);
+        expect(report.kindLabel, `${report.name} 显示类型标签`).not.toBe('');
+        expect(report.title.split('\n')[0]).toBe(report.name);
+      }
+      // 侧栏宽度下哈希名确实被中间省略（而非整行显示）
+      expect(reports.some((report) => report.headTruncated)).toBe(true);
+      expect(reports.find((report) => report.name.endsWith('.mp4'))?.kindLabel).toBe('视频');
+      expect(reports.find((report) => report.name.endsWith('.png'))?.kindLabel).toBe('图片');
+      expect(reports.find((report) => report.name.endsWith('.bin'))?.kindLabel).toBe('BIN');
+
+      await page.evaluate((first: string) => {
+        Array.from(document.querySelectorAll<HTMLElement>('[class*="itemHeader"]'))
+          .find((row) => row.title.split('\n')[0] === first)
+          ?.scrollIntoView({ block: 'start' });
+      }, names[0]);
+      await captureForReview('material-hash-names');
+    } finally {
+      await Promise.all(names.map((name) => rm(path.join(materialDir, name), { force: true })));
+      await contextMenuAction(page, '资料', '刷新资料');
+      await page.waitFor(
+        (first: string) =>
+          !Array.from(document.querySelectorAll<HTMLElement>('[class*="itemHeader"]')).some(
+            (row) => row.title.split('\n')[0] === first
+          ),
+        { args: [names[0]], message: '还原后哈希文件从资料列表消失' }
+      );
+    }
+  });
+
+  it('13. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
     const other = await createFixtureProject('novel-editor-e2e-second-');
     try {
       await mkdir(other.resolve('novels/另一部作品'), { recursive: true });

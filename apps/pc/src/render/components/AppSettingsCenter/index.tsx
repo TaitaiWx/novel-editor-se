@@ -17,8 +17,6 @@ interface AppSettingsCenterProps {
   initialTab?: SettingsTab;
   onSettingsChange?: (settings: SettingsDraft) => void;
   onOpenShortcuts?: () => void;
-  /** 打开更新日志标签（「关于」分区使用） */
-  onOpenChangelog?: () => void;
 }
 
 const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
@@ -27,7 +25,6 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
   initialTab = 'general',
   onSettingsChange,
   onOpenShortcuts,
-  onOpenChangelog,
 }) => {
   const {
     activeTab,
@@ -113,19 +110,7 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
               />
             )}
 
-            {activeTab === 'about' && (
-              <AboutSection
-                active={visible}
-                onOpenChangelog={
-                  onOpenChangelog
-                    ? () => {
-                        onClose();
-                        onOpenChangelog();
-                      }
-                    : undefined
-                }
-              />
-            )}
+            {activeTab === 'about' && <AboutSection active={visible} />}
           </section>
         </div>
       </div>

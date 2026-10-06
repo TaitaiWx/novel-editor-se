@@ -14,6 +14,7 @@
  * - growth/memory: 成长记录器与记忆资料快照（资料/记忆/）
  * - session:      GUI 会话文件（供 CLI ne status 读取）
  * - about:        「关于小说编辑器」信息
+ * - log-upload:   打包 / 上传日志
  */
 import {
   registerFileSystemHandlers,
@@ -26,6 +27,7 @@ import {
   registerMemoryHandlers,
   registerSessionHandlers,
   registerAboutHandlers,
+  registerLogUploadHandlers,
 } from './handlers';
 
 export { type FileNode } from './handlers';
@@ -41,4 +43,5 @@ export function setupIPC() {
   registerMemoryHandlers();
   registerSessionHandlers();
   registerAboutHandlers();
+  registerLogUploadHandlers();
 }

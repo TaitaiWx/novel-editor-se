@@ -7,7 +7,14 @@
   }
 
   .fileTreeItem {
+    // 大目录（数百个资料文件）滚动时跳过屏幕外叶子行的布局与绘制
+    &.leaf {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 28px;
+    }
+
     .itemHeader {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -72,48 +79,54 @@
           font-size: 15px;
         }
 
+        // 文件类型配色：低饱和、同一明度区间，避免某一类过于抢眼
         &.folder {
-          color: #e8b84a;
+          color: #d4b16a;
         }
 
-        &.js {
-          color: #f7df1e;
+        &.image {
+          color: #79b4a9;
         }
 
-        &.ts {
-          color: #3178c6;
+        &.video {
+          color: #a99bd0;
         }
 
-        &.jsx {
-          color: #61dafb;
+        &.audio {
+          color: #c895b4;
         }
 
-        &.json {
-          color: #f0c040;
+        &.pdf {
+          color: #d38a84;
         }
 
-        &.md {
-          color: #519aba;
+        &.word {
+          color: #7fa6d6;
         }
 
-        &.css {
-          color: #56b6f7;
+        &.excel {
+          color: #82b58f;
         }
 
-        &.html {
-          color: #e44d26;
+        &.ppt {
+          color: #d2a074;
         }
 
-        &.txt {
-          color: #bbb;
+        &.archive {
+          color: #aa9c80;
         }
 
-        &.py {
-          color: #3776ab;
+        &.markdown {
+          color: #84aecb;
         }
 
-        &.file {
-          color: #999;
+        &.code {
+          color: #9aa7c4;
+        }
+
+        &.text,
+        &.unknown {
+          color: #9a9a9a;
         }
       }
 
@@ -124,7 +137,12 @@
         flex-direction: column;
       }
 
+      // 修改按钮浮在行尾（悬停时盖住文件大小），不占用文件名的宽度
       .itemAction {
+        position: absolute;
+        top: 50%;
+        right: 4px;
+        transform: translateY(-50%);
         width: 22px;
         height: 22px;
         border: none;
@@ -149,8 +167,17 @@
       }
 
       &:hover .itemAction,
-      &.selected .itemAction {
+      .itemAction:focus-visible {
         opacity: 1;
+      }
+
+      &:hover:has(.itemAction) .itemSize {
+        visibility: hidden;
+      }
+
+      // 没有文件大小可盖住时（目录、关闭大小显示），悬停时为按钮让出位置
+      &:hover:has(.itemAction):not(:has(.itemSize)) .itemText {
+        margin-right: 22px;
       }
 
       .itemName {
@@ -159,6 +186,37 @@
         overflow: hidden;
         text-overflow: ellipsis;
         line-height: 1.4;
+      }
+
+      // 中间省略：头部收缩并显示省略号，尾部（主名末尾 + 扩展名）固定可见
+      .itemNameSplit {
+        display: flex;
+        min-width: 0;
+        text-overflow: clip;
+      }
+
+      .itemNameHead {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: pre;
+      }
+
+      .itemNameTail {
+        flex-shrink: 0;
+        white-space: pre;
+      }
+
+      // 机器生成文件名的类型标签（位于第二行元信息开头）
+      .itemKind {
+        display: inline-block;
+        margin-right: 6px;
+        padding: 0 4px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--ui-fg-muted, #8b8b8b);
+        line-height: 14px;
+        vertical-align: top;
       }
 
       .itemMeta {

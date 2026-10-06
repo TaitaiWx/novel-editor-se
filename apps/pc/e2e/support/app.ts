@@ -75,6 +75,8 @@ export function buildAppEnv(userDataDir: string, extra: Record<string, string> =
   // 防止外部开发环境变量把渲染进程指向 Vite dev server
   delete env.VITE_DEV_SERVER_URL;
   delete env.ELECTRON_RUN_AS_NODE;
+  // 「上传日志」在 E2E 中必须走本地兜底，不能真的上传到开发者本机配置的地址
+  delete env.NOVEL_EDITOR_LOG_UPLOAD_URL;
   return env;
 }
 

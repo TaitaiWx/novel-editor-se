@@ -35,4 +35,6 @@ export function applySmokeTestPaths(): void {
   app.setPath('userData', smokeUserDataPath);
   // 示例数据会拷贝到「文稿/Novel Editor」，测试时同样隔离，避免写入真实文稿目录
   app.setPath('documents', join(smokeUserDataPath, 'documents'));
+  // 「上传日志」兜底会把日志包保存到「下载」目录，测试时同样隔离，避免写入真实下载目录
+  app.setPath('downloads', join(smokeUserDataPath, 'downloads'));
 }

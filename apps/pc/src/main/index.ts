@@ -11,8 +11,11 @@ import { detectSystemProfile } from './system-profile';
 import { configureWebAuthn, registerWebAuthnSessionHandlers } from './webauthn';
 import { resolveLaunchFolder } from './launch-folder';
 import { addRecentFolder } from './recent-folders';
+import { setupCrashLogUpload } from './log-upload';
 
 applySmokeTestPaths();
+// 尽早安装崩溃钩子：崩溃 / 未捕获异常时打包日志（E2E / 烟雾测试模式下跳过）
+setupCrashLogUpload();
 
 // 在 app.ready 之前完成系统能力探测，便于决定是否关闭 GPU 加速
 const systemProfile = detectSystemProfile();

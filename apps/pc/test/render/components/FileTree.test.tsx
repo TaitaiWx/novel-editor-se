@@ -79,7 +79,7 @@ describe('FileTree', () => {
     expect(screen.getByText('3 MB')).toBeTruthy();
     expect(mock.invoke).toHaveBeenCalledWith('get-file-info-batch', expect.any(Array));
     // 各类型图标 class
-    for (const cls of ['md', 'js', 'py', 'css', 'html', 'jsx', 'file', 'folder']) {
+    for (const cls of ['markdown', 'code', 'unknown', 'folder']) {
       expect(container.querySelector(`.fileIcon.${cls}`)).toBeTruthy();
     }
   });
@@ -103,9 +103,7 @@ describe('FileTree', () => {
 
     fireEvent.click(screen.getByText('子目录'));
     expect(screen.getByText('deep.json')).toBeTruthy();
-    expect(container.querySelector('.fileIcon.json')).toBeTruthy();
-    expect(container.querySelector('.fileIcon.txt')).toBeTruthy();
-    expect(container.querySelector('.fileIcon.ts')).toBeTruthy();
+    expect(container.querySelector('.fileIcon.text')).toBeTruthy();
 
     fireEvent.click(screen.getByText('a.ts'));
     expect(onFileSelect).toHaveBeenCalledWith('/p/卷一/a.ts');

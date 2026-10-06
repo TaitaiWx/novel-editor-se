@@ -1,16 +1,9 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import {
-  AiFillFolder,
-  AiOutlineFileText,
-  AiOutlineCode,
-  AiOutlineFile,
-  AiOutlineEdit,
-} from 'react-icons/ai';
-import { DiJavascript1, DiReact, DiPython, DiHtml5, DiCss3 } from 'react-icons/di';
-import { VscJson } from 'react-icons/vsc';
-import { AiOutlineFileMarkdown } from 'react-icons/ai';
+import { AiOutlineEdit } from 'react-icons/ai';
 import type { FileNode, FileInfo, FileInfoBatchEntry } from '../../types';
 import { isImeComposing } from '../../utils/ime';
+import { buildFileTooltip, describeFileName, formatFileSize } from './fileDisplay';
+import { getFileIcon } from './fileIcons';
 import styles from './styles.module.scss';
 
 export interface ContextMenuEvent {
@@ -37,46 +30,6 @@ interface FileTreeProps {
   onCancelCreate?: () => void;
   revealPath?: string | null;
 }
-
-const getFileIcon = (name: string, type: 'file' | 'directory') => {
-  if (type === 'directory') {
-    return { icon: <AiFillFolder />, className: 'folder' };
-  }
-
-  const ext = name.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'js':
-      return { icon: <DiJavascript1 />, className: 'js' };
-    case 'ts':
-      return { icon: <AiOutlineCode />, className: 'ts' };
-    case 'jsx':
-    case 'tsx':
-      return { icon: <DiReact />, className: 'jsx' };
-    case 'json':
-      return { icon: <VscJson />, className: 'json' };
-    case 'md':
-      return { icon: <AiOutlineFileMarkdown />, className: 'md' };
-    case 'css':
-    case 'scss':
-      return { icon: <DiCss3 />, className: 'css' };
-    case 'html':
-      return { icon: <DiHtml5 />, className: 'html' };
-    case 'txt':
-      return { icon: <AiOutlineFileText />, className: 'txt' };
-    case 'py':
-      return { icon: <DiPython />, className: 'py' };
-    default:
-      return { icon: <AiOutlineFile />, className: 'file' };
-  }
-};
-
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-};
 
 const sortNodes = (nodes: FileNode[]): FileNode[] => {
   return [...nodes].sort((a, b) => {
@@ -233,7 +186,17 @@ const FileTreeItem: React.FC<{
       }
     };
 
-    const { icon, className } = getFileIcon(node.name, node.type);
+    const isFile = node.type === 'file';
+    // 按文件名缓存派生信息（类型、中间省略拆分、是否机器生成），大目录重渲染时不重复计算
+    const display = useMemo(
+      () => (isFile ? describeFileName(node.name) : null),
+      [isFile, node.name]
+    );
+    const { icon, className } = getFileIcon(node.name, node.type, display?.kind);
+    const tooltip = useMemo(
+      () => buildFileTooltip(node.name, display ? display.kindLabel : null, fileInfo),
+      [display, fileInfo, node.name]
+    );
     const sortedChildren = useMemo(
       () => (node.children ? sortNodes(node.children) : []),
       [node.children]
@@ -241,7 +204,7 @@ const FileTreeItem: React.FC<{
     const itemMeta = itemMetaMap?.[node.path];
 
     return (
-      <div className={styles.fileTreeItem}>
+      <div className={`${styles.fileTreeItem} ${isFile ? styles.leaf : ''}`}>
         <div
           className={`${styles.itemHeader} ${styles[node.type]} ${isSelected ? styles.selected : ''}`}
           onClick={handleClick}
@@ -251,6 +214,7 @@ const FileTreeItem: React.FC<{
             onContextMenu?.({ x: e.clientX, y: e.clientY, node });
           }}
           style={{ paddingLeft: `${baseIndent + level * 16}px` }}
+          title={tooltip}
         >
           {showExpandIcon ? (
             <span
@@ -263,8 +227,23 @@ const FileTreeItem: React.FC<{
           ) : null}
           <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
           <span className={styles.itemText}>
-            <span className={styles.itemName}>{node.name}</span>
-            {itemMeta && <span className={styles.itemMeta}>{itemMeta}</span>}
+            {display?.tail ? (
+              // 中间省略：头部可收缩，尾部（主名末尾 + 扩展名）始终可见
+              <span className={`${styles.itemName} ${styles.itemNameSplit}`}>
+                <span className={styles.itemNameHead}>{display.head}</span>
+                <span className={styles.itemNameTail}>{display.tail}</span>
+              </span>
+            ) : (
+              <span className={styles.itemName}>{node.name}</span>
+            )}
+            {(itemMeta || display?.machineGenerated) && (
+              <span className={styles.itemMeta}>
+                {display?.machineGenerated && (
+                  <span className={styles.itemKind}>{display.kindLabel}</span>
+                )}
+                {itemMeta}
+              </span>
+            )}
           </span>
           {onRenameNode && (
             <button
@@ -280,7 +259,7 @@ const FileTreeItem: React.FC<{
               <AiOutlineEdit />
             </button>
           )}
-          {showFileSizes && node.type === 'file' && fileInfo && (
+          {showFileSizes && isFile && fileInfo && (
             <span className={styles.itemSize}>{formatFileSize(fileInfo.size)}</span>
           )}
         </div>

@@ -151,7 +151,9 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
               {directoryMeta.label}
             </span>
             <span className={styles.storyNodePrimary}>
-              <span className={styles.storyNodeTitle}>{node.name}</span>
+              <span className={styles.storyNodeTitle} title={node.name}>
+                {node.name}
+              </span>
               {!isSyntheticVolume && (
                 <button
                   type="button"
@@ -243,7 +245,9 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
         <span className={styles.storyNodeIcon}>{fileMeta.icon}</span>
         <span className={`${styles.storyNodeType} ${fileTypeClass}`}>{fileMeta.label}</span>
         <span className={styles.storyNodePrimary}>
-          <span className={styles.storyNodeTitle}>{displayName}</span>
+          <span className={styles.storyNodeTitle} title={node.name}>
+            {displayName}
+          </span>
           <button
             type="button"
             className={styles.storyNodeAction}

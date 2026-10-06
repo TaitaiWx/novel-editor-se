@@ -103,6 +103,13 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - 拖拽文件路径使用 `webUtils.getPathForFile()` 获取（Electron 32+ 已移除 `File.path`）
 - 主进程不得直接信任渲染进程传入的路径/参数，需在 handler 内校验
 
+### 关于 / 日志上传
+
+- 关于窗口（`AboutDialog`，约 380px 小窗、不滚动）与设置中心「关于」分区共用 `components/AboutContent`，只展示：图标 + 名称 + 版本（通道徽标）、「首次运行 · 本次已运行」（主进程启动时间经 `get-about-info` 返回，每分钟刷新）、设备 ID（点击复制，提示「设备 ID 已复制」）、「上传日志」按钮。运行环境、数据目录等诊断信息不在界面展示，统一写进日志包的 `diagnostics.json`
+- 更新通道（正式 / 测试 / 金丝雀）、检查更新与「崩溃时自动上传日志」开关在设置中心「通用 → 更新与诊断」（`AppSettingsCenter/UpdateGroup`）
+- 日志上传在主进程 `src/main/log-upload/`：白名单打包（diagnostics.json + electron-log 日志 + 小状态文件，主目录脱敏为 `~`，绝不包含作品正文与 SQLite 数据库）→ 已配置地址时上传（`NOVEL_EDITOR_LOG_UPLOAD_URL` 或 `config.ts` 常量，默认为空）→ 未配置或失败时保存到「下载」目录并定位。崩溃钩子只在配置了地址且开关开启时上传，否则只保存到 `userData/crash-reports/`（最多 5 个），10 分钟最多一次，E2E / 烟雾测试下不安装
+- 服务端接口约定（请求头、请求体、响应、大小限制、隐私）见 `docs/log-upload.md`；IPC 通道 `log-upload-run` / `log-upload-get-settings` / `log-upload-set-settings`（`main/handlers/log-upload.ts`）
+
 ## 代码规范
 
 ### 路径别名
@@ -173,7 +180,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
   - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
   - `workbench.ts`: 本应用的高层操作（展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
   - `fixture.ts`: 每次运行在临时目录生成全新的示例项目（中文作品/章节 + `资料/`）
-- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、GUI 与 CLI 共享写作日志和会话状态、关于页与设备 ID、单实例转发）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据
+- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、GUI 与 CLI 共享写作日志和会话状态、关于小窗口（运行时间、点击复制设备 ID、上传日志兜底到下载目录）、资料长文件名（哈希名中间省略保留扩展名、类型图标与标签）、单实例转发）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
 - 调试: 失败时自动把截图（`*.png`）和主进程 stdout/stderr（`*.log`）写入 `apps/pc/e2e/.artifacts/`（已 gitignore，CI 失败时作为 artifact 上传）；设置 `NOVEL_EDITOR_E2E_VERBOSE=1` 可实时输出主进程日志；可用 `pnpm test:e2e -t "<用例名>"` 过滤；`NOVEL_EDITOR_E2E_TRACE=1` 打印每个等待的耗时（用例共享同一窗口状态，单独运行靠后的用例时可能需要连同前置用例一起跑）
