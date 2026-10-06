@@ -1,0 +1,46 @@
+/* 右侧面板独立窗口：与主窗口一致的卡片式外观（窗口背景 + 圆角卡片） */
+.window {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-bg-app);
+}
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.title {
+  padding: 0 calc(var(--ui-pane-padding) + 6px);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-fg-primary);
+  -webkit-app-region: no-drag;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0 var(--ui-pane-padding) var(--ui-pane-padding);
+  background-color: var(--ui-bg-card);
+  border: 1px solid var(--ui-card-border);
+  border-radius: var(--ui-card-radius);
+  box-shadow: var(--ui-card-shadow);
+}
+
+.loading {
+  padding: 32px;
+  color: var(--ui-fg-muted);
+  font-size: 13px;
+}

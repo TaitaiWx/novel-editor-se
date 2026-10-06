@@ -7,6 +7,8 @@ import {
   CENTER_MIN,
   LEFT_COLLAPSED_WIDTH,
   LEFT_MAX,
+  PANE_CHROME,
+  PANE_GAP,
   RIGHT_COLLAPSED_WIDTH,
   RIGHT_MAX,
 } from '@/render/app/layoutConstants';
@@ -18,6 +20,9 @@ interface LayoutState {
   leftWidth: number;
   rightWidth: number;
 }
+
+/** 容器宽度扣除左右外边距后的可用宽度 */
+const inner = (containerWidth: number) => containerWidth - PANE_CHROME;
 
 /** 构造一个用 ref 模拟状态的上下文：setter 会同步写回 ref，便于观察 */
 function createCtx(initial: LayoutState) {
@@ -122,8 +127,8 @@ describe('usePaneLayout', () => {
     });
     const { result } = renderHook(() => usePaneLayout(c.ctx));
     act(() => result.current.resolvePaneLayout());
-    // available = 800 - 320 = 480 → right = 180
-    expect(c.setRightPanelWidth).toHaveBeenCalledWith(800 - CENTER_MIN - 300);
+    // 两侧卡片预算 = 784 - 320 - 2 × 间距 = 448 → right = 148
+    expect(c.setRightPanelWidth).toHaveBeenCalledWith(inner(800) - CENTER_MIN - PANE_GAP * 2 - 300);
     expect(c.setLeftPanelWidth).not.toHaveBeenCalled();
   });
 
@@ -137,7 +142,7 @@ describe('usePaneLayout', () => {
     });
     const { result } = renderHook(() => usePaneLayout(c.ctx));
     act(() => result.current.resolvePaneLayout({ preferExpanding: 'right' }));
-    expect(c.setLeftPanelWidth).toHaveBeenCalledWith(800 - CENTER_MIN - 300);
+    expect(c.setLeftPanelWidth).toHaveBeenCalledWith(inner(800) - CENTER_MIN - PANE_GAP * 2 - 300);
     expect(c.setRightPanelWidth).not.toHaveBeenCalled();
   });
 
@@ -151,9 +156,11 @@ describe('usePaneLayout', () => {
     });
     const { result } = renderHook(() => usePaneLayout(c.ctx));
     act(() => result.current.resolvePaneLayout());
-    // available = 380, right shrinks to 0 → collapse right; left then = min(480, 380-32)
+    // 右侧被挤到 0 → 折叠右侧；左侧 = 可用宽度 - 折叠条 - 一段间距
     expect(c.setRightPanelCollapsed).toHaveBeenCalledWith(true);
-    expect(c.leftPanelWidthRef.current).toBe(700 - CENTER_MIN - RIGHT_COLLAPSED_WIDTH);
+    expect(c.leftPanelWidthRef.current).toBe(
+      inner(700) - CENTER_MIN - RIGHT_COLLAPSED_WIDTH - PANE_GAP
+    );
   });
 
   it('只有左侧展开时左侧宽度占满可用空间', () => {
@@ -166,7 +173,9 @@ describe('usePaneLayout', () => {
     });
     const { result } = renderHook(() => usePaneLayout(c.ctx));
     act(() => result.current.resolvePaneLayout());
-    expect(c.setLeftPanelWidth).toHaveBeenCalledWith(600 - CENTER_MIN - RIGHT_COLLAPSED_WIDTH);
+    expect(c.setLeftPanelWidth).toHaveBeenCalledWith(
+      inner(600) - CENTER_MIN - RIGHT_COLLAPSED_WIDTH - PANE_GAP
+    );
   });
 
   it('只有右侧展开且空间不足时折叠右侧', () => {
@@ -192,7 +201,9 @@ describe('usePaneLayout', () => {
     });
     const { result } = renderHook(() => usePaneLayout(c.ctx));
     act(() => result.current.resolvePaneLayout());
-    expect(c.setRightPanelWidth).toHaveBeenCalledWith(600 - CENTER_MIN - LEFT_COLLAPSED_WIDTH);
+    expect(c.setRightPanelWidth).toHaveBeenCalledWith(
+      inner(600) - CENTER_MIN - LEFT_COLLAPSED_WIDTH - PANE_GAP
+    );
   });
 
   it('容器宽度为 0 时只做上限裁剪', () => {
@@ -253,12 +264,50 @@ describe('usePaneLayout', () => {
     act(() => {
       window.dispatchEvent(new Event('resize'));
     });
-    expect(c.setRightPanelWidth).toHaveBeenCalledWith(180);
+    expect(c.setRightPanelWidth).toHaveBeenCalledWith(inner(800) - CENTER_MIN - PANE_GAP * 2 - 300);
     unmount();
     c.setRightPanelWidth.mockClear();
     (c.appMainRef.current as unknown as { offsetWidth: number }).offsetWidth = 700;
     window.dispatchEvent(new Event('resize'));
     expect(c.setRightPanelWidth).not.toHaveBeenCalled();
+  });
+
+  it('两侧都展开时为两段卡片间距预留空间，刚好放得下时不做调整', () => {
+    const left = 260;
+    const right = 300;
+    const exact = PANE_CHROME + left + PANE_GAP + CENTER_MIN + PANE_GAP + right;
+    const c = createCtx({
+      containerWidth: exact,
+      sidebarCollapsed: false,
+      rightPanelCollapsed: false,
+      leftWidth: left,
+      rightWidth: right,
+    });
+    const { result } = renderHook(() => usePaneLayout(c.ctx));
+    act(() => result.current.resolvePaneLayout());
+    expect(c.setRightPanelWidth).not.toHaveBeenCalled();
+    expect(c.setLeftPanelWidth).not.toHaveBeenCalled();
+
+    // 再窄 1px，就要从右侧卡片扣掉 1px
+    (c.appMainRef.current as unknown as { offsetWidth: number }).offsetWidth = exact - 1;
+    act(() => result.current.resolvePaneLayout());
+    expect(c.setRightPanelWidth).toHaveBeenCalledWith(right - 1);
+  });
+
+  it('拖拽时最大宽度扣除外边距与两段间距', () => {
+    const c = createCtx({
+      containerWidth: 1100,
+      sidebarCollapsed: false,
+      rightPanelCollapsed: false,
+      leftWidth: 260,
+      rightWidth: 300,
+    });
+    const { result } = renderHook(() => usePaneLayout(c.ctx));
+    act(() => result.current.handleLeftResizerMouseDown(mouseDown(0).event));
+    const maxAllowed = inner(1100) - CENTER_MIN - (300 + PANE_GAP) - PANE_GAP;
+    move(maxAllowed - 260); // 刚好拖到上限
+    expect(c.setLeftPanelWidth).toHaveBeenLastCalledWith(maxAllowed);
+    expect(c.setRightPanelCollapsed).not.toHaveBeenCalled();
   });
 
   describe('左侧拖拽', () => {
@@ -308,10 +357,10 @@ describe('usePaneLayout', () => {
       });
       const { result } = renderHook(() => usePaneLayout(c.ctx));
       act(() => result.current.handleLeftResizerMouseDown(mouseDown(0).event));
-      move(200); // next = 460 > 1000-320-300 = 380
+      move(200); // next = 460 > 984 - 320 - (300 + 8) - 8 = 348
       expect(c.setRightPanelCollapsed).toHaveBeenCalledWith(true);
       expect(c.setLeftPanelWidth).toHaveBeenLastCalledWith(
-        Math.min(LEFT_MAX, 1000 - CENTER_MIN - RIGHT_COLLAPSED_WIDTH, 460)
+        Math.min(LEFT_MAX, inner(1000) - CENTER_MIN - RIGHT_COLLAPSED_WIDTH - PANE_GAP, 460)
       );
     });
 
@@ -370,10 +419,10 @@ describe('usePaneLayout', () => {
       });
       const { result } = renderHook(() => usePaneLayout(c.ctx));
       act(() => result.current.handleRightResizerMouseDown(mouseDown(1000).event));
-      move(800); // next = 500 > 1000-320-300 = 380
+      move(800); // next = 500 > 984 - 320 - (300 + 8) - 8 = 348
       expect(c.setSidebarCollapsed).toHaveBeenCalledWith(true);
       expect(c.setRightPanelWidth).toHaveBeenLastCalledWith(
-        Math.min(RIGHT_MAX, 1000 - CENTER_MIN - LEFT_COLLAPSED_WIDTH, 500)
+        Math.min(RIGHT_MAX, inner(1000) - CENTER_MIN - LEFT_COLLAPSED_WIDTH - PANE_GAP, 500)
       );
     });
 

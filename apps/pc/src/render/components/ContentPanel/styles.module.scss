@@ -19,3 +19,14 @@
     overflow: auto;
   }
 }
+
+/*
+ * 卡片内的编辑区：正文与卡片右缘保持舒适距离（行号栏已贴左侧，只补右侧与正文起始留白）。
+ * 专注模式由 TextEditor 自身控制排版，这里不介入。
+ */
+.contentPanelCarded {
+  .contentPanelContent :global(.cm-content) {
+    padding-left: 12px;
+    padding-right: 28px;
+  }
+}

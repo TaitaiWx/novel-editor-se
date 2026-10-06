@@ -4,6 +4,8 @@ import {
   LEFT_COLLAPSED_WIDTH,
   LEFT_COLLAPSE_THRESHOLD,
   LEFT_MAX,
+  PANE_CHROME,
+  PANE_GAP,
   RIGHT_COLLAPSED_WIDTH,
   RIGHT_COLLAPSE_THRESHOLD,
   RIGHT_MAX,
@@ -22,6 +24,23 @@ export type UsePaneLayoutContext = Pick<
   | 'setSidebarCollapsed'
   | 'sidebarCollapsedRef'
 >;
+
+/**
+ * 三栏容器扣除左右外边距后，留给卡片与间距的宽度。
+ * 容器未挂载时返回 0（调用方据此跳过空间分配，只做上限裁剪）。
+ */
+function getPaneInnerWidth(el: HTMLDivElement | null | undefined): number {
+  const width = el?.offsetWidth ?? 0;
+  return width > 0 ? Math.max(0, width - PANE_CHROME) : 0;
+}
+
+/**
+ * 侧栏在水平方向上的占用：展开时 = 卡片宽度 + 与中间卡片之间的间距（拖拽把手）；
+ * 折叠时 = 折叠条宽度（折叠条不是卡片，不额外留间距）。
+ */
+function sideFootprint(collapsed: boolean, width: number, collapsedWidth: number): number {
+  return collapsed ? collapsedWidth : width + PANE_GAP;
+}
 
 /**
  * 三栏布局：折叠 / 展开、拖拽调整宽度、窗口尺寸变化时重新计算
@@ -45,7 +64,7 @@ export function usePaneLayout(ctx: UsePaneLayoutContext) {
       nextRightPanelCollapsed?: boolean;
       preferExpanding?: 'left' | 'right';
     }) => {
-      const containerWidth = appMainRef.current?.offsetWidth ?? 0;
+      const containerWidth = getPaneInnerWidth(appMainRef.current);
 
       let nextSidebarCollapsed = options?.nextSidebarCollapsed ?? sidebarCollapsedRef.current;
       let nextRightPanelCollapsed =
@@ -57,17 +76,19 @@ export function usePaneLayout(ctx: UsePaneLayoutContext) {
         const availableForSides = Math.max(0, containerWidth - CENTER_MIN);
         // First pass: keep both sides visible whenever possible by shrinking widths.
         if (!nextSidebarCollapsed && !nextRightPanelCollapsed) {
+          // 两侧卡片各自还要占用一段间距（拖拽把手）
+          const cardBudget = Math.max(0, availableForSides - PANE_GAP * 2);
           const desiredTotal = nextLeftWidth + nextRightWidth;
-          if (desiredTotal > availableForSides) {
+          if (desiredTotal > cardBudget) {
             if (options?.preferExpanding === 'right') {
-              nextLeftWidth = Math.max(0, availableForSides - nextRightWidth);
-              if (nextLeftWidth + nextRightWidth > availableForSides) {
-                nextRightWidth = Math.max(0, availableForSides - nextLeftWidth);
+              nextLeftWidth = Math.max(0, cardBudget - nextRightWidth);
+              if (nextLeftWidth + nextRightWidth > cardBudget) {
+                nextRightWidth = Math.max(0, cardBudget - nextLeftWidth);
               }
             } else {
-              nextRightWidth = Math.max(0, availableForSides - nextLeftWidth);
-              if (nextLeftWidth + nextRightWidth > availableForSides) {
-                nextLeftWidth = Math.max(0, availableForSides - nextRightWidth);
+              nextRightWidth = Math.max(0, cardBudget - nextLeftWidth);
+              if (nextLeftWidth + nextRightWidth > cardBudget) {
+                nextLeftWidth = Math.max(0, cardBudget - nextRightWidth);
               }
             }
           }
@@ -85,13 +106,13 @@ export function usePaneLayout(ctx: UsePaneLayoutContext) {
         if (!nextSidebarCollapsed && nextRightPanelCollapsed) {
           nextLeftWidth = Math.min(
             LEFT_MAX,
-            Math.max(0, availableForSides - RIGHT_COLLAPSED_WIDTH)
+            Math.max(0, availableForSides - RIGHT_COLLAPSED_WIDTH - PANE_GAP)
           );
           if (nextLeftWidth <= 0.5) nextSidebarCollapsed = true;
         } else if (nextSidebarCollapsed && !nextRightPanelCollapsed) {
           nextRightWidth = Math.min(
             RIGHT_MAX,
-            Math.max(0, availableForSides - LEFT_COLLAPSED_WIDTH)
+            Math.max(0, availableForSides - LEFT_COLLAPSED_WIDTH - PANE_GAP)
           );
           if (nextRightWidth <= 0.5) nextRightPanelCollapsed = true;
         }
@@ -151,16 +172,18 @@ export function usePaneLayout(ctx: UsePaneLayoutContext) {
           setSidebarCollapsed(true);
           return;
         }
-        const containerWidth = appMainRef.current?.offsetWidth ?? 0;
-        const rightWidth = rightPanelCollapsedRef.current
-          ? RIGHT_COLLAPSED_WIDTH
-          : rightPanelWidthRef.current;
-        const maxAllowed = containerWidth - CENTER_MIN - rightWidth;
+        const containerWidth = getPaneInnerWidth(appMainRef.current);
+        const rightWidth = sideFootprint(
+          rightPanelCollapsedRef.current,
+          rightPanelWidthRef.current,
+          RIGHT_COLLAPSED_WIDTH
+        );
+        const maxAllowed = containerWidth - CENTER_MIN - rightWidth - PANE_GAP;
 
         // Expanding left panel can force right panel to auto-collapse to preserve center minimum width.
         if (next > maxAllowed && !rightPanelCollapsedRef.current) {
           setRightPanelCollapsed(true);
-          const maxAfterCollapse = containerWidth - CENTER_MIN - RIGHT_COLLAPSED_WIDTH;
+          const maxAfterCollapse = containerWidth - CENTER_MIN - RIGHT_COLLAPSED_WIDTH - PANE_GAP;
           setLeftPanelWidth(Math.min(LEFT_MAX, maxAfterCollapse, next));
           return;
         }
@@ -204,16 +227,18 @@ export function usePaneLayout(ctx: UsePaneLayoutContext) {
           setRightPanelCollapsed(true);
           return;
         }
-        const containerWidth = appMainRef.current?.offsetWidth ?? 0;
-        const leftWidth = sidebarCollapsedRef.current
-          ? LEFT_COLLAPSED_WIDTH
-          : leftPanelWidthRef.current;
-        const maxAllowed = containerWidth - CENTER_MIN - leftWidth;
+        const containerWidth = getPaneInnerWidth(appMainRef.current);
+        const leftWidth = sideFootprint(
+          sidebarCollapsedRef.current,
+          leftPanelWidthRef.current,
+          LEFT_COLLAPSED_WIDTH
+        );
+        const maxAllowed = containerWidth - CENTER_MIN - leftWidth - PANE_GAP;
 
         // Expanding right panel can force left panel to auto-collapse to preserve center minimum width.
         if (next > maxAllowed && !sidebarCollapsedRef.current) {
           setSidebarCollapsed(true);
-          const maxAfterCollapse = containerWidth - CENTER_MIN - LEFT_COLLAPSED_WIDTH;
+          const maxAfterCollapse = containerWidth - CENTER_MIN - LEFT_COLLAPSED_WIDTH - PANE_GAP;
           setRightPanelWidth(Math.min(RIGHT_MAX, maxAfterCollapse, next));
           return;
         }

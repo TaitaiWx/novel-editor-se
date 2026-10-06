@@ -5,6 +5,7 @@ import { AiConfigProvider } from './components/RightPanel/useAiConfig';
 import { useMessagePort } from './utils/useMessagePort';
 import { useCrdtOpsReceiver } from './utils/useCrdtOpsChannel';
 import { PortChannel } from '../shared/portChannels';
+import styles from './RightPanelStandaloneApp.module.scss';
 
 /**
  * 右侧面板独立窗口模式 —— 通过 ?mode=right-panel&folderPath=... 参数启动。
@@ -71,48 +72,18 @@ export const RightPanelStandaloneApp: React.FC = () => {
   }, []);
 
   if (!dbReady) {
-    return (
-      <div style={{ padding: 32, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>正在初始化...</div>
-    );
+    return <div className={styles.loading}>正在初始化...</div>;
   }
 
   return (
     <AiConfigProvider>
-      <div
-        style={{
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          background: '#1e1e1e',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            height: 32,
-            borderBottom: '1px solid #2d2d2d',
-            flexShrink: 0,
-            // @ts-expect-error Electron-specific CSS property
-            WebkitAppRegion: 'drag',
-          }}
-        >
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 500,
-              color: 'var(--ui-fg-primary)',
-              padding: '0 12px',
-              // @ts-expect-error Electron-specific CSS property
-              WebkitAppRegion: 'no-drag',
-            }}
-          >
-            故事面板
-          </span>
-          <div style={{ flex: 1 }} />
+      <div className={styles.window}>
+        <div className={styles.titleBar}>
+          <span className={styles.title}>故事面板</span>
+          <div className={styles.spacer} />
           <WindowControls />
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className={styles.card} data-pane="right">
           <RightPanel
             content={content}
             collapsed={false}

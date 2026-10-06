@@ -54,6 +54,8 @@ interface ContentPanelProps {
   reloadToken?: number;
   encoding?: string;
   showThousandCharMarkers?: boolean;
+  /** Markdown 实时渲染（设置中心「通用」） */
+  markdownLivePreview?: boolean;
   thousandCharMarkerStep?: number;
   formatChapterShortcut?: string;
   characterHighlights?: CharacterHighlightPattern[];
@@ -137,6 +139,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   reloadToken,
   encoding,
   showThousandCharMarkers = true,
+  markdownLivePreview = true,
   thousandCharMarkerStep = 1000,
   formatChapterShortcut,
   characterHighlights = [],
@@ -308,7 +311,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   );
 
   return (
-    <div className={styles.contentPanel}>
+    <div className={`${styles.contentPanel} ${focusMode ? '' : styles.contentPanelCarded}`}>
       {!focusMode && (
         <TabBar
           tabs={openTabs}
@@ -347,6 +350,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
               wordWrap={wordWrap}
               showLineNumbers={showLineNumbers}
               showThousandCharMarkers={showThousandCharMarkers}
+              markdownLivePreview={markdownLivePreview}
               thousandCharMarkerStep={thousandCharMarkerStep}
               encoding={encoding}
               characterHighlights={characterHighlights}

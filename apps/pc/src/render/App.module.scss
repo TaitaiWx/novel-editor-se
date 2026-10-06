@@ -1,10 +1,27 @@
+/*
+ * 卡片式三栏布局：窗口背景（--ui-bg-app）上放置左 / 中 / 右三张圆角卡片，
+ * 卡片之间与窗口边缘保持统一间距（--ui-pane-gap / --ui-pane-padding）。
+ * 间距数值必须与 app/layoutConstants.ts 中的 PANE_GAP / PANE_PADDING 一致。
+ */
+@mixin pane-card {
+  background-color: var(--ui-bg-card);
+  border: 1px solid var(--ui-card-border);
+  border-radius: var(--ui-card-radius);
+  box-shadow: var(--ui-card-shadow);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
 .app {
   width: 100%;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  background-color: var(--ui-bg-app);
+  color: var(--ui-fg-primary);
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', sans-serif;
@@ -14,51 +31,73 @@
 .appMain {
   flex: 1;
   display: flex;
+  min-height: 0;
   overflow: hidden;
+  padding: 0 var(--ui-pane-padding) var(--ui-pane-padding);
 }
 
-/* 左侧面板 */
+/* 底部有状态栏时，由状态栏本身提供与窗口底边的留白 */
+.appMainWithStatusBar {
+  padding-bottom: 0;
+}
+
+/* 左侧面板卡片（宽度由 inline style 控制，可拖拽） */
 .leftPanel {
-  /* Width is controlled via inline style (draggable resize) */
+  @include pane-card;
   flex-shrink: 0;
-  background-color: #252526;
-  border-right: 1px solid #333;
+  /* 让文件面板根节点使用卡片底色，三张卡片颜色统一 */
+  --ui-bg-elevated: var(--ui-bg-card);
+}
+
+/* 折叠后的侧边条：不是卡片，只是窗口背景上的一个展开按钮，不额外留间距 */
+.sideRail {
+  /* 宽度与 LEFT_COLLAPSED_WIDTH / RIGHT_COLLAPSED_WIDTH 一致 */
+  width: 32px;
+  min-width: 32px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  position: relative;
+  align-items: flex-start;
+  padding-top: 6px;
 }
 
-.leftPanelCollapsed {
-  width: 36px !important;
-  min-width: 36px !important;
+.sideRailRight {
+  align-items: flex-end;
 }
 
-.sidebarToggle {
-  background: none;
+.railToggle {
+  width: 24px;
+  height: 24px;
   border: none;
-  color: #666;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-fg-muted);
   cursor: pointer;
-  font-size: 11px;
-  padding: 8px;
-  margin-top: 4px;
-  border-radius: 3px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-    color: #d4d4d4;
+    background-color: var(--ui-interaction-hover-bg);
+    color: var(--ui-fg-primary);
   }
 }
 
+/* 中间编辑区卡片：标签栏 / 文件头位于卡片顶部，随卡片圆角裁切 */
 .centerPanel {
+  @include pane-card;
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
+  min-width: 0;
+}
+
+/* 右侧辅助面板卡片（宽度由 inline style 控制） */
+.rightPanelWrapper {
+  @include pane-card;
+  flex-shrink: 0;
 }
 
 .lazyFallback {
@@ -66,9 +105,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8b8b8b;
+  color: var(--ui-fg-muted);
   font-size: 13px;
-  background: #1e1e1e;
+  background: var(--ui-bg-card);
 }
 
 .lazyOverlay {
@@ -95,8 +134,16 @@
 }
 
 /* ========== Focus Mode ========== */
+/* 专注模式：隐藏 TitleBar / 两侧卡片 / StatusBar，编辑卡片居中，四周保留间距 */
 .focusMode {
-  /* 专注模式：编辑器全宽，仅隐藏 TitleBar / Sidebar / RightPanel / StatusBar */
+  .appMain {
+    justify-content: center;
+    padding: var(--ui-pane-padding);
+  }
+
+  .centerPanel {
+    max-width: 1280px;
+  }
 }
 
 .exitFocusBtn {
@@ -126,39 +173,5 @@
   &:hover {
     background: rgba(255, 255, 255, 0.1);
     color: #d4d4d4;
-  }
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .leftPanel {
-    min-width: 180px;
-  }
-}
-
-/* 右侧面板包裹层（宽度由 inline style 控制） */
-.rightPanelWrapper {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.rightPanelToggle {
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: #252526;
-  color: #777;
-  cursor: pointer;
-  font-size: 11px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 10px;
-
-  &:hover {
-    color: #d4d4d4;
-    background: #2c2c2d;
   }
 }
