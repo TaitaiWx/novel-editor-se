@@ -1,4 +1,6 @@
-// 与设置中心弹窗保持一致的外观（遮罩、圆角、边框），尺寸固定为小窗口、不滚动
+// 关于小窗口：与设置中心弹窗一致的外观（遮罩、圆角、边框），固定小尺寸、不滚动
+@use '../../styles/about' as about;
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -12,8 +14,8 @@
 
 .modal {
   position: relative;
-  width: min(380px, 92vw);
-  padding: 28px 24px 20px;
+  width: min(372px, 92vw);
+  padding: 40px 28px 24px;
   border-radius: 10px;
   border: 1px solid var(--ui-border-strong);
   background: var(--ui-bg-elevated);
@@ -22,19 +24,27 @@
     0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 
+// 关闭按钮固定在右上角留白区内，与内容（从 40px 开始）不重叠
 .closeButton {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 24px;
-  height: 24px;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   background: transparent;
   color: var(--ui-fg-muted);
   cursor: pointer;
   font-size: 18px;
   line-height: 1;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 
   &:hover {
     background: var(--ui-interaction-hover-bg);
@@ -45,4 +55,130 @@
     outline: none;
     box-shadow: 0 0 0 1px var(--ui-interaction-focus-ring);
   }
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.appIcon {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.appName {
+  margin-top: 14px;
+  color: var(--ui-fg-primary);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.versionRow {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.version {
+  color: var(--ui-fg-primary);
+  font-family: about.$mono;
+  font-size: 12px;
+}
+
+.badge {
+  @include about.channel-badge;
+  @include about.channel-tones;
+}
+
+.runtime {
+  margin-top: 8px;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+// 两个等宽按钮并排
+.actions {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-border-subtle);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+
+  // Tooltip 外层包裹 span：撑满网格单元，让按钮等宽
+  > * {
+    min-width: 0;
+  }
+}
+
+.actionButton {
+  width: 100%;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 5px;
+  background: #252527;
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: #8cc4ec;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: rgba(0, 122, 204, 0.45);
+    background: #2b2b2f;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--ui-interaction-focus-ring);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+}
+
+.spin {
+  @include about.spin;
+}
+
+.notice {
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 5px;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.noticeWarn {
+  color: #f1c27d;
+  border-color: rgba(241, 194, 125, 0.25);
+  background: rgba(241, 194, 125, 0.06);
 }

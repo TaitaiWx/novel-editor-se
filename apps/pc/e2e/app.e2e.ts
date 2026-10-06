@@ -570,7 +570,7 @@ describe('小说编辑器 GUI', () => {
     );
   });
 
-  it('11. 关于：精简小窗口显示版本 / 运行时间 / 设备 ID，点击复制，上传日志兜底保存到下载目录', async () => {
+  it('11. 关于：设置分区显示完整设备 ID；小窗口隐藏设备 ID，复制与上传日志同行并用 toast 反馈', async () => {
     const pkg = JSON.parse(await readFile(path.resolve(__dirname, '../package.json'), 'utf-8')) as {
       version: string;
     };
@@ -584,7 +584,7 @@ describe('小说编辑器 GUI', () => {
         selector
       );
 
-    // 设置中心 →「关于」分区：与关于窗口相同的精简内容
+    // 设置中心 →「关于」分区：行式布局，完整显示设备 ID
     await page.click('[aria-label="打开设置中心"]');
     await page.waitForTarget({ text: '设置中心', exact: true });
     await page.click({ text: '关于', within: '[class*="sidebar"]', exact: true });
@@ -616,42 +616,79 @@ describe('小说编辑器 GUI', () => {
     await page.click({ text: `v${pkg.version}`, exact: true });
     await page.click({ text: '关于…', exact: true });
     await page.waitForTarget(DIALOG);
-    await page.waitForTarget('[data-testid="about-device-id"]');
-    expect(await readText('[data-testid="about-device-id"]')).toBe(deviceId);
-    expect(await readText('[data-testid="about-runtime"]')).toMatch(RUNNING);
-    // 小窗口：宽度不超过 400px、内容不滚动，不再展示运行环境 / 目录 / 链接
-    const layout = await page.evaluate<{ width: number; scrolls: boolean; text: string }>(
-      (sel: string) => {
-        const dialog = document.querySelector(sel) as HTMLElement;
-        const scrolls = [dialog, ...Array.from(dialog.querySelectorAll<HTMLElement>('*'))].some(
-          (el) =>
-            el.scrollHeight > el.clientHeight + 1 && getComputedStyle(el).overflowY !== 'visible'
-        );
-        return { width: dialog.getBoundingClientRect().width, scrolls, text: dialog.innerText };
-      },
-      DIALOG
-    );
+    await page.waitForTarget({ text: '复制设备 ID', within: DIALOG, exact: true });
+    expect(await readText(`${DIALOG} [data-testid="about-runtime"]`)).toMatch(RUNNING);
+    // 小窗口：宽度不超过 400px、内容不滚动、不显示设备 ID；关闭按钮不压住内容；两个按钮同一行等宽
+    const layout = await page.evaluate<{
+      width: number;
+      scrolls: boolean;
+      text: string;
+      closeOverlaps: boolean;
+      buttons: { top: number; width: number }[];
+    }>((sel: string) => {
+      const dialog = document.querySelector(sel) as HTMLElement;
+      const scrolls = [dialog, ...Array.from(dialog.querySelectorAll<HTMLElement>('*'))].some(
+        (el) =>
+          el.scrollHeight > el.clientHeight + 1 && getComputedStyle(el).overflowY !== 'visible'
+      );
+      const close = (
+        dialog.querySelector('[aria-label="关闭关于"]') as HTMLElement
+      ).getBoundingClientRect();
+      const content = Array.from(dialog.querySelectorAll<HTMLElement>('img, [data-testid]')).map(
+        (el) => el.getBoundingClientRect()
+      );
+      const closeOverlaps = content.some(
+        (r) =>
+          r.left < close.right &&
+          r.right > close.left &&
+          r.top < close.bottom &&
+          r.bottom > close.top
+      );
+      const buttons = Array.from(dialog.querySelectorAll<HTMLButtonElement>('button'))
+        .filter((b) => /复制设备 ID|上传日志/.test(b.textContent ?? ''))
+        .map((b) => {
+          const r = b.getBoundingClientRect();
+          return { top: Math.round(r.top), width: Math.round(r.width) };
+        });
+      return {
+        width: dialog.getBoundingClientRect().width,
+        scrolls,
+        text: dialog.innerText,
+        closeOverlaps,
+        buttons,
+      };
+    }, DIALOG);
     expect(layout.width).toBeLessThanOrEqual(400);
     expect(layout.scrolls).toBe(false);
+    expect(layout.closeOverlaps).toBe(false);
+    expect(layout.text).not.toContain(deviceId);
+    expect(layout.text).not.toContain(deviceId.slice(0, 8));
+    expect(layout.buttons).toHaveLength(2);
+    expect(layout.buttons[0].top).toBe(layout.buttons[1].top);
+    expect(Math.abs(layout.buttons[0].width - layout.buttons[1].width)).toBeLessThanOrEqual(1);
     for (const hidden of ['Electron', '数据目录', 'GitHub', '复制诊断信息', '更新通道']) {
       expect(layout.text).not.toContain(hidden);
     }
     await captureForReview('about-dialog');
 
-    // 点击设备 ID 复制（E2E 模式下主进程不写系统剪贴板）
-    await page.click('[data-testid="about-device-id"]');
+    // 复制设备 ID（E2E 模式下主进程不写系统剪贴板）→ toast
+    await page.click({ text: '复制设备 ID', within: DIALOG, exact: true });
     await page.waitForTarget({ text: '设备 ID 已复制', exact: true });
+    await page.waitForTarget('[role="tooltip"]');
+    expect(await readText('[role="tooltip"]')).toBe('复制本机设备 ID，用于问题排查与灰度分组');
     await captureForReview('about-dialog-copied');
 
-    // 上传日志：E2E 未配置上传地址 → 打包保存到（重定向到测试 userData 的）下载目录
+    // 上传日志：E2E 未配置上传地址 → 打包保存到（重定向到测试 userData 的）下载目录，toast 提示
     await page.click({ text: '上传日志', within: DIALOG, exact: true });
     const status = await page.waitFor<string>(
       () => {
-        const text = document.querySelector('[data-testid="about-upload-status"]')?.textContent;
-        return text && text.includes('日志已打包到') ? text : null;
+        const text = document.body.innerText;
+        const match = /日志已打包到 下载\/\S+\.zip，可发送给我们/.exec(text);
+        return match ? match[0] : null;
       },
-      { timeout: 15_000, message: '日志打包完成' }
+      { timeout: 15_000, message: '日志打包完成 toast' }
     );
+    expect(await page.exists({ text: '打包中…', within: DIALOG, exact: true })).toBe(false);
     const fileName = /下载\/(novel-editor-logs-\d{8}-\d{6}-[0-9a-f]{8}\.zip)/.exec(status)?.[1];
     expect(fileName, status).toBeTruthy();
     expect(fileName).toContain(deviceId.slice(0, 8));
@@ -669,6 +706,9 @@ describe('小说编辑器 GUI', () => {
       reason: 'manual',
       app: { version: pkg.version },
     });
+    // 弹窗内仍不显示设备 ID 与内联状态
+    expect(await readText(DIALOG)).not.toContain(deviceId);
+    expect(await page.exists('[data-testid="about-upload-status"]')).toBe(false);
     await captureForReview('about-dialog-uploaded');
 
     await page.click('[aria-label="关闭关于"]');

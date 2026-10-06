@@ -99,28 +99,62 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const SAVED_RESULT: LogUploadResult = {
+  status: 'saved',
+  fileName: 'novel-editor-logs-x.zip',
+  filePath: '/d/novel-editor-logs-x.zip',
+  uploadError: null,
+  bytes: 1,
+};
+
+/** 悬停 Tooltip 包裹层并等待提示出现 */
+async function hoverTooltip(button: HTMLElement): Promise<string> {
+  fireEvent.mouseEnter(button.parentElement as HTMLElement);
+  const tip = await screen.findByRole('tooltip');
+  const text = tip.textContent ?? '';
+  fireEvent.mouseLeave(button.parentElement as HTMLElement);
+  return text;
+}
+
 describe('AboutDialog（精简小窗口）', () => {
-  it('只显示名称、版本与通道、运行时间、完整设备 ID 与上传日志按钮', async () => {
+  it('只显示图标、名称、版本与通道、运行时间，以及同一行的复制设备 ID / 上传日志', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW });
     mockIpc();
     renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
-    expect(await screen.findByTestId('about-device-id')).toHaveProperty('textContent', DEVICE_ID);
+    const copy = await screen.findByRole('button', { name: '复制设备 ID' });
+    const upload = screen.getByRole('button', { name: '上传日志' });
     expect(screen.getByText('小说编辑器')).toBeTruthy();
     expect(screen.getByTestId('about-version').textContent).toBe('版本 1.1.0-beta.43');
     expect(screen.getByText('测试版')).toBeTruthy();
     expect(screen.getByTestId('about-runtime').textContent).toBe(
       '首次运行 2026-03-17 · 本次已运行 2 小时 13 分'
     );
-    expect(screen.getByTestId('about-device-id').getAttribute('title')).toBe('点击复制');
-    expect(screen.getByText('点击复制')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '上传日志' })).toBeTruthy();
+    // 两个按钮在同一行容器中
+    expect(copy.parentElement?.parentElement).toBe(upload.parentElement?.parentElement);
 
-    // 诊断信息、目录、链接、更新通道都不再展示
+    // 弹窗里不显示设备 ID
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.textContent).not.toContain(DEVICE_ID);
+    expect(dialog.textContent).not.toContain(DEVICE_ID.slice(0, 8));
+    expect(screen.queryByTestId('about-device-id')).toBeNull();
+
+    // 诊断信息、目录、链接、更新通道都不展示，也没有内联状态块
     for (const text of ['Electron', '数据目录', 'GitHub', '更新日志', '问题反馈', '复制诊断信息']) {
       expect(screen.queryByText(text)).toBeNull();
     }
     expect(screen.queryByText(/更新通道|灰度分组|金丝雀计划/)).toBeNull();
-    expect(screen.queryByRole('button', { name: '复制设备 ID' })).toBeNull();
+    expect(screen.queryByTestId('about-upload-status')).toBeNull();
+  });
+
+  it('两个按钮悬停时显示说明', async () => {
+    mockIpc();
+    renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
+    const copy = await screen.findByRole('button', { name: '复制设备 ID' });
+    expect(await hoverTooltip(copy)).toBe('复制本机设备 ID，用于问题排查与灰度分组');
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
+    expect(await hoverTooltip(screen.getByRole('button', { name: '上传日志' }))).toBe(
+      '打包诊断信息与最近日志并上传，不含作品内容'
+    );
   });
 
   it('「本次已运行」每分钟刷新', async () => {
@@ -134,30 +168,32 @@ describe('AboutDialog（精简小窗口）', () => {
     expect(screen.getByTestId('about-runtime').textContent).toContain('本次已运行 2 小时 14 分');
   });
 
-  it('点击设备 ID 复制并提示「设备 ID 已复制」', async () => {
+  it('点击「复制设备 ID」写入剪贴板并 toast 提示', async () => {
     const { mock } = mockIpc();
     renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
-    fireEvent.click(await screen.findByTestId('about-device-id'));
+    fireEvent.click(await screen.findByRole('button', { name: '复制设备 ID' }));
     await waitFor(() => expect(callsOf(mock, 'about-copy-text')).toEqual([[DEVICE_ID]]));
     await screen.findByText('设备 ID 已复制');
+    // 复制后也不在弹窗里显示设备 ID
+    expect(screen.getByRole('dialog').textContent).not.toContain(DEVICE_ID);
   });
 
-  it('主进程剪贴板失败时退回 navigator.clipboard；两者都失败时提示', async () => {
+  it('主进程剪贴板失败时退回 navigator.clipboard；两者都失败时 toast「复制失败」', async () => {
     const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error());
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     mockIpc({ copyResult: { success: false } });
     renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
-    const id = await screen.findByTestId('about-device-id');
+    const copy = await screen.findByRole('button', { name: '复制设备 ID' });
 
-    fireEvent.click(id);
+    fireEvent.click(copy);
     await screen.findByText('设备 ID 已复制');
     expect(writeText).toHaveBeenCalledWith(DEVICE_ID);
 
-    fireEvent.click(id);
-    await screen.findByText('复制失败，请手动选择文本复制');
+    fireEvent.click(copy);
+    await screen.findByText('复制失败');
   });
 
-  it('上传日志：未配置地址时提示已打包到下载目录，打包中按钮禁用', async () => {
+  it('上传日志：打包中显示「打包中…」并禁用；上传失败兜底保存时 toast 说明原因与文件', async () => {
     let resolve: (value: LogUploadResult) => void = () => undefined;
     const { mock } = mockIpc({
       upload: () =>
@@ -166,56 +202,50 @@ describe('AboutDialog（精简小窗口）', () => {
         }),
     });
     renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
-    await screen.findByTestId('about-device-id');
-
-    fireEvent.click(screen.getByRole('button', { name: '上传日志' }));
-    const busy = (await screen.findByRole('button', {
-      name: '正在打包日志…',
-    })) as HTMLButtonElement;
+    fireEvent.click(await screen.findByRole('button', { name: '上传日志' }));
+    const busy = (await screen.findByRole('button', { name: '打包中…' })) as HTMLButtonElement;
     expect(busy.disabled).toBe(true);
+    expect(busy.getAttribute('aria-busy')).toBe('true');
+    expect(busy.querySelector('svg')).toBeTruthy();
     fireEvent.click(busy);
     expect(callsOf(mock, 'log-upload-run')).toHaveLength(1);
 
     await act(async () => {
-      resolve({
-        status: 'saved',
-        fileName: 'novel-editor-logs-x.zip',
-        filePath: '/d/novel-editor-logs-x.zip',
-        uploadError: '服务器返回 502',
-        bytes: 1,
-      });
+      resolve({ ...SAVED_RESULT, uploadError: '服务器返回 502' });
     });
-    expect(screen.getByTestId('about-upload-status').textContent).toContain(
-      '日志已打包到 下载/novel-editor-logs-x.zip，可发送给我们'
+    await screen.findByText(
+      '上传失败（服务器返回 502），日志已打包到 下载/novel-editor-logs-x.zip，可发送给我们'
     );
-    expect(screen.getByText('上传失败（服务器返回 502），已改为本地保存')).toBeTruthy();
     expect(screen.getByRole('button', { name: '上传日志' })).toBeTruthy();
+    expect(screen.queryByTestId('about-upload-status')).toBeNull();
   });
 
-  it('上传日志：成功显示编号，失败显示原因', async () => {
+  it('上传日志：成功 / 未配置地址 / 失败分别 toast', async () => {
     const results: LogUploadResult[] = [
       { status: 'uploaded', ticketId: 'T-42', bytes: 1 },
+      SAVED_RESULT,
       { status: 'failed', error: '磁盘已满' },
     ];
     mockIpc({ upload: () => results.shift() as LogUploadResult });
     renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
-    await screen.findByTestId('about-device-id');
+    const button = await screen.findByRole('button', { name: '上传日志' });
 
-    fireEvent.click(screen.getByRole('button', { name: '上传日志' }));
+    fireEvent.click(button);
     await screen.findByText('日志已上传（编号 T-42）');
-    fireEvent.click(screen.getByRole('button', { name: '上传日志' }));
+    fireEvent.click(await screen.findByRole('button', { name: '上传日志' }));
+    await screen.findByText('日志已打包到 下载/novel-editor-logs-x.zip，可发送给我们');
+    fireEvent.click(await screen.findByRole('button', { name: '上传日志' }));
     await screen.findByText('日志打包失败：磁盘已满');
   });
 
-  it('IPC 异常时显示失败', async () => {
+  it('IPC 异常时 toast 失败原因', async () => {
     mockIpc({
       upload: () => {
         throw new Error('主进程无响应');
       },
     });
     renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
-    await screen.findByTestId('about-device-id');
-    fireEvent.click(screen.getByRole('button', { name: '上传日志' }));
+    fireEvent.click(await screen.findByRole('button', { name: '上传日志' }));
     await screen.findByText('日志打包失败：主进程无响应');
   });
 
@@ -223,7 +253,7 @@ describe('AboutDialog（精简小窗口）', () => {
     mockIpc();
     const onClose = vi.fn();
     const { container, rerender } = renderWithToast(<AboutDialog visible onClose={onClose} />);
-    await screen.findByTestId('about-device-id');
+    await screen.findByRole('button', { name: '复制设备 ID' });
 
     fireEvent.click(screen.getByRole('button', { name: '关闭关于' }));
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -250,15 +280,72 @@ describe('AboutDialog（精简小窗口）', () => {
   });
 });
 
-describe('AboutSection', () => {
-  it('与关于窗口展示同样的精简内容，不再包含更新通道', async () => {
+describe('AboutSection（设置中心 → 关于）', () => {
+  it('行式布局：应用、运行时间、完整设备 ID、诊断日志，不包含更新通道', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW });
     mockIpc();
     renderWithToast(<AboutSection active />);
-    await screen.findByTestId('about-device-id');
-    expect(screen.getByTestId('about-runtime').textContent).toMatch(/^首次运行 2026-03-17 · /);
+    expect((await screen.findByTestId('about-device-id')).textContent).toBe(DEVICE_ID);
+    expect(screen.getByText('小说编辑器')).toBeTruthy();
+    expect(screen.getByTestId('about-version').textContent).toBe('版本 1.1.0-beta.43');
+    expect(screen.getByText('测试版')).toBeTruthy();
+    expect(screen.getByTestId('about-runtime').textContent).toBe(
+      '首次运行 2026-03-17 · 本次已运行 2 小时 13 分'
+    );
+    for (const label of ['运行时间', '设备 ID', '诊断日志']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(screen.getByRole('button', { name: '复制设备 ID' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '上传日志' })).toBeTruthy();
     expect(screen.queryByRole('radiogroup')).toBeNull();
     expect(screen.queryByText('运行环境')).toBeNull();
+  });
+
+  it('复制设备 ID 写入剪贴板并 toast 提示', async () => {
+    const { mock } = mockIpc();
+    renderWithToast(<AboutSection active />);
+    fireEvent.click(await screen.findByRole('button', { name: '复制设备 ID' }));
+    await waitFor(() => expect(callsOf(mock, 'about-copy-text')).toEqual([[DEVICE_ID]]));
+    await screen.findByText('设备 ID 已复制');
+  });
+
+  it('上传日志在行内显示结果，兜底保存时附上失败原因', async () => {
+    let resolve: (value: LogUploadResult) => void = () => undefined;
+    mockIpc({
+      upload: () =>
+        new Promise<LogUploadResult>((r) => {
+          resolve = r;
+        }),
+    });
+    renderWithToast(<AboutSection active />);
+    fireEvent.click(await screen.findByRole('button', { name: '上传日志' }));
+    const busy = (await screen.findByRole('button', { name: '打包中…' })) as HTMLButtonElement;
+    expect(busy.disabled).toBe(true);
+
+    await act(async () => {
+      resolve({ ...SAVED_RESULT, uploadError: '服务器返回 502' });
+    });
+    const status = screen.getByTestId('about-upload-status');
+    expect(status.textContent).toContain('日志已打包到 下载/novel-editor-logs-x.zip，可发送给我们');
+    expect(status.textContent).toContain('上传失败：服务器返回 502，已改为本地保存');
+  });
+
+  it('上传成功显示编号', async () => {
+    mockIpc({ upload: () => ({ status: 'uploaded', ticketId: 'T-7', bytes: 1 }) });
+    renderWithToast(<AboutSection active />);
+    fireEvent.click(await screen.findByRole('button', { name: '上传日志' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('about-upload-status').textContent).toBe('日志已上传（编号 T-7）')
+    );
+  });
+
+  it('读取失败时显示错误', async () => {
+    installElectronMock((channel) => {
+      if (channel === 'get-about-info') throw new Error('主进程未就绪');
+      return undefined;
+    });
+    renderWithToast(<AboutSection active />);
+    await screen.findByText('主进程未就绪');
   });
 });
 

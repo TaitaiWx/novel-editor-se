@@ -1,0 +1,48 @@
+// 「关于」相关的共享样式片段（仅变量与 mixin，不产出任何全局选择器），
+// 供关于弹窗与设置中心「关于」分区各自引用，保证版本徽标、等宽字体一致。
+
+$mono: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+@mixin channel-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/** 通道配色：正式版绿、测试版蓝、金丝雀版琥珀，均为低饱和柔和色 */
+@mixin channel-tones {
+  &.channel-stable {
+    color: #8ce0b9;
+    border-color: rgba(78, 201, 176, 0.28);
+    background: rgba(78, 201, 176, 0.1);
+  }
+
+  &.channel-beta {
+    color: #8cc4ec;
+    border-color: rgba(0, 122, 204, 0.35);
+    background: var(--ui-interaction-accent-soft);
+  }
+
+  &.channel-alpha {
+    color: #f1c27d;
+    border-color: rgba(241, 194, 125, 0.3);
+    background: rgba(241, 194, 125, 0.1);
+  }
+}
+
+@mixin spin {
+  animation: about-spin 1s linear infinite;
+
+  @keyframes about-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
