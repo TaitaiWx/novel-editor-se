@@ -128,4 +128,25 @@ describe('Tooltip', () => {
     unmount();
     expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
   });
+
+  it('在指针下方挂载（如内容异步加载后重渲染）时也会显示提示', () => {
+    const originalMatches = Element.prototype.matches;
+    vi.spyOn(Element.prototype, 'matches').mockImplementation(function (
+      this: Element,
+      selector: string
+    ) {
+      if (selector === ':hover') return true;
+      return originalMatches.call(this, selector);
+    });
+    render(
+      <Tooltip content="挂载即悬停">
+        <button type="button">按钮</button>
+      </Tooltip>
+    );
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByRole('tooltip').textContent).toBe('挂载即悬停');
+  });
 });

@@ -537,10 +537,21 @@ describe('小说编辑器 GUI', () => {
     await captureForReview('about-dialog');
 
     // 复制设备 ID（E2E 模式下主进程不写系统剪贴板）→ toast
+    // 先悬停：显示本按钮的说明提示（与用户「先看提示再点击」的顺序一致）
+    await page.hover({ text: '复制设备 ID', within: DIALOG, exact: true });
+    await page.waitFor(
+      (text: string) =>
+        Array.from(document.querySelectorAll('[role="tooltip"]')).some(
+          (node) => node.textContent === text
+        ),
+      {
+        args: ['复制本机设备 ID，用于问题排查与灰度分组'],
+        message: '复制设备 ID 的悬停提示',
+      }
+    );
+    // 再点击：toast 提示已复制
     await page.click({ text: '复制设备 ID', within: DIALOG, exact: true });
     await page.waitForTarget({ text: '设备 ID 已复制', exact: true });
-    await page.waitForTarget('[role="tooltip"]');
-    expect(await readText('[role="tooltip"]')).toBe('复制本机设备 ID，用于问题排查与灰度分组');
     await captureForReview('about-dialog-copied');
 
     // 上传日志：E2E 未配置上传地址 → 打包保存到（重定向到测试 userData 的）下载目录，toast 提示

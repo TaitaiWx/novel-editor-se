@@ -38,14 +38,16 @@ const Tooltip: React.FC<TooltipProps> = ({ content, children, position = 'top', 
     setVisible(false);
   }, []);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // 组件在指针下方挂载 / 重新挂载（例如弹窗内容异步加载完成后重渲染）时不会收到 mouseenter，
+    // 这里主动检测一次悬停状态，避免提示一直不出现
+    if (triggerRef.current?.matches(':hover')) show();
+    return () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
-    },
-    []
-  );
+    };
+  }, [show]);
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
