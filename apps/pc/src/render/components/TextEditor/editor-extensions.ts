@@ -1,12 +1,11 @@
 /**
- * TextEditor 使用的 CodeMirror 静态扩展：主题、专注模式、行号、
+ * TextEditor 使用的 CodeMirror 静态扩展：主题、滚动条、专注模式（见 focus-mode.ts）、行号、
  * 临时高亮行、"已应用"行标记、千字标记等。
  * 这些扩展均为模块级单例或纯工厂函数，不持有任何 React 状态。
  */
 import {
   type EditorState,
   type Extension,
-  Range,
   RangeSet,
   StateEffect,
   StateField,
@@ -17,7 +16,6 @@ import {
   EditorView,
   GutterMarker,
   ViewPlugin,
-  type ViewUpdate,
   WidgetType,
   gutter,
   highlightActiveLineGutter,
@@ -26,53 +24,38 @@ import {
 } from '@codemirror/view';
 import { buildThousandCharMarkers } from '../../utils/contentStats';
 
-const FOCUS_VISIBLE_RADIUS = 0;
+export { focusLineDecorations } from './focus-mode';
 
-/** 专注模式：淡化当前行以外的行 */
-export const focusLineDecorations = (enabled: boolean) => {
-  if (!enabled) return [];
-  return ViewPlugin.fromClass(
-    class {
-      decorations;
+/** 滚动时短暂显示滚动条的时长（毫秒） */
+const SCROLLBAR_REVEAL_MS = 900;
 
-      constructor(view: EditorView) {
-        this.decorations = this.build(view);
-      }
+/**
+ * 滚动条自动隐藏：平时只保留透明轨道，悬停或滚动时显示细滑块。
+ * 滚动时给编辑器根节点加 cm-scrolling，停止滚动一段时间后移除。
+ */
+class ScrollbarAutoHideView {
+  private timer: ReturnType<typeof setTimeout> | null = null;
 
-      update(update: ViewUpdate) {
-        if (update.docChanged || update.selectionSet || update.viewportChanged) {
-          this.decorations = this.build(update.view);
-        }
-      }
+  constructor(private readonly view: EditorView) {
+    view.scrollDOM.addEventListener('scroll', this.onScroll, { passive: true });
+  }
 
-      build(view: EditorView) {
-        const ranges: Range<Decoration>[] = [];
-        const mainLine = view.state.doc.lineAt(view.state.selection.main.head).number;
-        const minLine = Math.max(1, mainLine - FOCUS_VISIBLE_RADIUS);
-        const maxLine = Math.min(view.state.doc.lines, mainLine + FOCUS_VISIBLE_RADIUS);
+  private onScroll = () => {
+    this.view.dom.classList.add('cm-scrolling');
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      this.view.dom.classList.remove('cm-scrolling');
+    }, SCROLLBAR_REVEAL_MS);
+  };
 
-        for (const vp of view.visibleRanges) {
-          let from = vp.from;
-          while (from <= vp.to) {
-            const line = view.state.doc.lineAt(from);
-            if (line.number < minLine || line.number > maxLine) {
-              ranges.push(Decoration.line({ class: 'cm-focus-fade' }).range(line.from));
-            } else if (line.number === mainLine) {
-              ranges.push(Decoration.line({ class: 'cm-focus-main' }).range(line.from));
-            }
-            if (line.to >= vp.to) break;
-            from = line.to + 1;
-          }
-        }
+  destroy() {
+    if (this.timer) clearTimeout(this.timer);
+    this.view.scrollDOM.removeEventListener('scroll', this.onScroll);
+  }
+}
 
-        return Decoration.set(ranges, true);
-      }
-    },
-    {
-      decorations: (v) => v.decorations,
-    }
-  );
-};
+export const scrollbarAutoHide = ViewPlugin.fromClass(ScrollbarAutoHideView);
 
 /** Dark theme matching the existing editor style */
 export const darkTheme = EditorView.theme(
@@ -103,17 +86,6 @@ export const darkTheme = EditorView.theme(
       backgroundColor: 'rgba(140, 100, 220, 0.06)',
       color: '#c8b8e8',
     },
-    '.cm-line': {
-      transition: 'filter 0.16s ease, opacity 0.16s ease',
-    },
-    '.cm-line.cm-focus-fade': {
-      filter: 'blur(1.8px)',
-      opacity: '0.28',
-    },
-    '.cm-line.cm-focus-main': {
-      filter: 'none',
-      opacity: '1',
-    },
     '.cm-gutters': {
       backgroundColor: '#1e1e1e',
       color: '#555',
@@ -132,20 +104,27 @@ export const darkTheme = EditorView.theme(
     '&.cm-focused': {
       outline: 'none',
     },
-    // Scrollbar styling
+    // 滚动条：细、圆角、低对比度；平时隐藏，悬停 / 滚动时显示（颜色取自 global.scss 的 token）
     '.cm-scroller::-webkit-scrollbar': {
-      width: '8px',
-      height: '8px',
+      width: '10px',
+      height: '10px',
     },
     '.cm-scroller::-webkit-scrollbar-track': {
       background: 'transparent',
     },
     '.cm-scroller::-webkit-scrollbar-thumb': {
-      background: '#424242',
-      borderRadius: '4px',
+      backgroundColor: 'transparent',
+      backgroundClip: 'padding-box',
+      border: '3px solid transparent',
+      borderRadius: '999px',
     },
-    '.cm-scroller::-webkit-scrollbar-thumb:hover': {
-      background: '#555',
+    '.cm-scroller:hover::-webkit-scrollbar-thumb, &.cm-scrolling .cm-scroller::-webkit-scrollbar-thumb':
+      {
+        backgroundColor: 'var(--ui-scrollbar-thumb)',
+      },
+    '.cm-scroller::-webkit-scrollbar-thumb:hover, .cm-scroller::-webkit-scrollbar-thumb:active': {
+      backgroundColor: 'var(--ui-scrollbar-thumb-hover)',
+      border: '2px solid transparent',
     },
     '.cm-scroller::-webkit-scrollbar-corner': {
       background: 'transparent',

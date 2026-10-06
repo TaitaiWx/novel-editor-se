@@ -33,6 +33,10 @@
   --ui-pane-padding: 8px;
   --ui-resizer-hover: rgba(86, 156, 214, 0.45);
   --ui-resizer-active: rgba(86, 156, 214, 0.7);
+
+  /* 滚动条：细、圆角、低对比度（编辑器内悬停 / 滚动时才显示） */
+  --ui-scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --ui-scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
 }
 
 html,
@@ -72,11 +76,11 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
+  background: var(--ui-scrollbar-thumb);
   border-radius: 4px;
 
   &:hover {
-    background: #505050;
+    background: var(--ui-scrollbar-thumb-hover);
   }
 }
 
