@@ -332,9 +332,7 @@ describe('GrowthView 工作区布局', () => {
     const electron = installElectronMock((channel) =>
       channel === 'growth-load' ? ok(buildSnapshot()) : null
     );
-    render(
-      <GrowthView folderPath={FOLDER} dbReady={false} layout="workspace" initialCharacter="林舟" />
-    );
+    render(<GrowthView folderPath={FOLDER} dbReady={false} initialCharacter="林舟" />);
     expect(await screen.findByText('当前作品还没有「林舟」的成长卡')).toBeTruthy();
     expect(electron.invoke).not.toHaveBeenCalledWith(
       'growth-ensure-sheet',
@@ -374,14 +372,7 @@ describe('GrowthView 工作区布局', () => {
     const changed = vi.fn();
     window.addEventListener(GROWTH_MEMORY_CHANGED_EVENT, changed);
     try {
-      render(
-        <GrowthView
-          folderPath={FOLDER}
-          dbReady={false}
-          layout="workspace"
-          initialCharacter="白芷"
-        />
-      );
+      render(<GrowthView folderPath={FOLDER} dbReady={false} initialCharacter="白芷" />);
       const heading = await screen.findByRole('heading', { level: 1, name: '白芷' });
       expect(heading).toBeTruthy();
       expect(screen.getByLabelText('等级 1')).toBeTruthy();
@@ -398,14 +389,7 @@ describe('GrowthView 工作区布局', () => {
   it('总览卡片点击后交给外部导航', async () => {
     installElectronMock((channel) => (channel === 'growth-load' ? ok(buildSnapshot()) : null));
     const onNavigate = vi.fn();
-    render(
-      <GrowthView
-        folderPath={FOLDER}
-        dbReady={false}
-        layout="workspace"
-        onNavigateCharacter={onNavigate}
-      />
-    );
+    render(<GrowthView folderPath={FOLDER} dbReady={false} onNavigateCharacter={onNavigate} />);
     fireEvent.click(await screen.findByLabelText('打开 阿尔 的成长卡'));
     expect(onNavigate).toHaveBeenCalledWith('阿尔');
   });
@@ -414,9 +398,7 @@ describe('GrowthView 工作区布局', () => {
     installElectronMock((channel) =>
       channel === 'growth-load' ? ok(buildSnapshot({ initialized: false, sheets: [] })) : null
     );
-    render(
-      <GrowthView folderPath={FOLDER} dbReady={false} layout="workspace" initialCharacter="白芷" />
-    );
+    render(<GrowthView folderPath={FOLDER} dbReady={false} initialCharacter="白芷" />);
     expect(await screen.findByText('开始后会自动为「白芷」建立成长卡。')).toBeTruthy();
   });
 });

@@ -37,9 +37,10 @@ describe('首次启动', () => {
     await selectWork(app.page, '星河旅人');
     await expandTreePath(app.page, ['第一卷-离乡', '001-启程']);
     const titles = await treeTitles(app.page);
-    expect(titles).toEqual(expect.arrayContaining(['项目说明', '第一卷-离乡', '001-启程']));
-    // 欢迎使用.md 是项目文档：在默认折叠的「项目说明」里，不是「未分卷」里的章
+    expect(titles).toEqual(expect.arrayContaining(['第一卷-离乡', '001-启程']));
+    // 欢迎使用.md 是项目文档：收在项目名旁的「项目说明」按钮里，不是「未分卷」里的章
     expect(titles).not.toContain('欢迎使用');
+    expect(await app.page.exists(SEL.projectDocsButton)).toBe(true);
     expect(titles).not.toContain('novels');
     expect(titles).not.toContain('未分卷');
     expect(titles).not.toContain('剑与诗');

@@ -9,7 +9,7 @@ import styles from './RightPanelStandaloneApp.module.scss';
 
 /**
  * 右侧面板独立窗口模式 —— 通过 ?mode=right-panel&folderPath=... 参数启动。
- * 渲染一个全屏的 RightPanel（故事线 / 人物 / 设定），无侧边栏和编辑器。
+ * 渲染一个全屏的 RightPanel（目录 / 章纲 / 卷纲），无侧边栏和编辑器。
  * 内容同步通过 MessagePort 直连通道从主窗口接收，零 main-process 开销。
  */
 export const RightPanelStandaloneApp: React.FC = () => {
@@ -79,7 +79,7 @@ export const RightPanelStandaloneApp: React.FC = () => {
     <AiConfigProvider>
       <div className={styles.window}>
         <div className={styles.titleBar}>
-          <span className={styles.title}>故事面板</span>
+          <span className={styles.title}>大纲</span>
           <div className={styles.spacer} />
           <WindowControls />
         </div>

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { applyGrowthEvent, createSheet } from '@novel-editor/core/growth';
 import { GrowthView } from '@/render/components/RightPanel/GrowthView';
 import {
@@ -10,7 +10,6 @@ import {
   GROWTH_TOUR_STEPS,
   GROWTH_TOUR_STORAGE_KEY,
 } from '@/render/components/RightPanel/GrowthView/growthGuide';
-import { GROWTH_OPEN_EVENT } from '@/render/utils/growthIndex';
 import { installElectronMock, uninstallElectronMock } from '../hooks/electronMock';
 import { FOLDER, buildSnapshot, createGrowthBackend } from './fixtures';
 
@@ -45,7 +44,6 @@ describe('成长档案总览', () => {
       <GrowthView
         folderPath={FOLDER}
         dbReady={false}
-        layout="workspace"
         onNavigateCharacter={onNavigate}
         onCreateSheet={vi.fn()}
       />
@@ -75,14 +73,7 @@ describe('成长档案总览', () => {
   it('首次使用的空状态：新建成长卡与查看使用说明', async () => {
     installElectronMock(createGrowthBackend(buildSnapshot({ sheets: [] })).handle);
     const onCreateSheet = vi.fn();
-    render(
-      <GrowthView
-        folderPath={FOLDER}
-        dbReady={false}
-        layout="workspace"
-        onCreateSheet={onCreateSheet}
-      />
-    );
+    render(<GrowthView folderPath={FOLDER} dbReady={false} onCreateSheet={onCreateSheet} />);
     const empty = await screen.findByRole('region', { name: '还没有成长卡' });
     fireEvent.click(within(empty).getByRole('button', { name: '+ 新建成长卡' }));
     expect(onCreateSheet).toHaveBeenCalledWith({});
@@ -94,7 +85,7 @@ describe('成长档案总览', () => {
     const electron = installElectronMock(
       createGrowthBackend(buildSnapshot({ initialized: false, sheets: [] })).handle
     );
-    render(<GrowthView folderPath={FOLDER} dbReady={false} layout="workspace" />);
+    render(<GrowthView folderPath={FOLDER} dbReady={false} />);
     const setup = await screen.findByRole('region', { name: '开始使用成长档案' });
     fireEvent.click(within(setup).getByRole('radio', { name: /空白规则/ }));
     fireEvent.click(within(setup).getByRole('button', { name: '使用说明' }));
@@ -111,9 +102,7 @@ describe('成长档案总览', () => {
 describe('使用说明', () => {
   it('从成长卡的「?」与「⋯」菜单都能打开，章节齐全，Esc 关闭', async () => {
     installElectronMock(createGrowthBackend().handle);
-    render(
-      <GrowthView folderPath={FOLDER} dbReady={false} layout="workspace" initialCharacter="阿尔" />
-    );
+    render(<GrowthView folderPath={FOLDER} dbReady={false} initialCharacter="阿尔" />);
     fireEvent.click(await screen.findByRole('button', { name: '使用说明' }));
     const dialog = screen.getByRole('dialog', HELP);
     // 默认只展开「3 步上手」，进阶说明折叠为摘要行
@@ -146,9 +135,7 @@ describe('首次引导', () => {
   it('第一次打开成长卡时显示，跳过后不再出现，可从使用说明重新打开', async () => {
     window.localStorage.removeItem(GROWTH_TOUR_STORAGE_KEY);
     installElectronMock(createGrowthBackend().handle);
-    const view = render(
-      <GrowthView folderPath={FOLDER} dbReady={false} layout="workspace" initialCharacter="阿尔" />
-    );
+    const view = render(<GrowthView folderPath={FOLDER} dbReady={false} initialCharacter="阿尔" />);
     const first = await screen.findByRole('dialog', {
       name: `引导 1/${GROWTH_TOUR_STEPS.length}：${GROWTH_TOUR_STEPS[0].title}`,
     });
@@ -160,9 +147,7 @@ describe('首次引导', () => {
     expect(window.localStorage.getItem(GROWTH_TOUR_STORAGE_KEY)).toBe('1');
 
     view.unmount();
-    render(
-      <GrowthView folderPath={FOLDER} dbReady={false} layout="workspace" initialCharacter="阿尔" />
-    );
+    render(<GrowthView folderPath={FOLDER} dbReady={false} initialCharacter="阿尔" />);
     fireEvent.click(await screen.findByRole('button', { name: '使用说明' }));
     expect(screen.queryByRole('dialog', { name: /^引导/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '重新查看引导' }));
@@ -178,49 +163,8 @@ describe('首次引导', () => {
   });
 });
 
-describe('右侧面板摘要', () => {
-  it('列出本章出场的角色，可直接记一笔并打开成长档案', async () => {
-    const electron = installElectronMock(createGrowthBackend(withTwoCharacters()).handle);
-    const opened = vi.fn();
-    window.addEventListener(GROWTH_OPEN_EVENT, opened);
-    try {
-      render(
-        <GrowthView folderPath={FOLDER} dbReady={false} content="阿尔推开门。" currentChapter={7} />
-      );
-      expect(await screen.findByText('本章出场 1 个已建卡角色')).toBeTruthy();
-      // 不再出现完整角色卡（属性 / 时间线）
-      expect(screen.queryByRole('region', { name: '属性' })).toBeNull();
-      expect(screen.getByText('距下一级 500')).toBeTruthy();
-
-      fireEvent.click(screen.getByRole('button', { name: '为 阿尔 记一笔' }));
-      const form = screen.getByRole('form', { name: '为 阿尔 记一笔' });
-      expect((within(form).getByLabelText('章节') as HTMLInputElement).value).toBe('7');
-      fireEvent.change(within(form).getByLabelText('获得多少经验'), { target: { value: '100' } });
-      fireEvent.submit(form);
-      expect(await screen.findByText('阿尔 获得 100 经验')).toBeTruthy();
-      expect(electron.invoke).toHaveBeenCalledWith(
-        'growth-apply-event',
-        FOLDER,
-        '阿尔',
-        { type: 'exp', delta: 100, chapter: 7 },
-        { force: false }
-      );
-
-      // 其他角色可手动加入摘要
-      fireEvent.click(screen.getByRole('button', { name: '白芷' }));
-      expect(screen.getByRole('button', { name: '为 白芷 记一笔' })).toBeTruthy();
-
-      act(() => {
-        fireEvent.click(screen.getByRole('button', { name: '打开成长档案' }));
-      });
-      expect(opened).toHaveBeenCalledTimes(1);
-      expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({ name: null });
-    } finally {
-      window.removeEventListener(GROWTH_OPEN_EVENT, opened);
-    }
-  });
-
-  it('记忆库未创建时显示紧凑的开始引导', async () => {
+describe('首次使用', () => {
+  it('记忆库未创建时总览显示开始引导', async () => {
     installElectronMock(
       createGrowthBackend(buildSnapshot({ initialized: false, sheets: [] })).handle
     );

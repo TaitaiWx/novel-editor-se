@@ -64,6 +64,8 @@ interface ContentPanelProps {
   replaceLineRequest?: ReplaceLineRequest | null;
   inlineDiff?: InlineDiffRange | null;
   editorViewRef?: React.MutableRefObject<EditorView | null>;
+  /** 文本编辑器文件栏上额外的操作按钮（如「灵感」），放在设置按钮之前 */
+  editorHeaderActions?: React.ReactNode;
   viewportSnapshots?: Record<string, EditorViewportSnapshot>;
   onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onTabSelect: (filePath: string) => void;
@@ -148,6 +150,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   replaceLineRequest,
   inlineDiff,
   editorViewRef,
+  editorHeaderActions,
   viewportSnapshots,
   onViewportSnapshotChange,
   onTabSelect,
@@ -366,7 +369,16 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
               onSaveUntitled={onSaveUntitled}
               onScrollProcessed={onScrollProcessed}
               onTransientHighlightProcessed={onTransientHighlightProcessed}
-              settingsComponent={settingsComponent}
+              settingsComponent={
+                editorHeaderActions ? (
+                  <>
+                    {editorHeaderActions}
+                    {settingsComponent}
+                  </>
+                ) : (
+                  settingsComponent
+                )
+              }
             />
           )}
         </div>

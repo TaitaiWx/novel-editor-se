@@ -19,7 +19,8 @@ export type ShortcutCommand =
   | 'toggleFocusMode'
   | 'closeTab'
   | 'formatChapter'
-  | 'openGrowth';
+  | 'openGrowth'
+  | 'openInspiration';
 
 export interface ShortcutSettings {
   quickOpen: string;
@@ -28,6 +29,7 @@ export interface ShortcutSettings {
   closeTab: string;
   formatChapter: string;
   openGrowth: string;
+  openInspiration: string;
 }
 
 export type AIProvider = 'openai-compatible' | 'openai' | 'deepseek';
@@ -111,6 +113,12 @@ export const SHORTCUT_FIELD_DEFINITIONS: ShortcutFieldDefinition[] = [
     description: '打开角色成长档案总览（等级、技能、抉择、队伍与地图）。',
     placeholder: '例如 Mod+Shift+J',
   },
+  {
+    key: 'openInspiration',
+    label: '灵感抽签',
+    description: '打开灵感抽签：一键抽出人物、地点、冲突三张签，可直接插入到光标处。',
+    placeholder: '例如 Mod+Shift+Y',
+  },
 ];
 
 export const READONLY_SHORTCUTS = [
@@ -119,6 +127,7 @@ export const READONLY_SHORTCUTS = [
   { accelerator: isMacLike() ? 'Cmd+M' : 'Ctrl+M', description: '最小化窗口' },
   { accelerator: 'CommandOrControl+Shift+E', description: '导出项目' },
   { accelerator: 'F11', description: '切换专注模式（备用键）' },
+  { accelerator: 'Esc', description: '退出专注模式' },
 ];
 
 function isMacLike(): boolean {
@@ -143,6 +152,7 @@ export const DEFAULT_SHORTCUT_SETTINGS: ShortcutSettings = {
   closeTab: 'Mod+W',
   formatChapter: 'Mod+Alt+L',
   openGrowth: 'Mod+Shift+J',
+  openInspiration: 'Mod+Shift+Y',
 };
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
@@ -390,6 +400,7 @@ export function applyShortcutOverrides<T extends { accelerator: string; descript
     ['关闭当前标签', settings.closeTab],
     ['格式化当前章节', settings.formatChapter],
     ['打开成长档案', settings.openGrowth],
+    ['灵感抽签', settings.openInspiration],
   ]);
 
   const consumed = new Set<string>();

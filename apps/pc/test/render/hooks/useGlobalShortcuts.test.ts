@@ -59,6 +59,20 @@ describe('useGlobalShortcuts', () => {
     expect(fns.handleOpenGrowth).toHaveBeenCalledWith(null);
   });
 
+  it('Mod+Shift+Y 请求打开灵感抽签', () => {
+    const { ctx } = createCtx();
+    const opened = vi.fn();
+    window.addEventListener('open-inspiration', opened);
+    try {
+      renderHook(() => useGlobalShortcuts(ctx));
+      const event = press({ key: 'Y', metaKey: true, shiftKey: true });
+      expect(event.defaultPrevented).toBe(true);
+      expect(opened).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener('open-inspiration', opened);
+    }
+  });
+
   it('挂载时注册主进程快捷键事件，卸载时清理', () => {
     const { ctx } = createCtx();
     const { unmount } = renderHook(() => useGlobalShortcuts(ctx));

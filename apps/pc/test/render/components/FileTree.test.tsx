@@ -113,7 +113,7 @@ describe('FileTree', () => {
     await waitFor(() => expect(screen.queryByText('20 B')).toBeNull());
   });
 
-  it('选中态、itemMeta、修改按钮', () => {
+  it('选中态、itemMeta、双击名称行内重命名', () => {
     installElectronMock(() => []);
     const onRenameNode = vi.fn();
     const onFileSelect = vi.fn();
@@ -129,8 +129,11 @@ describe('FileTree', () => {
     );
     expect(container.querySelector('.selected')?.textContent).toContain('a.js');
     expect(screen.getByText('1200 字')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '修改 a.js' }));
-    expect(onRenameNode).toHaveBeenCalledWith('/p/a.js');
+    fireEvent.doubleClick(screen.getByText('a.js'));
+    const input = screen.getByLabelText('重命名 a.js');
+    fireEvent.change(input, { target: { value: 'b.js' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRenameNode).toHaveBeenCalledWith('/p/a.js', 'b.js');
     expect(onFileSelect).not.toHaveBeenCalled();
   });
 

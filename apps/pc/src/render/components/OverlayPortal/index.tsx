@@ -74,7 +74,8 @@ const OverlayPortal = React.forwardRef<HTMLDivElement, OverlayPortalProps>(
     }
 
     return createPortal(
-      <div ref={setRefs} {...divProps}>
+      // data-overlay-layer：弹层打开期间 Esc 优先给弹层（见 hooks/useFocusModeEscape.ts）
+      <div ref={setRefs} data-overlay-layer="" {...divProps}>
         {children}
       </div>,
       document.body

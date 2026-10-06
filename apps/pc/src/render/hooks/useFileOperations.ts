@@ -155,8 +155,9 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
     [handleDeleteDirectory, toast]
   );
 
+  /** 重命名文件 / 目录：传入 inlineName（行内重命名）时直接提交，否则弹出输入框 */
   const handleRename = useCallback(
-    async (oldPath: string) => {
+    async (oldPath: string, inlineName?: string) => {
       const ipc = window.electron?.ipcRenderer;
       if (!ipc) return;
       const oldName = getPathBaseName(oldPath);
@@ -164,7 +165,8 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
       const isStoryDocument = storyNode?.type === 'file';
       const oldExtension = isStoryDocument ? getFileExtension(oldName) : '';
       const promptDefaultName = isStoryDocument ? stripExtension(oldName) : oldName;
-      const nextInputName = await dialog.prompt('重命名', '请输入新名称', promptDefaultName);
+      const nextInputName =
+        inlineName ?? (await dialog.prompt('重命名', '请输入新名称', promptDefaultName));
       const normalizedInputName = nextInputName?.trim();
       if (!normalizedInputName) return;
 

@@ -10,6 +10,8 @@ import type { ScopedAssistantGenerationApi } from './useScopedAssistantGeneratio
 import type { ProjectExportApi } from './useProjectExport';
 import type { ProjectLoaderApi } from './useProjectLoader';
 import type { GrowthEntryApi } from './useGrowthEntry';
+import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
+import type { ChapterMaterialsApi } from './useChapterMaterials';
 
 export type UseContextMenuItemsContext = Pick<
   WorkspaceEntityActions,
@@ -26,6 +28,8 @@ export type UseContextMenuItemsContext = Pick<
   | 'handleOpenLoreNode'
   | 'handleOpenVolumeNode'
   | 'handleRenameProject'
+  | 'handleRenameCharacterNode'
+  | 'handleRenameLoreNode'
 > &
   Pick<GrowthEntryApi, 'handleCreateGrowthSheet' | 'handleOpenGrowth'> &
   Pick<WorkspaceState, 'folderPath'> &
@@ -55,7 +59,9 @@ export type UseContextMenuItemsContext = Pick<
     'handleGenerateScopedCharacters' | 'handleGenerateScopedLore' | 'handleGenerateScopedMaterials'
   > &
   Pick<ProjectExportApi, 'handleOpenKnowledgeExportDialog'> &
-  Pick<ProjectLoaderApi, 'refreshCurrentFolder'>;
+  Pick<ProjectLoaderApi, 'refreshCurrentFolder'> &
+  Pick<WorkspaceDerivedState, 'chapterAssistantEnabled' | 'materialFiles' | 'linkedMaterialFiles'> &
+  Pick<ChapterMaterialsApi, 'handleAddChapterMaterial' | 'handleRemoveChapterMaterial'>;
 
 /**
  * 文件树 / 对象 / 背景右键菜单项
@@ -65,6 +71,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     buildChapterAssistantScope,
     buildProjectAssistantScope,
     buildVolumeAssistantScope,
+    chapterAssistantEnabled,
     contextMenu,
     folderPath,
     handleClearCharacters,
@@ -94,8 +101,14 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleOpenVolumeNode,
     handlePasteFiles,
     handleRename,
+    handleRenameCharacterNode,
+    handleRenameLoreNode,
     handleRenameProject,
     handleSplitStoryFile,
+    handleAddChapterMaterial,
+    handleRemoveChapterMaterial,
+    linkedMaterialFiles,
+    materialFiles,
     refreshCurrentFolder,
     workspaceCharacters,
     workspaceLoreEntries,
@@ -223,6 +236,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
           if (!targetCharacter) return [];
           return [
             menuItem('查看详情', () => handleOpenCharacterNode(target.characterId)),
+            menuItem('重命名', () => void handleRenameCharacterNode(target.characterId)),
             menuItem('', () => {}, { separator: true }),
             menuItem('删除人物', () => void handleDeleteCharacterNode(target.characterId), {
               danger: true,
@@ -234,6 +248,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
           if (!targetEntry) return [];
           return [
             menuItem('查看详情', () => handleOpenLoreNode(target.entryId)),
+            menuItem('重命名', () => void handleRenameLoreNode(target.entryId)),
             menuItem('', () => {}, { separator: true }),
             menuItem('删除设定', () => void handleDeleteLoreNode(target.entryId), {
               danger: true,
@@ -274,6 +289,17 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
       ...(node.type === 'file' && isStoryFilePath(node.path)
         ? [menuItem('按章节拆分', () => void handleSplitStoryFile(node.path))]
         : []),
+      // 资料文件：关联到当前打开的章节（AI 助手「上下文」里同样可以关联 / 移除）
+      ...(node.type === 'file' &&
+      chapterAssistantEnabled &&
+      materialFiles.some((item) => item.path === node.path)
+        ? [
+            linkedMaterialFiles.some((item) => item.path === node.path)
+              ? menuItem('从当前章移除', () => handleRemoveChapterMaterial(node.path))
+              : menuItem('关联到当前章', () => handleAddChapterMaterial(node.path)),
+            menuItem('', () => {}, { separator: true }),
+          ]
+        : []),
       ...(node.type === 'file' && isStoryFilePath(node.path)
         ? [menuItem('', () => {}, { separator: true })]
         : []),
@@ -286,6 +312,11 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     return items;
   }, [
     contextMenu,
+    chapterAssistantEnabled,
+    handleAddChapterMaterial,
+    handleRemoveChapterMaterial,
+    linkedMaterialFiles,
+    materialFiles,
     buildChapterAssistantScope,
     buildProjectAssistantScope,
     buildVolumeAssistantScope,
@@ -318,6 +349,8 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handlePasteFiles,
     handleRenameProject,
     handleRename,
+    handleRenameCharacterNode,
+    handleRenameLoreNode,
     handleSplitStoryFile,
     refreshCurrentFolder,
     workspaceCharacters,

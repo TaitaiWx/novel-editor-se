@@ -31,9 +31,12 @@ export const getAllShortcuts = (): ShortcutDisplay[] => {
     { accelerator: `${mod}+P`, description: '搜索文件', category: '文件' },
     { accelerator: `${mod}+W`, description: '关闭当前标签', category: '文件' },
     { accelerator: `${mod}+Alt+L`, description: '格式化当前章节', category: '编辑' },
+    { accelerator: `${mod}+Shift+Y`, description: '灵感抽签', category: '编辑' },
     { accelerator: `${mod}+B`, description: '切换侧边栏', category: '视图' },
     { accelerator: `${mod}+Shift+F`, description: '切换专注模式', category: '视图' },
     { accelerator: 'F11', description: '切换专注模式', category: '视图' },
+    // 专注模式下生效；弹层、搜索面板打开或输入法组字时 Esc 优先交给它们
+    { accelerator: 'Esc', description: '退出专注模式', category: '视图' },
     { accelerator: `${mod}+Shift+J`, description: '打开成长档案', category: '视图' },
   ];
 

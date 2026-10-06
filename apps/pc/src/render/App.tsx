@@ -11,6 +11,8 @@ import ShortcutsHelp from './components/ShortcutsHelp';
 import AppSettingsCenter from './components/AppSettingsCenter';
 import KnowledgeExportDialog from './components/KnowledgeExportDialog';
 import AboutDialog from './components/AboutDialog';
+import InspirationDialog from './components/InspirationDialog';
+import InspirationButton from './components/InspirationButton';
 import styles from './App.module.scss';
 import { VscLayoutSidebarLeft, VscLayoutSidebarRight } from 'react-icons/vsc';
 import { CENTER_MIN } from '@/render/app/layoutConstants';
@@ -50,13 +52,13 @@ const App: React.FC = () => {
     projectExport,
     handlePopOutRightPanel,
     contextMenuItems,
-    handleAddChapterMaterial,
-    handleRemoveChapterMaterial,
+    assistantContext,
     workspaceTabLabels,
     editorCharacterHighlights,
     specialTabContent,
     handleAssistantApplyFix,
     handleAssistantPreviewDiff,
+    inspiration,
   } = useAppController();
 
   // ─── 渲染所需字段 ──────────────────────────────────────────────
@@ -86,15 +88,7 @@ const App: React.FC = () => {
     initialViewportSnapshots,
     editorViewRef,
   } = editorState;
-  const {
-    inlineDiff,
-    diffState,
-    pendingApplyQueue,
-    assistantScopedCharacters,
-    assistantCharacterGenerationStatus,
-    assistantScopedLoreEntries,
-    assistantScopedMaterials,
-  } = aiState;
+  const { inlineDiff, diffState, pendingApplyQueue, assistantCharacterGenerationStatus } = aiState;
   const { workspaceCharacters, workspaceLoreEntries, workspaceProjectName, materialUsageMap } =
     entitiesState;
   const { appSettings } = settingsState;
@@ -124,8 +118,6 @@ const App: React.FC = () => {
     activeWorkspaceTab,
     activeUntitledVirtualContent,
     activeDocumentTab,
-    materialFiles,
-    linkedMaterialFiles,
     currentAssistantScope,
     currentOutlineScope,
   } = derived;
@@ -287,7 +279,7 @@ const App: React.FC = () => {
                 onCreateGrowthSheet={() => void growthEntry.handleCreateGrowthSheet()}
                 onRefresh={refreshCurrentFolder}
                 onOpenFolder={handleOpenLocal}
-                onRenameProject={() => void handleRenameProject()}
+                onRenameProject={(name) => void handleRenameProject(name)}
                 onImportFile={handleImportFile}
                 onCollapse={handleCollapseSidebar}
                 onContextMenu={handleFileContextMenu}
@@ -343,6 +335,9 @@ const App: React.FC = () => {
                 replaceLineRequest={replaceLineRequest}
                 inlineDiff={inlineDiff}
                 editorViewRef={editorViewRef}
+                editorHeaderActions={
+                  <InspirationButton shortcut={appSettings.shortcuts.openInspiration} />
+                }
                 viewportSnapshots={initialViewportSnapshots}
                 onViewportSnapshotChange={handleViewportSnapshotChange}
                 onTabSelect={(filePath) => {
@@ -366,7 +361,7 @@ const App: React.FC = () => {
               <button
                 className={styles.exitFocusBtn}
                 onClick={toggleFocusMode}
-                title="退出聚焦模式 (F11)"
+                title="退出聚焦模式 (Esc / F11)"
               >
                 退出聚焦
               </button>
@@ -402,25 +397,12 @@ const App: React.FC = () => {
                     scopeKind={currentAssistantScope?.kind}
                     scopeLabel={currentAssistantScope?.label}
                     outlineScope={currentOutlineScope}
-                    materialFiles={materialFiles.map((item) => ({
-                      path: item.path,
-                      name: item.name,
-                    }))}
-                    linkedMaterialPaths={linkedMaterialFiles.map((item) => item.path)}
-                    scopedCharacterGenerationStatus={assistantCharacterGenerationStatus}
-                    scopedCharacters={assistantScopedCharacters}
-                    scopedLoreEntries={assistantScopedLoreEntries}
-                    scopedMaterials={assistantScopedMaterials}
                     onToggle={handleToggleRightPanel}
                     onPopOut={handlePopOutRightPanel}
-                    onOpenMaterial={openFileInTab}
-                    onAddMaterial={handleAddChapterMaterial}
-                    onRemoveMaterial={handleRemoveChapterMaterial}
                     onScrollToLine={handleScrollToLine}
                     onReplaceLineText={handleReplaceLineText}
                     folderPath={workScopePath}
                     dbReady={dbReady}
-                    currentLine={cursorPosition.line}
                   />
                 </Suspense>
               </div>
@@ -507,11 +489,22 @@ const App: React.FC = () => {
           onApplyFix={handleAssistantApplyFix}
           onOpenFile={openFileInTab}
           onPreviewDiff={handleAssistantPreviewDiff}
+          context={assistantContext}
           onOpenSettings={() => {
             setShowAIAssistant(false);
             setSettingsCenterTab('ai');
             setShowSettingsCenter(true);
           }}
+        />
+
+        <InspirationDialog
+          visible={inspiration.inspirationVisible}
+          onClose={inspiration.closeInspiration}
+          initialCardId={inspiration.inspirationCardId}
+          folderPath={workScopePath}
+          dbReady={dbReady}
+          content={activeDocumentTab ? editorContent : ''}
+          onInsert={inspiration.handleInsertInspiration}
         />
       </div>
     </AiConfigProvider>

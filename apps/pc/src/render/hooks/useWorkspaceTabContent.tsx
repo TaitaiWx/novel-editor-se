@@ -211,7 +211,6 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
                 key={`${activeGrowthTab}-${scopePath ?? ''}`}
                 folderPath={scopePath}
                 dbReady={dbReady}
-                layout="workspace"
                 initialCharacter={parseGrowthWorkspaceTab(activeGrowthTab)}
                 currentChapter={growthChapter}
                 onNavigateCharacter={handleOpenGrowth}

@@ -78,10 +78,7 @@ function buildController() {
       inlineDiff: null,
       diffState: null,
       pendingApplyQueue: [],
-      assistantScopedCharacters: [],
       assistantCharacterGenerationStatus: null,
-      assistantScopedLoreEntries: [],
-      assistantScopedMaterials: [],
     }),
     entitiesState: stub({
       workspaceCharacters: [],
@@ -97,7 +94,11 @@ function buildController() {
           showThousandCharMarkers: false,
           thousandCharMarkerStep: 1000,
         },
-        shortcuts: { quickOpen: 'Mod+P', formatChapter: 'Mod+Shift+F' },
+        shortcuts: {
+          quickOpen: 'Mod+P',
+          formatChapter: 'Mod+Shift+F',
+          openInspiration: 'Mod+Shift+Y',
+        },
       },
     }),
     uiState: stub({
@@ -118,8 +119,6 @@ function buildController() {
       activeWorkspaceTab: null,
       activeUntitledVirtualContent: null,
       activeDocumentTab: null,
-      materialFiles: [],
-      linkedMaterialFiles: [],
       currentAssistantScope: null,
       currentOutlineScope: null,
     }),
@@ -137,13 +136,18 @@ function buildController() {
     projectExport: stub({}),
     handlePopOutRightPanel: vi.fn(),
     contextMenuItems: [],
-    handleAddChapterMaterial: vi.fn(),
-    handleRemoveChapterMaterial: vi.fn(),
+    assistantContext: { scope: null, characters: [], loreEntries: [], materials: [] },
     workspaceTabLabels: {},
     editorCharacterHighlights: [],
     specialTabContent: null,
     handleAssistantApplyFix: vi.fn(),
     handleAssistantPreviewDiff: vi.fn(),
+    inspiration: {
+      inspirationVisible: false,
+      inspirationCardId: null,
+      closeInspiration: vi.fn(),
+      handleInsertInspiration: vi.fn(),
+    },
   };
 }
 
@@ -167,6 +171,8 @@ vi.mock('@/render/components/KnowledgeExportDialog', () => placeholder('knowledg
 vi.mock('@/render/components/AboutDialog', () => placeholder('about'));
 vi.mock('@/render/components/VersionTimeline', () => placeholder('versions'));
 vi.mock('@/render/components/DiffEditor', () => placeholder('diff'));
+vi.mock('@/render/components/InspirationDialog', () => placeholder('inspiration'));
+vi.mock('@/render/components/InspirationButton', () => placeholder('inspiration-button'));
 vi.mock('@/render/components/RightPanel/AIAssistantDialog', () => ({
   AIAssistantDialog: () => null,
 }));
@@ -272,7 +278,7 @@ describe('App 卡片式三栏布局', () => {
     expect(resizers()).toHaveLength(0);
     expect(screen.queryByTestId('title-bar')).toBeNull();
     expect(screen.queryByTestId('status-bar')).toBeNull();
-    expect(screen.getByTitle('退出聚焦模式 (F11)')).toBeTruthy();
+    expect(screen.getByTitle('退出聚焦模式 (Esc / F11)')).toBeTruthy();
   });
 
   it('显示状态栏时三栏容器去掉底部外边距，隐藏时保留', async () => {

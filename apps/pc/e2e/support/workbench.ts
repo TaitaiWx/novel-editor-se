@@ -16,11 +16,18 @@ export const SEL = {
   dialogInput: '[role="dialog"] input',
   menu: '[role="menu"]',
   storyline: '[class*="storylineView"]',
+  /** 灵感抽签弹窗 */
+  inspiration: '[role="dialog"][aria-label="灵感"]',
   /** 文件面板顶部的作品切换器与它的下拉列表 */
   workSwitcher: '[data-testid="work-switcher"]',
   workList: '[role="listbox"][aria-label="作品"]',
-  /** 文件面板底部「项目说明」分区（根目录说明文档，默认折叠） */
-  projectNotes: '[aria-label="项目说明"]',
+  /** 文件面板顶部（项目名 + 操作按钮） */
+  workspaceHeader: '[class*="workspaceHeader"]',
+  /** 项目名旁的「项目说明」按钮（根目录说明文档，带数量）与它弹出的文档列表 */
+  projectDocsButton: 'button[aria-label^="项目说明（"]',
+  projectNotes: '[role="list"][aria-label="项目说明"]',
+  /** 行内重命名输入框（双击名称 / F2） */
+  renameInput: 'input[aria-label^="重命名"]',
 } as const;
 
 /** 等待主界面加载完成并打开了指定项目（以目录名判断） */
@@ -96,11 +103,46 @@ export async function selectWork(page: Page, name: string): Promise<void> {
   );
 }
 
-/** 展开底部「项目说明」分区（默认折叠） */
-export async function expandProjectNotes(page: Page): Promise<void> {
-  const collapsed = `${SEL.projectNotes} button[aria-expanded="false"]`;
-  if (await page.exists(collapsed)) await page.click(collapsed);
-  await page.waitForTarget(`${SEL.projectNotes} button[aria-expanded="true"]`);
+/** 打开项目名旁的「项目说明」弹层（根目录说明文档列表） */
+export async function openProjectDocs(page: Page): Promise<void> {
+  if (!(await page.exists(SEL.projectNotes))) await page.click(SEL.projectDocsButton);
+  await page.waitForTarget(SEL.projectNotes);
+}
+
+/** 在已出现的行内重命名输入框中输入新名称并回车提交 */
+export async function commitInlineRename(page: Page, value: string): Promise<void> {
+  await page.waitForTarget(SEL.renameInput);
+  // macOS 上 Cmd+A 依赖原生菜单命令，CDP 按键不会触发；直接选中输入框内容再输入
+  await page.evaluate((selector: string) => {
+    const input = document.querySelector(selector) as HTMLInputElement;
+    input.focus();
+    input.select();
+  }, SEL.renameInput);
+  await page.type(value);
+  await page.waitFor(
+    (selector: string, expected: string) =>
+      (document.querySelector(selector) as HTMLInputElement | null)?.value === expected,
+    { args: [SEL.renameInput, value], message: `重命名输入框内容为「${value}」` }
+  );
+  await page.press('Enter');
+  await page.waitForGone(SEL.renameInput);
+}
+
+/** 双击文件树中的名称，行内重命名为 value */
+export async function renameByDoubleClick(page: Page, name: string, value: string) {
+  await page.doubleClick({ text: name, within: SEL.workspaceTree, exact: true });
+  await commitInlineRename(page, value);
+}
+
+/** 文件面板顶部按钮的 aria-label（按显示顺序） */
+export function workspaceHeaderButtons(page: Page): Promise<string[]> {
+  return page.evaluate<string[]>(
+    (selector: string) =>
+      Array.from(document.querySelector(selector)?.querySelectorAll('button') ?? []).map(
+        (button) => button.getAttribute('aria-label') ?? ''
+      ),
+    SEL.workspaceHeader
+  );
 }
 
 /** 编辑器当前文档内容（逐行拼接，适用于不超过一屏视口的短文档） */
@@ -207,7 +249,16 @@ export async function ensureRightPanelOpen(page: Page): Promise<void> {
   await page.waitForTarget(SEL.storyline);
 }
 
-/** 切换右侧「作品助手」底部的视图（目录 / 本章大纲 / 卷规划 / 三签卡 / 成长） */
-export async function switchStorylineMode(page: Page, label: string): Promise<void> {
+/** 右侧「大纲」面板的视图 */
+export type StorylineModeLabel = '目录' | '章纲' | '卷纲';
+
+/** 切换右侧「大纲」面板的视图（目录 / 章纲 / 卷纲） */
+export async function switchStorylineMode(page: Page, label: StorylineModeLabel): Promise<void> {
   await page.click({ text: label, within: SEL.storyline, exact: true });
+}
+
+/** 通过编辑器文件栏的「灵感」按钮打开灵感抽签弹窗 */
+export async function openInspiration(page: Page): Promise<void> {
+  await page.click('button[aria-label="灵感"]');
+  await page.waitForTarget(SEL.inspiration);
 }

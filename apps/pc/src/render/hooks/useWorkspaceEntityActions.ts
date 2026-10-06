@@ -95,32 +95,37 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     [openFileInTab]
   );
 
-  const handleRenameProject = useCallback(async () => {
-    const ipc = window.electron?.ipcRenderer;
-    const folder = folderPathRef.current;
-    if (!ipc || !folder) return;
-    const novel = (await ipc.invoke('db-novel-get-by-folder', folder)) as {
-      id: number;
-      name?: string | null;
-    } | null;
-    if (!novel?.id) return;
-    const currentName = (
-      workspaceProjectName ||
-      novel.name ||
-      folder.split('/').pop() ||
-      ''
-    ).trim();
-    const nextName = await dialog.prompt('修改作品名', '请输入新的作品名', currentName);
-    if (!nextName?.trim() || nextName.trim() === currentName) return;
+  /** 修改作品名：传入 nextName（行内重命名）时直接提交，否则弹出输入框 */
+  const handleRenameProject = useCallback(
+    async (inlineName?: string) => {
+      const ipc = window.electron?.ipcRenderer;
+      const folder = folderPathRef.current;
+      if (!ipc || !folder) return;
+      const novel = (await ipc.invoke('db-novel-get-by-folder', folder)) as {
+        id: number;
+        name?: string | null;
+      } | null;
+      if (!novel?.id) return;
+      const currentName = (
+        workspaceProjectName ||
+        novel.name ||
+        folder.split('/').pop() ||
+        ''
+      ).trim();
+      const nextName =
+        inlineName ?? (await dialog.prompt('修改作品名', '请输入新的作品名', currentName));
+      if (!nextName?.trim() || nextName.trim() === currentName) return;
 
-    try {
-      await ipc.invoke('db-novel-update', novel.id, { name: nextName.trim() });
-      setWorkspaceProjectName(nextName.trim());
-      toast.success('作品名已更新');
-    } catch (error) {
-      toast.error(`修改作品名失败: ${error instanceof Error ? error.message : '未知错误'}`);
-    }
-  }, [dialog, folderPathRef, setWorkspaceProjectName, toast, workspaceProjectName]);
+      try {
+        await ipc.invoke('db-novel-update', novel.id, { name: nextName.trim() });
+        setWorkspaceProjectName(nextName.trim());
+        toast.success('作品名已更新');
+      } catch (error) {
+        toast.error(`修改作品名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [dialog, folderPathRef, setWorkspaceProjectName, toast, workspaceProjectName]
+  );
 
   const syncWorkspaceCharacters = useCallback(
     (nextCharacters: Character[]) => {
@@ -216,11 +221,12 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
   );
 
   const handleRenameCharacterNode = useCallback(
-    async (characterId: number) => {
+    async (characterId: number, inlineName?: string) => {
       const ipc = window.electron?.ipcRenderer;
       const target = workspaceCharacters.find((item) => item.id === characterId);
       if (!ipc || !target) return;
-      const nextName = await dialog.prompt('修改人物名', '请输入新的人物名', target.name);
+      const nextName =
+        inlineName ?? (await dialog.prompt('修改人物名', '请输入新的人物名', target.name));
       const normalizedName = nextName?.trim();
       if (!normalizedName || normalizedName === target.name) return;
 
@@ -297,11 +303,12 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
   );
 
   const handleRenameLoreNode = useCallback(
-    async (entryId: number) => {
+    async (entryId: number, inlineTitle?: string) => {
       const ipc = window.electron?.ipcRenderer;
       const target = workspaceLoreEntries.find((item) => item.id === entryId);
       if (!ipc || !target) return;
-      const nextTitle = await dialog.prompt('修改设定名', '请输入新的设定名', target.title);
+      const nextTitle =
+        inlineTitle ?? (await dialog.prompt('修改设定名', '请输入新的设定名', target.title));
       const normalizedTitle = nextTitle?.trim();
       if (!normalizedTitle || normalizedTitle === target.title) return;
 

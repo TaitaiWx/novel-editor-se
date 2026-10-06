@@ -24,13 +24,7 @@ afterEach(() => {
 
 function renderSheet(props: Partial<React.ComponentProps<typeof GrowthView>> = {}) {
   return render(
-    <GrowthView
-      folderPath={FOLDER}
-      dbReady={false}
-      layout="workspace"
-      initialCharacter="阿尔"
-      {...props}
-    />
+    <GrowthView folderPath={FOLDER} dbReady={false} initialCharacter="阿尔" {...props} />
   );
 }
 

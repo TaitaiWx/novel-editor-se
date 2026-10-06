@@ -112,6 +112,12 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - ⌘/Ctrl + 点击链接：网址经 `open-external-url`（主进程只放行 http(s) / mailto），本地路径经 `open-in-system-app`；图片按当前文件目录解析，经 `read-file-binary` 读取
 - 性能基准见 `test/render/components/TextEditor/live-preview-view.test.ts`（10 万行 / 5MB 文档每视口构建远低于 16ms）
 
+### 右侧「大纲」面板 / AI 上下文 / 灵感
+
+- 右侧面板（`RightPanel`，标题「大纲」）只有 目录 / 章纲 / 卷纲 三个视图（`StorylineView` 的 `STORYLINE_MODES`，默认目录），可弹出为独立窗口或折叠（`collapseRightPanelOnStartup`）
+- 当前作用域（作品 / 卷 / 章）的 AI 人物 / 设定 / 资料上下文在 AI 助手对话框顶部的「上下文」分区（`RightPanel/AssistantContextSection`，默认折叠只显示计数；数据与动作由 `hooks/useAssistantContext.ts` 组装，复用 `useScopedAssistantGeneration` / `useChapterMaterials`）；资料文件右键菜单也可「关联到当前章 / 从当前章移除」
+- 灵感抽签（`components/InspirationDialog`）：编辑器文件栏「灵感」按钮（`InspirationButton`，经 `ContentPanel` 的 `editorHeaderActions` 插槽）或 `Mod+Shift+Y`（设置中心可改）打开；「抽一签」零输入抽出 人物 / 地点 / 冲突，可单张换签、插入到光标处、复制、交给 AI 扩写；词源 / 我的词池 / 历史收在「更多选项」。纯函数在 `inspiration.ts`；存储复用三签卡（词池 `novel-editor:story-idea-term-pool:<作品>`，历史为 story_idea_card 行，题眼签存人物、变形签存地点、冲突签存冲突），大纲版本的「回到灵感」按卡片 id 回填
+
 ### 关于 / 日志上传
 
 - 关于窗口（`AboutDialog`，约 380px 小窗、不滚动）与设置中心「关于」分区共用 `components/AboutContent`，只展示：图标 + 名称 + 版本（通道徽标）、「首次运行 · 本次已运行」（主进程启动时间经 `get-about-info` 返回，每分钟刷新）、设备 ID（点击复制，提示「设备 ID 已复制」）、「上传日志」按钮。运行环境、数据目录等诊断信息不在界面展示，统一写进日志包的 `diagnostics.json`
@@ -200,11 +206,11 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - 打包产物烟雾测试: `apps/pc/e2e/packaged-smoke.e2e.ts` 带 `--smoke-test` 启动 `apps/pc/build` 中的可执行文件，存活 5 秒或正常退出即通过；没有打包产物时自动跳过。发布流程与 `preflight:release` 用 `pnpm test:e2e apps/pc/e2e/packaged-smoke.e2e.ts` 单独运行
 - 驱动: `apps/pc/e2e/support/` 下的极简 CDP 客户端（Node 24 内置 `WebSocket` + `fetch`）
   - `app.ts`: 用 `apps/pc/node_modules` 中的 electron 启动 `dist/main.mjs`，附加 `--remote-debugging-port=<空闲端口>`，最后一个参数是临时 fixture 项目目录（由 `launch-folder.ts` 打开）；环境变量 `NOVEL_EDITOR_E2E=1`（复用烟雾测试的 userData 隔离 `NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR`，但就绪后不自动退出）、`NOVEL_EDITOR_DISABLE_AUTO_UPDATER=1`；附加 `--disable-renderer-backgrounding` 等参数并关闭窗口 `backgroundThrottling`（窗口被遮挡时 Chromium 会节流定时器、暂停 rAF，曾导致用例偶发变慢 / 超时）；结束时整组杀进程并删除临时目录
-  - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
-  - `workbench.ts`: 本应用的高层操作（作品切换 `selectWork` / `currentWork`、展开「项目说明」、展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
+  - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `doubleClick`（clickCount 1 → 2，触发 dblclick）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
+  - `workbench.ts`: 本应用的高层操作（作品切换 `selectWork` / `currentWork`、打开「项目说明」弹层 `openProjectDocs`、行内重命名 `renameByDoubleClick` / `commitInlineRename`、顶部按钮顺序 `workspaceHeaderButtons`、展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
   - `fixture.ts`: 每次运行把示例作品集 `apps/pc/sample-data` 完整拷贝到临时目录（跳过本机数据库等运行产物，可用 `exclude` 去掉某些路径）；`FIXTURE_CHAPTERS` / `FIXTURE_CHAPTER_TREE` 指向其中的「星河旅人 / 第一卷-离乡」（先用 `selectWork` 在作品切换器选中 `FIXTURE_WORK`，正文树只有当前作品的 卷 → 章，没有 novels / 作品 / 未分卷 层级）；`FIXTURE_MATERIAL_DIR` / `FIXTURE_MEMORY_DIR` 是星河旅人自己的 `资料/`、`资料/记忆/`
   - `suite.ts`: `setupAppSuite()` 为一个 `*.e2e.ts` 注册启动 / 关闭、失败截图、控制台错误检查；另有 `openChapter`、`captureForReview`、成长档案选择器等通用操作
-- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、示例作品集开箱即用（欢迎使用、预置成长档案、种子人物 / 设定、幕剧、章纲）、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、GUI 与 CLI 共享写作日志和会话状态、关于小窗口、资料长文件名、Markdown 实时渲染（排版示例.md：公式 / 表格渲染、坏公式隔离、光标处显示源码、源码 / 实时预览切换）、单实例转发）；`growth.e2e.ts` 用去掉 `novels/星河旅人/资料/记忆/` 的示例验证成长档案首次使用（开始使用、新建成长卡、引导、记一笔、提醒、总览、记忆库同步、人物详情入口）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据并写入种子人物；`sample-upgrade.e2e.ts` 验证本机旧版示例被备份并升级为新版
+- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、示例作品集开箱即用（欢迎使用、预置成长档案、种子人物 / 设定、幕剧、章纲）、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧「大纲」面板与专注模式、灵感抽签（工具栏按钮 → 抽一签 → 插入）、GUI 与 CLI 共享写作日志和会话状态、关于小窗口、资料长文件名、Markdown 实时渲染（排版示例.md：公式 / 表格渲染、坏公式隔离、光标处显示源码、源码 / 实时预览切换）、单实例转发）；`growth.e2e.ts` 用去掉 `novels/星河旅人/资料/记忆/` 的示例验证成长档案首次使用（开始使用、新建成长卡、引导、记一笔、提醒、总览、记忆库同步、人物详情入口）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据并写入种子人物；`sample-upgrade.e2e.ts` 验证本机旧版示例被备份并升级为新版
 - 示例项目的作品名来自 `seed.json`（「示例作品集」），标题栏显示它而不是临时目录名
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
@@ -216,6 +222,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 `apps/pc/sample-data` 是唯一的示范项目：首次启动时拷贝到「文稿/Novel Editor/sample-data」并自动打开，GUI E2E 也直接拷贝它作为 fixture。改它就是改用户第一眼看到的内容，同时也是改测试数据。
 
 - **版本与升级**：`.novel-editor/sample.json` 的 `sampleVersion` 标记示例版本。用户首次打开时示例被拷贝到「文稿/Novel Editor/sample-data」；之后每次启动（以及打开示例前）若内置版本更高，旧副本会整体改名备份为 `sample-data-旧版-<时间>`（保留用户改动与数据库），再拷贝新版并提示一次备份位置（core `syncSeededDirectory`）。**修改示例内容后必须递增 `sampleVersion`**，否则老用户看不到新内容
+- **内容指纹**：`sample.json` 还记录 `contentHash`（对除 sample.json 与本机运行产物（core `isSeedRuntimeArtifact`）外的全部文件，按相对路径排序后对「路径 + 字节」做 sha256，文本文件按 LF 计算）。`sample-data.test.ts` 重新计算，不一致时失败并提示「示例内容已变更，请递增 sampleVersion 并更新 contentHash」。改完示例（包括运行 generate-sample-data.mts 之后）执行 `pnpm exec tsx apps/pc/scripts/sample-content-hash.mts --bump`（递增版本并刷新指纹；`--write` 只刷新指纹，不带参数只检查）。core `readSeedVersion` / `syncSeededDirectory` 只读 `sampleVersion`，忽略 `contentHash`
 - 结构遵循 `ne init`，资料跟随作品（v3）：`.novel-editor/config.json`（作品集名「示例作品集」）、`novels/星河旅人/第一卷-离乡|第二卷-星海/00N-*.md`（6 章，正文带「第X幕 / 第X场」供幕剧演示）、`novels/星河旅人/资料/`（设定笔记）、`novels/星河旅人/资料/素材/`（成对的 `xxx` / `xxx-alt` 媒体，演示预览与版本对比）、`novels/星河旅人/资料/文档示例/`（docx / pptx / xlsx，含一个故意损坏的 docx）、`novels/星河旅人/资料/记忆/`（成长档案：林舟 / 苏晴）、`novels/剑与诗/`（2 章）与它自己的 `novels/剑与诗/资料/`（江湖风物.md）和 `资料/记忆/`（小规则之书 + 沈砚）；项目根没有 `资料/`、根目录 `欢迎使用.md`（功能导览，引用的路径都必须存在）、根目录 `排版示例.md`（Markdown 实时渲染演示，含一个故意写错的公式，E2E 依赖）
 - 人物 / 设定 / 大纲存在 SQLite 中，且按作品目录的绝对路径区分，不能随包分发数据库。改为 `.novel-editor/seed.json`（沿用全量导出的行结构，路径相对项目根）：`novels` 每部作品一条，`folder_path` 指向作品目录（如 `novels/星河旅人`，省略表示项目根 = 旧版单作品格式），内容行用 `novel_id` 归属作品（只有一部作品时可省略）。主进程 `db-init` 后调用 store `seedProjectData`，按作品判断：某作品目录还没有作品记录时才写入，绝不覆盖用户数据；任何带 seed.json 的项目都适用
 - 各作品的 `资料/记忆/` 与 `seed.json` 由 `apps/pc/scripts/generate-sample-data.mts` 通过 core 成长记录器 API 生成（固定时间戳）。修改章节或成长事件后运行 `pnpm exec tsx apps/pc/scripts/generate-sample-data.mts`，不要手改这些文件
@@ -273,7 +280,7 @@ ne open <path>                  # 用 GUI 打开指定文件夹/项目
 ne status                       # 输出当前项目状态（作品/字数、今日写作、GUI 打开的文件与未保存变更、daemon）
 ```
 
-- GUI 正文树与 CLI 同一口径：打开带 `.novel-editor/config.json` 的文件夹时，主进程 `refresh-folder` / `open-local-folder` 附带 core `readProjectLayout`（novelsDir + 作品列表），渲染进程 `utils/storyStructure.ts` 据此展示「作品 / 卷 / 章」（不显示 novels 容器），根目录文档（欢迎使用.md、README.md）放在文件面板底部默认折叠的「项目说明」分区，不计章数、不启用章节助手、不计入写作日志（core `isProjectDocumentPath`）；普通文件夹沿用按名称推断卷的规则，只把 README / 欢迎使用 这类说明文档（或子目录装着章节时根目录的非章节文档）视为项目文档。命名与排序（序号前缀、中文数字卷名）在 `packages/core/src/story-layout.ts`，GUI 通过 `@novel-editor/core/story-layout` 引入
+- GUI 正文树与 CLI 同一口径：打开带 `.novel-editor/config.json` 的文件夹时，主进程 `refresh-folder` / `open-local-folder` 附带 core `readProjectLayout`（novelsDir + 作品列表），渲染进程 `utils/storyStructure.ts` 据此展示「作品 / 卷 / 章」（不显示 novels 容器），根目录文档（欢迎使用.md、README.md）收在文件面板顶部项目名旁的「项目说明」按钮里（带数量徽标，点击弹出文档列表，没有根目录文档时不显示），不计章数、不启用章节助手、不计入写作日志（core `isProjectDocumentPath`）；普通文件夹沿用按名称推断卷的规则，只把 README / 欢迎使用 这类说明文档（或子目录装着章节时根目录的非章节文档）视为项目文档。命名与排序（序号前缀、中文数字卷名）在 `packages/core/src/story-layout.ts`，GUI 通过 `@novel-editor/core/story-layout` 引入
 - `ne status` 读取 `<project>/.novel-editor/session.json`（core `readGuiSession`）：GUI 渲染进程经 `gui-session-publish` IPC 防抖（500ms）上报打开的标签、当前文件、未保存文件，并每 60 秒心跳刷新；主进程补全 pid/版本/时间后写入。窗口销毁、切换文件夹时标记 `closed`
 - `--json` 下 `data.gui = { status, reason?, pid, appVersion, updatedAt, activeFile, openFiles, unsavedFiles }`；`status`: `active`（GUI 正在使用）/ `closed`（已关闭）/ `stale`（`reason`: `pid-not-alive` 进程已退出，或 `outdated` 超过 5 分钟未刷新）/ `none`（从未打开）。路径相对项目根，未命名标签为 `__untitled__:<名称>`
 - 未 `ne init` 的文件夹被 GUI 打开时，会话文件位于该文件夹的 `.novel-editor/`，在该目录执行 `ne status` 同样能看到
@@ -357,7 +364,7 @@ ne update [--check|--install]   # 检查/安装更新
 
 - 数据源: 作品的 `<作品>/资料/记忆/` 下的 JSON 文件（记忆库跟随作品；普通文件夹为 `<folder>/资料/记忆/`，作用域规则见「项目目录约定」）（带 `schemaVersion`，旧版本自动迁移，高版本拒绝读写），GUI、CLI 与 AI agent 直接读写同一份文件；Markdown 均为派生文件，每次保存时重新生成
 - 纯逻辑: `packages/core/src/growth/`（不依赖 Node/Electron，渲染进程通过 `@novel-editor/core/growth` 引入）；文件读写在 `growth/storage.ts`（仅主进程与 CLI 使用）
-- GUI: `RightPanel/GrowthView/` 同时用于右侧面板「成长」页签与工作区标签（`__workspace__:growth` 总览、`__workspace__:growth:<角色名>` 单个角色，宽布局）；入口还有文件面板「成长档案」分区（`FilePanel/GrowthSection`，等级徽章 + 新建，显示当前作品的成长卡）、人物详情的「成长档案」按钮、快捷键 `Mod+Shift+J`。索引与打开动作在 `hooks/useGrowthEntry.ts`，各视图写入后通过 `growth-memory-changed` 事件互相刷新（`utils/growthIndex.ts`）。主进程通道 `growth-*`（`main/handlers/growth.ts`）与 `memory-sync-snapshots`（`main/handlers/memory.ts`）
+- GUI: `RightPanel/GrowthView/` 只用于工作区标签（`__workspace__:growth` 总览、`__workspace__:growth:<角色名>` 单个角色，宽布局；右侧面板不再有「成长」视图）；入口还有文件面板「成长档案」分区（`FilePanel/GrowthSection`，等级徽章 + 新建，显示当前作品的成长卡）、人物详情的「成长档案」按钮、快捷键 `Mod+Shift+J`。索引与打开动作在 `hooks/useGrowthEntry.ts`，各视图写入后通过 `growth-memory-changed` 事件互相刷新（`utils/growthIndex.ts`）。主进程通道 `growth-*`（`main/handlers/growth.ts`）与 `memory-sync-snapshots`（`main/handlers/memory.ts`）
 - AI 推演只产出提案：GUI 用设置中心配置的 AI 执行；CLI 不保存 AI Key，只输出 prompt 与 JSON schema，由驱动 CLI 的 AI agent 执行后再 `apply-sim`。作者确认「采用此分支」之前不会写入任何数据
 - 生成资料清理逻辑（`cleanup-empty-generated-material-directories`，core `cleanupEmptyWorkMaterialDirectories`）只处理项目根与各作品 `资料/` 下的 AI资料/项目上下文/卷上下文/章上下文 空目录，不会删除 `资料/记忆/`
 
@@ -402,4 +409,6 @@ ne growth apply-sim <角色> <file|--stdin> [--branch <id>] [--dry-run]
 
 所有 `ne growth` 子命令都接受 `--novel <作品>`（`-n`）：记忆库跟随作品。省略时在作品目录中执行即为该作品，否则为项目中唯一的作品；项目有多部作品时报错（退出码 2）并提示 `--novel`；项目还没有作品时提示先 `ne novel create`；`--novel 未归属` 指项目根的旧版资料。普通文件夹（没有 `ne init`）整体是一部作品，不能使用 `--novel`（退出码 5）。
 
-GUI 文件面板（`FilePanel`）顶部是作品切换器（`FilePanel/WorkSwitcher`：当前作品 + 下拉列表（章数）+「新建作品」），下面的正文（当前作品的卷 / 章）、角色、设定、成长档案、资料都只显示当前作品（搜索时跨作品显示结果）；右侧面板、工作区标签（角色 / 设定 / 成长档案）、知识导出、AI 助手同样作用于当前作品。当前作品状态在 `useWorkspaceState`（`workScope` / `workScopePath`，纯函数在 `utils/workScope.ts`），切换与新建在 `hooks/useWorkScope.ts`：按项目记住上次选择（localStorage），打开另一部作品的章节时自动切换。根目录说明文档在底部默认折叠的「项目说明」（`FilePanel/ProjectNotesSection`）。
+GUI 文件面板（`FilePanel`）顶部是作品切换器（`FilePanel/WorkSwitcher`：当前作品 + 下拉列表（章数）+「新建作品」），下面的正文（当前作品的卷 / 章）、角色、设定、成长档案、资料都只显示当前作品（搜索时跨作品显示结果）；右侧面板、工作区标签（角色 / 设定 / 成长档案）、知识导出、AI 助手同样作用于当前作品。当前作品状态在 `useWorkspaceState`（`workScope` / `workScopePath`，纯函数在 `utils/workScope.ts`），切换与新建在 `hooks/useWorkScope.ts`：按项目记住上次选择（localStorage），打开另一部作品的章节时自动切换。根目录说明文档在项目名旁的「项目说明」按钮弹层（`FilePanel/ProjectDocsButton`）。
+
+文件面板顶部（`FilePanel/WorkspaceHeader`）：项目名 +「项目说明」｜打开文件夹、搜索、新建、刷新｜分隔线 + 折叠侧边栏（固定在最右端）。重命名不再使用铅笔按钮：项目名、正文树（`StoryTreeNode`）、角色 / 设定（`ObjectItemRow`）、资料（`FileTree`）一律**双击名称**或选中行按 **F2** 进入行内编辑（共用 `components/InlineRenameInput`：Enter 提交、Esc 取消并把焦点还给行、失焦提交，空名称或未变化视为取消，输入框内的按键 / 点击不冒泡到行），单击仍是打开；右键菜单「重命名」保留（对话框）。渲染进程的重命名处理（`handleRename` / `handleRenameProject` / `handleRenameCharacterNode` / `handleRenameLoreNode`）传入新名称时直接提交，不传时弹出输入框。成长档案行没有重命名（core 尚无对应 API）

@@ -123,15 +123,11 @@
       letter-spacing: 0.2px;
     }
 
-    :global(.cm-line.cm-focus-fade) {
-      filter: blur(2.6px);
-      opacity: 0.14;
-    }
-
-    :global(.cm-line.cm-focus-main) {
-      filter: none;
-      opacity: 1;
-      text-shadow: 0 0 10px rgba(255, 255, 255, 0.12);
+    // 渐进淡化的分档透明度在 focus-mode.ts 的 CodeMirror 主题中定义（不模糊，远处文字仍可阅读）
+    @media (prefers-reduced-motion: reduce) {
+      :global(.cm-content > *) {
+        transition: none;
+      }
     }
 
     :global(.cm-gutters) {

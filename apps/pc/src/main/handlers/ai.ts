@@ -265,7 +265,7 @@ export function registerAIHandlers(): void {
           webSecurity: true,
         },
         backgroundColor: '#1e1e1e',
-        title: '故事面板',
+        title: '大纲',
         autoHideMenuBar: true,
         frame: false,
       });

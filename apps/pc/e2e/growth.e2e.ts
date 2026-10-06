@@ -2,7 +2,8 @@
  * 成长档案首次使用流程（独立的 Electron 实例）
  *
  * fixture 同样拷贝自示例作品集，但去掉了「星河旅人」预置的 `资料/记忆/`（成长档案跟随作品），从「开始使用」起验证：
- * 创建记忆库 → 新建成长卡 → 引导 → 记一笔 → 提醒 → 总览 → 右侧摘要 → 人物详情入口。
+ * 创建记忆库 → 新建成长卡 → 引导 → 记一笔 → 提醒 → 总览 → 人物详情入口。
+ * 右侧「大纲」面板不再有「成长」视图，成长档案只在文件面板分区与工作区标签中。
  * 预置成长档案的展示见 app.e2e.ts「示例作品集」用例。
  */
 import { existsSync } from 'node:fs';
@@ -21,13 +22,7 @@ import {
   setupAppSuite,
   waitForSheet,
 } from './support/suite';
-import {
-  SEL,
-  contextMenuAction,
-  ensureRightPanelOpen,
-  selectWork,
-  switchStorylineMode,
-} from './support/workbench';
+import { SEL, contextMenuAction, ensureRightPanelOpen, selectWork } from './support/workbench';
 import { FIXTURE_MEMORY_DIR, FIXTURE_WORK } from './support/fixture';
 
 const suite = setupAppSuite({
@@ -43,9 +38,8 @@ describe('成长档案：首次使用', () => {
     await openChapter(page, '001-启程', '林舟背起行囊');
     await ensureSidebarOpen(page);
     await ensureRightPanelOpen(page);
-    await switchStorylineMode(page, '成长');
 
-    // 视图切换按钮在默认宽度与接近折叠阈值的窄宽度下都保持单行（不出现「目\n录」）
+    // 右侧「大纲」面板的视图切换按钮在默认宽度与接近折叠阈值的窄宽度下都保持单行（不出现「目\n录」）
     const toggleLayout = () =>
       page.evaluate<{ multiLine: string[]; count: number }>(() => {
         const buttons = Array.from(
@@ -59,7 +53,7 @@ describe('成长档案：首次使用', () => {
             .map((el) => el.innerText),
         };
       });
-    expect(await toggleLayout()).toEqual({ count: 5, multiLine: [] });
+    expect(await toggleLayout()).toEqual({ count: 3, multiLine: [] });
     await captureForReview(page, 'storyline-toggle-default');
     const wrapperSelector = '[class*="rightPanelWrapper"]';
     const originalWidth = await page.evaluate<string>(
@@ -69,7 +63,7 @@ describe('成长档案：首次使用', () => {
     await page.evaluate((selector: string) => {
       (document.querySelector(selector) as HTMLElement).style.width = '140px';
     }, wrapperSelector);
-    expect(await toggleLayout()).toEqual({ count: 5, multiLine: [] });
+    expect(await toggleLayout()).toEqual({ count: 3, multiLine: [] });
     await page.evaluate(() =>
       document.querySelector('[class*="storylineToolbar"]')?.scrollIntoView({ block: 'center' })
     );
@@ -82,10 +76,11 @@ describe('成长档案：首次使用', () => {
       originalWidth
     );
 
-    // 首次使用：右侧面板给出用途说明与「开始使用」
-    await page.waitForTarget({ text: '开始使用', within: SEL.storyline, exact: true });
-    await captureForReview(page, 'growth-v2-panel-setup');
-    await page.click({ text: '开始使用', within: SEL.storyline, exact: true });
+    // 首次使用：文件面板「成长档案」分区打开总览标签，给出用途说明与「开始使用」
+    await page.click('[aria-label="打开成长档案总览"]');
+    await page.waitForTarget({ text: '开始使用', within: GROWTH_WORKSPACE, exact: true });
+    await captureForReview(page, 'growth-v2-setup');
+    await page.click({ text: '开始使用', within: GROWTH_WORKSPACE, exact: true });
     await page.waitUntil(() => existsSync(path.join(memoryDir, '规则.json')), {
       message: '规则.json 已创建',
     });
@@ -305,25 +300,6 @@ describe('成长档案：首次使用', () => {
     await page.waitForTarget('[aria-label="打开 白芷 的成长卡"]');
     await page.waitForTarget('[aria-label="打开 林舟 的成长卡"]');
     await captureForReview(page, 'growth-v2-overview');
-
-    // 右侧面板：本章出场角色的摘要 + 记一笔
-    await openChapter(page, '001-启程', '林舟背起行囊');
-    await ensureRightPanelOpen(page);
-    await switchStorylineMode(page, '成长');
-    await page.waitForTarget({ text: '本章出场', within: SEL.storyline });
-    await page.waitForTarget(`${SEL.storyline} [aria-label="为 林舟 记一笔"]`);
-    // 关掉堆叠的 toast，避免遮住右侧面板底部的摘要
-    await page.evaluate(() => {
-      document
-        .querySelectorAll<HTMLButtonElement>('button[aria-label="关闭通知"]')
-        .forEach((button) => button.click());
-      document
-        .querySelector('[class*="storylineView"] [aria-label="为 林舟 记一笔"]')
-        ?.scrollIntoView({ block: 'center' });
-    });
-    await page.waitForGone('button[aria-label="关闭通知"]');
-    await captureForReview(page, 'growth-v2-panel-summary');
-    await switchStorylineMode(page, '目录');
   });
 
   it('4. 人物详情的「成长档案」按钮：为人物新建并打开成长卡', async () => {

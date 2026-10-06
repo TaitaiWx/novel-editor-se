@@ -22,6 +22,7 @@ import { useScopedContentReader } from './useScopedContentReader';
 import { useFileOperations } from './useFileOperations';
 import { useEditorInteractions } from './useEditorInteractions';
 import { useGlobalShortcuts } from './useGlobalShortcuts';
+import { useFocusModeEscape } from './useFocusModeEscape';
 import { useProjectExport } from './useProjectExport';
 import { useAiWindowBridge } from './useAiWindowBridge';
 import { useRightPanelPopout } from './useRightPanelPopout';
@@ -40,6 +41,8 @@ import { useAssistantDialogHandlers } from './useAssistantDialogHandlers';
 import { useGrowthEntry } from './useGrowthEntry';
 import { useGuiSessionPublisher } from './useGuiSessionPublisher';
 import { useWorkScope } from './useWorkScope';
+import { useInspirationDialog } from './useInspirationDialog';
+import { useAssistantContext } from './useAssistantContext';
 
 /**
  * 应用组合根的全部 hook 调用：声明各领域状态，并按依赖把状态与动作接到各业务 hook。
@@ -137,6 +140,8 @@ export function useAppController() {
     ...editor,
     ...growthEntry,
   });
+  // 专注模式下 Esc 退出（弹层 / 搜索面板 / 输入法组字优先消费 Esc）
+  useFocusModeEscape(layoutState.focusMode, tabs.toggleFocusMode);
   const projectExport = useProjectExport({ ...workspaceState, ...uiState });
   useAiWindowBridge({ ...editorState, ...aiState, ...uiState, ...tabs });
   const { handlePopOutRightPanel } = useRightPanelPopout({
@@ -179,6 +184,13 @@ export function useAppController() {
     ...loader,
     ...contentReader,
   });
+  // 章节关联资料（右键菜单「关联到当前章」与 AI 助手「上下文」共用）；
+  // 右键菜单没有 effect，提前到它之前调用不改变 effect 顺序
+  const chapterMaterials = useChapterMaterials({
+    ...workspaceState,
+    ...entitiesState,
+    ...derived,
+  });
   const { contextMenuItems } = useContextMenuItems({
     ...workspaceState,
     ...entitiesState,
@@ -191,15 +203,19 @@ export function useAppController() {
     ...projectExport,
     ...libraryGeneration,
     ...scopedGeneration,
+    ...derived,
+    ...chapterMaterials,
   });
 
-  // ─── 章节资料 / 助手上下文 / 工作区标签内容 ─────────────────────
-  const { handleAddChapterMaterial, handleRemoveChapterMaterial } = useChapterMaterials({
-    ...workspaceState,
-    ...entitiesState,
-    ...derived,
-  });
+  // ─── 助手上下文 / 工作区标签内容 ─────────────────────────────
   useScopedAssistantArtifacts({ ...aiState, ...derived });
+  const assistantContext = useAssistantContext({
+    ...aiState,
+    ...derived,
+    ...scopedGeneration,
+    ...chapterMaterials,
+    ...tabs,
+  });
   const { workspaceTabLabels, editorCharacterHighlights, specialTabContent } =
     useWorkspaceTabContent({
       ...workspaceState,
@@ -223,6 +239,8 @@ export function useAppController() {
     ...editorState,
     ...aiState,
   });
+  // 灵感抽签弹窗（工具栏按钮 / 快捷键 / 大纲版本来源）；只订阅打开事件，无顺序依赖
+  const inspiration = useInspirationDialog(editorState);
 
   return {
     workspaceState,
@@ -248,12 +266,12 @@ export function useAppController() {
     projectExport,
     handlePopOutRightPanel,
     contextMenuItems,
-    handleAddChapterMaterial,
-    handleRemoveChapterMaterial,
+    assistantContext,
     workspaceTabLabels,
     editorCharacterHighlights,
     specialTabContent,
     handleAssistantApplyFix,
     handleAssistantPreviewDiff,
+    inspiration,
   };
 }

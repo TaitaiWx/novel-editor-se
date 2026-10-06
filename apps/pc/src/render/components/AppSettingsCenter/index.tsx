@@ -50,7 +50,13 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="设置中心"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
           <h3>设置中心</h3>
           <button className={styles.closeButton} onClick={onClose} aria-label="关闭设置">

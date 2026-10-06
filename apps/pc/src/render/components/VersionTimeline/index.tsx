@@ -105,7 +105,13 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
 
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
-      <div className={`${styles.modal} ${previewState ? styles.previewModal : ''}`} ref={modalRef}>
+      <div
+        className={`${styles.modal} ${previewState ? styles.previewModal : ''}`}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="版本历史"
+      >
         {/* 模态框顶部 */}
         <div className={styles.modalHeader}>
           <div className={styles.modalTitle}>

@@ -15,6 +15,7 @@ import {
   createWordWrapExtension,
   darkTheme,
   focusLineDecorations,
+  scrollbarAutoHide,
   transientLineHighlightField,
 } from '../editor-extensions';
 import type { CursorPosition } from '../types';
@@ -150,6 +151,7 @@ export function useCodeMirrorView({
           ]),
           transientLineHighlightField,
           darkTheme,
+          scrollbarAutoHide,
           inlineDiffField,
           inlineDiffTheme,
           placeholder('开始输入您的内容...'),

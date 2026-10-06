@@ -69,7 +69,13 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose, onOpenS
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="键盘快捷键"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
           <h3>键盘快捷键</h3>
           <button className={styles.closeButton} onClick={onClose} aria-label="关闭">

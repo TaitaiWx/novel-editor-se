@@ -3,6 +3,7 @@ import { cleanupKeyboardShortcuts } from '@/render/components/ShortcutsHelp/shor
 import { initKeyboardShortcuts } from '@/render/components/ShortcutsHelp/shortcuts/initKeyboardShortcuts';
 import { isImeComposing } from '@/render/utils/ime';
 import { matchShortcutEvent } from '@/render/utils/appSettings';
+import { requestOpenInspiration } from '@/render/components/InspirationDialog/inspiration';
 import type { TabsState } from './state/useTabsState';
 import type { LayoutState } from './state/useLayoutState';
 import type { SettingsState } from './state/useSettingsState';
@@ -80,6 +81,11 @@ export function useGlobalShortcuts(ctx: UseGlobalShortcutsContext) {
       if (matchShortcutEvent(e, appSettings.shortcuts.openGrowth)) {
         e.preventDefault();
         handleOpenGrowth(null);
+        return;
+      }
+      if (matchShortcutEvent(e, appSettings.shortcuts.openInspiration)) {
+        e.preventDefault();
+        requestOpenInspiration();
         return;
       }
       // Cmd+N: 新建标签
