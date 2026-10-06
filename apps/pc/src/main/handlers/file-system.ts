@@ -12,7 +12,7 @@ import { watch, type FSWatcher, existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import {
-  cleanupEmptyGeneratedMaterialDirectories,
+  cleanupEmptyWorkMaterialDirectories,
   copyProjectTo,
   createDirectory,
   createFile,
@@ -26,6 +26,7 @@ import {
   pastePaths,
   readFileBinary,
   readFolderTree,
+  migrateLegacyProjectMaterials,
   readProjectLayout,
   readTextFileWithEncoding,
   recordStoryFileSave,
@@ -46,6 +47,16 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** 外部链接白名单：只允许 http(s) 与 mailto，拒绝 file: / javascript: 等 */
+export function isSafeExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:', 'mailto:'].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
 /** 示例数据：用户文档目录下的副本，以及随应用分发的种子目录 */
 /** 读取保存前的文件内容；文件不存在（新建）时返回 null */
 async function readPreviousContent(filePath: string): Promise<string | null> {
@@ -61,6 +72,14 @@ async function readPreviousContent(filePath: string): Promise<string | null> {
  * 渲染进程据此按「作品 / 卷 / 章」展示正文，与 CLI 的 `ne novel list` / `ne chapter list` 同一口径
  */
 async function readWorkspaceTree(folderPath: string) {
+  // 旧版项目根 资料/ 在只有一部作品时整体移入该作品（资料跟随作品，见 core work-scope.ts）
+  await migrateLegacyProjectMaterials(folderPath)
+    .then((result) => {
+      if (result.migrated) console.info(`[project] 已把项目资料移入作品: ${result.to}`);
+    })
+    .catch((error: unknown) => {
+      console.warn('[project] 迁移项目资料失败，保留在原处:', errorMessage(error));
+    });
   const tree = await readFolderTree(folderPath);
   const project = await readProjectLayout(folderPath).catch((error: unknown) => {
     console.warn('[project] 读取项目配置失败，按普通文件夹展示:', errorMessage(error));
@@ -157,6 +176,15 @@ export function registerFileSystemHandlers(): void {
     }
   });
 
+  // 打开外部链接（Markdown 实时预览中 ⌘/Ctrl + 点击）：只允许 http(s) / mailto
+  ipcMain.handle('open-external-url', async (_event, url: unknown) => {
+    if (typeof url !== 'string' || !isSafeExternalUrl(url)) {
+      throw new Error('不支持打开该链接');
+    }
+    await shell.openExternal(url);
+    return { success: true };
+  });
+
   ipcMain.handle('watch-file', (_event, filePath: string) => {
     if (fileWatchers.has(filePath)) return;
     try {
@@ -224,7 +252,7 @@ export function registerFileSystemHandlers(): void {
     'cleanup-empty-generated-material-directories',
     async (_event, folderPath: string) => {
       try {
-        const removed = await cleanupEmptyGeneratedMaterialDirectories(folderPath);
+        const removed = await cleanupEmptyWorkMaterialDirectories(folderPath);
         return { success: true, removed };
       } catch {
         throw new Error(`Failed to cleanup generated material directories: ${folderPath}`);

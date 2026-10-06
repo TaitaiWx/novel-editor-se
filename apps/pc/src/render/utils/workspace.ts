@@ -1,5 +1,5 @@
 import { parseChineseInteger } from '@novel-editor/basic-algorithm';
-import { isGeneratedMaterialPath } from '@novel-editor/core/material';
+import { GENERATED_MATERIAL_ROOT_NAME, isGeneratedMaterialPath } from '@novel-editor/core/material';
 import type { FileNode } from '../types';
 import type { Character, LoreEntry } from '../components/RightPanel/types';
 
@@ -382,6 +382,19 @@ export interface SplitWorkspaceOptions {
   storyRoots?: readonly string[];
 }
 
+function parentPathOf(path: string): string {
+  const normalized = path.replace(/[\\/]+$/, '');
+  const index = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+  return index > 0 ? normalized.slice(0, index) : normalized;
+}
+
+function isWorkMaterialDirectory(node: FileNode, storyRoots: ReadonlySet<string>): boolean {
+  return (
+    node.name === GENERATED_MATERIAL_ROOT_NAME &&
+    storyRoots.has(normalizePath(parentPathOf(node.path)))
+  );
+}
+
 function partitionWorkspaceFiles(
   nodes: FileNode[],
   inheritedZone: WorkspaceZone,
@@ -396,6 +409,11 @@ function partitionWorkspaceFiles(
 
   nodes.forEach((node) => {
     if (node.type === 'directory') {
+      // 作品自己的资料目录（`<作品>/资料/`，含记忆库）不是卷，归入资料分区
+      if (isWorkMaterialDirectory(node, storyRoots)) {
+        materialNodes.push(node);
+        return;
+      }
       const locked = lockedStory || storyRoots.has(normalizePath(node.path));
       const zone = locked ? 'story' : classifyDirectoryZone(node.name, inheritedZone);
       const partitioned = partitionWorkspaceFiles(node.children || [], zone, storyRoots, locked);

@@ -88,7 +88,7 @@ export const growthWorldCommands: CommandSpec[] = [
       'ne growth party seen 莉娜 52 --important',
     ],
     async run(ctx, args) {
-      const { root, memory } = await requireMemory(ctx);
+      const { root, memory } = await requireMemory(ctx, args);
       const action = str(args, 'action') ?? 'list';
       const rest = list(args, 'args');
       let book = memory.party;
@@ -182,7 +182,7 @@ export const growthWorldCommands: CommandSpec[] = [
       'ne growth map visit 霜城 阿尔 --chapter 15',
     ],
     async run(ctx, args) {
-      const { root, memory } = await requireMemory(ctx);
+      const { root, memory } = await requireMemory(ctx, args);
       const action = str(args, 'action') ?? 'list';
       const rest = list(args, 'args');
       let atlas = memory.atlas;
@@ -261,7 +261,7 @@ export const growthWorldCommands: CommandSpec[] = [
       },
     ],
     async run(ctx, args) {
-      const { memory } = await requireMemory(ctx);
+      const { memory } = await requireMemory(ctx, args);
       const result = checkMemory(memory, {
         currentChapter: optionalChapter(args, 'chapter'),
         forgottenAfter: optionalChapter(args, 'after'),
@@ -330,7 +330,7 @@ export const growthWorldCommands: CommandSpec[] = [
       'ne growth simulate 阿尔 --mode free --json',
     ],
     async run(ctx, args) {
-      const { memory } = await requireMemory(ctx);
+      const { memory } = await requireMemory(ctx, args);
       const sheet = requireSheet(memory, requireStr(args, 'character'));
       const mode = (str(args, 'mode') ?? 'controlled') as GrowthSimulationMode;
       const choices = splitList(str(args, 'choices'));
@@ -388,7 +388,7 @@ export const growthWorldCommands: CommandSpec[] = [
       'cat result.json | ne growth apply-sim 阿尔 --stdin --dry-run --json',
     ],
     async run(ctx, args) {
-      const { root, memory } = await requireMemory(ctx);
+      const { root, memory } = await requireMemory(ctx, args);
       const sheet = requireSheet(memory, requireStr(args, 'character'));
       const file = str(args, 'file');
       if (!file && !bool(args, 'stdin')) {

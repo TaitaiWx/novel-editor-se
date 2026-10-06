@@ -23,7 +23,7 @@ import {
   findNodeInTree,
   getParentDirectory,
   isDraftLikeName,
-  isMaterialLikeName,
+  findScopeMaterialRoot,
   stripExtension,
 } from '@/render/app/fileTreeUtils';
 import { resolveDefaultWorkPath } from '@/render/utils/storyStructure';
@@ -38,7 +38,7 @@ import type { ProjectLoaderApi } from './useProjectLoader';
 
 export type UseWorkspaceCreationContext = Pick<
   WorkspaceState,
-  'files' | 'filesRef' | 'folderPath' | 'folderPathRef' | 'projectLayout'
+  'files' | 'filesRef' | 'folderPath' | 'folderPathRef' | 'projectLayout' | 'workScopePathRef'
 > &
   Pick<
     TabsState,
@@ -82,6 +82,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     setWorkspaceLoreEntries,
     toast,
     untitledCounterRef,
+    workScopePathRef,
   } = ctx;
 
   const handleCreateFile = useCallback(() => {
@@ -96,15 +97,14 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
 
   const handleCreateMaterialDirectory = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
-    const folder = folderPathRef.current;
+    // 资料跟随作品：建在当前作品的 资料/ 下（普通文件夹为文件夹本身的 资料/）
+    const folder = workScopePathRef.current;
     if (!ipc || !folder) return;
 
     const name = await dialog.prompt('新建资料目录', '请输入资料目录名称', '新资料');
     if (!name?.trim()) return;
 
-    const defaultRoot =
-      filesRef.current.find((node) => node.type === 'directory' && isMaterialLikeName(node.name))
-        ?.path ?? null;
+    const defaultRoot = findScopeMaterialRoot(filesRef.current, folder)?.path ?? null;
 
     try {
       // 资料根目录的创建也放在 try 内，失败时给出提示而不是抛出未处理的异常
@@ -122,15 +122,16 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     } catch (error) {
       toast.error(`新建资料目录失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [dialog, filesRef, folderPathRef, refreshCurrentFolder, toast]);
+  }, [dialog, filesRef, refreshCurrentFolder, toast, workScopePathRef]);
 
+  // 人物 / 设定跟随作品：归属当前作品的作品记录
   const getCurrentNovelId = useCallback(async (): Promise<number | null> => {
     const ipc = window.electron?.ipcRenderer;
-    const folder = folderPathRef.current;
+    const folder = workScopePathRef.current;
     if (!ipc || !folder) return null;
     const novel = (await ipc.invoke('db-novel-get-by-folder', folder)) as { id: number } | null;
     return novel?.id ?? null;
-  }, [folderPathRef]);
+  }, [workScopePathRef]);
 
   const handleCreateCharacter = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
@@ -186,7 +187,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
 
   const handleCreateLoreEntry = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
-    const folder = folderPathRef.current;
+    const folder = workScopePathRef.current;
     if (!ipc || !folder) return;
 
     const title = await dialog.prompt('新建设定', '请输入设定名称', '新设定');
@@ -213,7 +214,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     } catch (error) {
       toast.error(`新建设定失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-  }, [dialog, folderPathRef, openFileInTab, setWorkspaceLoreEntries, toast]);
+  }, [dialog, openFileInTab, setWorkspaceLoreEntries, toast, workScopePathRef]);
 
   const resolveStoryCreateTargetDir = useCallback(
     (kind: StoryCreateKind): string | null => {
@@ -226,7 +227,11 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
         : null;
 
       // `ne init` 项目：卷建在当前作品下；章节不能落在项目根目录（那里是项目文档）
-      const defaultWorkPath = resolveDefaultWorkPath(projectLayout, activeVolumePath ?? currentTab);
+      const defaultWorkPath = resolveDefaultWorkPath(
+        projectLayout,
+        activeVolumePath ?? currentTab,
+        workScopePathRef.current
+      );
       if (kind === 'volume') return defaultWorkPath ?? folder;
 
       if (kind === 'chapter') {
@@ -253,7 +258,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
 
       return folder;
     },
-    [activeTabRef, filesRef, folderPathRef, projectLayout]
+    [activeTabRef, filesRef, folderPathRef, projectLayout, workScopePathRef]
   );
 
   const suggestStoryCreateName = useCallback(

@@ -70,6 +70,7 @@ function setup(
     filesRef: ref<FileNode[]>(files),
     folderPath: folder,
     folderPathRef: ref<string | null>(folder),
+    workScopePathRef: ref<string | null>(folder),
     openFileInTab: vi.fn(),
     openTabsRef: ref<string[]>([]),
     refreshCurrentFolder: vi.fn(async () => undefined),

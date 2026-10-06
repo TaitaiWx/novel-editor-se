@@ -49,6 +49,7 @@ export type UseWorkspaceTabContentContext = Pick<
   | 'selectedVolumePath'
 > &
   Pick<WorkspaceState, 'dbReady' | 'files' | 'folderPath' | 'storyOrderMap'> &
+  Partial<Pick<WorkspaceState, 'workScopePath'>> &
   Pick<TabsState, 'openTabs'> &
   Pick<EditorState, 'editorContent'> &
   Pick<
@@ -137,6 +138,8 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
     () => Object.fromEntries((growthIndex?.sheets ?? []).map((item) => [item.name, item.level])),
     [growthIndex]
   );
+  // 角色 / 设定 / 成长档案标签跟随当前作品（普通文件夹为文件夹本身）
+  const scopePath = ctx.workScopePath ?? folderPath;
   const activeGrowthTab = isGrowthWorkspaceTab(activeWorkspaceTab) ? activeWorkspaceTab : null;
 
   const editorCharacterHighlights = useMemo(
@@ -157,8 +160,8 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
     () => ({
       [WORKSPACE_TAB_CHARACTERS]: (
         <CharactersView
-          key={`characters-root-${workspaceCharactersVersion}`}
-          folderPath={folderPath}
+          key={`characters-root-${scopePath ?? ''}-${workspaceCharactersVersion}`}
+          folderPath={scopePath}
           content={editorContent}
           onCharactersChange={syncWorkspaceCharacters}
           onOpenSourceLocation={handleOpenSourceLocation}
@@ -166,8 +169,8 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
       ),
       [WORKSPACE_TAB_LORE]: (
         <LoreView
-          key={`lore-root-${workspaceLoreVersion}`}
-          folderPath={folderPath}
+          key={`lore-root-${scopePath ?? ''}-${workspaceLoreVersion}`}
+          folderPath={scopePath}
           content={editorContent}
           onEntriesChange={syncWorkspaceLoreEntries}
         />
@@ -177,7 +180,7 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
             [activeWorkspaceTab as string]: (
               <CharactersView
                 key={`character-${selectedCharacterTabId}-${workspaceCharactersVersion}`}
-                folderPath={folderPath}
+                folderPath={scopePath}
                 content={editorContent}
                 initialSelectedCharacterId={selectedCharacterTabId}
                 onCharactersChange={syncWorkspaceCharacters}
@@ -193,7 +196,7 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
             [activeWorkspaceTab as string]: (
               <LoreView
                 key={`lore-${selectedLoreEntryTabId}-${workspaceLoreVersion}`}
-                folderPath={folderPath}
+                folderPath={scopePath}
                 content={editorContent}
                 initialEntryId={selectedLoreEntryTabId}
                 onEntriesChange={syncWorkspaceLoreEntries}
@@ -205,8 +208,8 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
         ? {
             [activeGrowthTab]: (
               <GrowthView
-                key={`${activeGrowthTab}-${folderPath ?? ''}`}
-                folderPath={folderPath}
+                key={`${activeGrowthTab}-${scopePath ?? ''}`}
+                folderPath={scopePath}
                 dbReady={dbReady}
                 layout="workspace"
                 initialCharacter={parseGrowthWorkspaceTab(activeGrowthTab)}
@@ -249,12 +252,12 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
       closeTab,
       dbReady,
       editorContent,
-      folderPath,
       growthChapter,
       growthLevels,
       handleCreateGrowthSheet,
       openFileInTab,
       handleCreateStoryItem,
+      scopePath,
       handleOpenGrowth,
       handleOpenSourceLocation,
       selectedCharacterTabId,

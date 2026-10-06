@@ -1,9 +1,11 @@
 /**
- * 生成示例作品集（apps/pc/sample-data）中由程序维护的数据：
+ * 生成示例作品集（apps/pc/sample-data）中由程序维护的数据。资料与成长档案跟随作品：
  *
- * - 资料/记忆/：成长档案（规则之书、林舟 / 苏晴 的成长卡、队伍、地图，以及派生的 Markdown），
- *   全部通过 @novel-editor/core 的成长记录器 API 计算，保证与 GUI / CLI 写入的格式完全一致
- * - .novel-editor/seed.json：人物、设定、大纲种子（首次打开示例时写入该项目的 SQLite）
+ * - novels/星河旅人/资料/记忆/：成长档案（规则之书、林舟 / 苏晴 的成长卡、队伍、地图，以及派生的 Markdown）
+ * - novels/剑与诗/资料/记忆/：第二部作品自己的小规则之书与沈砚的成长卡
+ *   以上全部通过 @novel-editor/core 的成长记录器 API 计算，保证与 GUI / CLI 写入的格式完全一致
+ * - .novel-editor/seed.json：按作品分开的人物、设定、大纲种子（novels[].folder_path 指向作品目录，
+ *   内容行用 novel_id 归属作品；首次打开示例时写入该项目的 SQLite）
  *
  * 修改故事章节后同步调整这里的事件，然后运行：
  *   pnpm exec tsx apps/pc/scripts/generate-sample-data.mts
@@ -34,11 +36,16 @@ import {
   type PartyBook,
 } from '@novel-editor/core';
 import type { ProjectSeedData } from '@novel-editor/store';
+import { POEM_WORK_DIR, buildPoemMemory, buildPoemSeedParts } from './sample-data-poem.mts';
 
 export const SAMPLE_DATA_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../sample-data'
 );
+
+/** 两部示例作品的目录（相对项目根）：各自的 资料/ 与 资料/记忆/ 都在作品目录下 */
+export const STAR_WORK_DIR = 'novels/星河旅人';
+export { POEM_WORK_DIR };
 
 /** 固定时间戳：保证每次生成的文件完全一致 */
 function at(chapter: number, minute = 0): string {
@@ -344,12 +351,6 @@ export function buildSampleSeed(): ProjectSeedData {
       description: '总跟在林舟身后的小孩，答应替他看好铁匠铺。',
       attributes: characterAttributes('secondary', [], []),
     },
-    {
-      name: '沈砚',
-      role: '主角 ·《剑与诗》',
-      description: '江南少年，想学剑，却被一位不会武功的诗人要求先学会听雨。',
-      attributes: characterAttributes('major', [], []),
-    },
   ];
 
   const lore: Array<[string, string, string, string[]]> = [
@@ -370,13 +371,12 @@ export function buildSampleSeed(): ProjectSeedData {
     [
       'system',
       '道途抉择（三选一）',
-      '3 级时在战士 / 法师 / 牧师三条道途中选择其一，选定后不可更改。具体数值见 资料/记忆/规则.json。',
+      '3 级时在战士 / 法师 / 牧师三条道途中选择其一，选定后不可更改。具体数值见本作品的 资料/记忆/规则.json。',
       ['成长'],
     ],
     ['term', '星图碎片', '刻有星线的碎片，靠近星辉灯塔时发热、发光。', ['道具']],
     ['term', '青石', '秦伯打造的旧剑，剑身有一道裂纹。「它不快，但不会背叛你。」', ['道具']],
   ];
-
   const outlines: Array<Record<string, unknown>> = [];
   let nextId = 1;
   const addOutline = (
@@ -448,32 +448,63 @@ export function buildSampleSeed(): ProjectSeedData {
     scope: ['volume', VOLUME_TWO],
   });
 
-  return {
-    version: '1.0.0',
-    novels: [{ id: 1, name: '示例作品集', description: '小说编辑器内置示例：星河旅人 / 剑与诗' }],
-    characters: characters.map((row, index) => ({ ...row, novel_id: 1, sort_order: index })),
-    world_settings: lore.map(([category, title, content, tags]) => ({
-      novel_id: 1,
+  const poem = buildPoemSeedParts(characterAttributes);
+
+  const toLore =
+    (novelId: number) =>
+    ([category, title, content, tags]: [string, string, string, string[]]) => ({
+      novel_id: novelId,
       category,
       title,
       content,
       tags: JSON.stringify(tags),
-    })),
-    outlines: outlines.map((row) => ({ ...row, novel_id: 1 })),
+    });
+
+  return {
+    version: '1.0.0',
+    // 人物 / 设定 / 大纲跟随作品：每部作品一条记录，folder_path 相对项目根
+    novels: [
+      {
+        id: 1,
+        name: '星河旅人',
+        folder_path: STAR_WORK_DIR,
+        description: '主示例：6 章冒险小说，分两卷',
+      },
+      {
+        id: 2,
+        name: '剑与诗',
+        folder_path: POEM_WORK_DIR,
+        description: '第二部作品：2 章武侠短篇，演示多作品各自的资料',
+      },
+    ],
+    characters: [
+      ...characters.map((row, index) => ({ ...row, novel_id: 1, sort_order: index })),
+      ...poem.characters.map((row, index) => ({ ...row, novel_id: 2, sort_order: index })),
+    ],
+    world_settings: [...lore.map(toLore(1)), ...poem.lore.map(toLore(2))],
+    outlines: [
+      ...outlines.map((row) => ({ ...row, novel_id: 1 })),
+      ...poem.outlines.map((row) => ({ ...row, novel_id: 2 })),
+    ],
   };
 }
 
 // ─── 写入 ───────────────────────────────────────────────────────────────────
 
-/** 把生成的数据写到 root（默认 apps/pc/sample-data），会先清空 资料/记忆/ */
-export async function writeSampleData(root: string = SAMPLE_DATA_DIR): Promise<void> {
-  const memory = buildSampleMemory();
-  await rm(path.join(root, '资料', '记忆'), { recursive: true, force: true });
+/** 把一部作品的记忆库写到 `<workRoot>/资料/记忆/`（先清空） */
+async function writeWorkMemory(workRoot: string, memory: MemoryBundle): Promise<void> {
+  await rm(path.join(workRoot, '资料', '记忆'), { recursive: true, force: true });
   // 走 core 的保存函数：JSON 规范化 + 原子写入 + 重新生成 README.md / 角色/*.md
-  await saveRuleset(root, memory.ruleset);
-  await saveParty(root, memory.party);
-  await saveAtlas(root, memory.atlas);
-  for (const sheet of memory.sheets) await saveSheet(root, sheet);
+  await saveRuleset(workRoot, memory.ruleset);
+  await saveParty(workRoot, memory.party);
+  await saveAtlas(workRoot, memory.atlas);
+  for (const sheet of memory.sheets) await saveSheet(workRoot, sheet);
+}
+
+/** 把生成的数据写到 root（默认 apps/pc/sample-data），会先清空各作品的 资料/记忆/ */
+export async function writeSampleData(root: string = SAMPLE_DATA_DIR): Promise<void> {
+  await writeWorkMemory(path.join(root, ...STAR_WORK_DIR.split('/')), buildSampleMemory());
+  await writeWorkMemory(path.join(root, ...POEM_WORK_DIR.split('/')), buildPoemMemory(at));
 
   const seedFile = path.join(root, '.novel-editor', 'seed.json');
   await mkdir(path.dirname(seedFile), { recursive: true });

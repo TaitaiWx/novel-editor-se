@@ -54,6 +54,13 @@ describe('PanelResizer', () => {
     fireEvent.mouseDown(container.firstChild as HTMLElement);
     expect(onMouseDown).toHaveBeenCalledTimes(1);
   });
+
+  it('作为竖向分隔条暴露无障碍名称', () => {
+    render(<PanelResizer onMouseDown={() => {}} label="调整左侧面板宽度" />);
+    const separator = screen.getByRole('separator', { name: '调整左侧面板宽度' });
+    expect(separator.getAttribute('aria-orientation')).toBe('vertical');
+    expect(separator.className).toContain('panelResizer');
+  });
 });
 
 describe('ActionButtons', () => {

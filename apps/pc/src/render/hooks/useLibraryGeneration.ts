@@ -21,7 +21,7 @@ import {
 import {
   buildUniqueMarkdownName,
   findNodeInTree,
-  isMaterialLikeName,
+  findScopeMaterialRoot,
 } from '@/render/app/fileTreeUtils';
 import {
   getAIGenerationScopeLabel,
@@ -37,7 +37,7 @@ import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 import type { ProjectLoaderApi } from './useProjectLoader';
 import type { ScopedContentReader } from './useScopedContentReader';
 
-export type UseLibraryGenerationContext = Pick<WorkspaceState, 'filesRef' | 'folderPathRef'> &
+export type UseLibraryGenerationContext = Pick<WorkspaceState, 'filesRef' | 'workScopePathRef'> &
   Pick<
     EntitiesState,
     | 'bumpWorkspaceCharactersVersion'
@@ -60,7 +60,7 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
     bumpWorkspaceLoreVersion,
     ensurePersistedAiReady,
     filesRef,
-    folderPathRef,
+    workScopePathRef,
     getCurrentNovelId,
     refreshCurrentFolder,
     resolveAIGenerationContext,
@@ -72,7 +72,7 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
   const handleGenerateCharacters = useCallback(
     async (scope: AIGenerationScope) => {
       const ipc = window.electron?.ipcRenderer;
-      const folder = folderPathRef.current;
+      const folder = workScopePathRef.current;
       if (!ipc || !folder) return;
       const persistedSettings = await ensurePersistedAiReady();
       if (!persistedSettings) return;
@@ -238,7 +238,7 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
     [
       bumpWorkspaceCharactersVersion,
       ensurePersistedAiReady,
-      folderPathRef,
+      workScopePathRef,
       getCurrentNovelId,
       resolveAIGenerationContext,
       setWorkspaceCharacters,
@@ -249,7 +249,7 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
   const handleGenerateLoreEntries = useCallback(
     async (scope: AIGenerationScope) => {
       const ipc = window.electron?.ipcRenderer;
-      const folder = folderPathRef.current;
+      const folder = workScopePathRef.current;
       if (!ipc || !folder) return;
       const persistedSettings = await ensurePersistedAiReady();
       if (!persistedSettings) return;
@@ -312,7 +312,7 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
     [
       bumpWorkspaceLoreVersion,
       ensurePersistedAiReady,
-      folderPathRef,
+      workScopePathRef,
       resolveAIGenerationContext,
       setWorkspaceLoreEntries,
       toast,
@@ -322,7 +322,7 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
   const handleGenerateMaterials = useCallback(
     async (scope: AIGenerationScope) => {
       const ipc = window.electron?.ipcRenderer;
-      const folder = folderPathRef.current;
+      const folder = workScopePathRef.current;
       if (!ipc || !folder) return;
       const persistedSettings = await ensurePersistedAiReady();
       if (!persistedSettings) return;
@@ -345,9 +345,7 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
         }
 
         let createdMaterialRoot = false;
-        const existingMaterialRoot = filesRef.current.find(
-          (node) => node.type === 'directory' && isMaterialLikeName(node.name)
-        );
+        const existingMaterialRoot = findScopeMaterialRoot(filesRef.current, folder);
         const defaultMaterialRoot =
           existingMaterialRoot?.path ??
           ((createdMaterialRoot = true),
@@ -420,7 +418,7 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
       }
     },
     [
-      folderPathRef,
+      workScopePathRef,
       ensurePersistedAiReady,
       toast,
       resolveAIGenerationContext,

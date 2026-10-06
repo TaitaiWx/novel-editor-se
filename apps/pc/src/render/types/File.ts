@@ -16,6 +16,8 @@ export interface WorkspaceProjectLayout {
   novelsPath: string;
   /** 作品名（novelsDir 下的作品目录，与 `ne novel list` 一致） */
   novels: string[];
+  /** 项目根下还有旧版布局的 `资料/`（不属于任何作品，GUI 显示为「未归属」） */
+  hasProjectMaterials?: boolean;
 }
 
 export interface OpenLocalResult {

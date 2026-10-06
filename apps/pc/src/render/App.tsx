@@ -12,7 +12,8 @@ import AppSettingsCenter from './components/AppSettingsCenter';
 import KnowledgeExportDialog from './components/KnowledgeExportDialog';
 import AboutDialog from './components/AboutDialog';
 import styles from './App.module.scss';
-import { CENTER_MIN, RIGHT_COLLAPSED_WIDTH } from '@/render/app/layoutConstants';
+import { VscLayoutSidebarLeft, VscLayoutSidebarRight } from 'react-icons/vsc';
+import { CENTER_MIN } from '@/render/app/layoutConstants';
 import { useAppController } from '@/render/hooks/useAppController';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
@@ -43,6 +44,7 @@ const App: React.FC = () => {
     creation,
     entityActions,
     growthEntry,
+    workScopeApi,
     fileOps,
     editor,
     projectExport,
@@ -59,6 +61,8 @@ const App: React.FC = () => {
 
   // ─── 渲染所需字段 ──────────────────────────────────────────────
   const { files, folderPath, projectLayout, isLoading, storyOrderMap, dbReady } = workspaceState;
+  // 角色 / 设定 / 成长档案 / 资料跟随当前作品（普通文件夹为文件夹本身）
+  const { workScopePath } = workspaceState;
   const { openTabs, activeTab, setActiveTab } = tabsState;
   const {
     sidebarCollapsed,
@@ -214,88 +218,100 @@ const App: React.FC = () => {
           />
         )}
 
-        <div className={styles.appMain} ref={appMainRef}>
-          {/* 左侧文件面板 */}
-          {!focusMode && (
+        <div
+          className={`${styles.appMain} ${
+            !focusMode && appSettings.general.showStatusBar ? styles.appMainWithStatusBar : ''
+          }`}
+          ref={appMainRef}
+        >
+          {/* 左侧文件面板卡片；折叠后只保留窗口背景上的展开按钮 */}
+          {!focusMode && sidebarCollapsed && (
+            <div className={styles.sideRail} data-pane="left-rail">
+              <button
+                className={styles.railToggle}
+                onClick={handleExpandSidebar}
+                title="展开侧边栏"
+                aria-label="展开侧边栏"
+              >
+                <VscLayoutSidebarLeft />
+              </button>
+            </div>
+          )}
+          {!focusMode && !sidebarCollapsed && (
             <div
               ref={sidebarRef}
-              className={`${styles.leftPanel} ${sidebarCollapsed ? styles.leftPanelCollapsed : ''}`}
-              style={sidebarCollapsed ? undefined : { width: leftPanelWidth }}
+              className={styles.leftPanel}
+              data-pane="left"
+              style={{ width: leftPanelWidth }}
             >
-              {sidebarCollapsed ? (
-                <button
-                  className={styles.sidebarToggle}
-                  onClick={handleExpandSidebar}
-                  title="展开侧边栏"
-                >
-                  ▶
-                </button>
-              ) : (
-                <FilePanel
-                  files={files}
-                  characters={workspaceCharacters}
-                  characterGenerationStatus={assistantCharacterGenerationStatus}
-                  loreEntries={workspaceLoreEntries}
-                  materialUsageMap={materialUsageMap}
-                  projectName={workspaceProjectName}
-                  selectedFile={activeDocumentTab}
-                  activeWorkspaceTab={activeWorkspaceTab}
-                  folderPath={folderPath}
-                  projectLayout={projectLayout}
-                  showFileSizes={appSettings.general.showFileSizes}
-                  quickOpenShortcut={appSettings.shortcuts.quickOpen}
-                  revealFileRequest={filePanelRevealRequest}
-                  isLoading={isLoading}
-                  onFileSelect={handleFileSelect}
-                  onOpenCharacterNode={handleOpenCharacterNode}
-                  onOpenLoreNode={handleOpenLoreNode}
-                  onDeleteCharacterNode={handleDeleteCharacterNode}
-                  onDeleteLoreNode={handleDeleteLoreNode}
-                  onRenameCharacterNode={handleRenameCharacterNode}
-                  onRenameLoreNode={handleRenameLoreNode}
-                  onRenameNode={handleRename}
-                  storyOrderMap={storyOrderMap}
-                  onReorderStoryNode={(sourcePath, targetPath, mode) =>
-                    void handleReorderStoryNode(sourcePath, targetPath, mode)
-                  }
-                  onCreateVolume={() => void handleCreateStoryItem('volume')}
-                  onCreateChapter={() => void handleCreateStoryItem('chapter')}
-                  onCreateDraftFolder={() => void handleCreateStoryItem('draft-folder')}
-                  onCreateDraft={() => void handleCreateStoryItem('draft')}
-                  onCreateCharacter={() => void handleCreateCharacter()}
-                  onCreateLoreEntry={() => void handleCreateLoreEntry()}
-                  onCreateMaterialDirectory={() => void handleCreateMaterialDirectory()}
-                  growthIndex={growthEntry.growthIndex}
-                  onOpenGrowth={growthEntry.handleOpenGrowth}
-                  onCreateGrowthSheet={() => void growthEntry.handleCreateGrowthSheet()}
-                  onRefresh={refreshCurrentFolder}
-                  onOpenFolder={handleOpenLocal}
-                  onRenameProject={() => void handleRenameProject()}
-                  onImportFile={handleImportFile}
-                  onCollapse={handleCollapseSidebar}
-                  onContextMenu={handleFileContextMenu}
-                  onObjectContextMenu={handleObjectContextMenu}
-                  onBackgroundContextMenu={handleBackgroundContextMenu}
-                  onCopyFile={handleCopyFile}
-                  onPasteFiles={handlePasteFiles}
-                  onDropFiles={handleDropFiles}
-                  hasClipboard={clipboard.length > 0}
-                  creatingType={creatingType}
-                  createTargetPath={createTargetPath}
-                  onInlineCreate={handleInlineCreate}
-                  onCancelCreate={handleCancelCreate}
-                />
-              )}
+              <FilePanel
+                files={files}
+                characters={workspaceCharacters}
+                characterGenerationStatus={assistantCharacterGenerationStatus}
+                loreEntries={workspaceLoreEntries}
+                materialUsageMap={materialUsageMap}
+                projectName={workspaceProjectName}
+                selectedFile={activeDocumentTab}
+                activeWorkspaceTab={activeWorkspaceTab}
+                folderPath={folderPath}
+                projectLayout={projectLayout}
+                workScope={workScopeApi.workScope}
+                workScopeOptions={workScopeApi.workScopeOptions}
+                onSelectWork={workScopeApi.handleSelectWork}
+                onCreateWork={() => void workScopeApi.handleCreateWork()}
+                showFileSizes={appSettings.general.showFileSizes}
+                quickOpenShortcut={appSettings.shortcuts.quickOpen}
+                revealFileRequest={filePanelRevealRequest}
+                isLoading={isLoading}
+                onFileSelect={handleFileSelect}
+                onOpenCharacterNode={handleOpenCharacterNode}
+                onOpenLoreNode={handleOpenLoreNode}
+                onDeleteCharacterNode={handleDeleteCharacterNode}
+                onDeleteLoreNode={handleDeleteLoreNode}
+                onRenameCharacterNode={handleRenameCharacterNode}
+                onRenameLoreNode={handleRenameLoreNode}
+                onRenameNode={handleRename}
+                storyOrderMap={storyOrderMap}
+                onReorderStoryNode={(sourcePath, targetPath, mode) =>
+                  void handleReorderStoryNode(sourcePath, targetPath, mode)
+                }
+                onCreateVolume={() => void handleCreateStoryItem('volume')}
+                onCreateChapter={() => void handleCreateStoryItem('chapter')}
+                onCreateDraftFolder={() => void handleCreateStoryItem('draft-folder')}
+                onCreateDraft={() => void handleCreateStoryItem('draft')}
+                onCreateCharacter={() => void handleCreateCharacter()}
+                onCreateLoreEntry={() => void handleCreateLoreEntry()}
+                onCreateMaterialDirectory={() => void handleCreateMaterialDirectory()}
+                growthIndex={growthEntry.growthIndex}
+                onOpenGrowth={growthEntry.handleOpenGrowth}
+                onCreateGrowthSheet={() => void growthEntry.handleCreateGrowthSheet()}
+                onRefresh={refreshCurrentFolder}
+                onOpenFolder={handleOpenLocal}
+                onRenameProject={() => void handleRenameProject()}
+                onImportFile={handleImportFile}
+                onCollapse={handleCollapseSidebar}
+                onContextMenu={handleFileContextMenu}
+                onObjectContextMenu={handleObjectContextMenu}
+                onBackgroundContextMenu={handleBackgroundContextMenu}
+                onCopyFile={handleCopyFile}
+                onPasteFiles={handlePasteFiles}
+                onDropFiles={handleDropFiles}
+                hasClipboard={clipboard.length > 0}
+                creatingType={creatingType}
+                createTargetPath={createTargetPath}
+                onInlineCreate={handleInlineCreate}
+                onCancelCreate={handleCancelCreate}
+              />
             </div>
           )}
 
-          {/* 左侧拖拽把手 */}
+          {/* 左侧拖拽把手（占据左卡片与中间卡片之间的间距） */}
           {!focusMode && !sidebarCollapsed && (
-            <PanelResizer onMouseDown={handleLeftResizerMouseDown} />
+            <PanelResizer onMouseDown={handleLeftResizerMouseDown} label="调整左侧面板宽度" />
           )}
 
-          {/* 中间内容面板 */}
-          <div className={styles.centerPanel} style={{ minWidth: CENTER_MIN }}>
+          {/* 中间内容卡片 */}
+          <div className={styles.centerPanel} data-pane="center" style={{ minWidth: CENTER_MIN }}>
             {diffState ? (
               <Suspense fallback={<div className={styles.lazyFallback}>正在加载差异编辑器...</div>}>
                 <DiffEditor
@@ -318,6 +334,7 @@ const App: React.FC = () => {
                 reloadToken={editorReloadToken}
                 encoding={encoding}
                 showThousandCharMarkers={appSettings.general.showThousandCharMarkers}
+                markdownLivePreview={appSettings.general.markdownLivePreview}
                 thousandCharMarkerStep={appSettings.general.thousandCharMarkerStep}
                 formatChapterShortcut={appSettings.shortcuts.formatChapter}
                 characterHighlights={editorCharacterHighlights}
@@ -328,7 +345,10 @@ const App: React.FC = () => {
                 editorViewRef={editorViewRef}
                 viewportSnapshots={initialViewportSnapshots}
                 onViewportSnapshotChange={handleViewportSnapshotChange}
-                onTabSelect={setActiveTab}
+                onTabSelect={(filePath) => {
+                  setActiveTab(filePath);
+                  workScopeApi.revealWorkForDocument(filePath);
+                }}
                 onTabClose={closeTab}
                 onToggleThousandCharMarkers={handleToggleThousandCharMarkers}
                 onFormatCurrentChapter={handleFormatCurrentChapter}
@@ -353,59 +373,56 @@ const App: React.FC = () => {
             )}
           </div>
 
-          {/* 右侧拖拽把手 + 右侧信息面板 */}
-          {!focusMode && !rightPanelPoppedOut && (
+          {/* 右侧拖拽把手 + 右侧信息面板卡片；折叠后只保留展开按钮 */}
+          {!focusMode && !rightPanelPoppedOut && rightPanelCollapsed && (
+            <div className={`${styles.sideRail} ${styles.sideRailRight}`} data-pane="right-rail">
+              <button
+                className={styles.railToggle}
+                onClick={handleToggleRightPanel}
+                title="展开辅助面板"
+                aria-label="展开辅助面板"
+              >
+                <VscLayoutSidebarRight />
+              </button>
+            </div>
+          )}
+          {!focusMode && !rightPanelPoppedOut && !rightPanelCollapsed && (
             <>
-              {!rightPanelCollapsed && <PanelResizer onMouseDown={handleRightResizerMouseDown} />}
+              <PanelResizer onMouseDown={handleRightResizerMouseDown} label="调整右侧面板宽度" />
               <div
                 className={styles.rightPanelWrapper}
-                style={
-                  rightPanelCollapsed
-                    ? { width: RIGHT_COLLAPSED_WIDTH }
-                    : { width: rightPanelWidth }
-                }
+                data-pane="right"
+                style={{ width: rightPanelWidth }}
               >
-                {rightPanelCollapsed ? (
-                  <button
-                    className={styles.rightPanelToggle}
-                    onClick={handleToggleRightPanel}
-                    title="展开辅助面板"
-                  >
-                    ◀
-                  </button>
-                ) : (
-                  <Suspense
-                    fallback={<div className={styles.lazyFallback}>正在加载辅助面板...</div>}
-                  >
-                    <RightPanel
-                      content={activeDocumentTab ? editorContent : ''}
-                      collapsed={rightPanelCollapsed}
-                      enabled={Boolean(folderPath)}
-                      scopeKind={currentAssistantScope?.kind}
-                      scopeLabel={currentAssistantScope?.label}
-                      outlineScope={currentOutlineScope}
-                      materialFiles={materialFiles.map((item) => ({
-                        path: item.path,
-                        name: item.name,
-                      }))}
-                      linkedMaterialPaths={linkedMaterialFiles.map((item) => item.path)}
-                      scopedCharacterGenerationStatus={assistantCharacterGenerationStatus}
-                      scopedCharacters={assistantScopedCharacters}
-                      scopedLoreEntries={assistantScopedLoreEntries}
-                      scopedMaterials={assistantScopedMaterials}
-                      onToggle={handleToggleRightPanel}
-                      onPopOut={handlePopOutRightPanel}
-                      onOpenMaterial={openFileInTab}
-                      onAddMaterial={handleAddChapterMaterial}
-                      onRemoveMaterial={handleRemoveChapterMaterial}
-                      onScrollToLine={handleScrollToLine}
-                      onReplaceLineText={handleReplaceLineText}
-                      folderPath={folderPath}
-                      dbReady={dbReady}
-                      currentLine={cursorPosition.line}
-                    />
-                  </Suspense>
-                )}
+                <Suspense fallback={<div className={styles.lazyFallback}>正在加载辅助面板...</div>}>
+                  <RightPanel
+                    content={activeDocumentTab ? editorContent : ''}
+                    collapsed={rightPanelCollapsed}
+                    enabled={Boolean(folderPath)}
+                    scopeKind={currentAssistantScope?.kind}
+                    scopeLabel={currentAssistantScope?.label}
+                    outlineScope={currentOutlineScope}
+                    materialFiles={materialFiles.map((item) => ({
+                      path: item.path,
+                      name: item.name,
+                    }))}
+                    linkedMaterialPaths={linkedMaterialFiles.map((item) => item.path)}
+                    scopedCharacterGenerationStatus={assistantCharacterGenerationStatus}
+                    scopedCharacters={assistantScopedCharacters}
+                    scopedLoreEntries={assistantScopedLoreEntries}
+                    scopedMaterials={assistantScopedMaterials}
+                    onToggle={handleToggleRightPanel}
+                    onPopOut={handlePopOutRightPanel}
+                    onOpenMaterial={openFileInTab}
+                    onAddMaterial={handleAddChapterMaterial}
+                    onRemoveMaterial={handleRemoveChapterMaterial}
+                    onScrollToLine={handleScrollToLine}
+                    onReplaceLineText={handleReplaceLineText}
+                    folderPath={workScopePath}
+                    dbReady={dbReady}
+                    currentLine={cursorPosition.line}
+                  />
+                </Suspense>
               </div>
             </>
           )}
@@ -484,7 +501,7 @@ const App: React.FC = () => {
         <AIAssistantDialog
           visible={showAIAssistant}
           onClose={() => setShowAIAssistant(false)}
-          folderPath={folderPath}
+          folderPath={workScopePath}
           content={editorContent}
           filePath={activeDocumentTab}
           onApplyFix={handleAssistantApplyFix}

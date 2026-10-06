@@ -1,5 +1,8 @@
 /**
- * 记忆库文件读写（Node.js）：`<project>/资料/记忆/`
+ * 记忆库文件读写（Node.js）：`<root>/资料/记忆/`
+ *
+ * root 是作品作用域根目录（见 work-scope.ts）：`ne init` 项目中为作品目录 `<novelsDir>/<作品>/`，
+ * 普通文件夹为文件夹本身，旧版项目根资料（「未归属」）为项目根。所有函数的 root 参数都是它。
  *
  * JSON 是唯一数据源；Markdown（README.md、角色/*.md）在每次保存时重新生成。
  * 写入采用「临时文件 + rename」，避免 GUI / CLI 同时写入时出现半截文件。

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "name": "剑与诗 · 规则之书",
+  "description": "武侠短篇的轻量规则：只记等级与「听雨」心法，不设属性。",
+  "attributes": [],
+  "levels": {
+    "maxLevel": 20,
+    "curve": {
+      "kind": "formula",
+      "base": 100,
+      "factor": 1.5
+    }
+  },
+  "skills": [
+    {
+      "id": "listen-rain",
+      "name": "听雨",
+      "description": "诗人教的第一课：听清每一滴雨落在哪里",
+      "maxLevel": 3,
+      "costPerLevel": [
+        0,
+        200,
+        400
+      ]
+    }
+  ],
+  "choiceGroups": [],
+  "coreRules": [
+    {
+      "id": "rule-1",
+      "text": "沈砚学会「听雨」之前不出真剑"
+    }
+  ],
+  "limits": {
+    "maxLevelsPerChapter": 2,
+    "maxAttributeGainPerChapter": 3,
+    "maxSkillLevelsPerChapter": 2,
+    "forgottenAfterChapters": 30
+  }
+}

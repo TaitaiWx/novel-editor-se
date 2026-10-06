@@ -16,6 +16,11 @@ export const SEL = {
   dialogInput: '[role="dialog"] input',
   menu: '[role="menu"]',
   storyline: '[class*="storylineView"]',
+  /** 文件面板顶部的作品切换器与它的下拉列表 */
+  workSwitcher: '[data-testid="work-switcher"]',
+  workList: '[role="listbox"][aria-label="作品"]',
+  /** 文件面板底部「项目说明」分区（根目录说明文档，默认折叠） */
+  projectNotes: '[aria-label="项目说明"]',
 } as const;
 
 /** 等待主界面加载完成并打开了指定项目（以目录名判断） */
@@ -65,6 +70,37 @@ export async function expandTreePath(page: Page, names: string[]): Promise<void>
     await page.click({ text: names[index], within: SEL.workspaceTree, exact: true });
     await page.waitForTarget({ text: next, within: SEL.workspaceTree, exact: true });
   }
+}
+
+/** 作品切换器上显示的当前作品名 */
+export function currentWork(page: Page): Promise<string> {
+  return page.evaluate<string>(
+    (selector: string) =>
+      document.querySelector(`${selector} [class*="name"]`)?.textContent?.trim() ?? '',
+    SEL.workSwitcher
+  );
+}
+
+/**
+ * 切换当前作品（角色 / 设定 / 成长档案 / 资料跟随作品）：已是该作品时不做任何操作
+ */
+export async function selectWork(page: Page, name: string): Promise<void> {
+  await page.waitForTarget(SEL.workSwitcher);
+  if ((await currentWork(page)) === name) return;
+  await page.click(SEL.workSwitcher);
+  await page.click({ text: name, within: SEL.workList, exact: true });
+  await page.waitFor(
+    (selector: string, wanted: string) =>
+      document.querySelector(`${selector} [class*="name"]`)?.textContent?.trim() === wanted,
+    { args: [SEL.workSwitcher, name], message: `当前作品切换为「${name}」` }
+  );
+}
+
+/** 展开底部「项目说明」分区（默认折叠） */
+export async function expandProjectNotes(page: Page): Promise<void> {
+  const collapsed = `${SEL.projectNotes} button[aria-expanded="false"]`;
+  if (await page.exists(collapsed)) await page.click(collapsed);
+  await page.waitForTarget(`${SEL.projectNotes} button[aria-expanded="true"]`);
 }
 
 /** 编辑器当前文档内容（逐行拼接，适用于不超过一屏视口的短文档） */

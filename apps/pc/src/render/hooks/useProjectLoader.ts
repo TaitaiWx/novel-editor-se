@@ -20,6 +20,7 @@ export type UseProjectLoaderContext = Pick<
   | 'applyFolderTree'
   | 'setFolderPath'
   | 'setIsLoading'
+  | 'setUnassignedRecords'
 > &
   Pick<TabsState, 'setActiveTab' | 'setOpenTabs'> &
   Pick<LayoutState, 'setRightPanelCollapsed'> &
@@ -45,6 +46,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     setIsLoading,
     setOpenTabs,
     setRightPanelCollapsed,
+    setUnassignedRecords,
     setWorkspaceProjectName,
     toast,
   } = ctx;
@@ -55,24 +57,32 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
   const beginLoad = useCallback(() => ++loadGenerationRef.current, []);
   const isLatestLoad = useCallback((gen: number) => gen === loadGenerationRef.current, []);
 
-  const initializeProjectStore = useCallback(async (projectFolderPath: string) => {
-    if (!window.electron?.ipcRenderer) return;
-    const dbDir = `${projectFolderPath}/.novel-editor`;
-    await window.electron.ipcRenderer.invoke('db-init', dbDir);
-    const existing = await window.electron.ipcRenderer.invoke(
-      'db-novel-get-by-folder',
-      projectFolderPath
-    );
-    if (!existing) {
-      const projectName = projectFolderPath.split('/').pop() || projectFolderPath;
-      await window.electron.ipcRenderer.invoke(
-        'db-novel-create',
-        projectName,
-        projectFolderPath,
-        ''
+  const initializeProjectStore = useCallback(
+    async (projectFolderPath: string) => {
+      if (!window.electron?.ipcRenderer) return;
+      const dbDir = `${projectFolderPath}/.novel-editor`;
+      // db-init 同时按作品准备数据库记录、迁移旧版项目级数据（见主进程 work-scope.ts）
+      const initResult = (await window.electron.ipcRenderer.invoke('db-init', dbDir)) as {
+        unassignedRecords?: boolean;
+      } | null;
+      setUnassignedRecords(initResult?.unassignedRecords === true);
+      // 项目根记录：普通文件夹的作品记录；ne 项目中承载版本快照（人物等内容跟随各作品）
+      const existing = await window.electron.ipcRenderer.invoke(
+        'db-novel-get-by-folder',
+        projectFolderPath
       );
-    }
-  }, []);
+      if (!existing) {
+        const projectName = projectFolderPath.split('/').pop() || projectFolderPath;
+        await window.electron.ipcRenderer.invoke(
+          'db-novel-create',
+          projectName,
+          projectFolderPath,
+          ''
+        );
+      }
+    },
+    [setUnassignedRecords]
+  );
 
   const refreshCurrentFolder = useCallback(async () => {
     const currentFolderPath = folderPathRef.current;

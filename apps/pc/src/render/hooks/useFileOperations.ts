@@ -4,6 +4,7 @@ import type { FileNode } from '@/render/types';
 import {
   buildUniqueMarkdownName,
   buildUniqueMovedName,
+  collectMaterialDeletionTargets,
   findNodeInTree,
   getFileExtension,
   getParentDirectory,
@@ -21,6 +22,7 @@ import {
 } from '@/render/utils/workspace';
 import { moveStoryPathRelative, remapStoryOrderMapPaths } from '@/render/app/storyOrder';
 import { splitChapters } from '@/render/utils/chapterSplitter';
+import { selectWorkScopeNodes } from '@/render/utils/workScope';
 import { isPathInside } from '@/render/utils/path';
 import type { WorkspaceState } from './state/useWorkspaceState';
 import type { TabsState } from './state/useTabsState';
@@ -35,7 +37,13 @@ import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
 
 export type UseFileOperationsContext = Pick<
   WorkspaceState,
-  'filesRef' | 'folderPathRef' | 'setStoryOrderMap' | 'storyOrderMapRef'
+  | 'filesRef'
+  | 'folderPathRef'
+  | 'projectLayout'
+  | 'setStoryOrderMap'
+  | 'storyOrderMapRef'
+  | 'workScope'
+  | 'workScopePathRef'
 > &
   Pick<TabsState, 'activeTabRef' | 'setActiveTab' | 'setOpenTabs' | 'setUntitledTabContents'> &
   Pick<EntitiesState, 'setChapterMaterialPaths'> &
@@ -77,6 +85,9 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
     setUntitledTabContents,
     storyOrderMapRef,
     toast,
+    projectLayout,
+    workScope,
+    workScopePathRef,
     workspaceMaterialNodes,
   } = ctx;
 
@@ -410,11 +421,15 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
     ]
   );
 
+  // 清空当前作品的资料（资料跟随作品）；只删资料，不会删到同一目录下的正文
   const handleClearMaterials = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
-    const folder = folderPathRef.current;
+    const folder = workScopePathRef.current;
     if (!ipc || !folder) return;
-    const targets = [...workspaceMaterialNodes];
+    const targets = collectMaterialDeletionTargets(
+      selectWorkScopeNodes(workspaceMaterialNodes, workScope, projectLayout),
+      filesRef.current
+    );
     if (targets.length === 0) {
       toast.info('当前作品没有可清空的资料');
       return;
@@ -459,10 +474,13 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
   }, [
     closeTabsByPredicate,
     dialog,
-    folderPathRef,
+    filesRef,
+    projectLayout,
     refreshCurrentFolder,
     setChapterMaterialPaths,
     toast,
+    workScope,
+    workScopePathRef,
     workspaceMaterialNodes,
   ]);
 

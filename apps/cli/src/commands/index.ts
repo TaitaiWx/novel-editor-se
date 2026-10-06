@@ -7,12 +7,18 @@ import { createAppCommands } from './app';
 import { batchCommands } from './batch';
 import { fileCommands } from './file';
 import { growthCommands } from './growth';
+import { NOVEL_OPTION } from './growth-shared';
 import { growthWorldCommands } from './growth-world';
 import { chapterCommands, novelCommands } from './novel';
 import { projectCommands } from './project';
 import { statsCommands } from './stats';
 
 export const commands: CommandSpec[] = [];
+
+/** 记忆库跟随作品：所有 ne growth 子命令都接受 --novel <作品> */
+function withNovelOption(command: CommandSpec): CommandSpec {
+  return { ...command, options: [...(command.options ?? []), NOVEL_OPTION] };
+}
 
 commands.push(
   ...projectCommands,
@@ -21,7 +27,6 @@ commands.push(
   ...novelCommands,
   ...chapterCommands,
   ...statsCommands,
-  ...growthCommands,
-  ...growthWorldCommands,
+  ...[...growthCommands, ...growthWorldCommands].map(withNovelOption),
   ...createAppCommands(() => describeCommands(commands))
 );

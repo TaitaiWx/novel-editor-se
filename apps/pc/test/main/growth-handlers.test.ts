@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -151,6 +151,25 @@ describe('growth IPC handlers', () => {
       ['左臂受伤', 5]
     );
     expect(notes.data.sheets[0].notes).toEqual(['左臂受伤']);
+  });
+
+  it('成长档案跟随作品：传入作品目录时读写 <作品>/资料/记忆/，作品之间互不影响', async () => {
+    const star = path.join(dir, 'novels', '星河旅人');
+    const poem = path.join(dir, 'novels', '剑与诗');
+    await mkdir(star, { recursive: true });
+    await mkdir(poem, { recursive: true });
+    await call('growth-init', star, 'dnd');
+    await call('growth-init', poem, 'blank');
+    await call('growth-ensure-sheet', star, '林舟');
+    await call('growth-ensure-sheet', poem, '沈砚');
+    const starSnapshot = (await call<SnapshotLike>('growth-load', star)).data;
+    const poemSnapshot = (await call<SnapshotLike>('growth-load', poem)).data;
+    expect(starSnapshot.sheets.map((sheet) => sheet.name)).toEqual(['林舟']);
+    expect(poemSnapshot.sheets.map((sheet) => sheet.name)).toEqual(['沈砚']);
+    expect(
+      JSON.parse(await readFile(path.join(poem, '资料', '记忆', '角色', '沈砚.json'), 'utf-8'))
+    ).toMatchObject({ name: '沈砚' });
+    expect((await call<SnapshotLike>('growth-load', dir)).data.initialized).toBe(false);
   });
 
   it('保存规则 / 队伍 / 地图时校验并规范化', async () => {

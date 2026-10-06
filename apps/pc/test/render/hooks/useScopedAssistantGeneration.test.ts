@@ -75,6 +75,7 @@ function setup(
     ),
     filesRef: ref<FileNode[]>(options.files ?? []),
     folderPathRef: ref<string | null>(options.folder === undefined ? FOLDER : options.folder),
+    workScopePathRef: ref<string | null>(options.folder === undefined ? FOLDER : options.folder),
     getCurrentNovelId: vi.fn(async () => (options.novelId === undefined ? 1 : options.novelId)),
     openFileInTab: vi.fn(),
     refreshCurrentFolder: vi.fn(async () => undefined),

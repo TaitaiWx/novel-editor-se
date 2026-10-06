@@ -17,11 +17,14 @@ export type CoreErrorCode =
 
 export class CoreError extends Error {
   readonly code: CoreErrorCode;
+  /** 给用户的下一步建议（CLI 输出为 hint） */
+  readonly hint?: string;
 
-  constructor(code: CoreErrorCode, message: string) {
+  constructor(code: CoreErrorCode, message: string, hint?: string) {
     super(message);
     this.name = 'CoreError';
     this.code = code;
+    this.hint = hint;
   }
 }
 

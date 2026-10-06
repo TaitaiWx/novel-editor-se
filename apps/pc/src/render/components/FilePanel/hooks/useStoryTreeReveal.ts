@@ -33,7 +33,8 @@ export function useStoryTreeReveal({
 }: UseStoryTreeRevealOptions) {
   const [revealPath, setRevealPath] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSections>({
-    docs: false,
+    // 「项目说明」（根目录说明文档）默认折叠，文件面板以当前作品的内容为主
+    docs: true,
     story: false,
     characters: false,
     lore: false,

@@ -1,7 +1,7 @@
 /**
  * 成长档案首次使用流程（独立的 Electron 实例）
  *
- * fixture 同样拷贝自示例作品集，但去掉了预置的 `资料/记忆/`，从「开始使用」起验证：
+ * fixture 同样拷贝自示例作品集，但去掉了「星河旅人」预置的 `资料/记忆/`（成长档案跟随作品），从「开始使用」起验证：
  * 创建记忆库 → 新建成长卡 → 引导 → 记一笔 → 提醒 → 总览 → 右侧摘要 → 人物详情入口。
  * 预置成长档案的展示见 app.e2e.ts「示例作品集」用例。
  */
@@ -25,17 +25,19 @@ import {
   SEL,
   contextMenuAction,
   ensureRightPanelOpen,
+  selectWork,
   switchStorylineMode,
 } from './support/workbench';
+import { FIXTURE_MEMORY_DIR, FIXTURE_WORK } from './support/fixture';
 
 const suite = setupAppSuite({
-  fixture: { prefix: 'novel-editor-e2e-growth-', exclude: ['资料/记忆'] },
+  fixture: { prefix: 'novel-editor-e2e-growth-', exclude: [FIXTURE_MEMORY_DIR] },
 });
 
 describe('成长档案：首次使用', () => {
   it('1. 成长档案：首次使用 → 新建成长卡 → 引导 → 记一笔写入 JSON；推演 / 世界可达，使用说明可打开', async () => {
     const { page, fixture } = suite;
-    const memoryDir = fixture.resolve('资料/记忆');
+    const memoryDir = fixture.resolve(FIXTURE_MEMORY_DIR);
     expect(existsSync(memoryDir), 'fixture 不含记忆库，模拟首次使用').toBe(false);
     // 「记一笔」的章节默认取最近打开的正文章节
     await openChapter(page, '001-启程', '林舟背起行囊');
@@ -93,7 +95,19 @@ describe('成长档案：首次使用', () => {
     await page.waitForTarget({ text: '还没有成长卡', within: GROWTH_WORKSPACE, exact: true });
     await captureForReview(page, 'growth-v2-overview-empty');
     await page.click({ text: '查看使用说明', within: GROWTH_WORKSPACE, exact: true });
-    await page.waitForTarget({ text: '记一笔：每章写完 30 秒', within: GROWTH_HELP, exact: true });
+    // 使用说明默认只展开「3 步上手」，进阶说明折叠
+    await page.waitForTarget({ text: '3 步上手', within: GROWTH_HELP, exact: true });
+    const helpState = await page.evaluate<{ details: number; open: number }>((sel: string) => {
+      const items = Array.from(document.querySelectorAll(`${sel} details`));
+      return {
+        details: items.length,
+        open: items.filter((item) => (item as HTMLDetailsElement).open).length,
+      };
+    }, GROWTH_HELP);
+    expect(helpState.details).toBeGreaterThanOrEqual(5);
+    expect(helpState.open).toBe(0);
+    await page.click({ text: 'AI 推演', within: GROWTH_HELP, exact: true });
+    await page.waitForTarget({ text: '需先在设置里开启 AI', within: GROWTH_HELP });
     await captureForReview(page, 'growth-v2-help');
     await page.click('[aria-label="关闭使用说明"]');
     await page.waitForGone(GROWTH_HELP);
@@ -103,7 +117,7 @@ describe('成长档案：首次使用', () => {
     await page.waitForTarget({ text: '成长 · 林舟', exact: true });
     await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
 
-    // 第一次打开成长卡：显示引导（左侧列表 → 记一笔 → 提醒 → 更多），看完后不再出现
+    // 第一次打开成长卡：显示 3 步引导（记一笔 → 提醒 → 更多），看完后不再出现
     await page.waitForTarget('[role="dialog"][aria-label^="引导 1/"]');
     await captureForReview(page, 'growth-v2-tour');
     await page.click({ text: '下一步', exact: true });
@@ -198,9 +212,26 @@ describe('成长档案：首次使用', () => {
     await captureForReview(page, 'growth-v2-more-menu');
     await page.click({ text: '同步人物卡 / 设定到记忆文件夹', within: SEL.menu, exact: true });
     await page.waitForTarget({ text: '已同步' });
-    const memoryDir = fixture.resolve('资料/记忆');
+    const memoryDir = fixture.resolve(FIXTURE_MEMORY_DIR);
     expect(existsSync(path.join(memoryDir, '角色卡'))).toBe(true);
     expect(existsSync(path.join(memoryDir, '设定'))).toBe(true);
+    // 只同步当前作品（星河旅人）的人物卡：《剑与诗》的沈砚不在这里
+    expect(existsSync(path.join(memoryDir, '角色卡', '林舟.md'))).toBe(true);
+    expect(existsSync(path.join(memoryDir, '角色卡', '沈砚.md'))).toBe(false);
+
+    // 成长档案跟随作品：切到《剑与诗》看到它自己的成长卡，切回来仍是星河旅人的
+    await selectWork(page, '剑与诗');
+    await page.waitForTarget({ text: '沈砚', within: GROWTH_SECTION, exact: true });
+    // 切换作品后列表立即只显示《剑与诗》的成长卡
+    await page.waitForGone({ text: '林舟', within: GROWTH_SECTION, exact: true });
+    // 「成长 · 林舟」标签仍开着：只提示新建，不能在《剑与诗》里凭空建出林舟的成长卡
+    await page.waitForTarget({ text: '当前作品还没有「林舟」的成长卡', exact: true });
+    expect(
+      existsSync(fixture.resolve('novels', '剑与诗', '资料', '记忆', '角色', '林舟.json'))
+    ).toBe(false);
+    await selectWork(page, FIXTURE_WORK);
+    await page.waitForTarget({ text: '林舟', within: GROWTH_SECTION, exact: true });
+    await page.waitForGone({ text: '沈砚', within: GROWTH_SECTION, exact: true });
   });
 
   it('3. 成长档案一级入口：文件面板新建 → 记一笔写入 JSON → 提醒 → 总览 → 右侧摘要', async () => {

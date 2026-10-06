@@ -32,6 +32,49 @@ export function isMaterialLikeName(name: string): boolean {
   );
 }
 
+/**
+ * 作用域（当前作品目录，或普通文件夹 / 未归属时的项目根）下已有的资料目录，优先名为「资料」的目录。
+ * files 是项目根的子节点；scopePath 不在树中（即项目根本身）时在顶层查找。
+ */
+export function findScopeMaterialRoot(files: FileNode[], scopePath: string): FileNode | null {
+  const scopeNode = findNodeInTree(files, scopePath);
+  const children = scopeNode?.type === 'directory' ? (scopeNode.children ?? []) : files;
+  const candidates = children.filter(
+    (node) => node.type === 'directory' && isMaterialLikeName(node.name)
+  );
+  return candidates.find((node) => node.name === '资料') ?? candidates[0] ?? null;
+}
+
+function countTreeFiles(node: FileNode): number {
+  if (node.type === 'file') return 1;
+  return (node.children ?? []).reduce((sum, child) => sum + countTreeFiles(child), 0);
+}
+
+/**
+ * 「清空资料」的删除目标：资料分区的树是从完整文件树筛出来的，同一路径的目录里可能还有正文
+ * （例如作品目录、novels 容器）。只有资料树节点与完整树中的同一目录内容一致时才整体删除，
+ * 否则逐层深入只删资料文件，绝不会删到正文。
+ */
+export function collectMaterialDeletionTargets(
+  materialNodes: FileNode[],
+  fullTree: FileNode[]
+): FileNode[] {
+  const targets: FileNode[] = [];
+  materialNodes.forEach((node) => {
+    if (node.type === 'file') {
+      targets.push(node);
+      return;
+    }
+    const full = findNodeInTree(fullTree, node.path);
+    if (full && countTreeFiles(full) === countTreeFiles(node)) {
+      targets.push(node);
+      return;
+    }
+    targets.push(...collectMaterialDeletionTargets(node.children ?? [], fullTree));
+  });
+  return targets;
+}
+
 export function ensureMarkdownFileName(name: string): string {
   return /\.[^./\\]+$/.test(name) ? name : `${name}.md`;
 }

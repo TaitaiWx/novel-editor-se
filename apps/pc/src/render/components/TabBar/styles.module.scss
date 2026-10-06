@@ -2,8 +2,9 @@
   display: flex;
   align-items: center;
   height: 35px;
-  background: #181818;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  /* 位于中间卡片顶部，随卡片圆角裁切 */
+  background: var(--ui-bg-card-header);
+  border-bottom: 1px solid var(--ui-card-border);
   flex-shrink: 0;
   overflow-x: auto;
   overflow-y: hidden;

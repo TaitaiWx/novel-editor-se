@@ -20,6 +20,7 @@ function setup(options: { handler?: InvokeHandler; noIpc?: boolean; folder?: str
   const ctx = {
     appSettingsRef: ref<SettingsDraft>(DEFAULT_SETTINGS_DRAFT),
     folderPathRef: ref<string | null>(options.folder ?? null),
+    setUnassignedRecords: vi.fn(),
     openFileInTab: vi.fn(),
     refreshCurrentFolderRef: ref<(() => Promise<void>) | null>(null),
     setActiveTab: vi.fn(),

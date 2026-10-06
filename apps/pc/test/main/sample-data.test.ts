@@ -24,13 +24,18 @@ import {
 } from '@novel-editor/core';
 import { validateProjectSeed } from '@novel-editor/store';
 import {
+  POEM_WORK_DIR,
   SAMPLE_DATA_DIR,
+  STAR_WORK_DIR,
   buildSampleSeed,
   writeSampleData,
 } from '../../scripts/generate-sample-data.mts';
 
 const ROOT = SAMPLE_DATA_DIR;
-const MEMORY_DIR = path.join(ROOT, '资料', '记忆');
+// 资料与成长档案跟随作品：每部作品有自己的 资料/ 与 资料/记忆/
+const STAR_ROOT = path.join(ROOT, ...STAR_WORK_DIR.split('/'));
+const POEM_ROOT = path.join(ROOT, ...POEM_WORK_DIR.split('/'));
+const MEMORY_DIR = path.join(STAR_ROOT, '资料', '记忆');
 
 /** 递归列出目录下所有文件（相对路径，统一 / 分隔） */
 async function listFiles(dir: string, base = dir): Promise<string[]> {
@@ -53,7 +58,7 @@ let files: string[];
 
 beforeAll(async () => {
   project = await loadProjectFromConfig(getConfigPath(ROOT));
-  memory = await loadMemory(ROOT);
+  memory = await loadMemory(STAR_ROOT);
   files = await listFiles(ROOT);
 });
 
@@ -82,7 +87,8 @@ describe('示例作品集 sample-data', () => {
   });
 
   it('带版本文件，旧版本机副本会在启动时被升级（改动示例内容时请递增 sampleVersion）', async () => {
-    expect(await readSeedVersion(ROOT)).toBeGreaterThanOrEqual(2);
+    // v3：资料、成长档案、人物 / 设定改为跟随作品
+    expect(await readSeedVersion(ROOT)).toBeGreaterThanOrEqual(3);
   });
 
   it('E2E 依赖的开篇文本保持不变', async () => {
@@ -110,7 +116,10 @@ describe('示例作品集 sample-data', () => {
       await writeSampleData(out);
       const generated = (await listFiles(out)).filter((file) => !file.endsWith('.tmp'));
       const committed = files.filter(
-        (file) => file.startsWith('资料/记忆/') || file === '.novel-editor/seed.json'
+        (file) =>
+          file.startsWith(`${STAR_WORK_DIR}/资料/记忆/`) ||
+          file.startsWith(`${POEM_WORK_DIR}/资料/记忆/`) ||
+          file === '.novel-editor/seed.json'
       );
       expect(committed).toEqual(generated);
       for (const file of generated) {
@@ -180,7 +189,7 @@ describe('示例作品集 sample-data', () => {
     const raw = await readJson(path.join(ROOT, '.novel-editor', 'seed.json'));
     const seed = validateProjectSeed(raw);
     expect(raw).toEqual(buildSampleSeed());
-    const names = seed.characters.map((row) => row.name);
+    const names = seed.characters.filter((row) => row.novel_id === 1).map((row) => row.name);
     for (const sheet of memory.sheets) expect(names).toContain(sheet.name);
     expect(seed.world_settings?.length).toBeGreaterThan(0);
     expect(seed.outlines?.length).toBeGreaterThan(0);
@@ -193,6 +202,46 @@ describe('示例作品集 sample-data', () => {
           scopePath
         ).toBe(true);
     }
+  });
+
+  it('资料、成长档案、人物 / 设定按作品隔离（v3 布局）', async () => {
+    // 项目根没有旧版的 资料/：所有资料都属于某部作品
+    expect(files.some((file) => file.startsWith('资料/'))).toBe(false);
+    for (const work of [STAR_WORK_DIR, POEM_WORK_DIR]) {
+      expect(
+        files.some((file) => file.startsWith(`${work}/资料/`) && !file.includes('/记忆/')),
+        `${work} 应有自己的资料笔记`
+      ).toBe(true);
+      expect(files).toContain(`${work}/资料/记忆/规则.json`);
+    }
+    // 作品的 资料/ 不是卷：章节列表只有正文
+    const poemChapters = await listChapters(project, '剑与诗');
+    expect(poemChapters.map((chapter) => chapter.file)).toEqual(['001-少年.md', '002-听雨楼.md']);
+
+    // 两部作品的成长档案互不相同，且都没有一致性问题
+    const poem = await loadMemory(POEM_ROOT);
+    expect(poem.initialized).toBe(true);
+    expect(poem.issues).toEqual([]);
+    expect(poem.sheets.map((sheet) => sheet.name)).toEqual(['沈砚']);
+    expect(checkMemory(poem).warnings).toEqual([]);
+    expect(memory.sheets.map((sheet) => sheet.name)).not.toContain('沈砚');
+
+    // 种子按作品分组：folder_path 指向真实作品目录，内容行归属正确
+    const seed = validateProjectSeed(await readJson(path.join(ROOT, '.novel-editor', 'seed.json')));
+    expect(seed.novels.map((row) => [row.id, row.name, row.folder_path])).toEqual([
+      [1, '星河旅人', STAR_WORK_DIR],
+      [2, '剑与诗', POEM_WORK_DIR],
+    ]);
+    for (const row of seed.novels) {
+      expect((await stat(path.join(ROOT, String(row.folder_path)))).isDirectory()).toBe(true);
+    }
+    const byNovel = (rows: Array<Record<string, unknown>> | undefined, key: string, id: number) =>
+      (rows ?? []).filter((row) => row.novel_id === id).map((row) => row[key]);
+    expect(byNovel(seed.characters, 'name', 1)).toEqual(['林舟', '苏晴', '白鸦', '秦伯', '小石头']);
+    expect(byNovel(seed.characters, 'name', 2)).toEqual(['沈砚', '听雨楼诗人']);
+    expect(byNovel(seed.world_settings, 'title', 2)).toEqual(['听雨楼', '剑在匣中鸣']);
+    expect(byNovel(seed.world_settings, 'title', 1)).not.toContain('听雨楼');
+    expect(byNovel(seed.outlines, 'title', 2)).toEqual(['001 少年', '002 听雨楼']);
   });
 
   it('欢迎使用.md 中提到的每个路径都存在', async () => {
@@ -216,7 +265,9 @@ describe('示例作品集 sample-data', () => {
       expect((await stat(path.join(ROOT, file))).size, `${file} 不应为空`).toBeGreaterThan(0);
     }
     // 素材保持成对，便于版本对比演示
-    const media = files.filter((file) => file.startsWith('资料/素材/') && !file.endsWith('.md'));
+    const media = files.filter(
+      (file) => file.startsWith(`${STAR_WORK_DIR}/资料/素材/`) && !file.endsWith('.md')
+    );
     for (const file of media.filter((item) => !/-alt\.\w+$/.test(item))) {
       expect(media, file).toContain(file.replace(/(\.\w+)$/, '-alt$1'));
     }

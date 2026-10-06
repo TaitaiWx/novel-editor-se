@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "name": "沈砚",
+  "aliases": [],
+  "level": 2,
+  "exp": 140,
+  "attributes": {},
+  "skills": [],
+  "choices": [],
+  "events": [
+    {
+      "id": "evt-1",
+      "type": "exp",
+      "at": "2026-01-01T12:01:00.000Z",
+      "delta": 60,
+      "chapter": 1,
+      "note": "在雨巷等了说书人三天",
+      "source": "manual"
+    },
+    {
+      "id": "evt-2",
+      "type": "exp",
+      "at": "2026-01-02T12:02:00.000Z",
+      "delta": 80,
+      "chapter": 2,
+      "note": "浑身湿透爬上听雨楼七层",
+      "source": "manual",
+      "levelBefore": 1,
+      "levelAfter": 2
+    },
+    {
+      "id": "evt-3",
+      "type": "note",
+      "at": "2026-01-02T12:03:00.000Z",
+      "chapter": 2,
+      "note": "诗人要他先学会听雨",
+      "source": "manual"
+    }
+  ],
+  "notes": [
+    "随身木剑一把，诗人的信揣在怀里"
+  ],
+  "createdAt": "2026-01-01T12:00:00.000Z",
+  "updatedAt": "2026-01-02T12:03:00.000Z"
+}

@@ -82,7 +82,8 @@ export const GrowthSetup: React.FC<GrowthSetupProps> = ({
         </button>
       </div>
       <p className={styles.footnote}>
-        数据保存在项目的 资料/记忆/ 文件夹，可用 Git 管理，与命令行 ne growth 共用。
+        数据保存在当前作品的 资料/记忆/ 文件夹（每部作品各一份），可用 Git 管理，与命令行 ne growth
+        共用。
       </p>
       {error && (
         <div className={styles.error} role="alert">

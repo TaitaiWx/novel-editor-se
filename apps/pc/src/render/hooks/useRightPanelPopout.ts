@@ -10,6 +10,7 @@ import type { EditorState } from './state/useEditorState';
 import type { PaneLayoutApi } from './usePaneLayout';
 
 export type UseRightPanelPopoutContext = Pick<WorkspaceState, 'folderPath'> &
+  Partial<Pick<WorkspaceState, 'workScopePath'>> &
   Pick<TabsState, 'activeTab'> &
   Pick<LayoutState, 'rightPanelPoppedOut' | 'setRightPanelPoppedOut'> &
   Pick<EditorState, 'editorContent' | 'editorContentRef'> &
@@ -23,11 +24,12 @@ export function useRightPanelPopout(ctx: UseRightPanelPopoutContext) {
     activeTab,
     editorContent,
     editorContentRef,
-    folderPath,
     resolvePaneLayout,
     rightPanelPoppedOut,
     setRightPanelPoppedOut,
   } = ctx;
+  // 独立窗口里的人物 / 设定 / 成长档案同样跟随当前作品
+  const folderPath = ctx.workScopePath ?? ctx.folderPath;
 
   // 监听右侧面板独立窗口关闭 → 恢复三栏布局
   React.useEffect(() => {

@@ -23,8 +23,8 @@
   --rp-info-glow: rgba(var(--rp-info-rgb), 0.42);
   width: 100%;
   min-width: 0;
-  background: #1e1e1e;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  /* 外层卡片（App 的 rightPanelWrapper / 独立窗口）负责边框与圆角 */
+  background: var(--ui-bg-card);
   display: flex;
   flex-direction: column;
   overflow: hidden;

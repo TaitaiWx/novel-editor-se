@@ -3,8 +3,15 @@
   "novels": [
     {
       "id": 1,
-      "name": "示例作品集",
-      "description": "小说编辑器内置示例：星河旅人 / 剑与诗"
+      "name": "星河旅人",
+      "folder_path": "novels/星河旅人",
+      "description": "主示例：6 章冒险小说，分两卷"
+    },
+    {
+      "id": 2,
+      "name": "剑与诗",
+      "folder_path": "novels/剑与诗",
+      "description": "第二部作品：2 章武侠短篇，演示多作品各自的资料"
     }
   ],
   "characters": [
@@ -50,11 +57,19 @@
     },
     {
       "name": "沈砚",
-      "role": "主角 ·《剑与诗》",
+      "role": "主角 · 学剑少年",
       "description": "江南少年，想学剑，却被一位不会武功的诗人要求先学会听雨。",
-      "attributes": "{\"aliases\":[],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[]}",
-      "novel_id": 1,
-      "sort_order": 5
+      "attributes": "{\"aliases\":[],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"所学\",\"value\":\"听雨（入门）\"}]}",
+      "novel_id": 2,
+      "sort_order": 0
+    },
+    {
+      "name": "听雨楼诗人",
+      "role": "师父 · 不会武功的诗人",
+      "description": "住在听雨楼七层，只用一封信、一句诗就把沈砚引上了楼。",
+      "attributes": "{\"aliases\":[\"诗人\"],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"所在\",\"value\":\"听雨楼七层\"}]}",
+      "novel_id": 2,
+      "sort_order": 1
     }
   ],
   "world_settings": [
@@ -90,7 +105,7 @@
       "novel_id": 1,
       "category": "system",
       "title": "道途抉择（三选一）",
-      "content": "3 级时在战士 / 法师 / 牧师三条道途中选择其一，选定后不可更改。具体数值见 资料/记忆/规则.json。",
+      "content": "3 级时在战士 / 法师 / 牧师三条道途中选择其一，选定后不可更改。具体数值见本作品的 资料/记忆/规则.json。",
       "tags": "[\"成长\"]"
     },
     {
@@ -106,6 +121,20 @@
       "title": "青石",
       "content": "秦伯打造的旧剑，剑身有一道裂纹。「它不快，但不会背叛你。」",
       "tags": "[\"道具\"]"
+    },
+    {
+      "novel_id": 2,
+      "category": "world",
+      "title": "听雨楼",
+      "content": "城西七层木楼，楼上住着不会武功的诗人。雨天整座楼都在响。",
+      "tags": "[\"地点\"]"
+    },
+    {
+      "novel_id": 2,
+      "category": "term",
+      "title": "剑在匣中鸣",
+      "content": "诗人信中唯一的一句诗，也是沈砚学剑的第一道题。",
+      "tags": "[\"伏笔\"]"
     }
   ],
   "outlines": [
@@ -229,6 +258,28 @@
       "parent_id": null,
       "sort_order": 0,
       "novel_id": 1
+    },
+    {
+      "id": 101,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "001 少年",
+      "content": "雨巷苦等说书人，等来一封只有一句诗的信。",
+      "anchor_text": "少年握紧了手中的木剑",
+      "parent_id": null,
+      "sort_order": 0,
+      "novel_id": 2
+    },
+    {
+      "id": 102,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "002 听雨楼",
+      "content": "登楼拜师，诗人要他先学会听雨。",
+      "anchor_text": "听雨楼在城西",
+      "parent_id": null,
+      "sort_order": 1,
+      "novel_id": 2
     }
   ]
 }

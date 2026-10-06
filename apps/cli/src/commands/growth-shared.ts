@@ -2,6 +2,8 @@
  * ne growth 命令共用工具：定位记忆库、渲染角色卡
  */
 import {
+  migrateLegacyProjectMaterials,
+  resolveWorkScope,
   findAttributeDef,
   findChoiceGroup,
   findSheet,
@@ -13,21 +15,54 @@ import {
   type GrowthWarning,
   type LoadedMemory,
 } from '@novel-editor/core';
+import path from 'node:path';
 import { CliError } from '../errors';
 import { renderTable } from '../output';
 import type { CliContext, OptionSpec, ParsedCommandArgs } from '../types';
 import { num, str } from './util';
 
-/** 记忆库所在根目录：优先使用 ne 项目根，否则使用当前目录（兼容 GUI 直接打开的文件夹） */
-export async function memoryRoot(ctx: CliContext): Promise<string> {
-  return (await ctx.getProject())?.root ?? ctx.cwd;
+/** 所有 growth 子命令共用的 --novel 选项：记忆库跟随作品 */
+export const NOVEL_OPTION: OptionSpec = {
+  name: 'novel',
+  short: 'n',
+  type: 'string',
+  valueName: '作品',
+  description: '要操作的作品（项目只有一部作品时可省略；「未归属」指项目根的旧版资料）',
+};
+
+/**
+ * 记忆库所在的作用域根目录（`<root>/资料/记忆/`），与 GUI 同一规则（core resolveWorkScope）：
+ * - ne 项目：`--novel` 指定的作品；省略时为当前所在的作品或唯一的作品，多部作品时报错并提示
+ * - 普通文件夹（GUI 直接打开的目录）：当前目录整体是一部作品
+ * 旧版项目根 资料/ 在只有一部作品时先整体移入该作品（与 GUI 打开项目时一致）。
+ */
+export async function memoryRoot(ctx: CliContext, args?: ParsedCommandArgs): Promise<string> {
+  const project = await ctx.getProject();
+  const workName = args ? str(args, 'novel') : undefined;
+  if (project) {
+    const migration = await migrateLegacyProjectMaterials(project.root);
+    if (migration.migrated && migration.to) {
+      ctx.logger.info(`已把项目根的 资料/ 移入唯一的作品: ${migration.to}`);
+    }
+  }
+  // 在项目内的作品目录中执行时（cd novels/星河旅人）默认就是这部作品
+  const folder = project && !isInsideProject(project.root, ctx.cwd) ? project.root : ctx.cwd;
+  const scope = await resolveWorkScope(folder, { workName });
+  ctx.logger.debug(`记忆库作用域: ${scope.name} (${scope.root})`);
+  return scope.root;
+}
+
+function isInsideProject(projectRoot: string, cwd: string): boolean {
+  const relative = path.relative(path.resolve(projectRoot), path.resolve(cwd));
+  return !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 /** 加载已初始化的记忆库 */
 export async function requireMemory(
-  ctx: CliContext
+  ctx: CliContext,
+  args?: ParsedCommandArgs
 ): Promise<{ root: string; memory: LoadedMemory }> {
-  const root = await memoryRoot(ctx);
+  const root = await memoryRoot(ctx, args);
   const memory = await loadMemory(root);
   if (!memory.initialized) {
     throw new CliError('NOT_FOUND', `记忆库未初始化: ${memory.dir}`, '先运行 `ne growth init`');

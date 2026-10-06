@@ -4,6 +4,7 @@ import type { Character, LoreEntry } from '../RightPanel/types';
 import type { StoryOrderMap } from '../../utils/workspace';
 import type { AssistantArtifactGenerationStatus } from '../../utils/assistantGeneration';
 import type { GrowthIndex } from '../../utils/growthIndex';
+import type { WorkScopeOption } from '../../utils/workScope';
 
 export type ObjectContextMenuTarget =
   | { kind: 'project-root' }
@@ -53,6 +54,14 @@ export interface FilePanelProps {
   folderPath: string | null;
   /** `ne init` 项目结构；普通文件夹为 null（正文按名称推断卷 / 章） */
   projectLayout?: WorkspaceProjectLayout | null;
+  /**
+   * 当前作品（角色 / 设定 / 成长档案 / 资料跟随作品）与可切换的作品；
+   * 未提供时按项目结构取第一部作品（普通文件夹为文件夹本身）
+   */
+  workScope?: WorkScopeOption | null;
+  workScopeOptions?: WorkScopeOption[];
+  onSelectWork?: (workPath: string) => void;
+  onCreateWork?: () => void;
   storyOrderMap?: StoryOrderMap;
   showFileSizes?: boolean;
   quickOpenShortcut?: string;

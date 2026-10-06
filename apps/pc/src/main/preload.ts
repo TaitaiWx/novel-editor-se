@@ -176,6 +176,8 @@ contextBridge.exposeInMainWorld('electron', {
         'export-project',
         // 外部编辑 & 文件监视
         'open-in-system-app',
+        // Markdown 实时预览中 ⌘/Ctrl + 点击链接（主进程只放行 http(s) / mailto）
+        'open-external-url',
         'watch-file',
         'unwatch-file',
         // PPT 预览

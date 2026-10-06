@@ -17,10 +17,22 @@ export {
   PROJECT_SEED_FILE,
   seedProjectData,
   validateProjectSeed,
+  NOVEL_CONTENT_TABLES,
+  countNovelContent,
+  ensureNovelByFolder,
+  hasNovelContentByFolder,
+  migrateProjectContentToWork,
 } from './database';
 export { versionOps } from './versioning';
 
-export type { ExportData, ProjectSeedData, SeedProjectResult } from './database';
+export type {
+  ExportData,
+  NovelContentCounts,
+  ProjectSeedData,
+  SeedCounts,
+  SeedProjectResult,
+  WorkContentMigration,
+} from './database';
 export type {
   OutlineScope,
   OutlineScopeKind,

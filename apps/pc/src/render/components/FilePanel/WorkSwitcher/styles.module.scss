@@ -1,0 +1,186 @@
+// 作品切换器：与文件面板行按钮同一套颜色与间距，柔和、不抢正文树的视觉重心
+
+.workSwitcher {
+  padding: 8px 10px 4px;
+}
+
+.trigger {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--ui-fg-primary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+  }
+}
+
+.triggerOpen {
+  border-color: var(--ui-border-strong);
+  background: var(--ui-interaction-active-bg);
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #88a9cb;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.25;
+}
+
+.eyebrow {
+  font-size: 10px;
+  color: var(--ui-fg-muted);
+}
+
+.name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ui-fg-muted);
+}
+
+.chevron {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: var(--ui-fg-muted);
+}
+
+.popover {
+  min-width: 220px;
+  max-width: 320px;
+  padding: 4px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 6px;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: var(--ui-interaction-hover-bg);
+  }
+}
+
+.optionSelected {
+  background: var(--ui-interaction-accent-soft);
+}
+
+.check {
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--ui-interaction-accent);
+}
+
+.optionName {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.optionMuted {
+  color: var(--ui-fg-muted);
+}
+
+.optionMeta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ui-fg-muted);
+}
+
+.createButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 8px 6px 30px;
+  border: none;
+  border-top: 1px solid var(--ui-border-subtle);
+  border-radius: 0 0 4px 4px;
+  background: transparent;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  cursor: pointer;
+  position: relative;
+
+  svg {
+    position: absolute;
+    left: 9px;
+    width: 13px;
+    height: 13px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    color: var(--ui-fg-primary);
+    background: var(--ui-interaction-hover-bg);
+  }
+}

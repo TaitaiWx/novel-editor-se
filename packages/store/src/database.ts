@@ -18,7 +18,15 @@ export { aiCacheOps } from './db/ai-cache';
 export { exportAllData, importData } from './db/export-import';
 export type { ExportData } from './db/export-import';
 export { PROJECT_SEED_FILE, seedProjectData, validateProjectSeed } from './db/seed';
-export type { ProjectSeedData, SeedProjectResult } from './db/seed';
+export type { ProjectSeedData, SeedCounts, SeedProjectResult } from './db/seed';
+export {
+  NOVEL_CONTENT_TABLES,
+  countNovelContent,
+  ensureNovelByFolder,
+  hasNovelContentByFolder,
+  migrateProjectContentToWork,
+} from './db/work-scope';
+export type { NovelContentCounts, WorkContentMigration } from './db/work-scope';
 export type {
   OutlineScope,
   OutlineScopeKind,

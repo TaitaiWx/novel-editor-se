@@ -24,11 +24,13 @@ import {
 import {
   FIXTURE_CHAPTERS,
   FIXTURE_CHAPTER_TREE,
+  FIXTURE_MATERIAL_DIR,
   FIXTURE_VOLUME_DIR,
+  FIXTURE_WORK,
   createFixtureProject,
   type FixtureProject,
 } from './support/fixture';
-import type { Page } from './support/page';
+import { PRIMARY_MODIFIER, type Page } from './support/page';
 import {
   GROWTH_SECTION,
   GROWTH_TITLE,
@@ -43,9 +45,12 @@ import {
   answerPrompt,
   confirmDialog,
   contextMenuAction,
+  currentWork,
   editorText,
   ensureRightPanelOpen,
+  expandProjectNotes,
   expandTreePath,
+  selectWork,
   storyRow,
   focusEditorEnd,
   redo,
@@ -71,6 +76,17 @@ beforeAll(() => {
 });
 
 const captureForReview = (name: string) => captureShot(page, name);
+
+/** 文件面板各对象分区（aria-label）；资料等分区标题上的数字是当前作品的条目数 */
+const SECTION_CHARACTERS = `${SEL.workspaceTree} [aria-label="角色"]`;
+const SECTION_LORE = `${SEL.workspaceTree} [aria-label="设定"]`;
+const SECTION_MATERIALS = `${SEL.workspaceTree} [aria-label="资料"]`;
+const sectionCount = (section: string) =>
+  page.evaluate<string>(
+    (selector: string) =>
+      document.querySelector(`${selector} [class*="supportNodeCount"]`)?.textContent ?? '',
+    section
+  );
 const openChapter = (title: string, expectText: string) => openChapterIn(page, title, expectText);
 const ensureSidebarOpen = () => ensureSidebarOpenIn(page);
 
@@ -82,13 +98,14 @@ describe('小说编辑器 GUI', () => {
   it('1. 启动：主窗口打开 fixture 项目并展示章节', async () => {
     // 示例项目首次打开时由 seed.json 写入作品记录，标题栏显示作品名而不是目录名
     await waitForWorkspace(page, SAMPLE_PROJECT_NAME);
+    // ne init 项目：顶部作品切换器，默认第一部作品（按名称排序）
+    await page.waitForTarget(SEL.workSwitcher);
+    expect(await currentWork(page)).toBe('剑与诗');
+    await selectWork(page, FIXTURE_WORK);
     await expandTreePath(page, [...FIXTURE_CHAPTER_TREE, '001-启程']);
     const titles = await treeTitles(page);
     expect(titles).toEqual(
       expect.arrayContaining([
-        '欢迎使用',
-        '剑与诗',
-        '星河旅人',
         '第一卷-离乡',
         '第二卷-星海',
         '001-启程',
@@ -97,10 +114,14 @@ describe('小说编辑器 GUI', () => {
       ])
     );
     expect(titles).toContain('资料');
-    // ne init 项目：作品直接作为顶层节点，不显示 novels 容器，也没有「未分卷」
-    expect(titles).toContain('项目文档');
+    // 正文只列当前作品的卷 / 章：不显示 novels 容器、作品节点、其他作品，也没有「未分卷」
     expect(titles).not.toContain('novels');
     expect(titles).not.toContain('未分卷');
+    expect(titles).not.toContain('剑与诗');
+    // 根目录说明文档在底部「项目说明」，默认折叠
+    expect(titles).toContain('项目说明');
+    expect(titles).not.toContain('欢迎使用');
+    expect(await page.exists(`${SEL.projectNotes} button[aria-expanded="false"]`)).toBe(true);
 
     // 开发构建同样应能读到仓库里的 release-notes.json
     const changelog = await page.evaluate<string>(() =>
@@ -113,25 +134,59 @@ describe('小说编辑器 GUI', () => {
 
   it('2. 示例作品集开箱即用：欢迎使用、成长档案、人物与设定、幕剧与大纲都已预置', async () => {
     await ensureSidebarOpen();
-    // 文件树：项目文档 + 两部作品（星河旅人两卷六章、剑与诗两章）+ 资料
-    await expandTreePath(page, ['星河旅人', '第二卷-星海', '004-星港城']);
-    await expandTreePath(page, ['剑与诗', '001-少年']);
-    await captureForReview('sample-tree');
+    // 作品切换器：两部作品（星河旅人两卷六章、剑与诗两章），新建作品入口
+    await page.click(SEL.workSwitcher);
+    await page.waitForTarget(SEL.workList);
+    const workOptions = await page.evaluate<string[]>(
+      (selector: string) =>
+        Array.from(document.querySelectorAll(`${selector} [role="option"]`)).map((node) =>
+          (node as HTMLElement).innerText.replace(/\s+/g, '')
+        ),
+      SEL.workList
+    );
+    expect(workOptions).toEqual(['剑与诗2章', '星河旅人6章']);
+    expect(await page.exists({ text: '新建作品', exact: true })).toBe(true);
+    await captureForReview('sample-work-switcher');
+    await page.press('Escape');
+    await page.waitForGone(SEL.workList);
 
-    // 欢迎使用.md 是项目文档，不是「章」，在「项目文档」分区而不是正文树里
-    const welcome = await storyRow(page, '欢迎使用');
-    expect(welcome.text).toBe('欢迎使用');
-    expect(
-      await page.exists({ text: '欢迎使用', within: '[aria-label="项目文档"]', exact: true })
-    ).toBe(true);
-    // 作品 / 卷 / 章：徽章与统计
-    const star = await storyRow(page, '星河旅人');
-    expect(star.text).toMatch(/^作品 星河旅人 2卷 6章$/);
-    expect(star.tooltip).toBe('作品「星河旅人」· 2 卷 · 6 章');
-    expect((await storyRow(page, '剑与诗')).text).toMatch(/^作品 剑与诗 2章$/);
+    // 《剑与诗》：自己的章节、人物、设定、成长档案与资料
+    await selectWork(page, '剑与诗');
+    expect((await storyRow(page, '001-少年')).text).toMatch(/^章 001-少年$/);
+    await page.waitForTarget({ text: '沈砚', within: GROWTH_SECTION, exact: true });
+    await page.waitForTarget({ text: '听雨楼诗人', within: SECTION_CHARACTERS, exact: true });
+    await page.waitForTarget({ text: '听雨楼', within: SECTION_LORE, exact: true });
+    expect(await page.exists({ text: '林舟', within: SECTION_CHARACTERS, exact: true })).toBe(
+      false
+    );
+    expect(await page.exists({ text: '林舟', within: GROWTH_SECTION, exact: true })).toBe(false);
+    expect(await sectionCount(SECTION_MATERIALS)).toBe('7');
+    await captureForReview('sample-work-poem');
+
+    // 《星河旅人》：卷 / 章徽章与统计；角色、设定、成长档案、资料随之切换
+    await selectWork(page, FIXTURE_WORK);
+    await expandTreePath(page, ['第二卷-星海', '004-星港城']);
+    await captureForReview('sample-tree');
     expect((await storyRow(page, '第一卷-离乡')).text).toMatch(/^卷 第一卷-离乡 3章$/);
     expect((await storyRow(page, '第二卷-星海')).text).toMatch(/^卷 第二卷-星海 3章$/);
-    expect((await storyRow(page, '001-少年')).text).toMatch(/^章 001-少年$/);
+    expect(await page.exists({ text: '001-少年', within: SEL.workspaceTree, exact: true })).toBe(
+      false
+    );
+    await page.waitForTarget({ text: '林舟', within: SECTION_CHARACTERS, exact: true });
+    await page.waitForTarget({ text: '星河大陆', within: SECTION_LORE, exact: true });
+    expect(await page.exists({ text: '沈砚', within: SECTION_CHARACTERS, exact: true })).toBe(
+      false
+    );
+    expect(await page.exists({ text: '听雨楼', within: SECTION_LORE, exact: true })).toBe(false);
+    expect(Number(await sectionCount(SECTION_MATERIALS))).toBeGreaterThan(10);
+
+    // 欢迎使用.md 是项目文档，不是「章」：收在底部默认折叠的「项目说明」里
+    await expandProjectNotes(page);
+    const welcome = await storyRow(page, '欢迎使用');
+    expect(welcome.text).toBe('欢迎使用');
+    expect(await page.exists({ text: '欢迎使用', within: SEL.projectNotes, exact: true })).toBe(
+      true
+    );
 
     // 长卷名：默认侧边栏宽度下省略显示，悬停时出现行内修改按钮，完整名称在悬停提示中
     const longVolume = '第三卷-群星尽头的漫长归途与未竟之约';
@@ -140,7 +195,12 @@ describe('小说编辑器 GUI', () => {
     try {
       await page.click('[aria-label="重新扫描作品目录"]');
       await page.waitForTarget({ text: longVolume, within: SEL.workspaceTree, exact: true });
-      expect((await storyRow(page, '星河旅人')).text).toMatch(/3卷 7章$/);
+      expect(
+        await page.evaluate<string>(
+          (sel: string) => document.querySelector(sel)?.textContent ?? '',
+          SEL.workSwitcher
+        )
+      ).toContain('7章');
       const titleClipped = await page.evaluate<boolean>(
         (selector: string, wanted: string) => {
           const node = Array.from(document.querySelectorAll<HTMLElement>(selector)).find(
@@ -217,6 +277,22 @@ describe('小说编辑器 GUI', () => {
     await page.waitForTarget({ text: '第二场 铁匠铺的夜', within: SEL.storyline });
     await captureForReview('sample-chapter-outline');
     await switchStorylineMode(page, '目录');
+
+    // 打开另一部作品的章节时，当前作品自动切过去（切回原作品的标签也一样）
+    await selectWork(page, '剑与诗');
+    await page.click({ text: '001-少年', within: SEL.workspaceTree, exact: true });
+    await waitForEditorText(page, '少年握紧了手中的木剑');
+    await selectWork(page, FIXTURE_WORK);
+    await page.click({ text: fixture.resolve(FIXTURE_CHAPTERS.other.file), exact: true });
+    await page.waitFor(
+      (sel: string) => document.querySelector(`${sel} [class*="name"]`)?.textContent === '剑与诗',
+      { args: [SEL.workSwitcher], message: '打开《剑与诗》的章节后当前作品切换为剑与诗' }
+    );
+    await page.click({ text: fixture.resolve(FIXTURE_CHAPTERS.first.file), exact: true });
+    await page.waitFor(
+      (sel: string) => document.querySelector(`${sel} [class*="name"]`)?.textContent === '星河旅人',
+      { args: [SEL.workSwitcher], message: '切回星河旅人的标签后当前作品切回' }
+    );
   });
 
   it('3. 编辑章节：自动保存到磁盘，撤销 / 重做生效', async () => {
@@ -594,7 +670,10 @@ describe('小说编辑器 GUI', () => {
   it('9. 资料：哈希 / GUID 文件名中间省略并保留扩展名，按类型显示图标、类型标签与悬停信息', async () => {
     // 示例项目首次打开时由 seed.json 写入作品记录，标题栏显示作品名而不是目录名
     await waitForWorkspace(page, SAMPLE_PROJECT_NAME);
-    const materialDir = fixture.resolve('资料');
+    // 资料跟随作品：写进「星河旅人」自己的 资料/
+    await ensureSidebarOpen();
+    await selectWork(page, FIXTURE_WORK);
+    const materialDir = fixture.resolve(FIXTURE_MATERIAL_DIR);
     const exts = ['png', 'jpg', 'mp4', 'mov', 'mp3', 'pdf', 'docx', 'xlsx', 'pptx', 'zip'];
     const moreExts = ['txt', 'md', 'json', 'webp', 'gif', 'wav', 'csv', 'heic', 'bin', 'm4a'];
     const names = [...exts, ...moreExts].map((ext, index) => {
@@ -654,17 +733,7 @@ describe('小说编辑器 GUI', () => {
     try {
       await contextMenuAction(page, '资料', '刷新资料');
       // 资料分区下是「资料」目录节点（目录行的悬停提示就是目录名），未展开时先展开
-      const hashRowVisible = () =>
-        page.evaluate<boolean>(
-          (first: string) =>
-            Array.from(document.querySelectorAll<HTMLElement>('[class*="itemHeader"]')).some(
-              (row) => row.title.split('\n')[0] === first
-            ),
-          names[0]
-        );
-      if (!(await hashRowVisible())) {
-        await page.click('[class*="itemHeader"][title="资料"]');
-      }
+      // 「资料」分区直接展示作品资料目录的内容（不再多套一层「资料」文件夹），等待刷新出新文件
       await page.waitFor(
         (first: string) =>
           Array.from(document.querySelectorAll<HTMLElement>('[class*="itemHeader"]')).some(
@@ -716,8 +785,64 @@ describe('小说编辑器 GUI', () => {
     }
   });
 
-  it('10. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
-    // 去掉种子：作品名回退为目录名，便于确认切换到了另一个项目
+  it('10. Markdown 实时渲染：标题、表格、公式就地渲染，坏公式只影响自身，光标处显示源码', async () => {
+    await ensureSidebarOpen();
+    // 排版示例.md 在项目根目录：属于默认折叠的「项目说明」
+    await expandProjectNotes(page);
+    await page.click({ text: '排版示例', within: SEL.projectNotes, exact: true });
+    await waitForEditorText(page, '角色属性表');
+
+    // 行内 + 块级公式、表格都已渲染
+    await page.waitFor(() => document.querySelectorAll('.cm-content .katex').length >= 3, {
+      message: '公式已渲染',
+    });
+    await page.waitForTarget('.cm-content .cm-lp-table table');
+    expect(
+      await page.evaluate<string>(
+        () => document.querySelector('.cm-content .cm-lp-table th')?.textContent ?? ''
+      )
+    ).toBe('角色');
+
+    // 坏公式：就地显示原文 + 错误标记，其它公式照常渲染
+    const broken = await page.evaluate<{ title: string; text: string; count: number }>(() => {
+      const markers = document.querySelectorAll('.cm-content .cm-lp-error-marker');
+      const marker = markers[0];
+      return {
+        title: marker?.getAttribute('title') ?? '',
+        text: marker?.parentElement?.textContent ?? '',
+        count: markers.length,
+      };
+    });
+    expect(broken.count).toBe(1);
+    expect(broken.title).toContain('公式错误');
+    expect(broken.text).toContain('\\frac{1}{2');
+
+    // 光标不在标题行时隐藏「#」，移到文档开头（标题行）后显示源码
+    const firstLine = () =>
+      page.evaluate<string>(
+        () => document.querySelector('.cm-content .cm-line')?.textContent ?? ''
+      );
+    await focusEditorEnd(page);
+    await page.waitUntil(async () => (await firstLine()) === '排版示例', {
+      message: '标题的 # 已隐藏',
+    });
+    await page.press('Home', [PRIMARY_MODIFIER]);
+    await page.waitUntil(async () => (await firstLine()).startsWith('# 排版示例'), {
+      message: '光标移入标题后显示 #',
+    });
+    await captureForReview('markdown-live-preview');
+
+    // 文件头切换「源码 / 实时预览」
+    const toggle = '[aria-label="Markdown 显示方式"]';
+    await page.click({ text: '源码', within: toggle, exact: true });
+    await page.waitFor(() => !document.querySelector('.cm-content .katex'), {
+      message: '源码模式不渲染公式',
+    });
+    await page.click({ text: '实时预览', within: toggle, exact: true });
+    await page.waitForTarget('.cm-content .katex');
+  });
+
+  it('11. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
     const other = await createFixtureProject({
       prefix: 'novel-editor-e2e-second-',
       exclude: ['.novel-editor/seed.json'],
@@ -731,8 +856,8 @@ describe('小说编辑器 GUI', () => {
       if (!exited) await stopProcess(second);
       expect(exited, '第二个实例应在转发后立即退出').toBe(true);
 
-      await waitForWorkspace(page, path.basename(other.root));
-      await expandTreePath(page, ['另一部作品', '001-开端']);
+      // 两个项目都源自示例（配置里的项目名相同），用第二个项目独有的作品确认已切换过去
+      await selectWork(page, '另一部作品');
       await page.waitForTarget({ text: '001-开端', within: SEL.workspaceTree, exact: true });
       // 原 Electron 进程仍在运行
       expect(app.process.exitCode).toBeNull();

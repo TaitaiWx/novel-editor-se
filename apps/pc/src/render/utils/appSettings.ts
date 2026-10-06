@@ -7,6 +7,8 @@ export interface GeneralSettings {
   showStatusBar: boolean;
   showThousandCharMarkers: boolean;
   thousandCharMarkerStep: number;
+  /** Markdown 文件实时渲染（类 Typora，光标所在处显示源码） */
+  markdownLivePreview: boolean;
   showFileSizes: boolean;
   openChangelogAfterUpdate: boolean;
 }
@@ -129,6 +131,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   showStatusBar: true,
   showThousandCharMarkers: true,
   thousandCharMarkerStep: 1000,
+  markdownLivePreview: true,
   showFileSizes: true,
   openChangelogAfterUpdate: true,
 };

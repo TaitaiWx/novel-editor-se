@@ -272,13 +272,19 @@ export function findContainingWorkPath(
 }
 
 /**
- * 项目模式下新建卷 / 章的默认目录：当前打开内容所在的作品，否则第一部作品；
- * 没有作品（或普通文件夹）时返回 null，由调用方回退到项目根目录
+ * 项目模式下新建卷 / 章的默认目录：当前打开内容所在的作品，否则当前作品（作品切换器选中的作品），
+ * 再否则第一部作品；没有作品（或普通文件夹）时返回 null，由调用方回退到项目根目录
  */
 export function resolveDefaultWorkPath(
   layout: WorkspaceProjectLayout | null | undefined,
-  activePath: string | null
+  activePath: string | null,
+  currentWorkPath: string | null = null
 ): string | null {
   if (!layout) return null;
-  return findContainingWorkPath(layout, activePath) ?? getWorkPaths(layout)[0] ?? null;
+  return (
+    findContainingWorkPath(layout, activePath) ??
+    findContainingWorkPath(layout, currentWorkPath) ??
+    getWorkPaths(layout)[0] ??
+    null
+  );
 }

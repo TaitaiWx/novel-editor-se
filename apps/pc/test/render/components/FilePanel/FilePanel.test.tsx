@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import FilePanel from '@/render/components/FilePanel';
 import type { FileNode } from '@/render/types';
 import type { Character, LoreEntry } from '@/render/components/RightPanel/types';
@@ -154,7 +154,7 @@ describe('FilePanel', () => {
   });
 });
 
-describe('FilePanel · ne init 项目结构', () => {
+describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / 资料跟随作品）', () => {
   const sampleFiles: FileNode[] = [
     { name: '欢迎使用.md', path: '/s/欢迎使用.md', type: 'file' },
     {
@@ -166,15 +166,33 @@ describe('FilePanel · ne init 项目结构', () => {
           name: '星河旅人',
           path: '/s/novels/星河旅人',
           type: 'directory',
-          children: ['第一卷-离乡', '第二卷-星海'].map((volume, index) => ({
-            name: volume,
-            path: `/s/novels/星河旅人/${volume}`,
-            type: 'directory' as const,
-            children: [1, 2, 3].map((n) => {
-              const name = `00${index * 3 + n}-章节${index * 3 + n}.md`;
-              return { name, path: `/s/novels/星河旅人/${volume}/${name}`, type: 'file' as const };
-            }),
-          })),
+          children: [
+            ...['第一卷-离乡', '第二卷-星海'].map((volume, index) => ({
+              name: volume,
+              path: `/s/novels/星河旅人/${volume}`,
+              type: 'directory' as const,
+              children: [1, 2, 3].map((n) => {
+                const name = `00${index * 3 + n}-章节${index * 3 + n}.md`;
+                return {
+                  name,
+                  path: `/s/novels/星河旅人/${volume}/${name}`,
+                  type: 'file' as const,
+                };
+              }),
+            })),
+            {
+              name: '资料',
+              path: '/s/novels/星河旅人/资料',
+              type: 'directory' as const,
+              children: [
+                {
+                  name: '世界观.md',
+                  path: '/s/novels/星河旅人/资料/世界观.md',
+                  type: 'file' as const,
+                },
+              ],
+            },
+          ],
         },
         {
           name: '剑与诗',
@@ -183,6 +201,15 @@ describe('FilePanel · ne init 项目结构', () => {
           children: [
             { name: '001-少年.md', path: '/s/novels/剑与诗/001-少年.md', type: 'file' },
             { name: '002-听雨楼.md', path: '/s/novels/剑与诗/002-听雨楼.md', type: 'file' },
+            {
+              name: '资料',
+              path: '/s/novels/剑与诗/资料',
+              type: 'directory',
+              children: [
+                { name: '江湖风物.md', path: '/s/novels/剑与诗/资料/江湖风物.md', type: 'file' },
+                { name: '听雨楼.png', path: '/s/novels/剑与诗/资料/听雨楼.png', type: 'file' },
+              ],
+            },
           ],
         },
       ],
@@ -194,43 +221,133 @@ describe('FilePanel · ne init 项目结构', () => {
     novelsPath: '/s/novels',
     novels: ['剑与诗', '星河旅人'],
   };
+  const star = { kind: 'work' as const, name: '星河旅人', path: '/s/novels/星河旅人' };
+  const sword = { kind: 'work' as const, name: '剑与诗', path: '/s/novels/剑与诗' };
+  const unassigned = { kind: 'unassigned' as const, name: '未归属', path: '/s' };
 
   const rowOf = (text: string) => screen.getByText(text).closest('[role="button"]') as HTMLElement;
+  const materials = () => screen.getByRole('region', { name: '资料' });
+  /** 资料分区标题上的文件数 */
+  const materialCount = () => within(materials()).getAllByText(/^\d+$/)[0]?.textContent ?? '';
 
-  it('作品为顶层「作品」节点，带卷数与章数；不显示 novels 容器与未分卷', () => {
-    renderPanel({ files: sampleFiles, folderPath: '/s', projectLayout });
+  it('顶部作品切换器显示当前作品；正文只列当前作品的卷 / 章，不显示 novels 容器与其他作品', () => {
+    renderPanel({
+      files: sampleFiles,
+      folderPath: '/s',
+      projectLayout,
+      workScope: star,
+      workScopeOptions: [sword, star],
+    });
+    const switcher = screen.getByTestId('work-switcher');
+    expect(switcher.textContent).toContain('星河旅人');
+    expect(switcher.textContent).toContain('6章');
     expect(screen.queryByText('novels')).toBeNull();
-    expect(screen.queryByText('未分卷')).toBeNull();
-    expect(screen.getAllByText('作品')).toHaveLength(2);
-
-    const star = rowOf('星河旅人');
-    expect(star.textContent).toContain('作品');
-    expect(star.textContent).toContain('2卷');
-    expect(star.textContent).toContain('6章');
-    expect(star.querySelector('[title]')?.getAttribute('title')).toBe(
-      '作品「星河旅人」· 2 卷 · 6 章'
-    );
-    const sword = rowOf('剑与诗');
-    expect(sword.textContent).toContain('2章');
-    expect(sword.textContent).not.toContain('卷');
-  });
-
-  it('展开作品显示卷与章；章节序号前缀单独弱化显示但文本完整', () => {
-    renderPanel({ files: sampleFiles, folderPath: '/s', projectLayout });
-    fireEvent.click(rowOf('星河旅人'));
+    expect(screen.queryByText('剑与诗')).toBeNull();
     expect(rowOf('第一卷-离乡').textContent).toContain('3章');
     expect(screen.getAllByText('卷')).toHaveLength(2);
-    fireEvent.click(rowOf('第一卷-离乡'));
-    const title = document.querySelector('span[title="001-章节1.md"]') as HTMLElement;
-    expect(title.textContent).toBe('001-章节1');
-    expect(title.getAttribute('title')).toBe('001-章节1.md');
-    expect(title.querySelector('[class*="storyNodeIndex"]')?.textContent).toBe('001-');
+    // 正文分区标题带当前作品的章数
+    expect(screen.getByText('正文').parentElement?.textContent).toContain('6');
   });
 
-  it('根目录文档在「项目文档」分区，不是章节，点击打开', () => {
-    const { props } = renderPanel({ files: sampleFiles, folderPath: '/s', projectLayout });
-    const docs = screen.getByRole('region', { name: '项目文档' });
-    expect(docs.textContent).toContain('欢迎使用');
+  it('未传入当前作品时默认第一部作品；切换器列出作品与章数，可切换、新建作品', () => {
+    const onSelectWork = vi.fn();
+    const onCreateWork = vi.fn();
+    renderPanel({
+      files: sampleFiles,
+      folderPath: '/s',
+      projectLayout,
+      onSelectWork,
+      onCreateWork,
+    });
+    expect(screen.getByTestId('work-switcher').textContent).toContain('剑与诗');
+    expect(document.querySelector('span[title="001-少年.md"]')).not.toBeNull();
+
+    fireEvent.click(screen.getByTestId('work-switcher'));
+    const list = screen.getByRole('listbox', { name: '作品' });
+    const options = Array.from(list.querySelectorAll('[role="option"]')).map(
+      (el) => el.textContent
+    );
+    expect(options).toEqual(['剑与诗2章', '星河旅人6章']);
+    fireEvent.click(screen.getByRole('option', { name: /星河旅人/ }));
+    expect(onSelectWork).toHaveBeenCalledWith('/s/novels/星河旅人');
+
+    fireEvent.click(screen.getByTestId('work-switcher'));
+    fireEvent.click(screen.getByText('新建作品'));
+    expect(onCreateWork).toHaveBeenCalledTimes(1);
+  });
+
+  it('资料分区只显示当前作品的 资料/；未归属显示项目根的旧资料', () => {
+    const { unmount } = renderPanel({
+      files: sampleFiles,
+      folderPath: '/s',
+      projectLayout,
+      workScope: star,
+    });
+    // 星河旅人 1 个资料文件，剑与诗 2 个
+    expect(materialCount()).toBe('1');
+    unmount();
+
+    const other = renderPanel({
+      files: sampleFiles,
+      folderPath: '/s',
+      projectLayout,
+      workScope: sword,
+    });
+    expect(materialCount()).toBe('2');
+    other.unmount();
+
+    renderPanel({
+      files: [
+        ...sampleFiles,
+        {
+          name: '资料',
+          path: '/s/资料',
+          type: 'directory',
+          children: [
+            { name: '旧设定.md', path: '/s/资料/旧设定.md', type: 'file' },
+            { name: '旧人物.md', path: '/s/资料/旧人物.md', type: 'file' },
+            { name: '草图.png', path: '/s/资料/草图.png', type: 'file' },
+          ],
+        },
+      ],
+      folderPath: '/s',
+      projectLayout: { ...projectLayout, hasProjectMaterials: true },
+      workScope: unassigned,
+      workScopeOptions: [sword, star, unassigned],
+    });
+    expect(screen.getByTestId('work-switcher').textContent).toContain('未归属');
+    expect(materialCount()).toBe('3');
+    expect(screen.queryByText('第一卷-离乡')).toBeNull();
+  });
+
+  it('搜索时跨作品显示结果', () => {
+    renderPanel({ files: sampleFiles, folderPath: '/s', projectLayout, workScope: star });
+    expect(screen.queryByText('剑与诗')).toBeNull();
+    fireEvent.click(screen.getByLabelText(/搜索文件/));
+    fireEvent.change(screen.getByPlaceholderText('搜索作品内容...'), {
+      target: { value: '少年' },
+    });
+    expect(screen.getByText('剑与诗')).toBeTruthy();
+  });
+
+  it('根目录文档在底部「项目说明」分区，默认折叠，带用途说明，展开后点击打开', () => {
+    const { props } = renderPanel({
+      files: sampleFiles,
+      folderPath: '/s',
+      projectLayout,
+      workScope: star,
+    });
+    const notes = screen.getByRole('region', { name: '项目说明' });
+    const header = notes.querySelector('button[aria-expanded]') as HTMLElement;
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+    expect(header.getAttribute('title')).toContain('不属于任何作品');
+    expect(screen.queryByText('欢迎使用')).toBeNull();
+    // 位于所有分区之后
+    const sections = Array.from(document.querySelectorAll('section'));
+    expect(sections[sections.length - 1]).toBe(notes);
+
+    fireEvent.click(header, { detail: 1 });
+    expect(header.getAttribute('aria-expanded')).toBe('true');
     const welcome = rowOf('欢迎使用');
     expect(welcome.textContent).not.toContain('章');
     expect(welcome.getAttribute('draggable')).toBe('false');
@@ -238,7 +355,17 @@ describe('FilePanel · ne init 项目结构', () => {
     expect(props.onFileSelect).toHaveBeenCalledWith('/s/欢迎使用.md');
   });
 
-  it('普通文件夹：根目录说明文档同样放进项目文档，不计入未分卷章数', () => {
+  it('没有根目录文档时不显示「项目说明」', () => {
+    renderPanel({
+      files: sampleFiles.slice(1),
+      folderPath: '/s',
+      projectLayout,
+      workScope: star,
+    });
+    expect(screen.queryByRole('region', { name: '项目说明' })).toBeNull();
+  });
+
+  it('普通文件夹：没有作品切换器；根目录说明文档放进项目说明，不计入未分卷章数', () => {
     renderPanel({
       files: [
         { name: 'README.md', path: '/p/README.md', type: 'file' },
@@ -246,7 +373,10 @@ describe('FilePanel · ne init 项目结构', () => {
       ],
       folderPath: '/p',
     });
-    expect(screen.getByRole('region', { name: '项目文档' }).textContent).toContain('README');
+    expect(screen.queryByTestId('work-switcher')).toBeNull();
+    const notes = screen.getByRole('region', { name: '项目说明' });
+    fireEvent.click(notes.querySelector('button[aria-expanded]') as HTMLElement, { detail: 1 });
+    expect(notes.textContent).toContain('README');
     expect(rowOf('未分卷').textContent).toContain('1章');
   });
 });

@@ -12,13 +12,16 @@ import {
 } from '@/render/utils/workspace';
 import {
   GROWTH_MEMORY_CHANGED_EVENT,
+  consumeGrowthSheetCreation,
   emitGrowthMemoryChanged,
   findGrowthSheetSummary,
   findMentionedNames,
   formatGrowthSheetMeta,
   inferChapterNumber,
   parseChineseNumber,
+  requestGrowthSheetCreation,
   requestOpenGrowth,
+  resetGrowthSheetCreationRequests,
   summarizeGrowthSnapshot,
   type GrowthSheetSummary,
 } from '@/render/utils/growthIndex';
@@ -162,6 +165,30 @@ describe('useGrowthEntry', () => {
     expect(toast.error).toHaveBeenCalledWith('记忆库创建失败');
   });
 
+  it('切换作品后立即隐藏上一部作品的成长卡，新作品的索引加载完成后再显示', async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    installElectronMock((channel, ...args) => {
+      if (channel !== 'growth-load') return null;
+      if (args[0] === FOLDER) return ok(buildSnapshot());
+      // 另一部作品的索引延迟返回，模拟磁盘读取
+      return new Promise((resolve) => pending.push(resolve));
+    });
+    const { ctx } = setup();
+    const { result, rerender } = renderHook(
+      (props: { work: string }) => useGrowthEntry({ ...ctx, workScopePath: props.work }),
+      { initialProps: { work: FOLDER } }
+    );
+    await waitFor(() => expect(result.current.growthIndex?.sheets).toHaveLength(1));
+
+    rerender({ work: '/other-work' });
+    expect(result.current.growthIndex).toBeNull();
+
+    await act(async () => {
+      pending.forEach((resolve) => resolve(ok(buildSnapshot({ sheets: [] }))));
+    });
+    await waitFor(() => expect(result.current.growthIndex?.sheets).toEqual([]));
+  });
+
   it('记住最近打开的正文章节号，切到成长标签后仍沿用；响应打开请求事件', async () => {
     installElectronMock(() => ok(buildSnapshot()));
     const { ctx, openFileInTab } = setup();
@@ -300,7 +327,38 @@ describe('GrowthView 工作区布局', () => {
     window.localStorage.setItem(GROWTH_TOUR_STORAGE_KEY, '1');
   });
 
-  it('指定角色时自动建卡，标题区显示角色与等级；写入后广播索引', async () => {
+  it('没有明确建卡请求时（例如切换作品后标签重新加载）不自动建卡，提示并可手动新建', async () => {
+    resetGrowthSheetCreationRequests();
+    const electron = installElectronMock((channel) =>
+      channel === 'growth-load' ? ok(buildSnapshot()) : null
+    );
+    render(
+      <GrowthView folderPath={FOLDER} dbReady={false} layout="workspace" initialCharacter="林舟" />
+    );
+    expect(await screen.findByText('当前作品还没有「林舟」的成长卡')).toBeTruthy();
+    expect(electron.invoke).not.toHaveBeenCalledWith(
+      'growth-ensure-sheet',
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    );
+    fireEvent.click(screen.getByRole('button', { name: '为「林舟」新建成长卡' }));
+    await waitFor(() =>
+      expect(electron.invoke).toHaveBeenCalledWith('growth-ensure-sheet', FOLDER, '林舟', [])
+    );
+  });
+
+  it('建卡请求按作品登记：在另一部作品里不会被消费', () => {
+    resetGrowthSheetCreationRequests();
+    requestGrowthSheetCreation('/works/星河旅人', '林舟');
+    expect(consumeGrowthSheetCreation('/works/剑与诗', '林舟')).toBe(false);
+    expect(consumeGrowthSheetCreation('/works/星河旅人', '林舟')).toBe(true);
+    expect(consumeGrowthSheetCreation('/works/星河旅人', '林舟')).toBe(false);
+  });
+
+  it('明确打开指定角色时自动建卡，标题区显示角色与等级；写入后广播索引', async () => {
+    resetGrowthSheetCreationRequests();
+    requestGrowthSheetCreation(FOLDER, '白芷');
     let snapshot: GrowthSnapshot = buildSnapshot();
     const electron = installElectronMock((channel, ...args) => {
       if (channel === 'growth-load') return ok(snapshot);

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>(),
   showOpenDialog: vi.fn(),
   openPath: vi.fn(),
+  openExternal: vi.fn(),
   getPath: vi.fn(),
   getAppPath: vi.fn(),
   send: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock('electron', () => ({
     },
   },
   dialog: { showOpenDialog: mocks.showOpenDialog },
-  shell: { openPath: mocks.openPath },
+  shell: { openPath: mocks.openPath, openExternal: mocks.openExternal },
   BrowserWindow: {
     getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: mocks.send } }],
   },
@@ -101,6 +102,7 @@ describe('通道注册', () => {
         'get-file-info',
         'get-file-info-batch',
         'open-in-system-app',
+        'open-external-url',
         'watch-file',
         'unwatch-file',
         'create-file',
@@ -191,6 +193,33 @@ describe('文件树：open-local-folder / refresh-folder', () => {
     });
   });
 
+  it('refresh-folder 把旧版项目根 资料/ 移入唯一的作品；多部作品时保留为未归属', async () => {
+    await touch(
+      '.novel-editor/config.json',
+      JSON.stringify({ name: '旧项目', novelsDir: 'novels' })
+    );
+    await touch('novels/星河/001-启程.md');
+    await touch('资料/世界观.md', '# 世界观');
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const result = await invoke<{ project: { hasProjectMaterials: boolean } }>(
+      'refresh-folder',
+      dir
+    );
+    info.mockRestore();
+    expect(result.project.hasProjectMaterials).toBe(false);
+    expect(await readFile(path.join(dir, 'novels', '星河', '资料', '世界观.md'), 'utf-8')).toBe(
+      '# 世界观'
+    );
+
+    await touch('novels/剑与诗/001-少年.md');
+    await touch('资料/旧笔记.md', '旧');
+    const again = await invoke<{ project: { hasProjectMaterials: boolean } }>(
+      'refresh-folder',
+      dir
+    );
+    expect(again.project.hasProjectMaterials).toBe(true);
+  });
+
   it('ne init 项目附带作品结构（与 ne novel list 同一口径），配置损坏时按普通文件夹处理', async () => {
     await touch(
       '.novel-editor/config.json',
@@ -205,6 +234,7 @@ describe('文件树：open-local-folder / refresh-folder', () => {
       novelsDir: 'novels',
       novelsPath: path.join(dir, 'novels'),
       novels: ['乙', '甲'].sort(new Intl.Collator('zh-Hans-CN', { numeric: true }).compare),
+      hasProjectMaterials: false,
     });
 
     await touch('.novel-editor/config.json', '{oops');
@@ -364,6 +394,17 @@ describe('Electron 专属能力', () => {
     expect(await invoke('open-in-system-app', '/x')).toEqual({ success: true });
     mocks.openPath.mockResolvedValueOnce('no app');
     await expect(invoke('open-in-system-app', '/x')).rejects.toThrow('无法打开文件: no app');
+  });
+
+  it('open-external-url 只放行 http(s) / mailto', async () => {
+    mocks.openExternal.mockResolvedValue(undefined);
+    expect(await invoke('open-external-url', 'https://example.com/a')).toEqual({ success: true });
+    expect(mocks.openExternal).toHaveBeenCalledWith('https://example.com/a');
+    await invoke('open-external-url', 'mailto:a@b.c');
+    for (const bad of ['file:///etc/passwd', 'javascript:alert(1)', 'not a url', 42]) {
+      await expect(invoke('open-external-url', bad)).rejects.toThrow('不支持打开该链接');
+    }
+    expect(mocks.openExternal).toHaveBeenCalledTimes(2);
   });
 
   it('get-default-data-path / open-sample-data 从开发环境种子目录播种', async () => {

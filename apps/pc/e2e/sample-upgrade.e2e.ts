@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { launchApp, type ElectronApp } from './support/app';
-import { treeTitles } from './support/workbench';
+import { SEL, currentWork } from './support/workbench';
 
 let app: ElectronApp;
 let userDataDir: string;
@@ -46,12 +46,18 @@ afterAll(async () => {
 
 describe('示例作品集升级', () => {
   it('上次打开的旧版示例被备份并替换为新版，且提示备份位置', async () => {
-    await app.page.waitUntil(async () => (await treeTitles(app.page)).includes('星河旅人'), {
-      timeout: 15_000,
-      message: '文件树展示新版示例',
-    });
+    // 新版示例（v3）：作品切换器出现，资料与成长档案跟随作品
+    await app.page.waitForTarget(SEL.workSwitcher, 15_000);
+    expect(['剑与诗', '星河旅人']).toContain(await currentWork(app.page));
     expect(existsSync(path.join(sampleDir, '欢迎使用.md'))).toBe(true);
     expect(existsSync(path.join(sampleDir, 'monica'))).toBe(false);
+    expect(
+      existsSync(path.join(sampleDir, 'novels', '星河旅人', '资料', '记忆', '规则.json'))
+    ).toBe(true);
+    expect(existsSync(path.join(sampleDir, 'novels', '剑与诗', '资料', '记忆', '规则.json'))).toBe(
+      true
+    );
+    expect(existsSync(path.join(sampleDir, '资料'))).toBe(false);
 
     const backups = (await readdir(novelEditorDocs)).filter((name) =>
       name.startsWith('sample-data-旧版-')

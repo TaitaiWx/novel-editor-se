@@ -2,7 +2,8 @@
  * 成长记录器命令（角色卡与规则）：
  *   ne growth init|list|show|exp|attr|skill|choose|note|rules
  *
- * 数据位于 `<project>/资料/记忆/`，与 GUI「成长」面板共用 @novel-editor/core 的同一套逻辑。
+ * 数据位于作品的 `<作品>/资料/记忆/`（`--novel` 指定作品，普通文件夹为 `<folder>/资料/记忆/`），
+ * 与 GUI「成长」面板共用 @novel-editor/core 的同一套逻辑。
  */
 import {
   GROWTH_TEMPLATES,
@@ -42,7 +43,7 @@ async function applyEvent(
   args: ParsedCommandArgs,
   input: GrowthEventInput
 ): Promise<CommandResult> {
-  const { root, memory } = await requireMemory(ctx);
+  const { root, memory } = await requireMemory(ctx, args);
   const name = requireStr(args, 'character');
   const { sheet, created } = await ensureSheet(root, name);
   const result = applyGrowthEvent(
@@ -90,7 +91,7 @@ async function applyEvent(
 export const growthCommands: CommandSpec[] = [
   {
     path: ['growth', 'init'],
-    summary: '初始化记忆库（资料/记忆/：规则、角色、队伍、地图）',
+    summary: '初始化作品的记忆库（<作品>/资料/记忆/：规则、角色、队伍、地图）',
     options: [
       {
         name: 'template',
@@ -102,9 +103,9 @@ export const growthCommands: CommandSpec[] = [
       },
       { name: 'force', type: 'boolean', description: '用模板覆盖已有的 规则.json' },
     ],
-    examples: ['ne growth init', 'ne growth init --template blank'],
+    examples: ['ne growth init', 'ne growth init --novel 星河旅人 --template blank'],
     async run(ctx, args) {
-      const root = await memoryRoot(ctx);
+      const root = await memoryRoot(ctx, args);
       const result = await initMemory(root, {
         template: (str(args, 'template') ?? 'dnd') as GrowthTemplate,
         force: bool(args, 'force'),
@@ -119,8 +120,8 @@ export const growthCommands: CommandSpec[] = [
   {
     path: ['growth', 'list'],
     summary: '列出所有角色成长卡',
-    async run(ctx) {
-      const { memory } = await requireMemory(ctx);
+    async run(ctx, args) {
+      const { memory } = await requireMemory(ctx, args);
       const rows = memory.sheets.map((sheet) => {
         const progress = getLevelProgress(memory.ruleset, sheet);
         return {
@@ -154,7 +155,7 @@ export const growthCommands: CommandSpec[] = [
     summary: '查看角色成长卡（等级、经验、属性、技能、抉择）',
     positionals: [CHARACTER_ARG],
     async run(ctx, args) {
-      const { memory } = await requireMemory(ctx);
+      const { memory } = await requireMemory(ctx, args);
       const sheet = requireSheet(memory, requireStr(args, 'character'));
       const warnings = checkSheetConsistency(memory.ruleset, sheet);
       return {
@@ -278,7 +279,7 @@ export const growthCommands: CommandSpec[] = [
       const text = requireStr(args, 'text');
       const result = await applyEvent(ctx, args, { type: 'note', note: text });
       if (bool(args, 'status')) {
-        const { root, memory } = await requireMemory(ctx);
+        const { root, memory } = await requireMemory(ctx, args);
         const sheet = requireSheet(memory, requireStr(args, 'character'));
         await saveSheet(root, { ...sheet, notes: [...sheet.notes, text] });
       }
@@ -294,7 +295,7 @@ export const growthCommands: CommandSpec[] = [
     ],
     examples: ['ne growth rules', 'ne growth rules --add "主角在第三卷前不能学会飞行"'],
     async run(ctx, args) {
-      const { root, memory } = await requireMemory(ctx);
+      const { root, memory } = await requireMemory(ctx, args);
       let ruleset = memory.ruleset;
       const add = str(args, 'add');
       const remove = str(args, 'remove');

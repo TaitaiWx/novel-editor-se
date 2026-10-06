@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { FileNode, OpenLocalResult, WorkspaceProjectLayout } from '@/render/types';
 import { type StoryOrderMap, createStoryOrderStorageKey } from '@/render/utils/workspace';
+import { listWorkScopeOptions, resolveWorkScope } from '@/render/utils/workScope';
 
 /**
- * 工作区领域状态：打开的文件夹、文件树、加载/数据库就绪标记、故事排序，
+ * 工作区领域状态：打开的文件夹、文件树、当前作品（作品作用域）、加载/数据库就绪标记、故事排序，
  * 以及刷新文件夹、生成资料清理等跨 hook 共享的 ref（只声明，不含副作用）
  */
 export function useWorkspaceState() {
@@ -15,10 +16,25 @@ export function useWorkspaceState() {
   const [dbReady, setDbReady] = useState(false);
   const [storyOrderMap, setStoryOrderMap] = useState<StoryOrderMap>({});
   const storyOrderStorageKey = useMemo(() => createStoryOrderStorageKey(folderPath), [folderPath]);
+  // 当前作品（角色 / 设定 / 成长档案 / 资料跟随作品）：作者选择的作品路径与「未归属」旧数据标记
+  const [preferredWorkPath, setPreferredWorkPath] = useState<string | null>(null);
+  const [unassignedRecords, setUnassignedRecords] = useState(false);
+  const workScopeOptions = useMemo(
+    () => listWorkScopeOptions(folderPath, projectLayout, unassignedRecords),
+    [folderPath, projectLayout, unassignedRecords]
+  );
+  const workScope = useMemo(
+    () => resolveWorkScope(workScopeOptions, preferredWorkPath),
+    [preferredWorkPath, workScopeOptions]
+  );
+  // 数据库（人物 / 设定 / 大纲）、记忆库、资料目录都以它为键；普通文件夹即 folderPath
+  const workScopePath = workScope?.path ?? folderPath;
 
   // 最新值 ref：供异步回调读取，避免闭包过期
   const folderPathRef = useRef(folderPath);
   folderPathRef.current = folderPath;
+  const workScopePathRef = useRef(workScopePath);
+  workScopePathRef.current = workScopePath;
   const filesRef = useRef(files);
   filesRef.current = files;
   const storyOrderMapRef = useRef(storyOrderMap);
@@ -40,6 +56,14 @@ export function useWorkspaceState() {
     applyFolderTree,
     folderPath,
     setFolderPath,
+    preferredWorkPath,
+    setPreferredWorkPath,
+    unassignedRecords,
+    setUnassignedRecords,
+    workScopeOptions,
+    workScope,
+    workScopePath,
+    workScopePathRef,
     isLoading,
     setIsLoading,
     dbReady,

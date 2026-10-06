@@ -1,0 +1,30 @@
+// 与其他对象分区同样的节奏；放在文件面板底部，视觉上比作品内容更弱
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 0 6px;
+  margin-top: 4px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+.children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.info {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-fg-muted);
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}

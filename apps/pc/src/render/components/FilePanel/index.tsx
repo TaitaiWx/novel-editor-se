@@ -1,10 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import {
-  AiOutlineFileText,
-  AiOutlineFolderOpen,
-  AiOutlineUser,
-  AiOutlineFolder,
-} from 'react-icons/ai';
+import { AiOutlineFolderOpen, AiOutlineUser, AiOutlineFolder } from 'react-icons/ai';
 import LoadingSpinner from '../LoadingSpinner';
 import EmptyState from '../EmptyState';
 import FileTree from '../FileTree';
@@ -39,6 +34,7 @@ import { useExternalFileDrop } from './hooks/useExternalFileDrop';
 import { useStoryDragReorder } from './hooks/useStoryDragReorder';
 import { useFilePanelSearch } from './hooks/useFilePanelSearch';
 import { useStoryTreeReveal } from './hooks/useStoryTreeReveal';
+import { useWorkScopedNodes } from './hooks/useWorkScopedNodes';
 import StoryTreeNode, { type StoryTreeContext } from './StoryTreeNode';
 import SectionHeader from './SectionHeader';
 import ObjectItemRow from './ObjectItemRow';
@@ -46,6 +42,8 @@ import WorkspaceHeader, { buildCreateMenuItems } from './WorkspaceHeader';
 import SearchBar from './SearchBar';
 import CharacterGenerationHint from './CharacterGenerationHint';
 import GrowthSection from './GrowthSection';
+import WorkSwitcher from './WorkSwitcher';
+import ProjectNotesSection from './ProjectNotesSection';
 import type { GrowthSheetSummary } from '../../utils/growthIndex';
 import styles from './styles.module.scss';
 
@@ -69,6 +67,10 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     activeWorkspaceTab,
     folderPath,
     projectLayout = null,
+    workScope: workScopeProp,
+    workScopeOptions: workScopeOptionsProp,
+    onSelectWork,
+    onCreateWork,
     storyOrderMap = EMPTY_STORY_ORDER_MAP,
     showFileSizes = true,
     quickOpenShortcut = 'Mod+P',
@@ -163,8 +165,28 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       () => storyStructure.projectDocs.map((node) => ({ ...node, storyKind: 'document' as const })),
       [storyStructure]
     );
-    const materialFileCount = useMemo(() => countFiles(materialNodes), [materialNodes]);
     const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    // 当前作品：正文 / 资料只显示这部作品（搜索时跨作品显示全部结果）
+    const {
+      workScope,
+      workScopeOptions,
+      isProjectMode,
+      scopeToWork,
+      scopedStoryNodes,
+      scopedMaterialNodes,
+      workChapterCounts,
+      storyParentPath,
+    } = useWorkScopedNodes({
+      folderPath,
+      projectLayout,
+      workScope: workScopeProp,
+      workScopeOptions: workScopeOptionsProp,
+      storyDisplayNodes,
+      materialNodes,
+      searching: Boolean(normalizedQuery),
+    });
+    const materialFileCount = useMemo(() => countFiles(scopedMaterialNodes), [scopedMaterialNodes]);
     const filteredCharacters = useMemo(
       () => filterCharacters(characters, normalizedQuery),
       [characters, normalizedQuery]
@@ -322,37 +344,22 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   onRefresh={onRefresh}
                   onContextMenu={(event) => emitObjectContextMenu(event, { kind: 'project-root' })}
                 />
+                {isProjectMode && workScope && (
+                  <WorkSwitcher
+                    current={workScope}
+                    options={workScopeOptions}
+                    chapterCounts={workChapterCounts}
+                    onSelect={(path) => onSelectWork?.(path)}
+                    onCreate={onCreateWork}
+                  />
+                )}
                 <div className={styles.workspaceTree}>
-                  {projectDocNodes.length > 0 && (
-                    <section className={styles.objectSection} aria-label="项目文档">
-                      <SectionHeader
-                        title="项目文档"
-                        icon={<AiOutlineFileText />}
-                        count={projectDocNodes.length}
-                        singleClickOnly
-                        onToggle={() => toggleSection('docs')}
-                        onContextMenu={(event) =>
-                          emitObjectContextMenu(event, { kind: 'project-root' })
-                        }
-                      />
-                      {!collapsedSections.docs && (
-                        <div className={styles.storyTree}>
-                          {projectDocNodes.map((node) => (
-                            <StoryTreeNode
-                              key={node.path}
-                              node={node}
-                              level={0}
-                              parentPath={null}
-                              tree={storyTree}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
-                  <section className={styles.objectSection}>
+                  <section className={styles.objectSection} aria-label="正文">
                     <SectionHeader
                       title="正文"
+                      count={
+                        scopeToWork && workScope ? workChapterCounts[workScope.path] : undefined
+                      }
                       singleClickOnly
                       onToggle={() => toggleSection('story')}
                       onContextMenu={(event) =>
@@ -360,9 +367,9 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       }
                     />
                     {!collapsedSections.story &&
-                      (storyDisplayNodes.length > 0 ? (
+                      (scopedStoryNodes.length > 0 ? (
                         <div className={styles.storyTree}>
-                          {storyDisplayNodes.map((node) => (
+                          {scopedStoryNodes.map((node) => (
                             <StoryTreeNode
                               key={node.path}
                               node={node}
@@ -370,19 +377,23 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                               parentPath={
                                 node.storyKind === 'work'
                                   ? storyStructure.worksParentPath
-                                  : folderPath || null
+                                  : storyParentPath
                               }
                               tree={storyTree}
                             />
                           ))}
                         </div>
                       ) : (
-                        <div className={styles.objectEmpty}>还没有正文文件</div>
+                        <div className={styles.objectEmpty}>
+                          {scopeToWork && workScope?.kind === 'work'
+                            ? '这部作品还没有章节'
+                            : '还没有正文文件'}
+                        </div>
                       ))}
                   </section>
 
                   {showCharactersSection && (
-                    <section className={styles.objectSection}>
+                    <section className={styles.objectSection} aria-label="角色">
                       <SectionHeader
                         title="角色"
                         icon={<AiOutlineUser />}
@@ -443,7 +454,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   )}
 
                   {showLoreSection && (
-                    <section className={styles.objectSection}>
+                    <section className={styles.objectSection} aria-label="设定">
                       <SectionHeader
                         title="设定"
                         icon={<AiOutlineFolder />}
@@ -495,7 +506,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                     />
                   )}
 
-                  <section className={styles.objectSection}>
+                  <section className={styles.objectSection} aria-label="资料">
                     <SectionHeader
                       title="资料"
                       icon={<AiOutlineFolderOpen />}
@@ -506,10 +517,10 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       }
                     />
                     {!collapsedSections.materials &&
-                      (materialNodes.length > 0 ? (
+                      (scopedMaterialNodes.length > 0 ? (
                         <div className={styles.supportMaterialsTree}>
                           <FileTree
-                            files={materialNodes}
+                            files={scopedMaterialNodes}
                             fill={false}
                             showFileSizes={showFileSizes}
                             showExpandIcon={false}
@@ -533,6 +544,18 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                         </div>
                       ))}
                   </section>
+
+                  {projectDocNodes.length > 0 && (
+                    <ProjectNotesSection
+                      nodes={projectDocNodes}
+                      collapsed={collapsedSections.docs}
+                      tree={storyTree}
+                      onToggle={() => toggleSection('docs')}
+                      onContextMenu={(event) =>
+                        emitObjectContextMenu(event, { kind: 'project-root' })
+                      }
+                    />
+                  )}
                 </div>
               </div>
             </>

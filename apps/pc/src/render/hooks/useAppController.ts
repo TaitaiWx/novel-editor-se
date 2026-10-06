@@ -39,6 +39,7 @@ import { useAppMenu } from './useAppMenu';
 import { useAssistantDialogHandlers } from './useAssistantDialogHandlers';
 import { useGrowthEntry } from './useGrowthEntry';
 import { useGuiSessionPublisher } from './useGuiSessionPublisher';
+import { useWorkScope } from './useWorkScope';
 
 /**
  * 应用组合根的全部 hook 调用：声明各领域状态，并按依赖把状态与动作接到各业务 hook。
@@ -98,6 +99,8 @@ export function useAppController() {
   });
   // 成长档案入口（文件面板分区、工作区标签、人物详情按钮）；effect 只读 资料/记忆/，与其他 hook 无顺序依赖
   const growthEntry = useGrowthEntry({ ...workspaceState, ...uiState, ...tabs, ...derived });
+  // 当前作品：角色 / 设定 / 成长档案 / 资料跟随作品；恢复上次选择、打开别的作品的章节时自动切换
+  const workScopeApi = useWorkScope({ ...workspaceState, ...uiState, ...derived, ...loader });
   const contentReader = useScopedContentReader({ ...workspaceState, ...editorState, ...derived });
   const fileOps = useFileOperations({
     ...workspaceState,
@@ -239,6 +242,7 @@ export function useAppController() {
     creation,
     entityActions,
     growthEntry,
+    workScopeApi,
     fileOps,
     editor,
     projectExport,

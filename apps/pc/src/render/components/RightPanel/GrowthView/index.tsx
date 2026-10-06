@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { consumeGrowthSheetCreation } from '../../../utils/growthIndex';
 import { useOptionalToast } from '../../Toast';
 import { GrowthCharacterPage } from './GrowthCharacterPage';
 import { GrowthHelp } from './GrowthHelp';
@@ -63,13 +64,29 @@ export const GrowthView: React.FC<GrowthViewProps> = ({
     : null;
   const tour = useGrowthTour(Boolean(pinnedSheet));
 
-  // 定位到指定角色：记忆库就绪后只执行一次（必要时建卡），失败时显示错误而不是反复重试
+  // 定位到指定角色：每个「作品 + 角色」只执行一次。卡片已存在直接选中；
+  // 不存在时只有用户明确请求过（consumeGrowthSheetCreation）才建卡——
+  // 切换作品后标签重新加载，不会在另一部作品里凭空建出同名成长卡
+  const [missingSheet, setMissingSheet] = useState(false);
   useEffect(() => {
     if (!pinnedName || !snapshot?.initialized) return;
-    if (appliedInitialRef.current === pinnedName) return;
-    appliedInitialRef.current = pinnedName;
+    const key = `${folderPath ?? ''}\u0000${pinnedName}`;
+    if (appliedInitialRef.current === key) return;
+    appliedInitialRef.current = key;
+    const exists = snapshot.sheets.some((sheet) => sheet.name === pinnedName);
+    if (!exists && !consumeGrowthSheetCreation(folderPath, pinnedName)) {
+      setMissingSheet(true);
+      return;
+    }
+    setMissingSheet(false);
     void selectCharacter(pinnedName).then(setActionError);
-  }, [pinnedName, selectCharacter, snapshot?.initialized]);
+  }, [folderPath, pinnedName, selectCharacter, snapshot]);
+
+  const createPinnedSheet = () => {
+    if (!pinnedName) return;
+    setMissingSheet(false);
+    void selectCharacter(pinnedName).then(setActionError);
+  };
 
   // 操作结果优先交给全局 toast；没有 ToastProvider（独立窗口 / 测试）时在视图内显示 4 秒
   useEffect(() => {
@@ -162,6 +179,15 @@ export const GrowthView: React.FC<GrowthViewProps> = ({
         onCreate={onCreateSheet ? () => onCreateSheet({}) : undefined}
         onOpenHelp={openHelp}
       />
+    );
+  } else if (!pinnedSheet && missingSheet) {
+    body = (
+      <div className={styles.placeholder}>
+        <div>当前作品还没有「{pinnedName}」的成长卡</div>
+        <button type="button" className={styles.button} onClick={createPinnedSheet}>
+          为「{pinnedName}」新建成长卡
+        </button>
+      </div>
     );
   } else if (!pinnedSheet) {
     body = <div className={styles.placeholder}>正在为「{pinnedName}」建立成长卡…</div>;

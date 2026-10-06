@@ -4,6 +4,7 @@ import type { WorkspaceState } from './state/useWorkspaceState';
 import type { UiState } from './state/useUiState';
 
 export type UseProjectExportContext = Pick<WorkspaceState, 'folderPathRef'> &
+  Partial<Pick<WorkspaceState, 'workScopePathRef'>> &
   Pick<UiState, 'knowledgeExportOptions' | 'setShowKnowledgeExportDialog' | 'toast'>;
 
 /**
@@ -11,6 +12,7 @@ export type UseProjectExportContext = Pick<WorkspaceState, 'folderPathRef'> &
  */
 export function useProjectExport(ctx: UseProjectExportContext) {
   const { folderPathRef, knowledgeExportOptions, setShowKnowledgeExportDialog, toast } = ctx;
+  const workScopePathRef = ctx.workScopePathRef ?? folderPathRef;
 
   // 导出项目：将整个项目目录复制到用户选择的位置
   const handleExportProject = useCallback(async () => {
@@ -38,12 +40,12 @@ export function useProjectExport(ctx: UseProjectExportContext) {
     }
   }, [folderPathRef, toast]);
 
-  // 导出角色卡、设定与资料：数据源直接来自 SQLite，避免依赖组件临时状态。
+  // 导出角色卡、设定与资料：数据源直接来自 SQLite，避免依赖组件临时状态。导出的是当前作品。
   const handleExportKnowledgeText = useCallback(
     async (options: KnowledgeExportOptions) => {
       const ipc = window.electron?.ipcRenderer;
       if (!ipc) return;
-      const folder = folderPathRef.current;
+      const folder = workScopePathRef.current;
       if (!folder) {
         toast.error('请先打开一个项目文件夹');
         return;
@@ -64,7 +66,7 @@ export function useProjectExport(ctx: UseProjectExportContext) {
         );
       }
     },
-    [folderPathRef, toast]
+    [workScopePathRef, toast]
   );
 
   const handleOpenKnowledgeExportDialog = useCallback(() => {

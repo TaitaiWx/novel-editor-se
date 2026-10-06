@@ -10,6 +10,10 @@ interface SectionHeaderProps {
   singleClickOnly?: boolean;
   /** 行尾的附加操作按钮（例如「新建」） */
   actions?: React.ReactNode;
+  /** 分区是否展开（提供时输出 aria-expanded，便于辅助技术与测试识别折叠状态） */
+  expanded?: boolean;
+  /** 悬停说明（分区用途） */
+  tooltip?: string;
   onToggle: () => void;
   onContextMenu: (event: React.MouseEvent) => void;
 }
@@ -22,6 +26,8 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
   active = false,
   singleClickOnly = false,
   actions,
+  expanded,
+  tooltip,
   onToggle,
   onContextMenu,
 }) => (
@@ -35,6 +41,8 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
       className={`${styles.storyNodeButton} ${styles.storyNodeButtonGroup}${
         active ? ` ${styles.storyNodeButtonActive}` : ''
       }`}
+      aria-expanded={expanded}
+      title={tooltip}
       onClick={(event) => {
         if (singleClickOnly && event.detail !== 1) return;
         onToggle();

@@ -1,7 +1,8 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { initMemory } from '@novel-editor/core';
 import { runCli } from '../src/run';
 
 interface RunOutput {
@@ -35,11 +36,13 @@ function data<T>(output: RunOutput): T {
   return output.json.data as T;
 }
 
-const memoryDir = () => path.join(dir, '资料', '记忆');
+// 记忆库跟随作品：项目只有一部作品「星河」时，growth 命令默认作用于它
+const memoryDir = () => path.join(dir, 'novels', '星河', '资料', '记忆');
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'ne-growth-cli-'));
   await ne(['init', '.']);
+  await ne(['novel', 'create', '星河']);
 });
 
 afterEach(async () => {
@@ -285,6 +288,76 @@ describe('ne growth', () => {
     expect(sheet.sheet.level).toBe(4);
     const shown = await ne(['growth', 'show', '阿尔', '--json']);
     expect(data<{ sheet: { level: number } }>(shown).sheet.level).toBe(4);
+  });
+
+  it('--novel：记忆库跟随作品，多部作品时必须指定', async () => {
+    await ne(['novel', 'create', '剑与诗']);
+    const ambiguous = await ne(['growth', 'init', '--json']);
+    expect(ambiguous.exitCode).toBe(2);
+    expect(ambiguous.json.error?.message).toContain('多部作品');
+    expect(ambiguous.json.error?.hint).toContain('--novel');
+
+    expect((await ne(['growth', 'init', '--novel', '剑与诗'])).exitCode).toBe(0);
+    await ne(['growth', 'exp', '沈砚', '100', '--novel', '剑与诗']);
+    await ne(['growth', 'init', '-n', '星河']);
+    await ne(['growth', 'exp', '阿尔', '50', '-n', '星河']);
+
+    const poem = await ne(['growth', 'list', '--novel', '剑与诗', '--json']);
+    expect(
+      data<{ characters: Array<{ name: string }> }>(poem).characters.map((c) => c.name)
+    ).toEqual(['沈砚']);
+    const star = await ne(['growth', 'list', '--novel', '星河', '--json']);
+    expect(
+      data<{ characters: Array<{ name: string }> }>(star).characters.map((c) => c.name)
+    ).toEqual(['阿尔']);
+    expect(await readdir(path.join(dir, 'novels', '剑与诗', '资料', '记忆', '角色'))).toContain(
+      '沈砚.json'
+    );
+
+    const missing = await ne(['growth', 'list', '--novel', '不存在', '--json']);
+    expect(missing.exitCode).toBe(3);
+    expect(missing.json.error?.message).toContain('现有作品');
+
+    // 在作品目录中执行时默认就是这部作品
+    const inside = await runCli(['growth', 'list', '--json'], {
+      cwd: path.join(dir, 'novels', '剑与诗'),
+      io: { stdout: () => undefined, stderr: () => undefined, readStdin: async () => '' },
+    });
+    expect(inside.exitCode).toBe(0);
+  });
+
+  it('旧版项目根 资料/记忆/ 在只有一部作品时自动移入该作品', async () => {
+    // 旧版布局：记忆库在项目根
+    await initMemory(dir);
+    const listed = await ne(['growth', 'list', '--json']);
+    expect(listed.exitCode).toBe(0);
+    expect((await stat(path.join(memoryDir(), '规则.json'))).isFile()).toBe(true);
+    await expect(stat(path.join(dir, '资料'))).rejects.toThrow();
+
+    // 作品已有自己的 资料/ 时不迁移：项目根的旧资料作为「未归属」保留，可用 --novel 未归属 访问
+    await initMemory(dir, { template: 'blank' });
+    await ne(['growth', 'list']);
+    expect((await stat(path.join(dir, '资料', '记忆', '规则.json'))).isFile()).toBe(true);
+    const unassigned = await ne(['growth', 'rules', '--novel', '未归属', '--json']);
+    expect(unassigned.exitCode).toBe(0);
+  });
+
+  it('项目还没有作品时提示先创建作品；普通文件夹整体是一部作品', async () => {
+    await rm(path.join(dir, 'novels', '星河'), { recursive: true, force: true });
+    const none = await ne(['growth', 'init', '--json']);
+    expect(none.exitCode).toBe(3);
+    expect(none.json.error?.hint).toContain('ne novel create');
+
+    const plain = await mkdtemp(path.join(os.tmpdir(), 'ne-growth-plain-'));
+    const io = { stdout: () => undefined, stderr: () => undefined, readStdin: async () => '' };
+    expect((await runCli(['growth', 'init'], { cwd: plain, io })).exitCode).toBe(0);
+    expect((await stat(path.join(plain, '资料', '记忆', '规则.json'))).isFile()).toBe(true);
+    const withNovel = await runCli(['growth', 'list', '--novel', 'x', '--json'], {
+      cwd: plain,
+      io,
+    });
+    expect(withNovel.exitCode).toBe(5);
+    await rm(plain, { recursive: true, force: true });
   });
 
   it('帮助中列出 growth 命令组', async () => {

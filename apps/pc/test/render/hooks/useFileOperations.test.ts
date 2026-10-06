@@ -59,6 +59,9 @@ function setup(
     dialog,
     filesRef: ref<FileNode[]>(options.files ?? defaultTree()),
     folderPathRef: ref<string | null>(options.folder === undefined ? FOLDER : options.folder),
+    workScopePathRef: ref<string | null>(options.folder === undefined ? FOLDER : options.folder),
+    projectLayout: null,
+    workScope: null,
     moveViewportSnapshot: vi.fn(),
     openFileInTab: vi.fn(),
     persistStoryOrderMap: vi.fn(async () => {

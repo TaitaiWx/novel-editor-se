@@ -23,7 +23,10 @@ import type { UiState } from './state/useUiState';
 import type { TabActions } from './useTabActions';
 import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 
-export type UseWorkspaceEntityActionsContext = Pick<WorkspaceState, 'filesRef' | 'folderPathRef'> &
+export type UseWorkspaceEntityActionsContext = Pick<
+  WorkspaceState,
+  'filesRef' | 'folderPathRef' | 'workScope' | 'workScopePathRef'
+> &
   Pick<TabsState, 'activeTabRef' | 'setActiveTab' | 'setOpenTabs'> &
   Pick<
     EntitiesState,
@@ -53,6 +56,8 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     filesRef,
     folderPathRef,
     getCurrentNovelId,
+    workScope,
+    workScopePathRef,
     openFileInTab,
     setActiveTab,
     setOpenTabs,
@@ -141,15 +146,19 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     [openFileInTab]
   );
 
+  // 作品级作用域跟随当前作品（普通文件夹为文件夹本身），与 useWorkspaceDerivedState 一致
   const buildProjectAssistantScope = useCallback((): AssistantScopeTarget | null => {
-    const folder = folderPathRef.current;
+    const folder = workScopePathRef.current;
     if (!folder) return null;
     return {
       kind: 'project',
       path: folder,
-      label: workspaceProjectName?.trim() || getNodeDisplayName(folder),
+      label:
+        workScope?.kind === 'work'
+          ? workScope.name
+          : workspaceProjectName?.trim() || getNodeDisplayName(folder),
     };
-  }, [folderPathRef, workspaceProjectName]);
+  }, [workScope, workScopePathRef, workspaceProjectName]);
 
   const buildVolumeAssistantScope = useCallback(
     (volumePath: string): AssistantScopeTarget => {
@@ -316,7 +325,7 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
   const handleClearCharacters = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
     const novelId = await getCurrentNovelId();
-    const folder = folderPathRef.current;
+    const folder = workScopePathRef.current;
     if (!ipc || !novelId || !folder) return;
     if (workspaceCharacters.length === 0) {
       toast.info('当前作品没有可清空的人物');
@@ -348,16 +357,16 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     bumpWorkspaceCharactersVersion,
     closeTabsByPredicate,
     dialog,
-    folderPathRef,
     getCurrentNovelId,
     setWorkspaceCharacters,
     toast,
+    workScopePathRef,
     workspaceCharacters.length,
   ]);
 
   const handleClearLoreEntries = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
-    const folder = folderPathRef.current;
+    const folder = workScopePathRef.current;
     if (!ipc || !folder) return;
     if (workspaceLoreEntries.length === 0) {
       toast.info('当前作品没有可清空的设定');
@@ -382,9 +391,9 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     bumpWorkspaceLoreVersion,
     closeTabsByPredicate,
     dialog,
-    folderPathRef,
     setWorkspaceLoreEntries,
     toast,
+    workScopePathRef,
     workspaceLoreEntries.length,
   ]);
 

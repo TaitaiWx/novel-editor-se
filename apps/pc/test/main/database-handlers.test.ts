@@ -93,7 +93,10 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
     electronState.openResult = { canceled: true, filePaths: [] };
     showSaveDialog.mockClear();
     showOpenDialog.mockClear();
-    await expect(call('db-init', dbDir)).resolves.toEqual({ success: true });
+    await expect(call('db-init', dbDir)).resolves.toEqual({
+      success: true,
+      unassignedRecords: false,
+    });
     const created = await call<RunResult>('db-novel-create', '星河', FOLDER, '科幻长篇');
     novelId = Number(created.lastInsertRowid);
   });
@@ -126,24 +129,40 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
       expect(store.isDatabaseReady()).toBe(true);
     });
 
-    it('db-init 首次打开带 seed.json 的项目时写入示例人物 / 设定 / 大纲，之后不再重复', async () => {
+    it('db-init 首次打开带 seed.json 的项目时按作品写入示例人物 / 设定 / 大纲，之后不再重复', async () => {
       await call('db-close');
       const project = tmp('ne-db-seed-project-');
       const metaDir = path.join(project, '.novel-editor');
       await mkdir(metaDir, { recursive: true });
-      // 直接使用仓库里的示例种子，保证随应用分发的文件可被导入
-      await copyFile(
-        path.join(SAMPLE_DATA_DIR, '.novel-editor', 'seed.json'),
-        path.join(metaDir, 'seed.json')
-      );
+      // 直接使用仓库里的示例种子与配置，保证随应用分发的文件可被导入
+      for (const file of ['seed.json', 'config.json']) {
+        await copyFile(path.join(SAMPLE_DATA_DIR, '.novel-editor', file), path.join(metaDir, file));
+      }
+      const star = path.join(project, 'novels', '星河旅人');
+      const poem = path.join(project, 'novels', '剑与诗');
+      await mkdir(star, { recursive: true });
+      await mkdir(poem, { recursive: true });
 
-      await expect(call('db-init', metaDir)).resolves.toEqual({ success: true });
-      const novel = await call<Row>('db-novel-get-by-folder', project);
-      expect(novel).toMatchObject({ name: '示例作品集', folder_path: project });
+      await expect(call('db-init', metaDir)).resolves.toEqual({
+        success: true,
+        unassignedRecords: false,
+      });
+      // 人物 / 设定跟随作品：每部作品一条记录，项目根没有作品内容
+      const novel = await call<Row>('db-novel-get-by-folder', star);
+      expect(novel).toMatchObject({ name: '星河旅人', folder_path: star });
       const names = (await call<Row[]>('db-character-list', novel.id)).map((row) => row.name);
       expect(names).toEqual(expect.arrayContaining(['林舟', '苏晴', '秦伯']));
-      const lore = await call<Row[]>('db-world-setting-list-by-folder', project);
+      expect(names).not.toContain('沈砚');
+      const poemNovel = await call<Row>('db-novel-get-by-folder', poem);
+      expect((await call<Row[]>('db-character-list', poemNovel.id)).map((row) => row.name)).toEqual(
+        ['沈砚', '听雨楼诗人']
+      );
+      const lore = await call<Row[]>('db-world-setting-list-by-folder', star);
       expect(lore.length).toBeGreaterThan(0);
+      expect(
+        (await call<Row[]>('db-world-setting-list-by-folder', poem)).map((row) => row.title).sort()
+      ).toEqual(['听雨楼', '剑在匣中鸣'].sort());
+      expect(await call('db-novel-get-by-folder', project)).toBeUndefined();
 
       // 用户删掉一个人物后重新打开：不会被种子补回来
       const first = (await call<Row[]>('db-character-list', novel.id))[0];
@@ -151,7 +170,56 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
       await call('db-close');
       await call('db-init', metaDir);
       expect(await call<Row[]>('db-character-list', novel.id)).toHaveLength(names.length - 1);
-      expect(store.novelOps.getAll()).toHaveLength(1);
+      expect(store.novelOps.getAll()).toHaveLength(2);
+    });
+
+    it('db-init 迁移旧版项目级人物：只有一部作品时移入该作品，多部作品时保留为未归属', async () => {
+      await call('db-close');
+      const project = tmp('ne-db-legacy-');
+      const metaDir = path.join(project, '.novel-editor');
+      await mkdir(path.join(project, 'novels', '星河'), { recursive: true });
+      await mkdir(metaDir, { recursive: true });
+      await writeFile(
+        path.join(metaDir, 'config.json'),
+        JSON.stringify({ name: '旧项目', novelsDir: 'novels' }),
+        'utf-8'
+      );
+      // 旧版：人物挂在项目根记录下，资料在项目根
+      await mkdir(path.join(project, '资料'), { recursive: true });
+      await writeFile(path.join(project, '资料', '世界观.md'), '# 世界观', 'utf-8');
+      store.initDatabase(metaDir, 'novel-editor.db');
+      const legacyId = Number(store.novelOps.create('旧项目', project).lastInsertRowid);
+      store.characterOps.create(legacyId, '林舟');
+      store.closeDatabase();
+
+      await expect(call('db-init', metaDir)).resolves.toEqual({
+        success: true,
+        unassignedRecords: false,
+      });
+      const work = await call<Row>('db-novel-get-by-folder', path.join(project, 'novels', '星河'));
+      expect((await call<Row[]>('db-character-list', work.id)).map((row) => row.name)).toEqual([
+        '林舟',
+      ]);
+      expect(
+        await readFile(path.join(project, 'novels', '星河', '资料', '世界观.md'), 'utf-8')
+      ).toBe('# 世界观');
+
+      // 多部作品：新的项目级内容不迁移，作为「未归属」保留
+      await call('db-close');
+      await mkdir(path.join(project, 'novels', '剑与诗'), { recursive: true });
+      store.initDatabase(metaDir, 'novel-editor.db');
+      store.characterOps.create(legacyId, '旧配角');
+      store.closeDatabase();
+      await expect(call('db-init', metaDir)).resolves.toEqual({
+        success: true,
+        unassignedRecords: true,
+      });
+      expect((await call<Row[]>('db-character-list', legacyId)).map((row) => row.name)).toEqual([
+        '旧配角',
+      ]);
+      expect(
+        await call('db-novel-get-by-folder', path.join(project, 'novels', '剑与诗'))
+      ).toBeDefined();
     });
 
     it('db-init 遇到损坏的 seed.json 只记录警告，不影响打开项目', async () => {
@@ -161,7 +229,10 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
       await mkdir(metaDir, { recursive: true });
       await writeFile(path.join(metaDir, 'seed.json'), '{ broken', 'utf-8');
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      await expect(call('db-init', metaDir)).resolves.toEqual({ success: true });
+      await expect(call('db-init', metaDir)).resolves.toEqual({
+        success: true,
+        unassignedRecords: false,
+      });
       expect(warn).toHaveBeenCalled();
       warn.mockRestore();
       expect(await call('db-novel-get-by-folder', project)).toBeUndefined();

@@ -4,6 +4,7 @@ import {
   GROWTH_MEMORY_CHANGED_EVENT,
   GROWTH_OPEN_EVENT,
   inferChapterNumber,
+  requestGrowthSheetCreation,
   summarizeGrowthSnapshot,
   type GrowthIndex,
   type GrowthMemoryChangedDetail,
@@ -15,6 +16,7 @@ import type { TabActions } from './useTabActions';
 import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
 
 export type UseGrowthEntryContext = Pick<WorkspaceState, 'folderPath'> &
+  Partial<Pick<WorkspaceState, 'workScopePath'>> &
   Pick<UiState, 'dialog' | 'toast'> &
   Pick<TabActions, 'openFileInTab'> &
   Partial<Pick<WorkspaceDerivedState, 'activeDocumentTab'>>;
@@ -30,12 +32,18 @@ const MAX_GROWTH_NAME_LENGTH = 100;
 /**
  * 成长档案入口：维护文件面板所需的成长卡索引，并提供打开 / 新建成长档案标签的动作。
  *
- * 索引来源：项目切换时读取一次 `growth-load`；GrowthView 写入后广播的快照；窗口重新获得焦点时
- * 再读一次（CLI / AI agent 可能在应用外修改了 资料/记忆/）。
+ * 成长档案跟随作品：读写当前作品的 `<作品>/资料/记忆/`（workScopePath，普通文件夹为 folderPath）。
+ * 索引来源：项目 / 作品切换时读取一次 `growth-load`；GrowthView 写入后广播的快照；窗口重新获得焦点时
+ * 再读一次（CLI / AI agent 可能在应用外修改了记忆库）。
  */
 export function useGrowthEntry(ctx: UseGrowthEntryContext) {
-  const { activeDocumentTab, dialog, folderPath, openFileInTab, toast } = ctx;
-  const [growthIndex, setGrowthIndex] = useState<GrowthIndex | null>(null);
+  const { activeDocumentTab, dialog, openFileInTab, toast } = ctx;
+  const folderPath = ctx.workScopePath ?? ctx.folderPath;
+  // 索引带上所属作品路径：切换作品后、新索引加载完成前不显示上一部作品的成长卡
+  const [indexEntry, setIndexEntry] = useState<{ folderPath: string; index: GrowthIndex } | null>(
+    null
+  );
+  const growthIndex = indexEntry && indexEntry.folderPath === folderPath ? indexEntry.index : null;
   /** 最近打开的正文章节号：「记一笔」默认填入（切到成长档案标签后仍沿用） */
   const [growthChapter, setGrowthChapter] = useState<number | null>(null);
   const folderRef = useRef(folderPath);
@@ -54,15 +62,15 @@ export function useGrowthEntry(ctx: UseGrowthEntryContext) {
   const reloadGrowthIndex = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
     if (!folderPath || !ipc) {
-      setGrowthIndex(null);
+      setIndexEntry(null);
       return;
     }
     try {
       const result = await ipc.invoke('growth-load', folderPath);
       if (folderRef.current !== folderPath) return;
-      setGrowthIndex(result.ok ? summarizeGrowthSnapshot(result.data) : null);
+      setIndexEntry(result.ok ? { folderPath, index: summarizeGrowthSnapshot(result.data) } : null);
     } catch {
-      if (folderRef.current === folderPath) setGrowthIndex(null);
+      if (folderRef.current === folderPath) setIndexEntry(null);
     }
   }, [folderPath]);
 
@@ -74,7 +82,7 @@ export function useGrowthEntry(ctx: UseGrowthEntryContext) {
     const onChanged = (event: Event) => {
       const detail = (event as CustomEvent<GrowthMemoryChangedDetail>).detail;
       if (!detail || detail.folderPath !== folderRef.current) return;
-      setGrowthIndex(detail.index);
+      setIndexEntry({ folderPath: detail.folderPath, index: detail.index });
     };
     const onFocus = () => void reloadGrowthIndex();
     window.addEventListener(GROWTH_MEMORY_CHANGED_EVENT, onChanged);
@@ -88,9 +96,11 @@ export function useGrowthEntry(ctx: UseGrowthEntryContext) {
   /** 打开成长档案标签：传入角色名打开（必要时新建）该角色的成长卡，否则打开总览 */
   const handleOpenGrowth = useCallback(
     (characterName?: string | null) => {
+      // 用户明确打开某个角色：允许成长视图在当前作品里为其建卡（仅此一次）
+      if (characterName) requestGrowthSheetCreation(folderPath, characterName);
       openFileInTab(createGrowthWorkspaceTab(characterName));
     },
-    [openFileInTab]
+    [folderPath, openFileInTab]
   );
 
   // 右侧面板等位置通过事件请求打开成长档案

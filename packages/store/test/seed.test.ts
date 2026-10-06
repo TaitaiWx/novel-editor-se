@@ -127,7 +127,7 @@ describe.skipIf(!sqliteAvailable)('store/seed（node:sqlite shim）', () => {
 
   it('非法种子：结构错误、路径越界或父节点顺序错误时整体回滚', () => {
     expect(() => validateProjectSeed(null)).toThrow('顶层必须是对象');
-    expect(() => validateProjectSeed({ novels: [] })).toThrow('只能包含一部作品');
+    expect(() => validateProjectSeed({ novels: [] })).toThrow('至少包含一部作品');
     expect(() => validateProjectSeed({ novels: [{ name: '' }], characters: [] })).toThrow(
       '缺少 name'
     );
@@ -155,6 +155,66 @@ describe.skipIf(!sqliteAvailable)('store/seed（node:sqlite shim）', () => {
     badScene.scenes = [{ act_id: 404, title: '无主场景' }];
     expect(() => seedProjectData(folder, badScene)).toThrow('不存在的幕');
     expect(novelOps.getAll()).toEqual([]);
+  });
+
+  it('多作品种子：内容按 novel_id 写入各自作品目录的记录，按作品幂等', () => {
+    const seed: ProjectSeedData = {
+      version: '1.0.0',
+      novels: [
+        { id: 1, name: '星河旅人', folder_path: 'novels/星河旅人' },
+        { id: 2, name: '剑与诗', folder_path: 'novels/剑与诗' },
+      ],
+      characters: [
+        { novel_id: 1, name: '林舟' },
+        { novel_id: 2, name: '沈砚' },
+        { novel_id: 1, name: '苏晴' },
+      ],
+      world_settings: [{ novel_id: 2, category: 'world', title: '听雨楼' }],
+      outlines: [{ id: 5, novel_id: 1, title: '第一卷', scope_kind: 'project', scope_path: '' }],
+      acts: [
+        { id: 7, novel_id: 1, title: '第一幕' },
+        { id: 8, novel_id: 2, title: '雨巷' },
+      ],
+      scenes: [
+        { act_id: 7, title: '启程' },
+        { act_id: 8, title: '登楼' },
+      ],
+    };
+    const result = seedProjectData(folder, seed);
+    expect(result.novels.map((item) => [item.name, item.folderPath])).toEqual([
+      ['星河旅人', path.join(folder, 'novels', '星河旅人')],
+      ['剑与诗', path.join(folder, 'novels', '剑与诗')],
+    ]);
+    expect(result.counts).toMatchObject({ characters: 3, worldSettings: 1, acts: 2, scenes: 2 });
+    const star = novelOps.getByFolder(path.join(folder, 'novels', '星河旅人')) as Row;
+    const poem = novelOps.getByFolder(path.join(folder, 'novels', '剑与诗')) as Row;
+    const names = (id: unknown) =>
+      (characterOps.getByNovel(id as number) as Row[]).map((row) => [row.name, row.sort_order]);
+    expect(names(star.id)).toEqual([
+      ['林舟', 0],
+      ['苏晴', 1],
+    ]);
+    expect(names(poem.id)).toEqual([['沈砚', 0]]);
+    expect(worldSettingOps.getByNovel(poem.id as number)).toHaveLength(1);
+    expect(worldSettingOps.getByNovel(star.id as number)).toHaveLength(0);
+    expect(outlineOps.getByNovel(star.id as number)).toHaveLength(1);
+    expect(novelOps.getByFolder(folder)).toBeUndefined();
+
+    // 某部作品已有记录时只跳过它
+    characterOps.delete((characterOps.getByNovel(poem.id as number) as Row[])[0].id as number);
+    const again = seedProjectData(folder, seed);
+    expect(again.seeded).toBe(false);
+    expect(characterOps.getByNovel(poem.id as number)).toEqual([]);
+
+    expect(() => validateProjectSeed({ ...seed, characters: [{ name: '无主' }] })).toThrow(
+      '缺少 novel_id'
+    );
+    expect(() =>
+      validateProjectSeed({ ...seed, characters: [{ novel_id: 9, name: '错作品' }] })
+    ).toThrow('不存在的作品 9');
+    expect(() =>
+      validateProjectSeed({ ...seed, novels: [seed.novels[0], { ...seed.novels[0], id: 3 }] })
+    ).toThrow('作品目录重复');
   });
 
   it('忽略白名单外的列（种子文件无法借列名注入 SQL）', () => {

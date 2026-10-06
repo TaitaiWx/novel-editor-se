@@ -11,18 +11,18 @@ import {
   type SeedProjectResult,
 } from '@novel-editor/store';
 import { getNativeBinding } from '../../native-binding';
+import { prepareProjectWorkScopes } from '../work-scope';
 
 /**
- * 项目数据库初始化后，若 `<项目>/.novel-editor/seed.json` 存在且该项目尚无作品记录，
- * 写入其中的人物 / 设定 / 大纲（示例作品集首次打开时使用）。
- * 播种失败只记日志，不影响打开项目；已有作品记录时不做任何改动。
+ * 项目数据库初始化后，若 `<项目>/.novel-editor/seed.json` 存在，按作品写入其中的人物 / 设定 / 大纲
+ * （示例作品集首次打开时使用；每部作品写到自己的作品记录，见 store seed.ts）。
+ * 播种失败只记日志，不影响打开项目；已有作品记录的作品不做任何改动。
  */
 export function seedProjectFromDbDir(dbDir: string): SeedProjectResult | null {
   const seedFile = path.join(dbDir, PROJECT_SEED_FILE);
   if (!existsSync(seedFile)) return null;
   const folderPath = path.dirname(dbDir);
   try {
-    if (novelOps.getByFolder(folderPath)) return null;
     const raw = JSON.parse(readFileSync(seedFile, 'utf-8').replace(/^\uFEFF/, '')) as unknown;
     return seedProjectData(folderPath, raw);
   } catch (error) {
@@ -35,10 +35,15 @@ export function seedProjectFromDbDir(dbDir: string): SeedProjectResult | null {
 export function registerProjectHandlers(): void {
   // ─── Init / Close ──────────────────────────────────────────────────────────
 
-  ipcMain.handle('db-init', (_event, dbDir: string) => {
+  ipcMain.handle('db-init', async (_event, dbDir: string) => {
     initDatabase(dbDir, 'novel-editor.db', getNativeBinding());
     seedProjectFromDbDir(dbDir);
-    return { success: true };
+    // 人物 / 设定 / 大纲跟随作品：确保每部作品有记录，并迁移旧版项目级数据
+    const scopes = await prepareProjectWorkScopes(path.dirname(dbDir)).catch((error: unknown) => {
+      console.warn('[work-scope] 准备作品作用域失败:', error);
+      return null;
+    });
+    return { success: true, unassignedRecords: scopes?.unassignedRecords ?? false };
   });
 
   ipcMain.handle('db-init-default', () => {

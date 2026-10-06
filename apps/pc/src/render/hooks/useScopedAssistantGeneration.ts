@@ -39,7 +39,7 @@ import { useScopedLoreMaterialGeneration } from './useScopedLoreMaterialGenerati
 
 export type UseScopedAssistantGenerationContext = Pick<
   WorkspaceState,
-  'filesRef' | 'folderPathRef'
+  'filesRef' | 'workScopePathRef'
 > &
   Pick<
     AiSessionState,
@@ -73,7 +73,7 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
     currentAssistantScope,
     ensurePersistedAiReady,
     filesRef,
-    folderPathRef,
+    workScopePathRef,
     getCurrentNovelId,
     openFileInTab,
     refreshCurrentFolder,
@@ -175,7 +175,7 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
   const handleGenerateScopedCharacters = useCallback(
     async (scope: AssistantScopeTarget) => {
       const ipc = window.electron?.ipcRenderer;
-      const folder = folderPathRef.current;
+      const folder = workScopePathRef.current;
       if (!ipc || !folder) return;
       const persistedSettings = await ensurePersistedAiReady();
       if (!persistedSettings) return;
@@ -426,7 +426,7 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
       }
     },
     [
-      folderPathRef,
+      workScopePathRef,
       ensurePersistedAiReady,
       toast,
       resolveScopeTargetContext,
@@ -445,7 +445,7 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
       bumpWorkspaceLoreVersion,
       ensurePersistedAiReady,
       filesRef,
-      folderPathRef,
+      workScopePathRef,
       isViewingScope,
       openFileInTab,
       persistScopedAssistantArtifacts,

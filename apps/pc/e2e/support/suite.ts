@@ -11,12 +11,14 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest';
 import { launchApp, writeLogs, type ElectronApp } from './app';
 import {
   FIXTURE_CHAPTER_TREE,
+  FIXTURE_MEMORY_DIR,
+  FIXTURE_WORK,
   createFixtureProject,
   type FixtureOptions,
   type FixtureProject,
 } from './fixture';
 import type { ConsoleIssue, Page } from './page';
-import { SEL, expandTreePath, waitForEditorText } from './workbench';
+import { SEL, expandTreePath, selectWork, waitForEditorText } from './workbench';
 
 export interface AppSuite {
   readonly fixture: FixtureProject;
@@ -99,8 +101,9 @@ export async function captureForReview(page: Page, name: string): Promise<void> 
   await copyFile(shot, path.join(dir, `${name}.png`));
 }
 
-/** 打开「星河旅人 / 第一卷」下的某一章并等待编辑器加载出内容 */
+/** 打开「星河旅人 / 第一卷」下的某一章并等待编辑器加载出内容（先切到「星河旅人」） */
 export async function openChapter(page: Page, title: string, expectText: string): Promise<void> {
+  await selectWork(page, FIXTURE_WORK);
   await expandTreePath(page, [...FIXTURE_CHAPTER_TREE, title]);
   await page.click({ text: title, within: SEL.workspaceTree, exact: true });
   await waitForEditorText(page, expectText);
@@ -139,7 +142,7 @@ export async function waitForSheet<T extends { exp: number; level: number }>(
   predicate: (sheet: T) => boolean,
   message: string
 ): Promise<T> {
-  const file = suite.fixture.resolve('资料/记忆/角色', `${name}.json`);
+  const file = suite.fixture.resolve(FIXTURE_MEMORY_DIR, '角色', `${name}.json`);
   return suite.page.waitUntil(
     async () => {
       if (!existsSync(file)) return null;

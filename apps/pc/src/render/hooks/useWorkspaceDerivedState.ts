@@ -18,13 +18,14 @@ import {
   shouldEnableChapterAssistant,
   splitWorkspaceFiles,
 } from '@/render/utils/workspace';
+import { selectWorkScopeNodes } from '@/render/utils/workScope';
 import type { WorkspaceState } from './state/useWorkspaceState';
 import type { TabsState } from './state/useTabsState';
 import type { EntitiesState } from './state/useEntitiesState';
 
 export type UseWorkspaceDerivedStateContext = Pick<
   WorkspaceState,
-  'files' | 'folderPath' | 'projectLayout'
+  'files' | 'folderPath' | 'projectLayout' | 'workScope' | 'workScopePath'
 > &
   Pick<TabsState, 'activeTab' | 'untitledTabContents'> &
   Pick<EntitiesState, 'chapterMaterialPaths' | 'workspaceProjectName'>;
@@ -40,8 +41,10 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     folderPath,
     projectLayout,
     untitledTabContents,
+    workScope = null,
     workspaceProjectName,
   } = ctx;
+  const workScopePath = ctx.workScopePath ?? folderPath;
 
   const activeWorkspaceTab = useMemo(
     () => (isWorkspaceTab(activeTab) ? activeTab : null),
@@ -88,9 +91,10 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
       !(activeDocumentTab && projectDocPaths.has(activeDocumentTab)),
     [activeDocumentTab, folderPath, projectDocPaths]
   );
+  // 可关联到章节的资料：只列当前作品的资料（资料跟随作品）
   const materialFiles = useMemo(
-    () => flattenFileNodes(workspaceMaterialNodes),
-    [workspaceMaterialNodes]
+    () => flattenFileNodes(selectWorkScopeNodes(workspaceMaterialNodes, workScope, projectLayout)),
+    [projectLayout, workScope, workspaceMaterialNodes]
   );
   const materialFileMap = useMemo(
     () => new Map(materialFiles.map((item) => [item.path, item])),
@@ -127,11 +131,15 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
         label,
       };
     }
-    if (!folderPath) return null;
+    if (!folderPath || !workScopePath) return null;
+    // 作品级作用域：ne 项目中是当前作品（大纲、资料上下文跟随作品），普通文件夹是文件夹本身
     return {
       kind: 'project',
-      path: folderPath,
-      label: workspaceProjectName?.trim() || getNodeDisplayName(folderPath),
+      path: workScopePath,
+      label:
+        workScope?.kind === 'work'
+          ? workScope.name
+          : workspaceProjectName?.trim() || getNodeDisplayName(folderPath),
     };
   }, [
     activeDocumentTab,
@@ -139,6 +147,8 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     isChapterDocument,
     selectedVolumeNode,
     selectedVolumePath,
+    workScope,
+    workScopePath,
     workspaceProjectName,
   ]);
   const currentOutlineScope = useMemo<PersistedOutlineScopeInput | null>(() => {

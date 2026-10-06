@@ -147,6 +147,8 @@ export interface ElectronAPI {
       snapshot: GuiSessionSnapshot | null
     ): Promise<{ success: boolean }>;
     invoke(channel: 'get-file-info', filePath: string): Promise<FileInfo>;
+    /** 用系统浏览器打开外部链接（仅 http(s) / mailto） */
+    invoke(channel: 'open-external-url', url: string): Promise<{ success: boolean }>;
     invoke(channel: 'get-file-info-batch', filePaths: string[]): Promise<FileInfoBatchEntry[]>;
     invoke(channel: 'get-default-data-path'): Promise<string>;
     invoke(channel: 'get-recent-folders'): Promise<string[]>;

@@ -387,7 +387,10 @@ const FileTree: React.FC<FileTreeProps> = ({
       return;
     }
 
-    window.electron.ipcRenderer
+    // 预览 / 测试环境可能没有 preload 注入的 IPC，直接跳过文件信息读取
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    ipc
       .invoke('get-file-info-batch', pathsToFetch)
       .then((entries: FileInfoBatchEntry[]) => {
         if (cancelled) return;

@@ -23,11 +23,16 @@ export interface FixtureProject {
 }
 
 /**
- * 「星河旅人」第一卷在磁盘与正文树中的路径。示例是 `ne init` 项目，正文树按「作品 / 卷 / 章」
- * 展示：作品（novels/ 下的目录）是顶层节点，不显示 novels 容器本身
+ * 「星河旅人」第一卷在磁盘与正文树中的路径。示例是 `ne init` 项目：文件面板顶部的作品切换器选择
+ * 当前作品，正文树只显示当前作品的「卷 / 章」（不显示 novels 容器与作品节点本身）
  */
+export const FIXTURE_WORK = '星河旅人';
+export const FIXTURE_WORK_DIR = 'novels/星河旅人';
 export const FIXTURE_VOLUME_DIR = 'novels/星河旅人/第一卷-离乡';
-export const FIXTURE_CHAPTER_TREE = ['星河旅人', '第一卷-离乡'] as const;
+export const FIXTURE_CHAPTER_TREE = ['第一卷-离乡'] as const;
+/** 资料与成长档案跟随作品：星河旅人的资料 / 记忆库 */
+export const FIXTURE_MATERIAL_DIR = 'novels/星河旅人/资料';
+export const FIXTURE_MEMORY_DIR = 'novels/星河旅人/资料/记忆';
 
 export const FIXTURE_CHAPTERS = {
   first: { file: `${FIXTURE_VOLUME_DIR}/001-启程.md`, title: '001-启程.md' },
@@ -37,7 +42,7 @@ export const FIXTURE_CHAPTERS = {
 
 export interface FixtureOptions {
   prefix?: string;
-  /** 不拷贝这些相对路径（例如 `资料/记忆`，用于验证首次使用流程） */
+  /** 不拷贝这些相对路径（例如 `novels/星河旅人/资料/记忆`，用于验证首次使用流程） */
   exclude?: string[];
 }
 

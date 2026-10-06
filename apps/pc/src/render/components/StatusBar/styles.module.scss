@@ -1,7 +1,7 @@
 .statusBar {
   height: 22px;
-  background-color: #181818;
-  border-top: 1px solid #2d2d2d;
+  /* 位于卡片下方、窗口背景之上，不再需要分隔线 */
+  background-color: var(--ui-bg-app);
   display: flex;
   align-items: center;
   justify-content: space-between;

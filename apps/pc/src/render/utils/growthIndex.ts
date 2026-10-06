@@ -185,3 +185,32 @@ export function findMentionedNames(
     )
     .map((sheet) => sheet.name);
 }
+
+// ─── 显式建卡请求 ───────────────────────────────────────────────────────────
+
+/**
+ * 成长卡标签只在用户明确要求时自动建卡（例如人物详情的「成长档案」按钮）。
+ * 请求按「作品目录 + 角色名」登记，由成长视图消费一次：
+ * 切换作品后标签重新加载时不会在另一部作品里凭空建卡。
+ */
+const pendingSheetCreations = new Set<string>();
+
+function creationKey(folderPath: string, name: string): string {
+  return `${folderPath}\u0000${name.trim()}`;
+}
+
+export function requestGrowthSheetCreation(folderPath: string | null, name: string): void {
+  if (!folderPath || !name.trim()) return;
+  pendingSheetCreations.add(creationKey(folderPath, name));
+}
+
+/** 取出（并清除）该作品下这个角色的建卡请求；没有请求时返回 false */
+export function consumeGrowthSheetCreation(folderPath: string | null, name: string): boolean {
+  if (!folderPath) return false;
+  return pendingSheetCreations.delete(creationKey(folderPath, name));
+}
+
+/** 测试用：清空未消费的建卡请求 */
+export function resetGrowthSheetCreationRequests(): void {
+  pendingSheetCreations.clear();
+}

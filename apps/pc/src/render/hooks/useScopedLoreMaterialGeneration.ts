@@ -14,7 +14,7 @@ import {
 import {
   buildUniqueMarkdownName,
   findNodeInTree,
-  isMaterialLikeName,
+  findScopeMaterialRoot,
 } from '@/render/app/fileTreeUtils';
 import {
   parseLoreGenerationResult,
@@ -27,7 +27,7 @@ export type UseScopedLoreMaterialGenerationContext = Pick<
   | 'bumpWorkspaceLoreVersion'
   | 'ensurePersistedAiReady'
   | 'filesRef'
-  | 'folderPathRef'
+  | 'workScopePathRef'
   | 'openFileInTab'
   | 'refreshCurrentFolder'
   | 'resolveScopeTargetContext'
@@ -58,7 +58,7 @@ export function useScopedLoreMaterialGeneration(ctx: UseScopedLoreMaterialGenera
     bumpWorkspaceLoreVersion,
     ensurePersistedAiReady,
     filesRef,
-    folderPathRef,
+    workScopePathRef,
     isViewingScope,
     openFileInTab,
     persistScopedAssistantArtifacts,
@@ -73,7 +73,7 @@ export function useScopedLoreMaterialGeneration(ctx: UseScopedLoreMaterialGenera
   const handleGenerateScopedLore = useCallback(
     async (scope: AssistantScopeTarget) => {
       const ipc = window.electron?.ipcRenderer;
-      const folder = folderPathRef.current;
+      const folder = workScopePathRef.current;
       if (!ipc || !folder) return;
       const persistedSettings = await ensurePersistedAiReady();
       if (!persistedSettings) return;
@@ -146,7 +146,7 @@ export function useScopedLoreMaterialGeneration(ctx: UseScopedLoreMaterialGenera
     [
       bumpWorkspaceLoreVersion,
       ensurePersistedAiReady,
-      folderPathRef,
+      workScopePathRef,
       isViewingScope,
       openFileInTab,
       persistScopedAssistantArtifacts,
@@ -160,7 +160,7 @@ export function useScopedLoreMaterialGeneration(ctx: UseScopedLoreMaterialGenera
   const handleGenerateScopedMaterials = useCallback(
     async (scope: AssistantScopeTarget) => {
       const ipc = window.electron?.ipcRenderer;
-      const folder = folderPathRef.current;
+      const folder = workScopePathRef.current;
       if (!ipc || !folder) return;
       const persistedSettings = await ensurePersistedAiReady();
       if (!persistedSettings) return;
@@ -187,9 +187,7 @@ export function useScopedLoreMaterialGeneration(ctx: UseScopedLoreMaterialGenera
         // 资料上下文不仅保存在 SQLite settings，也同步落盘到资料目录，保证在文件树可见。
         if (nextMaterials.length > 0) {
           let createdMaterialRoot = false;
-          const existingMaterialRoot = filesRef.current.find(
-            (node) => node.type === 'directory' && isMaterialLikeName(node.name)
-          );
+          const existingMaterialRoot = findScopeMaterialRoot(filesRef.current, folder);
           const defaultMaterialRoot =
             existingMaterialRoot?.path ??
             ((createdMaterialRoot = true),
@@ -276,7 +274,7 @@ export function useScopedLoreMaterialGeneration(ctx: UseScopedLoreMaterialGenera
     [
       ensurePersistedAiReady,
       filesRef,
-      folderPathRef,
+      workScopePathRef,
       isViewingScope,
       persistScopedAssistantArtifacts,
       refreshCurrentFolder,

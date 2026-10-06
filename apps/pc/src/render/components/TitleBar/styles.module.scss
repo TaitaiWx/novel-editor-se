@@ -4,8 +4,9 @@
   display: flex;
   align-items: center;
   height: 32px;
-  background-color: var(--ui-bg-surface);
-  border-bottom: 1px solid #2d2d2d;
+  /* 与窗口背景融为一体，下方卡片自身提供分隔 */
+  background-color: var(--ui-bg-app);
+  flex-shrink: 0;
   user-select: none;
   position: relative;
   z-index: 1000;

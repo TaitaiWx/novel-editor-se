@@ -59,7 +59,7 @@ export function exitCodeFor(code: CliErrorCode): number {
 /** 将任意异常规范化为 CliError */
 export function normalizeError(error: unknown): CliError {
   if (error instanceof CliError) return error;
-  if (isCoreError(error)) return new CliError(error.code, error.message);
+  if (isCoreError(error)) return new CliError(error.code, error.message, error.hint);
   const errno = error as NodeJS.ErrnoException;
   if (errno && typeof errno.code === 'string' && errno.code.startsWith('E')) {
     const core = toCoreError(error);

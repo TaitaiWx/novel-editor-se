@@ -13,7 +13,9 @@
  *       └── <作品名>/            一个目录就是一部作品
  *           ├── 001-第一章.md    章节文件：「三位序号-标题.扩展名」，序号决定顺序
  *           ├── 002-第二章.md
- *           └── 第2卷/           可选子目录，视为「卷」，其中章节同样按序号排序
+ *           ├── 第2卷/           可选子目录，视为「卷」，其中章节同样按序号排序
+ *           └── 资料/            作品自己的资料（设定笔记、素材、AI 资料），不是卷
+ *               └── 记忆/        作品的记忆库 / 成长档案（见 growth/storage.ts）
  *
  * GUI 打开 <project> 时通过 `readProjectLayout` 读取同一份配置：novelsDir 下每个目录是「作品」、
  * 子目录是「卷」、正文文件是「章」，项目根目录下的文档（欢迎使用.md 等）是项目文档而不是章节；
@@ -22,7 +24,7 @@
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CoreError } from './errors';
-import { isGeneratedMaterialPath } from './material';
+import { GENERATED_MATERIAL_ROOT_NAME, isGeneratedMaterialPath } from './material';
 import {
   assertDirectory,
   createFile,
@@ -243,7 +245,12 @@ export async function listNovelNames(project: Project): Promise<string[]> {
       .filter((entry) => !['node_modules', 'dist', 'build', 'out'].includes(entry.name))
       // novelsDir 为项目根（"."）时，根下的生成资料目录（资料/记忆 等）不是作品
       .filter(
-        (entry) => !isGeneratedMaterialPath(path.join(project.novelsPath, entry.name), project.root)
+        (entry) =>
+          !isGeneratedMaterialPath(
+            path.join(project.novelsPath, entry.name),
+            project.root,
+            project.config.novelsDir
+          )
       )
       .map((entry) => entry.name)
       .sort(naturalCollator.compare)
@@ -257,6 +264,11 @@ export interface ProjectLayout {
   novelsPath: string;
   /** 作品名（novelsDir 下的作品目录，自然排序） */
   novels: string[];
+  /**
+   * 项目根下是否还有旧版布局的 `资料/`（不属于任何作品）。资料跟随作品后，
+   * GUI 把它作为「未归属」分组展示，避免旧数据不可见（迁移规则见 work-scope.ts）
+   */
+  hasProjectMaterials: boolean;
 }
 
 /**
@@ -272,6 +284,7 @@ export async function readProjectLayout(folderPath: string): Promise<ProjectLayo
     novelsDir: project.config.novelsDir,
     novelsPath: project.novelsPath,
     novels: await listNovelNames(project),
+    hasProjectMaterials: await pathExists(path.join(project.root, GENERATED_MATERIAL_ROOT_NAME)),
   };
 }
 
@@ -328,7 +341,10 @@ export function formatChapterFileName(order: number, title: string, ext: string)
   return `${String(order).padStart(width, '0')}-${sanitizeFileName(title)}${ext}`;
 }
 
-/** 递归收集作品下的章节：根目录章节在前，然后按卷序号（第一卷、第二卷…）排序 */
+/**
+ * 递归收集作品下的章节：根目录章节在前，然后按卷序号（第一卷、第二卷…）排序。
+ * 作品自己的资料目录（`<作品>/资料/`，含记忆库）不是卷，整体跳过。
+ */
 async function collectChapterFiles(novelPath: string): Promise<string[]> {
   const result: string[] = [];
   const walk = async (dir: string): Promise<void> => {
@@ -340,6 +356,7 @@ async function collectChapterFiles(novelPath: string): Promise<string[]> {
     result.push(...files.map((name) => path.join(dir, name)));
     const dirs = entries
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+      .filter((entry) => !(dir === novelPath && entry.name === GENERATED_MATERIAL_ROOT_NAME))
       .map((entry) => entry.name)
       .sort(compareVolumeDirNames);
     for (const sub of dirs) await walk(path.join(dir, sub));

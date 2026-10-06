@@ -1,7 +1,8 @@
 /**
  * 角色成长记录器 / 设定记忆库：数据结构定义
  *
- * 所有数据以 JSON 文件的形式保存在 `<project>/资料/记忆/` 中，作为成长数据的唯一来源，
+ * 所有数据以 JSON 文件的形式保存在作品的 `<作品>/资料/记忆/` 中（记忆库跟随作品，见 work-scope.ts），
+ * 作为成长数据的唯一来源，
  * GUI、CLI 与 AI agent 都直接读写这些文件。每个文件都带 schemaVersion，便于未来迁移。
  *
  *   资料/记忆/
@@ -17,7 +18,7 @@
 
 export const GROWTH_SCHEMA_VERSION = 1;
 
-/** 记忆库相对项目根目录的路径片段 */
+/** 记忆库相对作品作用域根目录（作品目录 / 普通文件夹）的路径片段 */
 export const MEMORY_DIR_SEGMENTS = ['资料', '记忆'] as const;
 export const MEMORY_RULESET_FILE = '规则.json';
 export const MEMORY_PARTY_FILE = '队伍.json';
