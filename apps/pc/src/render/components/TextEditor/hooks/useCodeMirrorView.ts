@@ -5,8 +5,8 @@ import { EditorView, keymap, placeholder } from '@codemirror/view';
 import { writingDecorations, type CharacterHighlightPattern } from '../writing-decorations';
 import { inlineDiffField, inlineDiffTheme } from '../inline-diff';
 import type { EditorRuntimeModules } from '../editor-runtime';
-import { loadLanguageExtension } from '../editor-runtime';
-import { resolveEditorLanguage } from '../editor-paths';
+import { loadLanguageExtension, loadMarkdownLivePreview } from '../editor-runtime';
+import { isPersistablePath, resolveEditorLanguage } from '../editor-paths';
 import {
   appliedLineMarkerField,
   createActiveLineExtensions,
@@ -42,6 +42,8 @@ interface UseCodeMirrorViewOptions {
   showThousandCharMarkers: boolean;
   thousandCharMarkerStep: number;
   characterHighlights: CharacterHighlightPattern[];
+  /** Markdown 实时预览（仅对 markdown 文件生效） */
+  livePreview: boolean;
 }
 
 /**
@@ -73,6 +75,7 @@ export function useCodeMirrorView({
   showThousandCharMarkers,
   thousandCharMarkerStep,
   characterHighlights,
+  livePreview,
 }: UseCodeMirrorViewOptions) {
   const [editorReady, setEditorReady] = useState(false);
 
@@ -85,6 +88,7 @@ export function useCodeMirrorView({
   const lineNumberCompartment = useRef(new Compartment());
   const activeLineCompartment = useRef(new Compartment());
   const thousandCharMarkerCompartment = useRef(new Compartment());
+  const livePreviewCompartment = useRef(new Compartment());
 
   // 创建 EditorView 时使用的初始展示配置：通过最新值 ref 读取，
   // 避免这些配置变化时销毁重建 EditorView（后续变化由下方各 reconfigure effect 下发）
@@ -152,6 +156,7 @@ export function useCodeMirrorView({
           readOnlyCompartment.current.of(EditorView.editable.of(!readOnly)),
           wordWrapCompartment.current.of(createWordWrapExtension(wordWrap, focusMode)),
           languageCompartment.current.of([]),
+          livePreviewCompartment.current.of([]),
           writingDecoCompartment.current.of(writingDecorations(characterHighlights)),
           focusModeCompartment.current.of(focusLineDecorations(focusMode)),
           EditorView.updateListener.of((update) => {
@@ -272,6 +277,39 @@ export function useCodeMirrorView({
       cancelled = true;
     };
   }, [editorReady, filePath, isUntitled, viewRef]);
+
+  // Markdown 实时预览：仅 markdown 文件且开关开启时懒加载并启用，否则清空
+  useEffect(() => {
+    if (!editorReady) return;
+    const view = viewRef.current;
+    if (!view) return;
+    const enabled =
+      livePreview && Boolean(filePath) && resolveEditorLanguage(filePath ?? '') === 'markdown';
+    if (!enabled) {
+      view.dispatch({ effects: livePreviewCompartment.current.reconfigure([]) });
+      return;
+    }
+
+    let cancelled = false;
+    loadMarkdownLivePreview()
+      .then((module) => {
+        const current = viewRef.current;
+        if (cancelled || !current) return;
+        current.dispatch({
+          effects: livePreviewCompartment.current.reconfigure(
+            module.markdownLivePreview({
+              filePath: isPersistablePath(filePath) ? filePath : null,
+            })
+          ),
+        });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) console.error('Failed to load markdown live preview:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editorReady, filePath, livePreview, viewRef]);
 
   // Update writing decorations when character highlight rules change
   useEffect(() => {

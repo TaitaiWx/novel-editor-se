@@ -14,6 +14,7 @@ export interface EditorRuntimeModules {
 }
 
 let editorRuntimePromise: Promise<EditorRuntimeModules> | null = null;
+let livePreviewPromise: Promise<typeof import('./live-preview')> | null = null;
 const languageExtensionCache = new Map<string, Promise<Extension>>();
 
 export const loadEditorRuntime = () => {
@@ -42,8 +43,15 @@ export const loadLanguageExtension = (lang: string): Promise<Extension> => {
   const promise = (async () => {
     switch (lang) {
       case 'markdown': {
-        const module = await import('@codemirror/lang-markdown');
-        return module.markdown();
+        // GFM（表格、任务列表、删除线）+ 数学公式语法，供高亮与实时预览共用同一棵语法树
+        const [module, math] = await Promise.all([
+          import('@codemirror/lang-markdown'),
+          import('./live-preview/math-syntax'),
+        ]);
+        return module.markdown({
+          base: module.markdownLanguage,
+          extensions: [math.mathMarkdownSyntax],
+        });
       }
       case 'json': {
         const module = await import('@codemirror/lang-json');
@@ -61,4 +69,15 @@ export const loadLanguageExtension = (lang: string): Promise<Extension> => {
 
   languageExtensionCache.set(lang, promise);
   return promise;
+};
+
+/** 懒加载 Markdown 实时预览模块（含 KaTeX，单独分包，只在需要时加载） */
+export const loadMarkdownLivePreview = () => {
+  if (!livePreviewPromise) {
+    livePreviewPromise = import('./live-preview').catch((err: unknown) => {
+      livePreviewPromise = null;
+      throw err;
+    });
+  }
+  return livePreviewPromise;
 };

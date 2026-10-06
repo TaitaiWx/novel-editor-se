@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import LoadingSpinner from '../LoadingSpinner';
 import ErrorState from '../ErrorState';
@@ -82,6 +82,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   virtualContent,
   encoding = 'UTF-8',
   characterHighlights = [],
+  markdownLivePreview = true,
   scrollToLine,
   transientHighlightLine,
   replaceLineRequest,
@@ -116,6 +117,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const onSaveUntitledRef = useSyncedRef(onSaveUntitled);
   const readOnlyRef = useSyncedRef(readOnly);
   const filePathRef = useSyncedRef(filePath);
+
+  // 文件头的「源码 / 实时预览」切换：默认跟随设置中心，设置变化时同步
+  const [livePreview, setLivePreview] = useState(markdownLivePreview);
+  useEffect(() => {
+    setLivePreview(markdownLivePreview);
+  }, [markdownLivePreview]);
+  const toggleLivePreview = useCallback(() => setLivePreview((current) => !current), []);
 
   const { saveViewportSnapshot, restoreViewportSnapshot } = useViewportSnapshots({
     viewRef,
@@ -191,6 +199,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
     showThousandCharMarkers,
     thousandCharMarkerStep,
     characterHighlights,
+    livePreview,
   });
 
   // Save on unmount：卸载时读取各 ref 的最新值（而非挂载时快照），交由模块级函数处理
@@ -271,6 +280,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
           lastSaved={lastSaved}
           onSave={handleManualSave}
           settingsComponent={settingsComponent}
+          livePreview={language === 'markdown' ? livePreview : undefined}
+          onToggleLivePreview={toggleLivePreview}
         />
       )}
 

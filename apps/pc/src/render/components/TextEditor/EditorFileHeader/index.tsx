@@ -14,6 +14,9 @@ interface EditorFileHeaderProps {
   lastSaved: Date | null;
   onSave: () => void;
   settingsComponent?: React.ReactNode;
+  /** Markdown 文件的显示方式；undefined 表示不显示切换（非 markdown 文件） */
+  livePreview?: boolean;
+  onToggleLivePreview?: () => void;
 }
 
 /** 保存状态文案：保存中 / 未保存 / 上次保存时间 / 已保存 */
@@ -43,6 +46,8 @@ const EditorFileHeader: React.FC<EditorFileHeaderProps> = ({
   lastSaved,
   onSave,
   settingsComponent,
+  livePreview,
+  onToggleLivePreview,
 }) => (
   <div className={styles.fileHeader}>
     <div className={styles.fileInfo}>
@@ -59,6 +64,26 @@ const EditorFileHeader: React.FC<EditorFileHeaderProps> = ({
       )}
     </div>
     <div className={styles.fileActions}>
+      {livePreview !== undefined && onToggleLivePreview && (
+        <div className={styles.viewModeToggle} role="group" aria-label="Markdown 显示方式">
+          <button
+            type="button"
+            className={`${styles.viewModeOption} ${!livePreview ? styles.viewModeActive : ''}`}
+            aria-pressed={!livePreview}
+            onClick={livePreview ? onToggleLivePreview : undefined}
+          >
+            源码
+          </button>
+          <button
+            type="button"
+            className={`${styles.viewModeOption} ${livePreview ? styles.viewModeActive : ''}`}
+            aria-pressed={livePreview}
+            onClick={livePreview ? undefined : onToggleLivePreview}
+          >
+            实时预览
+          </button>
+        </div>
+      )}
       {!readOnly && !isChangelog && (
         <Tooltip content="保存 (Cmd/Ctrl+S)" position="bottom">
           <button

@@ -17,6 +17,7 @@ export const getLanguageFromPath = (path: string): string => {
   const ext = path.split('.').pop()?.toLowerCase();
   const languageMap: Record<string, string> = {
     md: 'markdown',
+    markdown: 'markdown',
     txt: 'text',
     json: 'json',
     js: 'javascript',

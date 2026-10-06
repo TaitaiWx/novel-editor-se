@@ -142,3 +142,33 @@ describe('TextEditor', () => {
     expect(container.querySelector('.cm-content')?.textContent).toContain('原始内容，新增未保存');
   });
 });
+
+describe('EditorFileHeader：Markdown 源码 / 实时预览切换', () => {
+  const props = {
+    fileName: '排版示例.md',
+    language: 'markdown',
+    hasChanges: false,
+    isLargeFile: false,
+    readOnly: false,
+    isChangelog: false,
+    autoSaving: false,
+    lastSaved: null,
+    onSave: vi.fn(),
+  };
+
+  it('非 markdown 文件不显示切换', () => {
+    render(<EditorFileHeader {...props} onToggleLivePreview={vi.fn()} />);
+    expect(screen.queryByRole('group', { name: 'Markdown 显示方式' })).toBeNull();
+  });
+
+  it('点击未选中的一侧才切换', () => {
+    const onToggle = vi.fn();
+    render(<EditorFileHeader {...props} livePreview onToggleLivePreview={onToggle} />);
+    const live = screen.getByRole('button', { name: '实时预览' });
+    expect(live.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(live);
+    expect(onToggle).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '源码' }));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+});
