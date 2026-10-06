@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "示例作品集",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "novelsDir": "novels",
+  "chapterExtension": ".md"
+}

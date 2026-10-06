@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "name": "星河旅人 · 规则之书",
+  "description": "基于 DND 模板：六维属性（每升一级全属性 +1，单级合理成长上限 +2）、20 级经验表；3 级时在三条道途中选择其一。",
+  "attributes": [
+    {
+      "key": "str",
+      "name": "力量",
+      "description": "近战、负重与肉体力量",
+      "initial": 10,
+      "min": 1,
+      "max": 30,
+      "growthPerLevel": 1,
+      "perLevelCap": 2
+    },
+    {
+      "key": "dex",
+      "name": "敏捷",
+      "description": "反应、闪避与精细动作",
+      "initial": 10,
+      "min": 1,
+      "max": 30,
+      "growthPerLevel": 1,
+      "perLevelCap": 2
+    },
+    {
+      "key": "con",
+      "name": "体质",
+      "description": "生命力与耐力",
+      "initial": 10,
+      "min": 1,
+      "max": 30,
+      "growthPerLevel": 1,
+      "perLevelCap": 2
+    },
+    {
+      "key": "int",
+      "name": "智力",
+      "description": "学识、推理与奥术",
+      "initial": 10,
+      "min": 1,
+      "max": 30,
+      "growthPerLevel": 1,
+      "perLevelCap": 2
+    },
+    {
+      "key": "wis",
+      "name": "感知",
+      "description": "洞察、意志与直觉",
+      "initial": 10,
+      "min": 1,
+      "max": 30,
+      "growthPerLevel": 1,
+      "perLevelCap": 2
+    },
+    {
+      "key": "cha",
+      "name": "魅力",
+      "description": "感染力、领导与交涉",
+      "initial": 10,
+      "min": 1,
+      "max": 30,
+      "growthPerLevel": 1,
+      "perLevelCap": 2
+    }
+  ],
+  "levels": {
+    "maxLevel": 20,
+    "curve": {
+      "kind": "table",
+      "perLevel": [
+        300,
+        600,
+        1800,
+        3800,
+        7500,
+        9000,
+        11000,
+        14000,
+        16000,
+        21000,
+        15000,
+        20000,
+        20000,
+        25000,
+        30000,
+        30000,
+        40000,
+        40000,
+        50000
+      ]
+    }
+  },
+  "skills": [
+    {
+      "id": "second-wind",
+      "name": "回气",
+      "description": "战斗中短暂恢复体力",
+      "maxLevel": 3,
+      "costPerLevel": [
+        0,
+        200,
+        500
+      ]
+    },
+    {
+      "id": "fireball",
+      "name": "火球术",
+      "description": "范围火焰伤害",
+      "maxLevel": 5,
+      "costPerLevel": [
+        0,
+        400,
+        800,
+        1600,
+        3200
+      ],
+      "prerequisites": {
+        "characterLevel": 5,
+        "attributes": {
+          "int": 13
+        }
+      },
+      "exclusiveGroup": "school"
+    },
+    {
+      "id": "frost-nova",
+      "name": "冰霜新星",
+      "description": "冻结周围敌人",
+      "maxLevel": 5,
+      "costPerLevel": [
+        0,
+        400,
+        800,
+        1600,
+        3200
+      ],
+      "prerequisites": {
+        "characterLevel": 5,
+        "attributes": {
+          "int": 13
+        }
+      },
+      "exclusiveGroup": "school"
+    },
+    {
+      "id": "healing-word",
+      "name": "治愈真言",
+      "description": "远程治疗队友",
+      "maxLevel": 5,
+      "costPerLevel": [
+        0,
+        300,
+        600,
+        1200,
+        2400
+      ],
+      "prerequisites": {
+        "attributes": {
+          "wis": 12
+        }
+      }
+    }
+  ],
+  "choiceGroups": [
+    {
+      "id": "path",
+      "name": "道途抉择（三选一）",
+      "description": "3 级时选择成长方向，选定后不可更改",
+      "pick": 1,
+      "unlockLevel": 3,
+      "options": [
+        {
+          "id": "warrior",
+          "name": "战士之道",
+          "description": "力量与体质成长",
+          "grants": {
+            "skills": [
+              "second-wind"
+            ],
+            "attributes": {
+              "str": 2,
+              "con": 1
+            }
+          }
+        },
+        {
+          "id": "mage",
+          "name": "法师之道",
+          "description": "智力成长，日后可学习元素法术",
+          "grants": {
+            "attributes": {
+              "int": 2,
+              "wis": 1
+            }
+          }
+        },
+        {
+          "id": "priest",
+          "name": "牧师之道",
+          "description": "感知成长，获得治疗能力",
+          "grants": {
+            "skills": [
+              "healing-word"
+            ],
+            "attributes": {
+              "wis": 2,
+              "cha": 1
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "coreRules": [
+    {
+      "id": "rule-1",
+      "text": "任何角色在第一卷结束前不得超过 10 级",
+      "check": {
+        "kind": "max-level",
+        "value": 10
+      }
+    },
+    {
+      "id": "rule-2",
+      "text": "元素法术（火/冰）只能主修其一，主修后不可转修"
+    },
+    {
+      "id": "rule-3",
+      "text": "林舟走战士之道，整部作品都不学元素法术",
+      "appliesTo": [
+        "林舟"
+      ],
+      "check": {
+        "kind": "forbid-skill",
+        "skillId": "fireball"
+      }
+    },
+    {
+      "id": "rule-4",
+      "text": "苏晴的治愈真言在第二卷结束前不超过 3 级",
+      "appliesTo": [
+        "苏晴"
+      ],
+      "check": {
+        "kind": "max-skill-level",
+        "skillId": "healing-word",
+        "value": 3
+      }
+    },
+    {
+      "id": "rule-5",
+      "text": "主角团必须在 4 级前完成道途抉择",
+      "check": {
+        "kind": "require-choice-by-level",
+        "groupId": "path",
+        "level": 4
+      }
+    }
+  ],
+  "limits": {
+    "maxLevelsPerChapter": 2,
+    "maxAttributeGainPerChapter": 3,
+    "maxSkillLevelsPerChapter": 2,
+    "forgottenAfterChapters": 4
+  }
+}

@@ -192,12 +192,24 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
   - `app.ts`: 用 `apps/pc/node_modules` 中的 electron 启动 `dist/main.mjs`，附加 `--remote-debugging-port=<空闲端口>`，最后一个参数是临时 fixture 项目目录（由 `launch-folder.ts` 打开）；环境变量 `NOVEL_EDITOR_E2E=1`（复用烟雾测试的 userData 隔离 `NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR`，但就绪后不自动退出）、`NOVEL_EDITOR_DISABLE_AUTO_UPDATER=1`；附加 `--disable-renderer-backgrounding` 等参数并关闭窗口 `backgroundThrottling`（窗口被遮挡时 Chromium 会节流定时器、暂停 rAF，曾导致用例偶发变慢 / 超时）；结束时整组杀进程并删除临时目录
   - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
   - `workbench.ts`: 本应用的高层操作（展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
-  - `fixture.ts`: 每次运行在临时目录生成全新的示例项目（中文作品/章节 + `资料/`）
-- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、成长记录器、记忆库同步、成长档案一级入口、GUI 与 CLI 共享写作日志和会话状态、关于小窗口（运行时间、点击复制设备 ID、上传日志兜底到下载目录）、资料长文件名（哈希名中间省略保留扩展名、类型图标与标签）、单实例转发）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据
+  - `fixture.ts`: 每次运行把示例作品集 `apps/pc/sample-data` 完整拷贝到临时目录（跳过本机数据库等运行产物，可用 `exclude` 去掉某些路径）；`FIXTURE_CHAPTERS` / `FIXTURE_CHAPTER_TREE` 指向其中的「星河旅人 / 第一卷-离乡」
+  - `suite.ts`: `setupAppSuite()` 为一个 `*.e2e.ts` 注册启动 / 关闭、失败截图、控制台错误检查；另有 `openChapter`、`captureForReview`、成长档案选择器等通用操作
+- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、示例作品集开箱即用（欢迎使用、预置成长档案、种子人物 / 设定、幕剧、章纲）、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、GUI 与 CLI 共享写作日志和会话状态、关于小窗口、资料长文件名、单实例转发）；`growth.e2e.ts` 用去掉 `资料/记忆/` 的示例验证成长档案首次使用（开始使用、新建成长卡、引导、记一笔、提醒、总览、记忆库同步、人物详情入口）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据并写入种子人物
+- 示例项目的作品名来自 `seed.json`（「示例作品集」），标题栏显示它而不是临时目录名
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
 - 调试: 失败时自动把截图（`*.png`）和主进程 stdout/stderr（`*.log`）写入 `apps/pc/e2e/.artifacts/`（已 gitignore，CI 失败时作为 artifact 上传）；设置 `NOVEL_EDITOR_E2E_VERBOSE=1` 可实时输出主进程日志；可用 `pnpm test:e2e -t "<用例名>"` 过滤；`NOVEL_EDITOR_E2E_TRACE=1` 打印每个等待的耗时（用例共享同一窗口状态，单独运行靠后的用例时可能需要连同前置用例一起跑）
 - 注意: macOS 上 `Cmd+A` 等依赖原生菜单的编辑命令不会被 CDP 按键触发，输入框全选请用 `input.select()`；快捷键作用于当前焦点元素，点击过按钮后需先把焦点还给编辑器
+
+### 示例作品集（sample-data）
+
+`apps/pc/sample-data` 是唯一的示范项目：首次启动时拷贝到「文稿/Novel Editor/sample-data」并自动打开，GUI E2E 也直接拷贝它作为 fixture。改它就是改用户第一眼看到的内容，同时也是改测试数据。
+
+- 结构遵循 `ne init`：`.novel-editor/config.json`（作品集名「示例作品集」）、`novels/星河旅人/第一卷-离乡|第二卷-星海/00N-*.md`（6 章，正文带「第X幕 / 第X场」供幕剧演示）、`novels/剑与诗/`、`资料/`（设定笔记）、`资料/素材/`（成对的 `xxx` / `xxx-alt` 媒体，演示预览与版本对比）、`资料/文档示例/`（docx / pptx / xlsx，含一个故意损坏的 docx）、`资料/记忆/`（成长档案）、根目录 `欢迎使用.md`（功能导览，引用的路径都必须存在）
+- 人物 / 设定 / 大纲存在 SQLite 中，且按项目绝对路径区分，不能随包分发数据库。改为 `.novel-editor/seed.json`（沿用全量导出的行结构，路径相对项目根）：主进程 `db-init` 后调用 store `seedProjectData`，仅当该目录还没有作品记录时写入，绝不覆盖用户数据；任何带 seed.json 的项目都适用
+- `资料/记忆/` 与 `seed.json` 由 `apps/pc/scripts/generate-sample-data.mts` 通过 core 成长记录器 API 生成（固定时间戳）。修改章节或成长事件后运行 `pnpm exec tsx apps/pc/scripts/generate-sample-data.mts`，不要手改这些文件
+- `apps/pc/test/main/sample-data.test.ts` 校验：配置与卷章顺序、E2E 依赖的开篇文本、生成文件逐字节一致、成长数据规范化与一致性检查无警告、事件章节正文确实提到该角色、seed.json 可导入、欢迎使用.md 中的路径都存在、没有垃圾 / 空文件 / 运行产物、总体积 < 2MB、打包过滤规则
+- 运行产物不进仓库也不进安装包：`.gitignore` 忽略 `sample-data/.novel-editor/*.db*`、`session.json`、`writing-log.json`；electron-builder `extraResources` 过滤同样排除它们和 `.DS_Store`；core `ensureSeededDirectory` 拷贝时也会跳过（`isSeedRuntimeArtifact`）。大文件性能测试请在测试中临时生成，不要放进示例
 
 ### CI
 

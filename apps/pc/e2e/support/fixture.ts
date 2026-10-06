@@ -1,9 +1,19 @@
 /**
- * 为每次 E2E 运行在临时目录生成一个全新的示例项目（与 `ne init` 的目录约定一致）
+ * E2E fixture：每次运行把示例作品集（apps/pc/sample-data）完整拷贝到临时目录
+ *
+ * 示例作品集是唯一的数据源——首次启动展示给用户的就是同一份内容，E2E 直接在它上面验证所有功能。
+ * 拷贝时跳过开发时可能残留的本机数据库 / 会话 / 写作日志（与应用播种示例时的规则相同）。
  */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { isSeedRuntimeArtifact } from '@novel-editor/core';
+
+export const SAMPLE_DATA_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../sample-data'
+);
 
 export interface FixtureProject {
   root: string;
@@ -12,40 +22,39 @@ export interface FixtureProject {
   dispose(): Promise<void>;
 }
 
+/** 文件树中「星河旅人」第一卷所在的路径（「未分卷」是文件面板对非卷目录的分组） */
+export const FIXTURE_VOLUME_DIR = 'novels/星河旅人/第一卷-离乡';
+export const FIXTURE_CHAPTER_TREE = ['未分卷', 'novels', '星河旅人', '第一卷-离乡'] as const;
+
 export const FIXTURE_CHAPTERS = {
-  first: { file: 'novels/星河旅人/001-启程.md', title: '001-启程.md' },
-  second: { file: 'novels/星河旅人/002-迷雾森林.md', title: '002-迷雾森林.md' },
+  first: { file: `${FIXTURE_VOLUME_DIR}/001-启程.md`, title: '001-启程.md' },
+  second: { file: `${FIXTURE_VOLUME_DIR}/002-迷雾森林.md`, title: '002-迷雾森林.md' },
   other: { file: 'novels/剑与诗/001-少年.md', title: '001-少年.md' },
 } as const;
 
-const FILES: Record<string, string> = {
-  '.novel-editor/config.json': `${JSON.stringify(
-    {
-      schemaVersion: 1,
-      name: 'E2E 测试项目',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      novelsDir: 'novels',
-      chapterExtension: '.md',
-    },
-    null,
-    2
-  )}\n`,
-  [FIXTURE_CHAPTERS.first.file]:
-    '# 启程\n\n林舟背起行囊，走出了小镇。\n\n远处的山峦笼罩在晨雾之中。\n',
-  [FIXTURE_CHAPTERS.second.file]: '# 迷雾森林\n\n森林里的雾气越来越浓。\n',
-  [FIXTURE_CHAPTERS.other.file]: '# 少年\n\n少年握紧了手中的木剑。\n',
-  '资料/世界观.md': '# 世界观\n\n星河大陆分为东西两境。\n',
-};
+export interface FixtureOptions {
+  prefix?: string;
+  /** 不拷贝这些相对路径（例如 `资料/记忆`，用于验证首次使用流程） */
+  exclude?: string[];
+}
 
 export async function createFixtureProject(
-  prefix = 'novel-editor-e2e-project-'
+  options: FixtureOptions | string = {}
 ): Promise<FixtureProject> {
+  const { prefix = 'novel-editor-e2e-project-', exclude = [] } =
+    typeof options === 'string' ? { prefix: options } : options;
   const root = await mkdtemp(path.join(tmpdir(), prefix));
-  for (const [relative, content] of Object.entries(FILES)) {
-    const absolute = path.join(root, relative);
-    await mkdir(path.dirname(absolute), { recursive: true });
-    await writeFile(absolute, content, 'utf-8');
-  }
+  const excluded = exclude.map((item) => item.split(/[\\/]/).join(path.sep));
+  await cp(SAMPLE_DATA_DIR, root, {
+    recursive: true,
+    filter: (source) => {
+      const relative = path.relative(SAMPLE_DATA_DIR, source);
+      if (isSeedRuntimeArtifact(relative)) return false;
+      return !excluded.some(
+        (item) => relative === item || relative.startsWith(`${item}${path.sep}`)
+      );
+    },
+  });
   return {
     root,
     resolve: (...segments) => path.join(root, ...segments),

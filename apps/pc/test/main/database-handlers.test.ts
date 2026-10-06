@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -59,6 +59,7 @@ async function call<T = unknown>(channel: string, ...args: unknown[]): Promise<T
 }
 
 type Row = Record<string, unknown>;
+const SAMPLE_DATA_DIR = path.resolve(__dirname, '../../sample-data');
 interface RunResult {
   changes: number;
   lastInsertRowid: number | bigint;
@@ -123,6 +124,47 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
       expect(result.success).toBe(true);
       expect(result.dbDir).toBe(path.join(electronState.userData, '.novel-editor'));
       expect(store.isDatabaseReady()).toBe(true);
+    });
+
+    it('db-init 首次打开带 seed.json 的项目时写入示例人物 / 设定 / 大纲，之后不再重复', async () => {
+      await call('db-close');
+      const project = tmp('ne-db-seed-project-');
+      const metaDir = path.join(project, '.novel-editor');
+      await mkdir(metaDir, { recursive: true });
+      // 直接使用仓库里的示例种子，保证随应用分发的文件可被导入
+      await copyFile(
+        path.join(SAMPLE_DATA_DIR, '.novel-editor', 'seed.json'),
+        path.join(metaDir, 'seed.json')
+      );
+
+      await expect(call('db-init', metaDir)).resolves.toEqual({ success: true });
+      const novel = await call<Row>('db-novel-get-by-folder', project);
+      expect(novel).toMatchObject({ name: '示例作品集', folder_path: project });
+      const names = (await call<Row[]>('db-character-list', novel.id)).map((row) => row.name);
+      expect(names).toEqual(expect.arrayContaining(['林舟', '苏晴', '秦伯']));
+      const lore = await call<Row[]>('db-world-setting-list-by-folder', project);
+      expect(lore.length).toBeGreaterThan(0);
+
+      // 用户删掉一个人物后重新打开：不会被种子补回来
+      const first = (await call<Row[]>('db-character-list', novel.id))[0];
+      await call('db-character-delete', first.id);
+      await call('db-close');
+      await call('db-init', metaDir);
+      expect(await call<Row[]>('db-character-list', novel.id)).toHaveLength(names.length - 1);
+      expect(store.novelOps.getAll()).toHaveLength(1);
+    });
+
+    it('db-init 遇到损坏的 seed.json 只记录警告，不影响打开项目', async () => {
+      await call('db-close');
+      const project = tmp('ne-db-bad-seed-');
+      const metaDir = path.join(project, '.novel-editor');
+      await mkdir(metaDir, { recursive: true });
+      await writeFile(path.join(metaDir, 'seed.json'), '{ broken', 'utf-8');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await expect(call('db-init', metaDir)).resolves.toEqual({ success: true });
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+      expect(await call('db-novel-get-by-folder', project)).toBeUndefined();
     });
 
     it('db-close 后 settings-get 返回 undefined 而不是抛错', async () => {

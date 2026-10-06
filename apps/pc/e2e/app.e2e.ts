@@ -1,28 +1,43 @@
 /**
  * 小说编辑器 GUI 端到端测试
  *
+ * fixture 是示例作品集（apps/pc/sample-data）的完整拷贝：首次启动展示给用户的内容就是 E2E 验证的内容。
  * 整个文件共用一个 Electron 实例（启动约 2~3 秒），用例按顺序执行并共享界面状态，
  * 因此每个用例开头都要自己把界面带到需要的位置（打开章节、展开面板等），不要依赖上一个用例的结尾。
- * 运行：pnpm test:e2e（会先构建）或 pnpm test:e2e:only（使用现有 dist）。
+ * 成长档案的「首次使用」流程需要不含记忆库的项目，见 growth.e2e.ts。
+ * 运行：pnpm test:e2e（会先构建）。
  */
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { getTodayStats, readGuiSession } from '@novel-editor/core';
 import {
   buildAppEnv,
-  launchApp,
   spawnElectron,
   stopProcess,
   waitForExit,
-  writeLogs,
   type ElectronApp,
 } from './support/app';
-import { createFixtureProject, FIXTURE_CHAPTERS, type FixtureProject } from './support/fixture';
-import { type ConsoleIssue, type Page } from './support/page';
+import {
+  FIXTURE_CHAPTERS,
+  FIXTURE_CHAPTER_TREE,
+  FIXTURE_VOLUME_DIR,
+  createFixtureProject,
+  type FixtureProject,
+} from './support/fixture';
+import type { Page } from './support/page';
+import {
+  GROWTH_SECTION,
+  GROWTH_TITLE,
+  GROWTH_WORKSPACE,
+  captureForReview as captureShot,
+  ensureSidebarOpen as ensureSidebarOpenIn,
+  openChapter as openChapterIn,
+  setupAppSuite,
+} from './support/suite';
 import {
   SEL,
   answerPrompt,
@@ -42,124 +57,43 @@ import {
   waitForWorkspace,
 } from './support/workbench';
 
-/** 已知且可接受的控制台错误（新增条目时写明原因） */
-const ALLOWED_ISSUES: RegExp[] = [];
+const suite = setupAppSuite();
+/** 示例作品集的作品名（.novel-editor/seed.json） */
+const SAMPLE_PROJECT_NAME = '示例作品集';
 
-const CHAPTER_DIR = ['未分卷', 'novels', '星河旅人'];
-/** 文件面板「成长档案」分区 / 成长档案工作区标签 / 成长卡标题 */
-const GROWTH_SECTION = `${SEL.workspaceTree} section:has([aria-label="新建成长卡"])`;
-const GROWTH_WORKSPACE = '[class*="growthWorkspace"]';
-const GROWTH_TITLE = `${GROWTH_WORKSPACE} header`;
-const GROWTH_HELP = '[role="dialog"][aria-label="成长档案使用说明"]';
-
+// 用例中直接使用 fixture / app / page（setupAppSuite 的 beforeAll 先执行）
 let fixture: FixtureProject;
 let app: ElectronApp;
 let page: Page;
+beforeAll(() => {
+  ({ fixture, app, page } = suite);
+});
 
-function unexpected(issues: ConsoleIssue[]): ConsoleIssue[] {
-  return issues.filter((issue) => !ALLOWED_ISSUES.some((pattern) => pattern.test(issue.text)));
-}
-
-/**
- * 截图供人工检查样式：设置 NOVEL_EDITOR_E2E_SCREENSHOT_DIR 时额外复制一份到该目录
- * （默认只写入 e2e/.artifacts/）
- */
-async function captureForReview(name: string): Promise<void> {
-  const dir = process.env.NOVEL_EDITOR_E2E_SCREENSHOT_DIR;
-  if (!dir) return;
-  const shot = await page.screenshot(name);
-  if (!shot) return;
-  await mkdir(dir, { recursive: true });
-  await copyFile(shot, path.join(dir, `${name}.png`));
-}
-
-/** 等待成长卡 JSON 满足条件 */
-async function waitForSheet<T extends { exp: number; level: number }>(
-  name: string,
-  predicate: (sheet: T) => boolean,
-  message: string
-): Promise<T> {
-  const file = fixture.resolve('资料/记忆/角色', `${name}.json`);
-  return page.waitUntil(
-    async () => {
-      if (!existsSync(file)) return null;
-      const data = JSON.parse(await readFile(file, 'utf-8')) as T;
-      return predicate(data) ? data : null;
-    },
-    { message }
-  );
-}
-
-/** 回答连续弹出的 Prompt 中标题为 title 的那一个，并等待它被下一个替换或关闭 */
-async function answerChainedPrompt(title: string, value: string): Promise<void> {
-  await page.waitForTarget({ text: title, within: SEL.dialog, exact: true });
-  await page.evaluate((selector: string) => {
-    const input = document.querySelector(selector) as HTMLInputElement;
-    input.focus();
-    input.select();
-  }, SEL.dialogInput);
-  await page.type(value);
-  await page.waitFor(
-    (selector: string, expected: string) =>
-      (document.querySelector(selector) as HTMLInputElement | null)?.value === expected,
-    { args: [SEL.dialogInput, value], message: `输入框内容为「${value}」` }
-  );
-  await page.click({ text: '确定', within: SEL.dialog, exact: true });
-  await page.waitForGone({ text: title, within: SEL.dialog, exact: true });
-}
-
-/** 成长档案入口在左侧文件面板：若侧边栏被折叠（例如退出专注模式后），先展开 */
-async function ensureSidebarOpen(): Promise<void> {
-  if (await page.exists('[title="展开侧边栏"]')) {
-    await page.click('[title="展开侧边栏"]');
-  }
-  await page.waitForTarget(SEL.workspaceTree);
-}
+const captureForReview = (name: string) => captureShot(page, name);
+const openChapter = (title: string, expectText: string) => openChapterIn(page, title, expectText);
+const ensureSidebarOpen = () => ensureSidebarOpenIn(page);
 
 async function readProjectFile(relative: string): Promise<string> {
   return readFile(fixture.resolve(relative), 'utf-8');
 }
 
-/** 打开「星河旅人」下的某一章并等待编辑器加载出内容 */
-async function openChapter(title: string, expectText: string): Promise<void> {
-  await expandTreePath(page, [...CHAPTER_DIR, title]);
-  await page.click({ text: title, within: SEL.workspaceTree, exact: true });
-  await waitForEditorText(page, expectText);
-}
-
-beforeAll(async () => {
-  fixture = await createFixtureProject();
-  app = await launchApp({ projectDir: fixture.root });
-  page = app.page;
-});
-
-afterAll(async () => {
-  await app?.close();
-  await fixture?.dispose();
-});
-
-beforeEach(({ task, onTestFailed }) => {
-  onTestFailed(async () => {
-    const name = `${Date.now()}-${task.name}`;
-    const shot = await page?.screenshot(name);
-    if (app) await writeLogs(name, app.logs);
-    if (shot) console.error(`[e2e] 失败截图: ${shot}`);
-  });
-});
-
-afterEach(() => {
-  // 每个用例结束时检查控制台错误 / 未捕获异常，出现非预期错误直接判定失败
-  const issues = unexpected(page?.takeIssues() ?? []);
-  expect(issues, `控制台出现非预期错误:\n${issues.map((i) => i.text).join('\n')}`).toEqual([]);
-});
-
 describe('小说编辑器 GUI', () => {
   it('1. 启动：主窗口打开 fixture 项目并展示章节', async () => {
-    await waitForWorkspace(page, path.basename(fixture.root));
-    await expandTreePath(page, [...CHAPTER_DIR, '001-启程']);
+    // 示例项目首次打开时由 seed.json 写入作品记录，标题栏显示作品名而不是目录名
+    await waitForWorkspace(page, SAMPLE_PROJECT_NAME);
+    await expandTreePath(page, [...FIXTURE_CHAPTER_TREE, '001-启程']);
     const titles = await treeTitles(page);
     expect(titles).toEqual(
-      expect.arrayContaining(['剑与诗', '星河旅人', '001-启程', '002-迷雾森林'])
+      expect.arrayContaining([
+        '欢迎使用',
+        '剑与诗',
+        '星河旅人',
+        '第一卷-离乡',
+        '第二卷-星海',
+        '001-启程',
+        '002-迷雾森林',
+        '003-狼王之夜',
+      ])
     );
     expect(titles).toContain('资料');
 
@@ -172,7 +106,72 @@ describe('小说编辑器 GUI', () => {
     expect(await page.exists({ text: '更新日志', exact: true })).toBe(false);
   });
 
-  it('2. 编辑章节：自动保存到磁盘，撤销 / 重做生效', async () => {
+  it('2. 示例作品集开箱即用：欢迎使用、成长档案、人物与设定、幕剧与大纲都已预置', async () => {
+    await ensureSidebarOpen();
+    // 文件树：两卷六章 + 第二部作品 + 资料
+    await expandTreePath(page, ['未分卷', 'novels', '星河旅人', '第二卷-星海', '004-星港城']);
+    await expandTreePath(page, ['未分卷', 'novels', '剑与诗', '001-少年']);
+    await captureForReview('sample-tree');
+
+    // 欢迎使用.md：功能导览
+    await page.click({ text: '欢迎使用', within: SEL.workspaceTree, exact: true });
+    await waitForEditorText(page, '欢迎使用小说编辑器');
+    await captureForReview('sample-welcome');
+
+    // 成长档案：预置林舟 / 苏晴两张成长卡
+    await page.waitForTarget({ text: '林舟', within: GROWTH_SECTION, exact: true });
+    await page.waitForTarget({ text: '苏晴', within: GROWTH_SECTION, exact: true });
+    await page.waitForTarget({ text: 'Lv.4', within: GROWTH_SECTION, exact: true });
+    await page.waitForTarget({ text: 'Lv.3', within: GROWTH_SECTION, exact: true });
+    await page.evaluate((selector: string) => {
+      document.querySelector(selector)?.scrollIntoView({ block: 'center' });
+    }, GROWTH_SECTION);
+    await captureForReview('sample-growth-list');
+
+    await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
+    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
+    // 本实例第一次打开成长卡会显示引导，跳过即可（引导本身在 growth.e2e.ts 中验证）
+    await page.waitForTarget('[role="dialog"][aria-label^="引导 1/"]');
+    await page.click({ text: '跳过', exact: true });
+    await page.waitForGone('[role="dialog"][aria-label^="引导"]');
+    await page.waitForTarget({ text: 'Lv.4', within: GROWTH_WORKSPACE, exact: true });
+    await page.waitForTarget({ text: '斩杀独眼狼王', within: GROWTH_WORKSPACE, exact: true });
+    // 被遗忘的配角提醒：秦伯 / 小石头与林舟同过队，已 5 章未出场
+    await page.waitForTarget(`${GROWTH_WORKSPACE} [aria-label="需要留意"]`);
+    await captureForReview('sample-growth-sheet');
+
+    await page.click('[aria-label="打开成长档案总览"]');
+    await page.waitForTarget('[aria-label="打开 林舟 的成长卡"]');
+    await page.waitForTarget('[aria-label="打开 苏晴 的成长卡"]');
+    await captureForReview('sample-growth-overview');
+
+    // 人物与设定：来自 .novel-editor/seed.json，首次打开项目时写入数据库
+    await contextMenuAction(page, '角色', '查看详情');
+    await page.waitForTarget({ text: '人物与关系' });
+    for (const name of ['林舟', '苏晴', '白鸦', '秦伯']) {
+      await page.waitForTarget({ text: name, exact: true });
+    }
+    await captureForReview('sample-characters');
+    await contextMenuAction(page, '设定', '查看详情');
+    await page.waitForTarget({ text: '星河大陆', exact: true });
+    await captureForReview('sample-lore');
+
+    // 幕剧：正文中的「第三幕 / 第一场…」生成卡片
+    await openChapter('003-狼王之夜', '月亮升起来的时候');
+    await ensureRightPanelOpen(page);
+    await switchStorylineMode(page, '卷规划');
+    await page.waitForTarget({ text: '第三幕 狼王之夜', within: SEL.storyline });
+    await captureForReview('sample-acts');
+
+    // 章纲：001-启程 预置两条
+    await openChapter('001-启程', '林舟背起行囊');
+    await switchStorylineMode(page, '本章大纲');
+    await page.waitForTarget({ text: '第二场 铁匠铺的夜', within: SEL.storyline });
+    await captureForReview('sample-chapter-outline');
+    await switchStorylineMode(page, '目录');
+  });
+
+  it('3. 编辑章节：自动保存到磁盘，撤销 / 重做生效', async () => {
     await openChapter('001-启程', '林舟背起行囊');
     const original = await readProjectFile(FIXTURE_CHAPTERS.first.file);
 
@@ -207,8 +206,9 @@ describe('小说编辑器 GUI', () => {
     expect(await editorText(page)).not.toContain('新增一句话。');
   });
 
-  it('3. 文件操作：新建、重命名、删除与磁盘保持一致', async () => {
-    const chapterDir = fixture.resolve('novels/星河旅人');
+  it('4. 文件操作：新建、重命名、删除与磁盘保持一致', async () => {
+    const chapterDir = fixture.resolve(FIXTURE_VOLUME_DIR);
+    const before = (await readdir(chapterDir)).sort();
     await openChapter('002-迷雾森林', '森林里的雾气');
 
     // 新建章：落在当前章节所在目录
@@ -243,10 +243,10 @@ describe('小说编辑器 GUI', () => {
       message: '文件已从磁盘删除',
     });
     await page.waitForGone({ text: '003-再会', within: SEL.workspaceTree, exact: true });
-    expect((await readdir(chapterDir)).sort()).toEqual(['001-启程.md', '002-迷雾森林.md']);
+    expect((await readdir(chapterDir)).sort()).toEqual(before);
   });
 
-  it('4. 状态栏字数统计随输入变化', async () => {
+  it('5. 状态栏字数统计随输入变化', async () => {
     await openChapter('002-迷雾森林', '森林里的雾气');
     const original = await readProjectFile(FIXTURE_CHAPTERS.second.file);
     const before = await statusBarStats(page);
@@ -286,7 +286,7 @@ describe('小说编辑器 GUI', () => {
     );
   });
 
-  it('5. 右侧面板：各视图渲染无报错，专注模式下编辑器正常换行', async () => {
+  it('6. 右侧面板：各视图渲染无报错，专注模式下编辑器正常换行', async () => {
     await openChapter('001-启程', '林舟背起行囊');
     await ensureRightPanelOpen(page);
 
@@ -294,7 +294,8 @@ describe('小说编辑器 GUI', () => {
       ['本章大纲', '章纲'],
       ['卷规划', '剧情板'],
       ['三签卡', '三签创作法'],
-      ['成长', '角色成长档案'],
+      // 示例自带成长档案：显示本章出场角色的摘要
+      ['成长', '本章出场'],
       ['目录', '启程'],
     ];
     for (const [label, marker] of views) {
@@ -344,291 +345,7 @@ describe('小说编辑器 GUI', () => {
     );
   });
 
-  it('6. 成长档案：首次使用 → 新建成长卡 → 引导 → 记一笔写入 JSON；推演 / 世界可达，使用说明可打开', async () => {
-    const memoryDir = fixture.resolve('资料/记忆');
-    await ensureSidebarOpen();
-    await ensureRightPanelOpen(page);
-    await switchStorylineMode(page, '成长');
-
-    // 视图切换按钮在默认宽度与接近折叠阈值的窄宽度下都保持单行（不出现「目\n录」）
-    const toggleLayout = () =>
-      page.evaluate<{ multiLine: string[]; count: number }>(() => {
-        const buttons = Array.from(
-          document.querySelectorAll<HTMLElement>('[class*="storylineToolbar"] > button')
-        );
-        const lineHeight = (el: HTMLElement) => parseFloat(getComputedStyle(el).lineHeight) || 16;
-        return {
-          count: buttons.length,
-          multiLine: buttons
-            .filter((el) => el.clientHeight > lineHeight(el) * 1.6 + 8)
-            .map((el) => el.innerText),
-        };
-      });
-    expect(await toggleLayout()).toEqual({ count: 5, multiLine: [] });
-    await captureForReview('storyline-toggle-default');
-    const wrapperSelector = '[class*="rightPanelWrapper"]';
-    const originalWidth = await page.evaluate<string>(
-      (selector: string) => (document.querySelector(selector) as HTMLElement).style.width,
-      wrapperSelector
-    );
-    await page.evaluate((selector: string) => {
-      (document.querySelector(selector) as HTMLElement).style.width = '140px';
-    }, wrapperSelector);
-    expect(await toggleLayout()).toEqual({ count: 5, multiLine: [] });
-    await page.evaluate(() =>
-      document.querySelector('[class*="storylineToolbar"]')?.scrollIntoView({ block: 'center' })
-    );
-    await captureForReview('storyline-toggle-narrow');
-    await page.evaluate(
-      (selector: string, width: string) => {
-        (document.querySelector(selector) as HTMLElement).style.width = width;
-      },
-      wrapperSelector,
-      originalWidth
-    );
-
-    // 首次使用：右侧面板给出用途说明与「开始使用」
-    await page.waitForTarget({ text: '开始使用', within: SEL.storyline, exact: true });
-    await captureForReview('growth-v2-panel-setup');
-    await page.click({ text: '开始使用', within: SEL.storyline, exact: true });
-    await page.waitUntil(() => existsSync(path.join(memoryDir, '规则.json')), {
-      message: '规则.json 已创建',
-    });
-
-    // 总览空状态：新建成长卡 / 查看使用说明
-    await page.click('[aria-label="打开成长档案总览"]');
-    await page.waitForTarget({ text: '还没有成长卡', within: GROWTH_WORKSPACE, exact: true });
-    await captureForReview('growth-v2-overview-empty');
-    await page.click({ text: '查看使用说明', within: GROWTH_WORKSPACE, exact: true });
-    await page.waitForTarget({ text: '记一笔：每章写完 30 秒', within: GROWTH_HELP, exact: true });
-    await captureForReview('growth-v2-help');
-    await page.click('[aria-label="关闭使用说明"]');
-    await page.waitForGone(GROWTH_HELP);
-
-    await page.click({ text: '+ 新建成长卡', within: GROWTH_WORKSPACE, exact: true });
-    await answerChainedPrompt('新建成长卡', '林舟');
-    await page.waitForTarget({ text: '成长 · 林舟', exact: true });
-    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
-
-    // 第一次打开成长卡：显示引导（左侧列表 → 记一笔 → 提醒 → 更多），看完后不再出现
-    await page.waitForTarget('[role="dialog"][aria-label^="引导 1/"]');
-    await captureForReview('growth-v2-tour');
-    await page.click({ text: '下一步', exact: true });
-    await page.waitForTarget('[role="dialog"][aria-label^="引导 2/"]');
-    await captureForReview('growth-v2-tour-record');
-    await page.click({ text: '跳过', exact: true });
-    await page.waitForGone('[role="dialog"][aria-label^="引导"]');
-
-    // 记一笔：章节默认取最近打开的正文章节（用例 5 打开了 001-启程）
-    await page.click('[aria-label="为 林舟 记一笔"]');
-    await page.waitForTarget('form[aria-label="为 林舟 记一笔"]');
-    const chapterValue = await page.evaluate<string>(
-      () =>
-        (
-          document.querySelector(
-            'form[aria-label="为 林舟 记一笔"] input[aria-label="章节"]'
-          ) as HTMLInputElement | null
-        )?.value ?? ''
-    );
-    expect(chapterValue).toBe('1');
-    await page.click('input[aria-label="获得多少经验"]');
-    await page.type('500');
-    await page.click('input[aria-label="发生了什么"]');
-    await page.type('击败狼王');
-    await captureForReview('growth-v2-record-open');
-    await page.press('Enter');
-
-    await page.waitForTarget({ text: '林舟 获得 500 经验，升到 Lv.2' });
-    const sheetFile = path.join(memoryDir, '角色', '林舟.json');
-    const sheet = await page.waitUntil(
-      async () => {
-        const data = JSON.parse(await readFile(sheetFile, 'utf-8')) as {
-          name: string;
-          level: number;
-          exp: number;
-          events: Array<{ type: string; delta?: number; chapter?: number; note?: string }>;
-        };
-        return data.exp === 500 ? data : null;
-      },
-      { message: '成长卡写入经验' }
-    );
-    expect(sheet).toMatchObject({ name: '林舟', level: 2, exp: 500 });
-    expect(sheet.events).toEqual([
-      expect.objectContaining({ type: 'exp', delta: 500, chapter: 1, note: '击败狼王' }),
-    ]);
-    expect(existsSync(path.join(memoryDir, '角色', '林舟.md'))).toBe(true);
-    await page.waitForTarget({ text: 'Lv.2', within: GROWTH_WORKSPACE, exact: true });
-    await page.waitForTarget({ text: '本级 200 / 600 · 距下一级 400', within: GROWTH_WORKSPACE });
-    await page.waitForTarget({ text: '击败狼王', within: GROWTH_WORKSPACE, exact: true });
-    await captureForReview('growth-v2-sheet-linzhou');
-
-    // 世界：队伍 / 地图 / 规则
-    await page.click({ text: '世界', within: GROWTH_WORKSPACE, exact: true });
-    for (const [tab, marker] of [
-      ['队伍', '组队历史'],
-      ['地图', '地点'],
-      ['规则', '核心规则'],
-    ]) {
-      await page.click({ text: tab, within: `${GROWTH_WORKSPACE} [role="tablist"]`, exact: true });
-      await page.waitForTarget({ text: marker, within: GROWTH_WORKSPACE });
-    }
-    await captureForReview('growth-v2-world');
-
-    // 推演：AI 未配置时友好提示，且不改动成长卡
-    await page.click({ text: '推演', within: GROWTH_WORKSPACE, exact: true });
-    await page.click({ text: '战士之道', exact: true });
-    await page.click({ text: '法师之道', exact: true });
-    await page.click({ text: '开始推演', exact: true });
-    await page.waitForTarget('[role="alert"]', 20_000);
-    const alertText = await page.evaluate<string>(
-      () => (document.querySelector('[role="alert"]') as HTMLElement).innerText
-    );
-    expect(alertText).toMatch(/AI/);
-    await captureForReview('growth-v2-simulate');
-    const after = JSON.parse(await readFile(sheetFile, 'utf-8')) as { exp: number };
-    expect(after.exp).toBe(500);
-    await page.click({ text: '档案', within: GROWTH_WORKSPACE, exact: true });
-
-    // 标题区的「?」打开使用说明
-    await page.click(`${GROWTH_WORKSPACE} [aria-label="使用说明"]`);
-    await page.waitForTarget(GROWTH_HELP);
-    await page.press('Escape');
-    await page.waitForGone(GROWTH_HELP);
-  });
-
-  it('7. 「⋯」菜单同步人物卡 / 设定到记忆文件夹', async () => {
-    await ensureSidebarOpen();
-    await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
-    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
-    await page.click(`${GROWTH_WORKSPACE} [aria-label="更多操作"]`);
-    await captureForReview('growth-v2-more-menu');
-    await page.click({ text: '同步人物卡 / 设定到记忆文件夹', within: SEL.menu, exact: true });
-    await page.waitForTarget({ text: '已同步' });
-    const memoryDir = fixture.resolve('资料/记忆');
-    expect(existsSync(path.join(memoryDir, '角色卡'))).toBe(true);
-    expect(existsSync(path.join(memoryDir, '设定'))).toBe(true);
-  });
-
-  it('8. 成长档案一级入口：文件面板新建 → 记一笔写入 JSON → 提醒 → 总览 → 右侧摘要', async () => {
-    // 用例 6 已创建记忆库并为林舟建卡：分区中应列出林舟及其等级
-    await ensureSidebarOpen();
-    await page.waitForTarget({ text: '成长档案', within: SEL.workspaceTree, exact: true });
-    await page.waitForTarget({ text: '林舟', within: GROWTH_SECTION, exact: true });
-    await page.waitForTarget({ text: 'Lv.2', within: GROWTH_SECTION, exact: true });
-
-    await page.click('[aria-label="新建成长卡"]');
-    await answerChainedPrompt('新建成长卡', '白芷');
-    await page.waitForTarget({ text: '成长 · 白芷', exact: true });
-    await page.waitForTarget({ text: '白芷', within: GROWTH_TITLE, exact: true });
-    await waitForSheet('白芷', (sheet) => sheet.exp === 0, '白芷 成长卡已创建');
-    // 引导只出现一次
-    expect(await page.exists('[role="dialog"][aria-label^="引导"]')).toBe(false);
-    await page.waitForTarget({ text: '白芷', within: GROWTH_SECTION, exact: true });
-
-    const recordExp = async (exp: string, chapter: string) => {
-      await page.click('[aria-label="为 白芷 记一笔"]');
-      await page.waitForTarget('form[aria-label="为 白芷 记一笔"]');
-      // 聚焦章节框会全选，直接输入即可覆盖默认章节
-      await page.click('form[aria-label="为 白芷 记一笔"] input[aria-label="章节"]');
-      await page.type(chapter);
-      await page.click('form[aria-label="为 白芷 记一笔"] input[aria-label="获得多少经验"]');
-      await page.type(exp);
-      await page.press('Enter');
-      await page.waitForGone('form[aria-label="为 白芷 记一笔"]');
-    };
-    await recordExp('300', '2');
-    await page.waitForTarget({ text: '白芷 获得 300 经验，升到 Lv.2' });
-
-    const sheet = await waitForSheet<{
-      exp: number;
-      level: number;
-      events: Array<{ type: string; delta?: number; chapter?: number }>;
-    }>('白芷', (data) => data.exp === 300, '白芷 成长卡写入经验');
-    expect(sheet.level).toBe(2);
-    expect(sheet.events).toEqual([
-      expect.objectContaining({ type: 'exp', delta: 300, chapter: 2 }),
-    ]);
-    await page.waitForTarget({ text: '本级 0 / 600 · 距下一级 600', within: GROWTH_WORKSPACE });
-    // 写入后文件面板中的等级徽章同步刷新（白芷与林舟都是 Lv.2）
-    await page.waitFor(
-      (selector: string) =>
-        (document.querySelector(selector) as HTMLElement | null)?.innerText.match(/Lv\.2/g)
-          ?.length === 2,
-      { args: [GROWTH_SECTION], message: '文件面板显示白芷 Lv.2' }
-    );
-    // 没有问题时不显示提醒
-    expect(await page.exists('[aria-label="需要留意"]')).toBe(false);
-    await captureForReview('growth-v2-sheet');
-
-    // 同一章连升 2 级以上 → 出现提醒横幅，展开后看到原因与建议
-    await recordExp('2400', '2');
-    await waitForSheet('白芷', (data) => data.exp === 2700, '白芷 一章内连升');
-    await page.waitForTarget(`${GROWTH_WORKSPACE} [aria-label="需要留意"]`);
-    await page.click(`${GROWTH_WORKSPACE} [aria-label="需要留意"] button[aria-expanded="false"]`);
-    await page.waitForTarget({ text: '连升 3 级', within: GROWTH_WORKSPACE });
-    await captureForReview('growth-v2-warnings');
-
-    // 点击已有档案：切换到对应角色的标签
-    await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
-    await page.waitForTarget({ text: '成长 · 林舟', exact: true });
-    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
-
-    // 总览：卡片网格 + 提醒圆点
-    await page.click('[aria-label="打开成长档案总览"]');
-    await page.waitForTarget({ text: '成长档案', within: '[class*="tabBar"]', exact: true });
-    await page.waitForTarget('[aria-label="打开 白芷 的成长卡"]');
-    await page.waitForTarget('[aria-label="打开 林舟 的成长卡"]');
-    await captureForReview('growth-v2-overview');
-
-    // 右侧面板：本章出场角色的摘要 + 记一笔
-    await openChapter('001-启程', '林舟背起行囊');
-    await ensureRightPanelOpen(page);
-    await switchStorylineMode(page, '成长');
-    await page.waitForTarget({ text: '本章出场', within: SEL.storyline });
-    await page.waitForTarget(`${SEL.storyline} [aria-label="为 林舟 记一笔"]`);
-    // 关掉堆叠的 toast，避免遮住右侧面板底部的摘要
-    await page.evaluate(() => {
-      document
-        .querySelectorAll<HTMLButtonElement>('button[aria-label="关闭通知"]')
-        .forEach((button) => button.click());
-      document
-        .querySelector('[class*="storylineView"] [aria-label="为 林舟 记一笔"]')
-        ?.scrollIntoView({ block: 'center' });
-    });
-    await page.waitForGone('button[aria-label="关闭通知"]');
-    await captureForReview('growth-v2-panel-summary');
-    await switchStorylineMode(page, '目录');
-  });
-
-  it('9. 人物详情的「成长档案」按钮：为人物新建并打开成长卡', async () => {
-    await contextMenuAction(page, '角色', '新建人物');
-    // 新建人物会连续弹出三个对话框，answerPrompt 等待对话框消失的判定不适用，按标题逐个回答
-    await answerChainedPrompt('新建人物', '莉娜');
-    await answerChainedPrompt('人物定位', '法师');
-    await answerChainedPrompt('人物分类', '次要角色');
-    await page.waitForGone(SEL.dialog);
-    // 新建人物后自动打开人物详情
-    await page.waitForTarget('[aria-label="为 莉娜 新建成长档案"]', 15_000);
-    await captureForReview('growth-entry-character-detail');
-    await page.click('[aria-label="为 莉娜 新建成长档案"]');
-
-    await page.waitForTarget({ text: '成长 · 莉娜', exact: true });
-    await page.waitForTarget({ text: '莉娜', within: GROWTH_TITLE, exact: true });
-    const sheet = await waitForSheet<{ exp: number; level: number; name: string }>(
-      '莉娜',
-      () => true,
-      '莉娜 成长卡已创建'
-    );
-    expect(sheet).toMatchObject({ name: '莉娜', level: 1, exp: 0 });
-    await page.waitForTarget({ text: '莉娜', within: GROWTH_SECTION, exact: true });
-
-    // 回到人物详情：按钮显示等级
-    await page.click({ text: '莉娜', within: '[class*="tabBar"]', exact: true });
-    await page.waitForTarget('[aria-label="打开 莉娜 的成长档案"]');
-    await captureForReview('growth-entry-filepanel');
-  });
-
-  it('10. GUI 与 CLI 共享：保存计入写作日志，会话文件反映打开 / 未保存的文件', async () => {
+  it('7. GUI 与 CLI 共享：保存计入写作日志，会话文件反映打开 / 未保存的文件', async () => {
     // 前面场景的自动保存已经写入 .novel-editor/writing-log.json（ne stats today 读取同一份）
     const today = await getTodayStats(fixture.root);
     expect(today.writes).toBeGreaterThan(0);
@@ -669,7 +386,7 @@ describe('小说编辑器 GUI', () => {
     );
   });
 
-  it('11. 关于：设置分区显示完整设备 ID；小窗口隐藏设备 ID，复制与上传日志同行并用 toast 反馈', async () => {
+  it('8. 关于：设置分区显示完整设备 ID；小窗口隐藏设备 ID，复制与上传日志同行并用 toast 反馈', async () => {
     const pkg = JSON.parse(await readFile(path.resolve(__dirname, '../package.json'), 'utf-8')) as {
       version: string;
     };
@@ -814,8 +531,9 @@ describe('小说编辑器 GUI', () => {
     await page.waitForGone(DIALOG);
   });
 
-  it('12. 资料：哈希 / GUID 文件名中间省略并保留扩展名，按类型显示图标、类型标签与悬停信息', async () => {
-    await waitForWorkspace(page, path.basename(fixture.root));
+  it('9. 资料：哈希 / GUID 文件名中间省略并保留扩展名，按类型显示图标、类型标签与悬停信息', async () => {
+    // 示例项目首次打开时由 seed.json 写入作品记录，标题栏显示作品名而不是目录名
+    await waitForWorkspace(page, SAMPLE_PROJECT_NAME);
     const materialDir = fixture.resolve('资料');
     const exts = ['png', 'jpg', 'mp4', 'mov', 'mp3', 'pdf', 'docx', 'xlsx', 'pptx', 'zip'];
     const moreExts = ['txt', 'md', 'json', 'webp', 'gif', 'wav', 'csv', 'heic', 'bin', 'm4a'];
@@ -938,8 +656,12 @@ describe('小说编辑器 GUI', () => {
     }
   });
 
-  it('13. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
-    const other = await createFixtureProject('novel-editor-e2e-second-');
+  it('10. 单实例：第二次启动把文件夹转发给已有窗口', async () => {
+    // 去掉种子：作品名回退为目录名，便于确认切换到了另一个项目
+    const other = await createFixtureProject({
+      prefix: 'novel-editor-e2e-second-',
+      exclude: ['.novel-editor/seed.json'],
+    });
     try {
       await mkdir(other.resolve('novels/另一部作品'), { recursive: true });
       await writeFile(other.resolve('novels/另一部作品/001-开端.md'), '# 开端\n', 'utf-8');

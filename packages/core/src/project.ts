@@ -315,7 +315,59 @@ function compareChapterFiles(a: string, b: string): number {
   return naturalCollator.compare(a, b);
 }
 
-/** 递归收集作品下的章节：根目录章节在前，然后按卷目录自然排序 */
+const CHINESE_DIGITS: Record<string, number> = {
+  零: 0,
+  〇: 0,
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+};
+const CHINESE_UNITS: Record<string, number> = { 十: 10, 百: 100, 千: 1000 };
+
+/** 解析不超过万位的中文数字（一、十二、一百零三）；无法解析时返回 null */
+function parseSmallChineseNumber(raw: string): number | null {
+  let total = 0;
+  let digit: number | null = null;
+  for (const char of raw) {
+    if (char in CHINESE_DIGITS) {
+      digit = CHINESE_DIGITS[char];
+    } else if (char in CHINESE_UNITS) {
+      total += (digit ?? 1) * CHINESE_UNITS[char];
+      digit = null;
+    } else {
+      return null;
+    }
+  }
+  return total + (digit ?? 0);
+}
+
+/** 卷目录的序号：「第一卷」「第12卷」「卷3」「Volume 2」；无序号返回 null */
+export function parseVolumeOrder(dirName: string): number | null {
+  const matched =
+    /^第([\d零〇一二两三四五六七八九十百千]+)[卷部]/.exec(dirName) ??
+    /^(?:卷|volume|vol\.?|part)[\s_-]*(\d+)/i.exec(dirName);
+  if (!matched) return null;
+  return /^\d+$/.test(matched[1]) ? Number(matched[1]) : parseSmallChineseNumber(matched[1]);
+}
+
+/** 卷目录排序：有序号的按序号（支持中文数字），其余按自然顺序排在后面 */
+function compareVolumeDirs(a: string, b: string): number {
+  const oa = parseVolumeOrder(a);
+  const ob = parseVolumeOrder(b);
+  if (oa !== null && ob !== null && oa !== ob) return oa - ob;
+  if (oa !== null && ob === null) return -1;
+  if (oa === null && ob !== null) return 1;
+  return naturalCollator.compare(a, b);
+}
+
+/** 递归收集作品下的章节：根目录章节在前，然后按卷序号（第一卷、第二卷…）排序 */
 async function collectChapterFiles(novelPath: string): Promise<string[]> {
   const result: string[] = [];
   const walk = async (dir: string): Promise<void> => {
@@ -328,7 +380,7 @@ async function collectChapterFiles(novelPath: string): Promise<string[]> {
     const dirs = entries
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
       .map((entry) => entry.name)
-      .sort(naturalCollator.compare);
+      .sort(compareVolumeDirs);
     for (const sub of dirs) await walk(path.join(dir, sub));
   };
   await walk(novelPath);

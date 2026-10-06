@@ -38,6 +38,11 @@ design.md
 
 large-novel.txt
 
+# 示例作品集：开发时直接打开 sample-data 产生的本机运行数据
+apps/pc/sample-data/.novel-editor/*.db*
+apps/pc/sample-data/.novel-editor/session.json
+apps/pc/sample-data/.novel-editor/writing-log.json
+
 *.db
 *.db-shm
 *.db-wal

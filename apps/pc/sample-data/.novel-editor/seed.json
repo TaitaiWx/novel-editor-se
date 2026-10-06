@@ -1,0 +1,234 @@
+{
+  "version": "1.0.0",
+  "novels": [
+    {
+      "id": 1,
+      "name": "示例作品集",
+      "description": "小说编辑器内置示例：星河旅人 / 剑与诗"
+    }
+  ],
+  "characters": [
+    {
+      "name": "林舟",
+      "role": "主角 · 旅人",
+      "description": "青石镇长大的少年，父亲三十年前追着星图出海未归。跟随老铁匠秦伯学过几年打铁和剑术，性子倔，认准的事不回头。",
+      "attributes": "{\"aliases\":[\"阿舟\"],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"道途\",\"value\":\"战士之道\"},{\"id\":\"state-2\",\"label\":\"伤势\",\"value\":\"左臂旧伤未愈\"},{\"id\":\"state-3\",\"label\":\"随身\",\"value\":\"旧剑「青石」、星图碎片\"}]}",
+      "novel_id": 1,
+      "sort_order": 0
+    },
+    {
+      "name": "苏晴",
+      "role": "女主 · 雾林药师",
+      "description": "迷雾森林边缘长大的草药师，嘴硬心软。第三卷之后会揭开雾林药师与灯塔守望者的渊源。",
+      "attributes": "{\"aliases\":[],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"道途\",\"value\":\"牧师之道\"},{\"id\":\"state-2\",\"label\":\"随身\",\"value\":\"药篓（驱狼草、止血草）\"}]}",
+      "novel_id": 1,
+      "sort_order": 1
+    },
+    {
+      "name": "白鸦",
+      "role": "领航员",
+      "description": "黑帆船的主人，左耳挂着银色罗盘耳坠。父亲曾为林舟的父亲领航。",
+      "attributes": "{\"aliases\":[],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"立场\",\"value\":\"暂时同行，目的不明\"}]}",
+      "novel_id": 1,
+      "sort_order": 2
+    },
+    {
+      "name": "秦伯",
+      "role": "老铁匠 · 林舟的师父",
+      "description": "青石镇的老铁匠，嗜酒，手艺极好。把佩剑青石与星图碎片交给林舟。",
+      "attributes": "{\"aliases\":[\"老铁匠\"],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"所在\",\"value\":\"青石镇\"}]}",
+      "novel_id": 1,
+      "sort_order": 3
+    },
+    {
+      "name": "小石头",
+      "role": "青石镇的孩子",
+      "description": "总跟在林舟身后的小孩，答应替他看好铁匠铺。",
+      "attributes": "{\"aliases\":[],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[]}",
+      "novel_id": 1,
+      "sort_order": 4
+    },
+    {
+      "name": "沈砚",
+      "role": "主角 ·《剑与诗》",
+      "description": "江南少年，想学剑，却被一位不会武功的诗人要求先学会听雨。",
+      "attributes": "{\"aliases\":[],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[]}",
+      "novel_id": 1,
+      "sort_order": 5
+    }
+  ],
+  "world_settings": [
+    {
+      "novel_id": 1,
+      "category": "world",
+      "title": "星河大陆",
+      "content": "分为东西两境：东境山多雾重，西境临海、商贸发达。西境以外是星海。",
+      "tags": "[\"地理\"]"
+    },
+    {
+      "novel_id": 1,
+      "category": "world",
+      "title": "星辉灯塔",
+      "content": "星海孤礁上的古老灯塔。嵌入完整星图后会点亮，在海面铺出通往「星河」的航路。",
+      "tags": "[\"地点\",\"主线\"]"
+    },
+    {
+      "novel_id": 1,
+      "category": "faction",
+      "title": "星港城商会",
+      "content": "掌控西境大半航线的商人联盟，第二卷之后成为主要对手。",
+      "tags": "[\"反派\"]"
+    },
+    {
+      "novel_id": 1,
+      "category": "faction",
+      "title": "雾林药师",
+      "content": "散居在迷雾森林边缘的草药师，世代以采药、驱狼为生。",
+      "tags": "[\"苏晴\"]"
+    },
+    {
+      "novel_id": 1,
+      "category": "system",
+      "title": "道途抉择（三选一）",
+      "content": "3 级时在战士 / 法师 / 牧师三条道途中选择其一，选定后不可更改。具体数值见 资料/记忆/规则.json。",
+      "tags": "[\"成长\"]"
+    },
+    {
+      "novel_id": 1,
+      "category": "term",
+      "title": "星图碎片",
+      "content": "刻有星线的碎片，靠近星辉灯塔时发热、发光。",
+      "tags": "[\"道具\"]"
+    },
+    {
+      "novel_id": 1,
+      "category": "term",
+      "title": "青石",
+      "content": "秦伯打造的旧剑，剑身有一道裂纹。「它不快，但不会背叛你。」",
+      "tags": "[\"道具\"]"
+    }
+  ],
+  "outlines": [
+    {
+      "id": 1,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "第一卷 离乡",
+      "content": "林舟离开青石镇，穿越迷雾森林，在狼王之夜选择战士之道。",
+      "anchor_text": "",
+      "parent_id": null,
+      "sort_order": 0,
+      "novel_id": 1
+    },
+    {
+      "id": 2,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "001 启程",
+      "content": "秦伯赠剑与星图碎片；小石头送别。",
+      "anchor_text": "林舟背起行囊",
+      "parent_id": 1,
+      "sort_order": 0,
+      "novel_id": 1
+    },
+    {
+      "id": 3,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "002 迷雾森林",
+      "content": "雾狼来袭，林舟受伤；遇见药师苏晴，结伴同行。",
+      "anchor_text": "森林里的雾气",
+      "parent_id": 1,
+      "sort_order": 1,
+      "novel_id": 1
+    },
+    {
+      "id": 4,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "003 狼王之夜",
+      "content": "狼王谷决战；三选一的道途抉择；黎明望见灯塔。",
+      "anchor_text": "月亮升起来的时候",
+      "parent_id": 1,
+      "sort_order": 2,
+      "novel_id": 1
+    },
+    {
+      "id": 5,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "第二卷 星海",
+      "content": "在星港城组建星河小队，穿过风暴航线，点亮星辉灯塔。",
+      "anchor_text": "",
+      "parent_id": null,
+      "sort_order": 1,
+      "novel_id": 1
+    },
+    {
+      "id": 6,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "004 星港城",
+      "content": "结识领航员白鸦，组建星河小队。",
+      "anchor_text": "星港城比林舟想象的大",
+      "parent_id": 5,
+      "sort_order": 0,
+      "novel_id": 1
+    },
+    {
+      "id": 7,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "005 风暴航线",
+      "content": "风暴中林舟用熟回气，苏晴救回落水水手。",
+      "anchor_text": "出海的第七天",
+      "parent_id": 5,
+      "sort_order": 1,
+      "novel_id": 1
+    },
+    {
+      "id": 8,
+      "scope_kind": "project",
+      "scope_path": "",
+      "title": "006 灯塔",
+      "content": "击败石像守卫，星图归位，灯塔点亮。伏笔：秦伯与小石头。",
+      "anchor_text": "星辉灯塔立在一座孤礁上",
+      "parent_id": 5,
+      "sort_order": 2,
+      "novel_id": 1
+    },
+    {
+      "id": 9,
+      "scope_kind": "chapter",
+      "scope_path": "novels/星河旅人/第一卷-离乡/001-启程.md",
+      "title": "第一场 清晨的青石镇",
+      "content": "离开小镇；小石头送饼，约定回来。",
+      "anchor_text": "第一场 清晨的青石镇",
+      "parent_id": null,
+      "sort_order": 0,
+      "novel_id": 1
+    },
+    {
+      "id": 10,
+      "scope_kind": "chapter",
+      "scope_path": "novels/星河旅人/第一卷-离乡/001-启程.md",
+      "title": "第二场 铁匠铺的夜",
+      "content": "倒叙：秦伯赠剑「青石」与星图碎片，指明西行之路。",
+      "anchor_text": "第二场 铁匠铺的夜",
+      "parent_id": null,
+      "sort_order": 1,
+      "novel_id": 1
+    },
+    {
+      "id": 11,
+      "scope_kind": "volume",
+      "scope_path": "novels/星河旅人/第二卷-星海",
+      "title": "第二卷节奏",
+      "content": "起：星港组队 → 承：风暴考验 → 转：灯塔点亮 → 合：沿光远航（第三卷）",
+      "anchor_text": "",
+      "parent_id": null,
+      "sort_order": 0,
+      "novel_id": 1
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "name": "林舟",
+  "aliases": [
+    "阿舟"
+  ],
+  "level": 4,
+  "exp": 2750,
+  "attributes": {
+    "str": 15,
+    "dex": 13,
+    "con": 14,
+    "int": 13,
+    "wis": 13,
+    "cha": 13
+  },
+  "skills": [
+    {
+      "id": "second-wind",
+      "level": 2,
+      "exp": 0
+    }
+  ],
+  "choices": [
+    {
+      "groupId": "path",
+      "optionId": "warrior",
+      "chapter": 3,
+      "note": "狼王扑来的那一刻，选择像秦伯一样硬扛",
+      "at": "2026-01-03T12:04:00.000Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "evt-1",
+      "type": "exp",
+      "at": "2026-01-01T12:01:00.000Z",
+      "delta": 100,
+      "chapter": 1,
+      "note": "帮秦伯送完最后一批铁器，离开青石镇",
+      "source": "manual"
+    },
+    {
+      "id": "evt-2",
+      "type": "exp",
+      "at": "2026-01-02T12:02:00.000Z",
+      "delta": 250,
+      "chapter": 2,
+      "note": "在迷雾森林击退雾狼",
+      "source": "manual",
+      "levelBefore": 1,
+      "levelAfter": 2
+    },
+    {
+      "id": "evt-3",
+      "type": "exp",
+      "at": "2026-01-03T12:03:00.000Z",
+      "delta": 600,
+      "chapter": 3,
+      "note": "斩杀独眼狼王",
+      "source": "manual",
+      "levelBefore": 2,
+      "levelAfter": 3
+    },
+    {
+      "id": "evt-4",
+      "type": "choice",
+      "at": "2026-01-03T12:04:00.000Z",
+      "target": "path",
+      "value": "warrior",
+      "chapter": 3,
+      "note": "狼王扑来的那一刻，选择像秦伯一样硬扛",
+      "source": "manual"
+    },
+    {
+      "id": "evt-5",
+      "type": "exp",
+      "at": "2026-01-04T12:05:00.000Z",
+      "delta": 300,
+      "chapter": 4,
+      "note": "赢下港口擂台赛第一场",
+      "source": "manual"
+    },
+    {
+      "id": "evt-6",
+      "type": "skill-exp",
+      "at": "2026-01-05T12:06:00.000Z",
+      "target": "second-wind",
+      "delta": 200,
+      "chapter": 5,
+      "note": "风暴中反复调息，回气终于用熟",
+      "source": "manual"
+    },
+    {
+      "id": "evt-7",
+      "type": "exp",
+      "at": "2026-01-05T12:07:00.000Z",
+      "delta": 800,
+      "chapter": 5,
+      "note": "穿过风暴航线",
+      "source": "manual"
+    },
+    {
+      "id": "evt-8",
+      "type": "exp",
+      "at": "2026-01-06T12:08:00.000Z",
+      "delta": 700,
+      "chapter": 6,
+      "note": "击败灯塔石像守卫",
+      "source": "manual",
+      "levelBefore": 3,
+      "levelAfter": 4
+    },
+    {
+      "id": "evt-9",
+      "type": "note",
+      "at": "2026-01-06T12:09:00.000Z",
+      "chapter": 6,
+      "note": "点亮星辉灯塔，决定沿着光走",
+      "source": "manual"
+    }
+  ],
+  "notes": [
+    "左臂被雾狼抓伤，尚未痊愈",
+    "佩剑「青石」：秦伯打造，剑身有裂纹"
+  ],
+  "createdAt": "2026-01-01T12:00:00.000Z",
+  "updatedAt": "2026-01-06T12:09:00.000Z"
+}

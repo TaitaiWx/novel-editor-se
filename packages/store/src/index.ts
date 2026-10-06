@@ -14,10 +14,13 @@ export {
   aiCacheOps,
   exportAllData,
   importData,
+  PROJECT_SEED_FILE,
+  seedProjectData,
+  validateProjectSeed,
 } from './database';
 export { versionOps } from './versioning';
 
-export type { ExportData } from './database';
+export type { ExportData, ProjectSeedData, SeedProjectResult } from './database';
 export type {
   OutlineScope,
   OutlineScopeKind,

@@ -1,7 +1,35 @@
 import { ipcMain, app } from 'electron';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
-import { initDatabase, closeDatabase, novelOps, characterOps } from '@novel-editor/store';
+import {
+  initDatabase,
+  closeDatabase,
+  novelOps,
+  characterOps,
+  seedProjectData,
+  PROJECT_SEED_FILE,
+  type SeedProjectResult,
+} from '@novel-editor/store';
 import { getNativeBinding } from '../../native-binding';
+
+/**
+ * 项目数据库初始化后，若 `<项目>/.novel-editor/seed.json` 存在且该项目尚无作品记录，
+ * 写入其中的人物 / 设定 / 大纲（示例作品集首次打开时使用）。
+ * 播种失败只记日志，不影响打开项目；已有作品记录时不做任何改动。
+ */
+export function seedProjectFromDbDir(dbDir: string): SeedProjectResult | null {
+  const seedFile = path.join(dbDir, PROJECT_SEED_FILE);
+  if (!existsSync(seedFile)) return null;
+  const folderPath = path.dirname(dbDir);
+  try {
+    if (novelOps.getByFolder(folderPath)) return null;
+    const raw = JSON.parse(readFileSync(seedFile, 'utf-8').replace(/^\uFEFF/, '')) as unknown;
+    return seedProjectData(folderPath, raw);
+  } catch (error) {
+    console.warn('[seed] 写入项目种子数据失败:', error);
+    return null;
+  }
+}
 
 /** 数据库初始化 / 关闭、作品与角色 CRUD */
 export function registerProjectHandlers(): void {
@@ -9,6 +37,7 @@ export function registerProjectHandlers(): void {
 
   ipcMain.handle('db-init', (_event, dbDir: string) => {
     initDatabase(dbDir, 'novel-editor.db', getNativeBinding());
+    seedProjectFromDbDir(dbDir);
     return { success: true };
   });
 

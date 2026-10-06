@@ -10,6 +10,7 @@ import {
   deleteFile,
   ensureSeededDirectory,
   getFileInfo,
+  isSeedRuntimeArtifact,
   getFileInfoBatch,
   guessMimeType,
   nextAvailablePath,
@@ -301,6 +302,40 @@ describe('ensureSeededDirectory', () => {
     await ensureSeededDirectory(path.join(dir, 'target'), path.join(dir, 'seed'));
     expect(await readFile(path.join(dir, 'target', '第1卷', '001.md'), 'utf-8')).toBe('seed');
     expect(await readFile(marker, 'utf-8')).toBe('db');
+  });
+
+  it('不拷贝种子目录里的本机运行产物（数据库、会话、写作日志、.DS_Store）', async () => {
+    await touch('seed/.novel-editor/config.json', '{}');
+    await touch('seed/.novel-editor/seed.json', '{}');
+    for (const name of [
+      'novel-editor.db',
+      'novel-editor.db-wal',
+      'novel-editor.db-shm',
+      'session.json',
+      'writing-log.json',
+    ]) {
+      await touch(`seed/.novel-editor/${name}`, 'x');
+    }
+    await touch('seed/.DS_Store', 'x');
+    await touch('seed/资料/.DS_Store', 'x');
+    await touch('seed/资料/世界观.md', '# 世界观');
+    const target = path.join(dir, 'target');
+    await ensureSeededDirectory(target, path.join(dir, 'seed'));
+    expect((await readdir(path.join(target, '.novel-editor'))).sort()).toEqual([
+      'config.json',
+      'seed.json',
+    ]);
+    expect(await readdir(target)).not.toContain('.DS_Store');
+    expect(await readdir(path.join(target, '资料'))).toEqual(['世界观.md']);
+  });
+
+  it('isSeedRuntimeArtifact 只匹配 .novel-editor 下的运行产物', () => {
+    expect(isSeedRuntimeArtifact('.novel-editor/novel-editor.db')).toBe(true);
+    expect(isSeedRuntimeArtifact(path.join('.novel-editor', 'session.json'))).toBe(true);
+    expect(isSeedRuntimeArtifact('资料/session.json')).toBe(false);
+    expect(isSeedRuntimeArtifact('资料/表格.db')).toBe(false);
+    expect(isSeedRuntimeArtifact('Thumbs.db')).toBe(true);
+    expect(isSeedRuntimeArtifact('')).toBe(false);
   });
 
   it('种子不存在时创建空目录', async () => {

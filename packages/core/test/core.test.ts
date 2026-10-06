@@ -26,6 +26,7 @@ import {
   markdownToPlainText,
   mergeChapters,
   parseChapterFileName,
+  parseVolumeOrder,
   plainTextToMarkdown,
   readTextFile,
   recordWrites,
@@ -201,6 +202,20 @@ describe('project model', () => {
     expect(chapters[0]).toMatchObject({ volume: '第1卷', file: '第1卷/001-序.md' });
     expect(parseChapterFileName('012_标题.txt')).toEqual({ order: 12, title: '标题' });
     expect(parseChapterFileName('无编号.md')).toEqual({ order: null, title: '无编号' });
+  });
+
+  it('卷目录按序号排序，支持中文数字（第二卷排在第十卷之前，无序号的卷在最后）', async () => {
+    for (const volume of ['番外', '第十卷-终章', '第二卷-星海', '第一卷-离乡']) {
+      await createChapter(project, '长篇', volume, { volume });
+    }
+    const volumes = (await listChapters(project, '长篇')).map((chapter) => chapter.volume);
+    expect(volumes).toEqual(['第一卷-离乡', '第二卷-星海', '第十卷-终章', '番外']);
+    expect(parseVolumeOrder('第一百零三卷')).toBe(103);
+    expect(parseVolumeOrder('第12卷')).toBe(12);
+    expect(parseVolumeOrder('Volume 3')).toBe(3);
+    expect(parseVolumeOrder('卷-4')).toBe(4);
+    expect(parseVolumeOrder('第二部')).toBe(2);
+    expect(parseVolumeOrder('番外')).toBeNull();
   });
 
   it('novelsDir 为项目根时，生成资料目录（资料/记忆）不会被当作作品', async () => {

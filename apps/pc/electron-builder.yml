@@ -28,10 +28,16 @@ files:
   - resources/branding/**/*
 
 extraResources:
+  # 示例作品集：排除开发时打开示例留下的本机数据库、会话、写作日志与系统文件
   - from: sample-data
     to: sample-data
     filter:
       - '**/*'
+      - '!**/.DS_Store'
+      - '!**/Thumbs.db'
+      - '!.novel-editor/*.db*'
+      - '!.novel-editor/session.json'
+      - '!.novel-editor/writing-log.json'
   - from: release-notes.json
     to: release-notes.json
 

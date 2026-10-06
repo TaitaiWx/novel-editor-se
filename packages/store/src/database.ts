@@ -17,6 +17,8 @@ export { settingsOps } from './db/settings';
 export { aiCacheOps } from './db/ai-cache';
 export { exportAllData, importData } from './db/export-import';
 export type { ExportData } from './db/export-import';
+export { PROJECT_SEED_FILE, seedProjectData, validateProjectSeed } from './db/seed';
+export type { ProjectSeedData, SeedProjectResult } from './db/seed';
 export type {
   OutlineScope,
   OutlineScopeKind,

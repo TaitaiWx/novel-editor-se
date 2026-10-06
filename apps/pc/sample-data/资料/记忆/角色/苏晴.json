@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "name": "苏晴",
+  "aliases": [],
+  "level": 3,
+  "exp": 1300,
+  "attributes": {
+    "str": 12,
+    "dex": 12,
+    "con": 12,
+    "int": 12,
+    "wis": 14,
+    "cha": 13
+  },
+  "skills": [
+    {
+      "id": "healing-word",
+      "level": 2,
+      "exp": 0
+    }
+  ],
+  "choices": [
+    {
+      "groupId": "path",
+      "optionId": "priest",
+      "chapter": 4,
+      "note": "领悟守护的意义，选择牧师之道",
+      "at": "2026-01-04T12:04:00.000Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "evt-1",
+      "type": "exp",
+      "at": "2026-01-02T12:01:00.000Z",
+      "delta": 150,
+      "chapter": 2,
+      "note": "为林舟解毒，结伴穿过雾林",
+      "source": "manual"
+    },
+    {
+      "id": "evt-2",
+      "type": "exp",
+      "at": "2026-01-03T12:02:00.000Z",
+      "delta": 450,
+      "chapter": 3,
+      "note": "点燃驱狼草逼退狼群",
+      "source": "manual",
+      "levelBefore": 1,
+      "levelAfter": 2
+    },
+    {
+      "id": "evt-3",
+      "type": "exp",
+      "at": "2026-01-04T12:03:00.000Z",
+      "delta": 400,
+      "chapter": 4,
+      "note": "在星港城救治病人",
+      "source": "manual",
+      "levelBefore": 2,
+      "levelAfter": 3
+    },
+    {
+      "id": "evt-4",
+      "type": "choice",
+      "at": "2026-01-04T12:04:00.000Z",
+      "target": "path",
+      "value": "priest",
+      "chapter": 4,
+      "note": "领悟守护的意义，选择牧师之道",
+      "source": "manual"
+    },
+    {
+      "id": "evt-5",
+      "type": "skill-exp",
+      "at": "2026-01-05T12:05:00.000Z",
+      "target": "healing-word",
+      "delta": 300,
+      "chapter": 5,
+      "note": "风暴中救回落水的水手",
+      "source": "manual"
+    },
+    {
+      "id": "evt-6",
+      "type": "exp",
+      "at": "2026-01-06T12:06:00.000Z",
+      "delta": 300,
+      "chapter": 6,
+      "note": "在灯塔之战中为林舟止血",
+      "source": "manual"
+    }
+  ],
+  "notes": [
+    "药篓里常备驱狼草与止血草"
+  ],
+  "createdAt": "2026-01-02T12:00:00.000Z",
+  "updatedAt": "2026-01-06T12:06:00.000Z"
+}

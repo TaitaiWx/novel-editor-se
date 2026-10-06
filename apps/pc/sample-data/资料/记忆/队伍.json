@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "parties": [
+    {
+      "id": "青石镇的日子",
+      "name": "青石镇的日子",
+      "members": [
+        "林舟",
+        "秦伯",
+        "小石头"
+      ],
+      "fromChapter": 1,
+      "toChapter": 1,
+      "notes": "跟着秦伯学打铁的那些年"
+    },
+    {
+      "id": "雾林同行",
+      "name": "雾林同行",
+      "members": [
+        "林舟",
+        "苏晴"
+      ],
+      "fromChapter": 2,
+      "toChapter": 3,
+      "notes": "穿越迷雾森林时临时结伴"
+    },
+    {
+      "id": "星河小队",
+      "name": "星河小队",
+      "members": [
+        "林舟",
+        "苏晴",
+        "白鸦"
+      ],
+      "fromChapter": 4,
+      "notes": "在星港城的小酒馆里组建，苏晴起的名字"
+    }
+  ],
+  "companions": [
+    {
+      "name": "林舟",
+      "lastSeenChapter": 6
+    },
+    {
+      "name": "秦伯",
+      "lastSeenChapter": 1,
+      "important": true,
+      "note": "读者很喜欢的老铁匠。第二卷还没让他出场，记得安排回归"
+    },
+    {
+      "name": "小石头",
+      "lastSeenChapter": 1,
+      "note": "青石镇的孩子，说要等林舟回来"
+    },
+    {
+      "name": "苏晴",
+      "lastSeenChapter": 6
+    },
+    {
+      "name": "白鸦",
+      "lastSeenChapter": 6
+    }
+  ]
+}

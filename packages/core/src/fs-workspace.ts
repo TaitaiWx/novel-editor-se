@@ -25,6 +25,7 @@ import path from 'node:path';
 import { CoreError, toCoreError } from './errors';
 import { pathExists } from './fs-ops';
 import { GENERATED_MATERIAL_ROOT_NAME, isGeneratedMaterialPath } from './material';
+import { PROJECT_META_DIR } from './project';
 
 // ─── 读取 ──────────────────────────────────────────────────────────────────
 
@@ -270,8 +271,26 @@ async function hasNoVisibleEntries(dirPath: string): Promise<boolean> {
 }
 
 /**
+ * 种子目录中不应被拷贝的本机运行产物：SQLite 数据库（含 WAL/SHM）、GUI 会话、写作日志、系统文件。
+ * 开发时直接打开过 sample-data 会在其中留下这些文件，拷贝给用户会带入别人的数据
+ */
+export function isSeedRuntimeArtifact(relativePath: string): boolean {
+  const segments = relativePath.split(/[\\/]/).filter(Boolean);
+  const name = segments[segments.length - 1] ?? '';
+  if (name === '.DS_Store' || name === 'Thumbs.db') return true;
+  if (segments.length >= 2 && segments[segments.length - 2] === PROJECT_META_DIR) {
+    return (
+      /\.db(-wal|-shm|-journal)?$/i.test(name) ||
+      name === 'session.json' ||
+      name === 'writing-log.json'
+    );
+  }
+  return false;
+}
+
+/**
  * 确保 targetDir 存在并带有 sourceDir 的示例内容：
- * - 不存在：整体拷贝
+ * - 不存在：整体拷贝（跳过 isSeedRuntimeArtifact 识别的本机运行产物）
  * - 已存在但没有可见内容（例如此前源路径错误只建了空目录）：补拷贝，不覆盖已有文件
  * - 已有用户内容：保持不动
  */
@@ -281,7 +300,12 @@ export async function ensureSeededDirectory(targetDir: string, sourceDir: string
   try {
     await access(sourceDir);
     await mkdir(path.dirname(targetDir), { recursive: true });
-    await cp(sourceDir, targetDir, { recursive: true, force: false, errorOnExist: false });
+    await cp(sourceDir, targetDir, {
+      recursive: true,
+      force: false,
+      errorOnExist: false,
+      filter: (source) => !isSeedRuntimeArtifact(path.relative(sourceDir, source)),
+    });
   } catch {
     await mkdir(targetDir, { recursive: true });
   }

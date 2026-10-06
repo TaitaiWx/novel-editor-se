@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "locations": [
+    {
+      "id": "青石镇",
+      "name": "青石镇",
+      "region": "东境",
+      "description": "东境最西边的铁匠镇，林舟的家乡",
+      "firstChapter": 1,
+      "visits": [
+        {
+          "character": "林舟",
+          "chapter": 1,
+          "note": "清晨离开"
+        }
+      ]
+    },
+    {
+      "id": "秦伯的铁匠铺",
+      "name": "秦伯的铁匠铺",
+      "region": "东境",
+      "parent": "青石镇",
+      "description": "镇口老槐树旁，炉火常年不熄",
+      "firstChapter": 1,
+      "visits": [
+        {
+          "character": "林舟",
+          "chapter": 1,
+          "note": "得到青石与星图碎片"
+        }
+      ]
+    },
+    {
+      "id": "迷雾森林",
+      "name": "迷雾森林",
+      "region": "东境",
+      "description": "终年大雾，雾狼出没",
+      "firstChapter": 2,
+      "visits": [
+        {
+          "character": "林舟",
+          "chapter": 2
+        },
+        {
+          "character": "苏晴",
+          "chapter": 2,
+          "note": "采药时遇见林舟"
+        }
+      ]
+    },
+    {
+      "id": "狼王谷",
+      "name": "狼王谷",
+      "region": "东境",
+      "parent": "迷雾森林",
+      "description": "三面环山，只有一条出路",
+      "firstChapter": 3,
+      "visits": [
+        {
+          "character": "林舟",
+          "chapter": 3,
+          "note": "斩杀狼王"
+        },
+        {
+          "character": "苏晴",
+          "chapter": 3
+        }
+      ]
+    },
+    {
+      "id": "星港城",
+      "name": "星港城",
+      "region": "西境",
+      "description": "西境最大的港口",
+      "firstChapter": 4,
+      "visits": [
+        {
+          "character": "林舟",
+          "chapter": 4
+        },
+        {
+          "character": "苏晴",
+          "chapter": 4
+        },
+        {
+          "character": "白鸦",
+          "chapter": 4,
+          "note": "黑帆船停在港口尽头"
+        }
+      ]
+    },
+    {
+      "id": "风暴航线",
+      "name": "风暴航线",
+      "region": "星海",
+      "description": "通往星辉灯塔的必经之路",
+      "firstChapter": 5,
+      "visits": [
+        {
+          "character": "林舟",
+          "chapter": 5
+        },
+        {
+          "character": "苏晴",
+          "chapter": 5
+        },
+        {
+          "character": "白鸦",
+          "chapter": 5
+        }
+      ]
+    },
+    {
+      "id": "星辉灯塔",
+      "name": "星辉灯塔",
+      "region": "星海",
+      "description": "孤礁上的古老灯塔，塔顶有残缺的星盘",
+      "firstChapter": 6,
+      "visits": [
+        {
+          "character": "林舟",
+          "chapter": 6,
+          "note": "点亮灯塔"
+        },
+        {
+          "character": "苏晴",
+          "chapter": 6
+        },
+        {
+          "character": "白鸦",
+          "chapter": 6
+        }
+      ]
+    }
+  ]
+}
