@@ -62,31 +62,6 @@
   color: rgba(255, 255, 255, 0.86);
 }
 
-.toc {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-bottom: 18px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid ui.$line;
-}
-
-.tocItem {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid ui.$line-strong;
-  background: transparent;
-  color: ui.$muted;
-  font-size: 12px;
-  cursor: pointer;
-
-  &:hover {
-    color: ui.$fg;
-    background: ui.$surface-hover;
-  }
-}
-
 .section {
   padding-top: 20px;
   scroll-margin-top: 8px;
@@ -194,4 +169,62 @@
     transform: translateX(24px);
     opacity: 0;
   }
+}
+
+// 3 步上手：默认展示的唯一正文
+.quickStart {
+  margin: 12px 0 20px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 178, 102, 0.22);
+  background: rgba(214, 178, 102, 0.06);
+
+  .sectionTitle {
+    margin-top: 0;
+  }
+}
+
+.moreTitle {
+  margin: 0 0 8px;
+  color: var(--ui-fg-muted, #8a8a8a);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+// 进阶说明：默认折叠，按需展开
+.details {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+
+  &:last-of-type {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}
+
+.detailsSummary {
+  padding: 10px 2px;
+  cursor: pointer;
+  color: var(--ui-fg-primary, #e6e6e6);
+  font-size: 13px;
+  list-style: none;
+  user-select: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::before {
+    content: '›';
+    display: inline-block;
+    width: 14px;
+    color: var(--ui-fg-muted, #8a8a8a);
+    transition: transform 0.15s ease;
+  }
+}
+
+.details[open] > .detailsSummary::before {
+  transform: rotate(90deg);
+}
+
+.detailsBody {
+  padding: 0 2px 12px 14px;
 }

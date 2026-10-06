@@ -6,6 +6,7 @@ import { applyGrowthEvent, createSheet } from '@novel-editor/core/growth';
 import { GrowthView } from '@/render/components/RightPanel/GrowthView';
 import {
   GROWTH_GUIDE_SECTIONS,
+  GROWTH_QUICK_START,
   GROWTH_TOUR_STEPS,
   GROWTH_TOUR_STORAGE_KEY,
 } from '@/render/components/RightPanel/GrowthView/growthGuide';
@@ -115,8 +116,14 @@ describe('使用说明', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: '使用说明' }));
     const dialog = screen.getByRole('dialog', HELP);
+    // 默认只展开「3 步上手」，进阶说明折叠为摘要行
+    expect(within(dialog).getByRole('heading', { level: 3, name: '3 步上手' })).toBeTruthy();
+    for (const step of GROWTH_QUICK_START) expect(dialog.textContent).toContain(step);
     for (const section of GROWTH_GUIDE_SECTIONS) {
-      expect(within(dialog).getByRole('heading', { level: 3, name: section.title })).toBeTruthy();
+      const details = dialog.querySelector(`#growth-guide-${section.id}`);
+      expect(details?.tagName, section.id).toBe('DETAILS');
+      expect((details as HTMLDetailsElement).open, section.id).toBe(false);
+      expect(details?.querySelector('summary')?.textContent).toBe(section.title);
     }
     expect(dialog.textContent).toContain('林舟');
     fireEvent.keyDown(document, { key: 'Escape' });

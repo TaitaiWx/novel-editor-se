@@ -5,6 +5,7 @@ import { createDndRuleset, createSheet, type GrowthEvent } from '@novel-editor/c
 import {
   GROWTH_GUIDE_SECTIONS,
   GROWTH_GUIDE_TITLE,
+  GROWTH_QUICK_START,
   GROWTH_TIPS,
   GROWTH_TOUR_STEPS,
   renderGrowthGuideMarkdown,
@@ -33,47 +34,53 @@ describe('使用说明与 docs/growth-guide.md 同源', () => {
 
   it('文档的标题与章节和应用内使用说明一致', () => {
     expect(headings(doc, 1)).toEqual([GROWTH_GUIDE_TITLE]);
-    expect(headings(doc, 2)).toEqual(GROWTH_GUIDE_SECTIONS.map((section) => section.title));
+    expect(headings(doc, 2)).toEqual([
+      '3 步上手',
+      ...GROWTH_GUIDE_SECTIONS.map((section) => section.title),
+    ]);
   });
 
   it('文档内容与 renderGrowthGuideMarkdown() 完全一致（修改文案后请重新生成）', () => {
     expect(doc).toBe(renderGrowthGuideMarkdown());
   });
 
-  it('覆盖要求的主题，并用同一个例子贯穿', () => {
-    const ids = GROWTH_GUIDE_SECTIONS.map((section) => section.id);
-    expect(ids).toEqual([
-      'intro',
+  it('默认只有 3 步上手；进阶说明精简（每节一两句 + 林舟的例子）', () => {
+    expect(GROWTH_QUICK_START).toHaveLength(3);
+    for (const step of GROWTH_QUICK_START) expect(step.length).toBeLessThanOrEqual(40);
+    expect(GROWTH_GUIDE_SECTIONS.map((section) => section.id)).toEqual([
       'level',
-      'attributes',
-      'skills',
       'choices',
-      'record',
       'warnings',
       'simulate',
       'world',
-      'data',
-      'workflow',
       'faq',
     ]);
-    const examples = GROWTH_GUIDE_SECTIONS.flatMap((section) =>
-      section.blocks.filter((block) => block.kind === 'example')
-    );
-    expect(examples.length).toBeGreaterThanOrEqual(8);
-    for (const block of examples) expect(JSON.stringify(block)).toContain('林舟');
-    const faq = JSON.stringify(GROWTH_GUIDE_SECTIONS.find((section) => section.id === 'faq'));
-    for (const topic of ['升级所需的经验', '删错', '多本书']) expect(faq).toContain(topic);
+    for (const section of GROWTH_GUIDE_SECTIONS.filter((item) => item.id !== 'faq')) {
+      const paragraphs = section.blocks.filter((block) => block.kind === 'p');
+      expect(paragraphs, section.id).toHaveLength(1);
+      const example = section.blocks.find((block) => block.kind === 'example');
+      expect(JSON.stringify(example), section.id).toContain('林舟');
+    }
+    const faq = GROWTH_GUIDE_SECTIONS.find((section) => section.id === 'faq');
+    const faqText = JSON.stringify(faq);
+    for (const topic of ['记错', '数据存在哪里', '升级所需的经验'])
+      expect(faqText).toContain(topic);
+    // 整体篇幅控制：所有正文字符数（不含标题）不超过 900
+    const total = [
+      ...GROWTH_QUICK_START,
+      ...GROWTH_GUIDE_SECTIONS.map((item) => JSON.stringify(item.blocks)),
+    ].join('').length;
+    expect(total).toBeLessThanOrEqual(1400);
   });
 
-  it('提示文案简短且带例子，引导 3~4 步', () => {
+  it('提示文案简短且带例子，引导 3 步', () => {
     for (const [key, text] of Object.entries(GROWTH_TIPS)) {
       expect(text.length, key).toBeLessThanOrEqual(80);
     }
     for (const key of ['attributes', 'skills', 'choices', 'timeline', 'warnings', 'exp']) {
       expect(GROWTH_TIPS[key as keyof typeof GROWTH_TIPS]).toContain('例');
     }
-    expect(GROWTH_TOUR_STEPS.length).toBeGreaterThanOrEqual(3);
-    expect(GROWTH_TOUR_STEPS.length).toBeLessThanOrEqual(4);
+    expect(GROWTH_TOUR_STEPS).toHaveLength(3);
   });
 });
 

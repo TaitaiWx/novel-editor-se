@@ -3,6 +3,7 @@ import OverlayPortal from '../../../OverlayPortal';
 import {
   GROWTH_GUIDE_SECTIONS,
   GROWTH_GUIDE_SUMMARY,
+  GROWTH_QUICK_START,
   GROWTH_GUIDE_TITLE,
   GROWTH_TOUR_STORAGE_KEY,
   type GuideBlock,
@@ -73,15 +74,10 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({ open, onClose, onStartTo
       return;
     }
     const target = section ? bodyRef.current?.querySelector(`#growth-guide-${section}`) : null;
+    if (target instanceof HTMLDetailsElement) target.open = true;
     if (target instanceof HTMLElement) target.scrollIntoView?.({ block: 'start' });
     else bodyRef.current?.scrollTo?.({ top: 0 });
   }, [open, section]);
-
-  const jumpTo = (id: GrowthGuideSectionId) => {
-    const target = bodyRef.current?.querySelector(`#growth-guide-${id}`);
-    if (target instanceof HTMLElement)
-      target.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-  };
 
   const replayTour = () => {
     if (onStartTour) {
@@ -119,25 +115,24 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({ open, onClose, onStartTo
         </header>
         <div ref={bodyRef} className={styles.body}>
           <p className={styles.summary}>{GROWTH_GUIDE_SUMMARY}</p>
-          <nav className={styles.toc} aria-label="目录">
-            {GROWTH_GUIDE_SECTIONS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={styles.tocItem}
-                onClick={() => jumpTo(item.id)}
-              >
-                {item.title}
-              </button>
-            ))}
-          </nav>
-          {GROWTH_GUIDE_SECTIONS.map((item) => (
-            <section key={item.id} id={`growth-guide-${item.id}`} className={styles.section}>
-              <h3 className={styles.sectionTitle}>{item.title}</h3>
-              {item.blocks.map((block, index) => (
-                <Block key={`${item.id}-${index}`} block={block} />
+          <section className={styles.quickStart} aria-label="3 步上手">
+            <h3 className={styles.sectionTitle}>3 步上手</h3>
+            <ol className={styles.steps}>
+              {GROWTH_QUICK_START.map((item) => (
+                <li key={item}>{item}</li>
               ))}
-            </section>
+            </ol>
+          </section>
+          <h4 className={styles.moreTitle}>需要时再看</h4>
+          {GROWTH_GUIDE_SECTIONS.map((item) => (
+            <details key={item.id} id={`growth-guide-${item.id}`} className={styles.details}>
+              <summary className={styles.detailsSummary}>{item.title}</summary>
+              <div className={styles.detailsBody}>
+                {item.blocks.map((block, index) => (
+                  <Block key={`${item.id}-${index}`} block={block} />
+                ))}
+              </div>
+            </details>
           ))}
         </div>
         <footer className={styles.footer}>
