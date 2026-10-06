@@ -35,6 +35,7 @@ import { useScopedAssistantArtifacts } from './useScopedAssistantArtifacts';
 import { useWorkspaceTabContent } from './useWorkspaceTabContent';
 import { useOpenSettingsTabListener } from './useOpenSettingsTabListener';
 import { useAboutDialogListener } from './useAboutDialogListener';
+import { useAppMenu } from './useAppMenu';
 import { useAssistantDialogHandlers } from './useAssistantDialogHandlers';
 import { useGrowthEntry } from './useGrowthEntry';
 import { useGuiSessionPublisher } from './useGuiSessionPublisher';
@@ -96,7 +97,7 @@ export function useAppController() {
     ...creation,
   });
   // 成长档案入口（文件面板分区、工作区标签、人物详情按钮）；effect 只读 资料/记忆/，与其他 hook 无顺序依赖
-  const growthEntry = useGrowthEntry({ ...workspaceState, ...uiState, ...tabs });
+  const growthEntry = useGrowthEntry({ ...workspaceState, ...uiState, ...tabs, ...derived });
   const contentReader = useScopedContentReader({ ...workspaceState, ...editorState, ...derived });
   const fileOps = useFileOperations({
     ...workspaceState,
@@ -212,6 +213,8 @@ export function useAppController() {
   useOpenSettingsTabListener(uiState);
   // 应用菜单「关于」/ 状态栏「关于…」打开关于对话框；只设置显隐，无顺序依赖
   useAboutDialogListener(uiState);
+  // 应用菜单命令（设置、检查更新、视图切换、查找、保存 / 另存为、帮助）；只订阅事件，无顺序依赖
+  useAppMenu({ ...uiState, ...settingsState, ...layout, ...tabs, ...loader, ...fileOps });
   const { handleAssistantApplyFix, handleAssistantPreviewDiff } = useAssistantDialogHandlers({
     ...tabsState,
     ...editorState,

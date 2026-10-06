@@ -42,8 +42,25 @@ function normalize(raw: unknown): RecentFoldersData {
   return { lastFolder, folders: Array.from(new Set(folders)).slice(0, MAX_RECENT) };
 }
 
+const changeListeners = new Set<() => void>();
+
+/** 订阅最近使用列表变化（应用菜单「打开最近使用」据此重建）；返回取消订阅函数 */
+export function onRecentFoldersChanged(listener: () => void): () => void {
+  changeListeners.add(listener);
+  return () => {
+    changeListeners.delete(listener);
+  };
+}
+
 function write(data: RecentFoldersData): void {
   writeFileSync(getFilePath(), JSON.stringify(data, null, 2), 'utf-8');
+  for (const listener of changeListeners) {
+    try {
+      listener();
+    } catch (error) {
+      console.warn('最近使用列表变更回调失败:', error);
+    }
+  }
 }
 
 /** Add a folder to recents and set it as last opened. */

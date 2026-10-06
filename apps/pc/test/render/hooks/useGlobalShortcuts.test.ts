@@ -138,12 +138,13 @@ describe('useGlobalShortcuts', () => {
     Object.values(fns).forEach((fn) => expect(fn).not.toHaveBeenCalled());
   });
 
+  // 菜单「新建文件」与 Cmd/Ctrl+N 一致：新建未命名标签
   it('响应 app:new-file / app:open-folder 窗口事件', () => {
     const { ctx, fns } = createCtx();
     renderHook(() => useGlobalShortcuts(ctx));
     window.dispatchEvent(new Event('app:new-file'));
     window.dispatchEvent(new Event('app:open-folder'));
-    expect(fns.handleCreateFile).toHaveBeenCalledTimes(1);
+    expect(fns.handleNewTab).toHaveBeenCalledTimes(1);
     expect(fns.handleOpenLocal).toHaveBeenCalledTimes(1);
   });
 

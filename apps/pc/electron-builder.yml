@@ -10,6 +10,9 @@ electronUpdaterCompatibility: '>=2.16'
 generateUpdatesFilesForAllChannels: true
 detectUpdateChannel: true
 afterAllArtifactBuild: ./scripts/prepare-update-metadata.mjs
+# macOS 菜单栏应用名显示为「小说编辑器」：只写入各 lproj 的本地化 InfoPlist.strings，
+# 不改 productName / Info.plist 的 CFBundleName（安装路径、更新产物、Helper 查找、userData 均不变）
+afterPack: ./scripts/mac-localized-app-name.mjs
 npmRebuild: false
 
 artifactName: Novel-Editor-${version}-${os}-${arch}.${ext}

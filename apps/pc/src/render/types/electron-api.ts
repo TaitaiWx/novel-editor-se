@@ -7,9 +7,11 @@ import type { GrowthInvokeOverloads } from './growth-api';
 import type { GuiSessionSnapshot } from '@novel-editor/core/gui-session';
 import type { AboutInfo } from '../../shared/about';
 import type { LogUploadResult, LogUploadSettingsState } from '../../shared/log-upload';
+import type { MenuShortcutBindings } from '../../shared/app-menu';
 
 export type { AboutInfo } from '../../shared/about';
 export type { LogUploadResult, LogUploadSettingsState } from '../../shared/log-upload';
+export type { AppMenuEvent, MenuShortcutBindings } from '../../shared/app-menu';
 
 export type UpdateChannel = 'stable' | 'beta' | 'canary';
 
@@ -176,6 +178,11 @@ export interface ElectronAPI {
     invoke(channel: 'dev-tools-toggle'): Promise<void>;
     invoke(channel: 'window-toggle-fullscreen'): Promise<void>;
     invoke(channel: 'get-shortcuts'): Promise<ShortcutInfo[]>;
+    /** 把设置中心自定义的快捷键同步到应用菜单（主进程校验后重建菜单） */
+    invoke(
+      channel: 'menu-sync-shortcuts',
+      bindings: MenuShortcutBindings
+    ): Promise<MenuShortcutBindings>;
     invoke(channel: 'get-app-version'): Promise<string>;
     invoke(channel: 'get-device-id'): Promise<string>;
     /** 关于小说编辑器：版本、通道、灰度分组、设备 ID、首次运行与本次启动时间 */
@@ -376,6 +383,7 @@ export interface ElectronAPI {
       options?: { includeCharacters?: boolean; includeLore?: boolean; includeMaterials?: boolean }
     ): Promise<string | null>;
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
+    /** 主进程推送事件；应用菜单事件通道见 shared/app-menu.ts 的 APP_MENU_EVENTS（AppMenuEvent） */
     on<TArgs extends unknown[]>(
       channel: string,
       listener: (...args: TArgs) => void

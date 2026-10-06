@@ -7,7 +7,6 @@ import type { TabsState } from './state/useTabsState';
 import type { LayoutState } from './state/useLayoutState';
 import type { SettingsState } from './state/useSettingsState';
 import type { TabActions } from './useTabActions';
-import type { WorkspaceCreationApi } from './useWorkspaceCreation';
 import type { EditorInteractions } from './useEditorInteractions';
 import type { ProjectLoaderApi } from './useProjectLoader';
 import type { PaneLayoutApi } from './usePaneLayout';
@@ -17,7 +16,6 @@ export type UseGlobalShortcutsContext = Pick<TabsState, 'activeTabRef'> &
   Pick<LayoutState, 'sidebarFocusedRef' | 'sidebarRef'> &
   Pick<SettingsState, 'appSettings'> &
   Pick<TabActions, 'closeTab' | 'handleNewTab' | 'toggleFocusMode'> &
-  Pick<WorkspaceCreationApi, 'handleCreateFile'> &
   Pick<EditorInteractions, 'handleFormatCurrentChapter'> &
   Pick<ProjectLoaderApi, 'handleOpenLocal'> &
   Pick<PaneLayoutApi, 'handleToggleSidebar'> &
@@ -31,7 +29,6 @@ export function useGlobalShortcuts(ctx: UseGlobalShortcutsContext) {
     activeTabRef,
     appSettings,
     closeTab,
-    handleCreateFile,
     handleFormatCurrentChapter,
     handleNewTab,
     handleOpenGrowth,
@@ -45,11 +42,13 @@ export function useGlobalShortcuts(ctx: UseGlobalShortcutsContext) {
   // Keyboard shortcuts
   React.useEffect(() => {
     initKeyboardShortcuts();
-    const onNewFile = () => handleCreateFile();
+    // 菜单「文件 → 新建文件」与 Cmd/Ctrl+N 行为一致：新建未命名标签（VS Code 同款）
+    const onNewFile = () => handleNewTab();
     const onOpenFolder = () => handleOpenLocal();
     const onKeyDown = (e: KeyboardEvent) => {
       if (isImeComposing(e)) return;
       const mod = e.ctrlKey || e.metaKey;
+      // 以下按键在渲染进程处理并 preventDefault，Electron 不会再触发同键的菜单加速键（不会重复执行）
       // Cmd+Q: 退出应用（渲染进程兜底，确保 Menu accelerator 失效时仍可退出）
       if (mod && e.key === 'q') {
         e.preventDefault();
@@ -118,7 +117,6 @@ export function useGlobalShortcuts(ctx: UseGlobalShortcutsContext) {
     activeTabRef,
     appSettings.shortcuts,
     closeTab,
-    handleCreateFile,
     handleFormatCurrentChapter,
     handleNewTab,
     handleOpenGrowth,

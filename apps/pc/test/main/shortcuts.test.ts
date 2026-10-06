@@ -33,9 +33,17 @@ const state = vi.hoisted(() => ({
   setApplicationMenu: vi.fn(),
 }));
 
+vi.mock('../../src/main/recent-folders', () => ({
+  getRecentFolders: () => [],
+  clearRecentFolders: vi.fn(),
+  onRecentFoldersChanged: () => () => undefined,
+}));
+
 vi.mock('electron', () => ({
+  shell: { openExternal: vi.fn() },
   app: {
-    name: 'Novel Editor',
+    // dev 模式下 app.name 为 package.json 的 name，菜单中不应出现
+    name: '@novel-editor/pc',
     get isPackaged() {
       return state.isPackaged;
     },
@@ -186,22 +194,50 @@ async function loadFresh(platform: NodeJS.Platform, isPackaged: boolean) {
   return { ...config, ...all, ...register };
 }
 
-describe('shortcutConfigs', () => {
-  it('macOS 使用 Cmd 修饰键，开发模式包含刷新', async () => {
-    const { shortcutConfigs } = await loadFresh('darwin', false);
-    const accelerators = shortcutConfigs.map((c) => c.accelerator);
-    expect(accelerators).toEqual(['Cmd+Q', 'Cmd+M', 'Ctrl+Shift+I', 'Cmd+N', 'Cmd+O', 'Cmd+R']);
+describe('getShortcutConfigs', () => {
+  it('macOS 使用 Cmd 修饰键，开发模式包含重新加载', async () => {
+    const { getShortcutConfigs } = await loadFresh('darwin', false);
+    const configs = getShortcutConfigs();
+    const byId = (id: string) => configs.find((c) => c.id === id)?.accelerator;
+    expect(byId('quit')).toBe('Cmd+Q');
+    expect(byId('settings')).toBe('Cmd+,');
+    expect(byId('hide')).toBe('Cmd+H');
+    expect(byId('newFile')).toBe('Cmd+N');
+    expect(byId('save')).toBe('Cmd+S');
+    expect(byId('saveAs')).toBe('Cmd+Shift+S');
+    expect(byId('exportProject')).toBe('Cmd+Shift+E');
+    expect(byId('toggleFullscreen')).toBe('Ctrl+Cmd+F');
+    expect(byId('toggleDevTools')).toBe('Cmd+Alt+I');
+    expect(configs.find((c) => c.id === 'reload')).toMatchObject({
+      accelerator: 'Cmd+R',
+      devOnly: true,
+    });
   });
 
-  it('Windows/Linux 使用 Ctrl，打包后不包含刷新', async () => {
-    const { shortcutConfigs } = await loadFresh('win32', true);
-    expect(shortcutConfigs.map((c) => c.accelerator)).toEqual([
-      'Ctrl+Q',
-      'Ctrl+M',
-      'Ctrl+Shift+I',
-      'Ctrl+N',
-      'Ctrl+O',
-    ]);
+  it('Windows/Linux 使用 Ctrl，打包后不包含重新加载，没有隐藏 / 全屏加速键', async () => {
+    const { getShortcutConfigs } = await loadFresh('win32', true);
+    const configs = getShortcutConfigs();
+    expect(configs.every((c) => !c.accelerator.includes('Cmd'))).toBe(true);
+    expect(configs.map((c) => c.id)).not.toContain('reload');
+    expect(configs.map((c) => c.id)).not.toContain('hide');
+    expect(configs.map((c) => c.id)).not.toContain('toggleFullscreen');
+    expect(configs.find((c) => c.id === 'toggleDevTools')?.accelerator).toBe('Ctrl+Shift+I');
+  });
+
+  it('同一平台内加速键不重复', async () => {
+    for (const platform of ['darwin', 'win32', 'linux'] as const) {
+      const { getShortcutConfigs } = await loadFresh(platform, false);
+      const accelerators = getShortcutConfigs().map((c) => c.accelerator);
+      expect(new Set(accelerators).size).toBe(accelerators.length);
+    }
+  });
+
+  it('toElectronAccelerator 统一为 CommandOrControl，保留 Ctrl+Cmd 组合', async () => {
+    const { toElectronAccelerator } = await loadFresh('darwin', true);
+    expect(toElectronAccelerator('Cmd+Shift+S')).toBe('CommandOrControl+Shift+S');
+    expect(toElectronAccelerator('Ctrl+N')).toBe('CommandOrControl+N');
+    expect(toElectronAccelerator('Ctrl+Cmd+F')).toBe('Control+Command+F');
+    expect(toElectronAccelerator('F11')).toBe('F11');
   });
 });
 
@@ -211,6 +247,10 @@ describe('getAllShortcuts', () => {
     const list = getAllShortcuts();
     expect(list.some((s) => s.description.includes('开发模式'))).toBe(false);
     expect(list.find((s) => s.description === '保存文件')?.accelerator).toBe('Ctrl+S');
+    expect(list.find((s) => s.description === '另存为')?.accelerator).toBe('Ctrl+Shift+S');
+    expect(list.find((s) => s.description === '导出项目')?.accelerator).toBe('Ctrl+Shift+E');
+    expect(list.find((s) => s.description === '打开设置')?.accelerator).toBe('Ctrl+,');
+    expect(list.find((s) => s.description === '搜索文件')?.accelerator).toBe('Ctrl+P');
     expect(list.find((s) => s.description === '退出应用')?.category).toBe('应用');
     expect(list.find((s) => s.description === '最小化窗口')?.category).toBe('应用');
     expect(list.find((s) => s.description === '新建文件')?.category).toBe('文件');
@@ -218,21 +258,33 @@ describe('getAllShortcuts', () => {
     expect(list.filter((s) => s.accelerator === 'F11')).toHaveLength(1);
   });
 
-  it('macOS 渲染进程快捷键使用 Cmd', async () => {
+  // 回归：总览曾列出没有任何处理逻辑的按键（Cmd+H 查找替换在 macOS 上实际是「隐藏应用」）
+  it('不列出没有实现的快捷键', async () => {
+    const { getAllShortcuts } = await loadFresh('darwin', true);
+    const descriptions = getAllShortcuts().map((s) => s.description);
+    expect(descriptions).not.toContain('查找替换');
+    expect(descriptions).not.toContain('导出为 Word');
+    expect(descriptions).not.toContain('导出为 PPT');
+    const cmdH = getAllShortcuts().filter((s) => s.accelerator === 'Cmd+H');
+    expect(cmdH.map((s) => s.description)).toEqual(['隐藏应用']);
+  });
+
+  it('macOS 快捷键使用 Cmd', async () => {
     const { getAllShortcuts } = await loadFresh('darwin', true);
     expect(getAllShortcuts().find((s) => s.description === '撤销')?.accelerator).toBe('Cmd+Z');
   });
 
-  it('所有条目的分类都合法', async () => {
+  it('所有条目的分类都合法，且总览中的描述不重复（专注模式备用键除外）', async () => {
     const { getAllShortcuts } = await loadFresh('linux', true);
-    for (const item of getAllShortcuts()) {
+    const list = getAllShortcuts();
+    for (const item of list) {
       expect(['文件', '编辑', '视图', '应用']).toContain(item.category);
     }
+    const descriptions = list.map((s) => s.description).filter((d) => d !== '切换专注模式');
+    expect(new Set(descriptions).size).toBe(descriptions.length);
   });
 
-  // 回归：categorize() 曾 先匹配 /新建|打开|保存/，"打开/关闭开发者工具" 含"打开"，
-  // 被归入"文件"而不是"视图"（getAllShortcuts.ts:58-59 规则顺序问题）。
-  it('开发者工具快捷键应归入"视图"分类', async () => {
+  it('开发者工具快捷键归入「视图」分类', async () => {
     const { getAllShortcuts } = await loadFresh('linux', true);
     expect(getAllShortcuts().find((s) => s.accelerator === 'Ctrl+Shift+I')?.category).toBe('视图');
   });
@@ -244,64 +296,22 @@ describe('registerAllShortcuts', () => {
     return calls[calls.length - 1][0] as MenuItemTemplate[];
   }
 
-  it('macOS 添加 appMenu，并跳过 Cmd+Q 的重复注册', async () => {
+  it('设置应用菜单，不再有隐藏的「快捷键」菜单', async () => {
     const { registerAllShortcuts } = await loadFresh('darwin', false);
     registerAllShortcuts();
-    const template = lastTemplate();
     expect(state.setApplicationMenu).toHaveBeenCalledOnce();
-    expect(template.map((t) => t.label ?? t.role)).toEqual([
-      'Novel Editor',
-      '快捷键',
-      '文件',
-      'editMenu',
-    ]);
-    expect(template[0].submenu?.some((i) => i.role === 'quit')).toBe(true);
-    // 不再使用原生 about 面板
-    expect(template[0].submenu?.some((i) => i.role === 'about')).toBe(false);
-    expect(template[0].submenu?.[0].label).toBe('关于 小说编辑器');
-    const shortcutItems = template[1].submenu ?? [];
-    expect(shortcutItems.map((i) => i.accelerator)).toEqual([
-      'CommandOrControl+M',
-      'CommandOrControl+Shift+I',
-      'CommandOrControl+N',
-      'CommandOrControl+O',
-      'CommandOrControl+R',
-    ]);
-    expect(shortcutItems.every((i) => i.visible === false)).toBe(true);
-  });
-
-  it('Windows 不添加 appMenu，保留 Ctrl+Q', async () => {
-    const { registerAllShortcuts } = await loadFresh('win32', true);
-    registerAllShortcuts();
     const template = lastTemplate();
-    expect(template.map((t) => t.label ?? t.role)).toEqual(['快捷键', '文件', 'editMenu', '帮助']);
-    expect(template[0].submenu?.[0]).toMatchObject({
-      label: '退出应用',
-      accelerator: 'CommandOrControl+Q',
-    });
-  });
-
-  it('菜单项点击触发对应动作；导出项目通知聚焦窗口', async () => {
-    const { registerAllShortcuts } = await loadFresh('linux', true);
-    registerAllShortcuts();
-    const template = lastTemplate();
-
-    template[0].submenu?.[0].click?.();
-    expect(state.quit).toHaveBeenCalledOnce();
-
-    const exportItem = template[1].submenu?.[0];
-    expect(exportItem?.accelerator).toBe('CommandOrControl+Shift+E');
-    expect(() => exportItem?.click?.()).not.toThrow(); // 无聚焦窗口
-    const win = createWindow();
-    state.focused = win;
-    exportItem?.click?.();
-    expect(win.webContents.send).toHaveBeenCalledWith('menu-export-project');
+    expect(template.map((t) => t.label)).not.toContain('快捷键');
+    const hasHidden = (items: MenuItemTemplate[] = []): boolean =>
+      items.some((i) => i.visible === false || hasHidden(i.submenu));
+    expect(hasHidden(template)).toBe(false);
   });
 
   it('「关于」菜单项通知渲染进程打开应用内对话框', async () => {
     const { registerAllShortcuts } = await loadFresh('darwin', true);
     registerAllShortcuts();
     const aboutItem = lastTemplate()[0].submenu?.[0];
+    expect(aboutItem?.label).toBe('关于 小说编辑器');
     expect(() => aboutItem?.click?.()).not.toThrow(); // 没有任何窗口
 
     // 无聚焦窗口时发给第一个窗口
@@ -316,14 +326,25 @@ describe('registerAllShortcuts', () => {
     expect(focused.webContents.send).toHaveBeenCalledWith('menu-open-about');
   });
 
-  it('Windows / Linux 在帮助菜单中提供「关于」', async () => {
-    const { registerAllShortcuts } = await loadFresh('linux', true);
+  it('syncMenuShortcuts 规范化渲染进程绑定，变化时重建菜单', async () => {
+    const { registerAllShortcuts, syncMenuShortcuts } = await loadFresh('darwin', true);
     registerAllShortcuts();
-    const help = lastTemplate().find((t) => t.label === '帮助');
-    const win = createWindow();
-    state.focused = win;
-    help?.submenu?.[0].click?.();
-    expect(help?.submenu?.[0].label).toBe('关于 小说编辑器');
-    expect(win.webContents.send).toHaveBeenCalledWith('menu-open-about');
+    const view = () => lastTemplate().find((t) => t.label === '视图')?.submenu ?? [];
+    expect(view().find((i) => i.label === '切换侧边栏')?.accelerator).toBe('CommandOrControl+B');
+
+    const result = syncMenuShortcuts({ toggleSidebar: 'Mod+Shift+B', toggleFocusMode: 42 });
+    expect(result).toEqual({ toggleSidebar: 'Mod+Shift+B', toggleFocusMode: 'Mod+Shift+F' });
+    expect(view().find((i) => i.label === '切换侧边栏')?.accelerator).toBe(
+      'CommandOrControl+Shift+B'
+    );
+
+    // 未变化时不重建
+    const builds = state.buildFromTemplate.mock.calls.length;
+    syncMenuShortcuts({ toggleSidebar: 'Mod+Shift+B', toggleFocusMode: 'Mod+Shift+F' });
+    expect(state.buildFromTemplate.mock.calls.length).toBe(builds);
+
+    // 清空绑定后菜单项不显示加速键
+    syncMenuShortcuts({ toggleSidebar: '', toggleFocusMode: 'Mod+Shift+F' });
+    expect(view().find((i) => i.label === '切换侧边栏')?.accelerator).toBeUndefined();
   });
 });

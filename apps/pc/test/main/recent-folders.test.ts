@@ -14,6 +14,7 @@ import {
   clearRecentFolders,
   getLastFolder,
   getRecentFolders,
+  onRecentFoldersChanged,
 } from '../../src/main/recent-folders';
 
 describe('recent-folders', () => {
@@ -97,5 +98,24 @@ describe('recent-folders', () => {
     writeFileSync(filePath(), JSON.stringify({ lastFolder: '/old' }), 'utf-8');
     addRecentFolder('/new');
     expect(getRecentFolders()).toEqual(['/new']);
+  });
+
+  it('添加 / 清除时通知订阅者（应用菜单据此重建），回调异常不影响写入', () => {
+    const listener = vi.fn();
+    const broken = vi.fn(() => {
+      throw new Error('boom');
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const dispose = onRecentFoldersChanged(listener);
+    const disposeBroken = onRecentFoldersChanged(broken);
+    addRecentFolder(realDir('a'));
+    clearRecentFolders();
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(getRecentFolders()).toEqual([]);
+    dispose();
+    disposeBroken();
+    addRecentFolder(realDir('b'));
+    expect(listener).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
   });
 });

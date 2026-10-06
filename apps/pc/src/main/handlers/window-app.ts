@@ -7,6 +7,8 @@ import { ipcMain, BrowserWindow, app } from 'electron';
 import { readFile, writeFile } from 'fs/promises';
 import path from 'path';
 import { getAllShortcuts } from '../shortcuts/getAllShortcuts';
+import { syncMenuShortcuts } from '../shortcuts/registerAllShortcuts';
+import { MENU_SYNC_SHORTCUTS_CHANNEL } from '../../shared/app-menu';
 import { getDeviceId } from '../device-id';
 import {
   addRecentFolder,
@@ -99,6 +101,10 @@ export function registerWindowAppHandlers(): void {
   // ─── App Info ─────────────────────────────────────────────────────────────
 
   ipcMain.handle('get-shortcuts', () => getAllShortcuts());
+  // 设置中心自定义快捷键后同步到应用菜单（入参在 syncMenuShortcuts 内校验）
+  ipcMain.handle(MENU_SYNC_SHORTCUTS_CHANNEL, (_event, bindings: unknown) =>
+    syncMenuShortcuts(bindings)
+  );
   ipcMain.handle('get-app-version', () => app.getVersion());
   ipcMain.handle('get-device-id', () => getDeviceId());
   // 系统能力探测：返回是否处于自动低配模式，渲染端据此延迟非关键工作

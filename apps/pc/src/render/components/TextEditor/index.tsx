@@ -22,6 +22,7 @@ import { useCodeMirrorView } from './hooks/useCodeMirrorView';
 import { useEditorFileLoader } from './hooks/useEditorFileLoader';
 import { useEditorRequests } from './hooks/useEditorRequests';
 import { useDirtyStateBroadcast } from './hooks/useDirtyStateBroadcast';
+import { useActiveEditorRegistration } from './hooks/useActiveEditorRegistration';
 import EditorFileHeader from './EditorFileHeader';
 import styles from './styles.module.scss';
 
@@ -158,6 +159,15 @@ const TextEditor: React.FC<TextEditorProps> = ({
     toast,
   });
   useDirtyStateBroadcast(filePath, hasChanges);
+  // 应用菜单的 保存 / 另存为 / 查找 作用于最近聚焦的编辑器
+  useActiveEditorRegistration({
+    editorContainerRef,
+    viewRef,
+    currentFilePathRef,
+    currentContentRef,
+    readOnlyRef,
+    handleManualSaveRef,
+  });
 
   const { editorReady, readOnlyCompartment, wordWrapCompartment } = useCodeMirrorView({
     editorContainerRef,

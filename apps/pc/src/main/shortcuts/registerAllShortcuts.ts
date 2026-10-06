@@ -1,86 +1,56 @@
-import { Menu, app, BrowserWindow } from 'electron';
-import { shortcutConfigs } from './config';
-import { APP_DISPLAY_NAME } from '../../shared/about';
+import { existsSync } from 'fs';
+import { Menu } from 'electron';
 
-/** 通知渲染进程打开应用内「关于」对话框（无聚焦窗口时发给第一个窗口） */
-export const openAboutDialog = () => {
-  const target = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-  target?.webContents.send('menu-open-about');
+import {
+  DEFAULT_MENU_SHORTCUT_BINDINGS,
+  normalizeMenuShortcutBindings,
+  type MenuShortcutBindings,
+} from '../../shared/app-menu';
+import { clearRecentFolders, getRecentFolders, onRecentFoldersChanged } from '../recent-folders';
+import { buildApplicationMenuTemplate } from './menuTemplate';
+
+export { openAboutDialog } from './sendToRenderer';
+
+let bindings: MenuShortcutBindings = { ...DEFAULT_MENU_SHORTCUT_BINDINGS };
+let unsubscribeRecent: (() => void) | null = null;
+
+/** 最近使用列表只展示仍然存在的目录；读取失败时降级为空列表，不影响菜单构建 */
+function readRecentFolders(): string[] {
+  try {
+    return getRecentFolders().filter((folder) => existsSync(folder));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 构建并设置应用菜单（快捷键通过可见菜单项的 accelerator 生效，仅在应用聚焦时响应，不影响其他程序）。
+ *
+ * macOS 必须包含应用菜单，否则 Cmd+Q / Cmd+H 等系统快捷键无法生效。
+ * 最近使用列表变化、渲染进程同步自定义快捷键时会重新调用本函数重建菜单。
+ */
+export const registerAllShortcuts = () => {
+  if (!unsubscribeRecent) {
+    unsubscribeRecent = onRecentFoldersChanged(() => registerAllShortcuts());
+  }
+  const template = buildApplicationMenuTemplate({
+    recentFolders: readRecentFolders(),
+    bindings,
+    onClearRecent: () => clearRecentFolders(),
+  });
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };
 
 /**
- * 通过应用菜单注册快捷键（仅在应用聚焦时生效，不影响其他程序）
- *
- * macOS 必须包含 appMenu 角色的子菜单，否则 Cmd+Q / Cmd+H 等系统快捷键无法生效。
+ * 渲染进程同步设置中心里自定义的快捷键（menu-sync-shortcuts），重建菜单使加速键与实际按键一致。
+ * 入参来自渲染进程，先规范化再使用；返回规范化后的绑定。
  */
-export const registerAllShortcuts = () => {
-  const normalizeAccelerator = (acc: string): string => {
-    return acc.replace(/Cmd\+/g, 'CommandOrControl+').replace(/Ctrl\+/g, 'CommandOrControl+');
-  };
-
-  // 将配置中的快捷键转为隐藏菜单项（仅保留 accelerator）
-  const menuItems = shortcutConfigs
-    .filter((c) => {
-      // macOS 下 Cmd+Q 由 appMenu role 处理，不重复注册
-      if (process.platform === 'darwin' && c.accelerator === 'Cmd+Q') return false;
-      return true;
-    })
-    .map((config) => ({
-      label: config.description,
-      accelerator: normalizeAccelerator(config.accelerator),
-      click: config.action,
-      visible: false,
-    }));
-
-  const template: Electron.MenuItemConstructorOptions[] = [];
-
-  // macOS: 第一项必须是 appMenu，提供 Cmd+Q / Cmd+H 等系统快捷键
-  if (process.platform === 'darwin') {
-    template.push({
-      label: app.name,
-      submenu: [
-        // 不使用原生 role: 'about'，改为打开应用内的「关于」对话框
-        { label: `关于 ${APP_DISPLAY_NAME}`, click: openAboutDialog },
-        { type: 'separator' },
-        { role: 'hide', label: `隐藏 ${app.name}` },
-        { role: 'hideOthers', label: '隐藏其他' },
-        { role: 'unhide', label: '全部显示' },
-        { type: 'separator' },
-        { role: 'quit', label: `退出 ${app.name}` },
-      ],
-    });
-  }
-
-  // 自定义快捷键菜单
-  template.push({
-    label: '快捷键',
-    submenu: menuItems,
-  });
-
-  // 文件菜单（导出）
-  template.push({
-    label: '文件',
-    submenu: [
-      {
-        label: '导出项目',
-        accelerator: 'CommandOrControl+Shift+E',
-        click: () => {
-          BrowserWindow.getFocusedWindow()?.webContents.send('menu-export-project');
-        },
-      },
-    ],
-  });
-
-  // 编辑菜单（Cmd+C / V / X / A 等）
-  template.push({ role: 'editMenu' });
-
-  // Windows / Linux：「关于」放在帮助菜单（macOS 已在应用菜单中）
-  if (process.platform !== 'darwin') {
-    template.push({
-      label: '帮助',
-      submenu: [{ label: `关于 ${APP_DISPLAY_NAME}`, click: openAboutDialog }],
-    });
-  }
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+export const syncMenuShortcuts = (value: unknown): MenuShortcutBindings => {
+  const next = normalizeMenuShortcutBindings(value);
+  const changed =
+    next.toggleSidebar !== bindings.toggleSidebar ||
+    next.toggleFocusMode !== bindings.toggleFocusMode;
+  bindings = next;
+  if (changed) registerAllShortcuts();
+  return next;
 };
