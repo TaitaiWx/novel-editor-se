@@ -6,6 +6,7 @@ import type {
 import type { OutlineEntry } from '../types';
 import type { OutlineAiGenerationOptions } from '../outline-import';
 import { parseStoryIdeaSnapshot } from '../story-idea';
+import { requestOpenInspiration } from '../../InspirationDialog/inspiration';
 
 // 大纲视图内部使用的纯函数与常量
 
@@ -67,14 +68,10 @@ export function buildStoryIdeaCardTitle(version: PersistedOutlineVersionRow): st
   return '三签创意卡';
 }
 
+/** 回到大纲版本的来源：在「灵感」弹窗中回填这张三签卡 */
 export function jumpToStoryIdeaCard(cardId: number | null) {
   if (cardId === null) return;
-  window.dispatchEvent(new CustomEvent('open-storyline-mode', { detail: { mode: 'ideas' } }));
-  window.dispatchEvent(
-    new CustomEvent('open-story-idea-card', {
-      detail: { cardId, expandOptionalInputs: true },
-    })
-  );
+  requestOpenInspiration({ cardId });
 }
 
 /** 版本来源标签 */

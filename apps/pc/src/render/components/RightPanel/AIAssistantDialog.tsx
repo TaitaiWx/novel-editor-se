@@ -3,6 +3,10 @@ import { createPortal } from 'react-dom';
 import { AIView } from './AIView';
 import type { AISessionState } from './AIView';
 import Tooltip from '../Tooltip';
+import {
+  AssistantContextSection,
+  type AssistantContextSectionProps,
+} from './AssistantContextSection';
 import { isImeComposing } from '../../utils/ime';
 import styles from './styles.module.scss';
 
@@ -21,6 +25,8 @@ export const AIAssistantDialog: React.FC<{
   onOpenFile?: (filePath: string) => void;
   onOpenSettings?: () => void;
   onPreviewDiff?: (original: string, modified: string) => void;
+  /** 当前作用域的 AI 上下文（人物 / 设定 / 资料）；提供时在对话上方显示可折叠的「上下文」分区 */
+  context?: AssistantContextSectionProps;
 }> = React.memo(
   ({
     visible,
@@ -32,6 +38,7 @@ export const AIAssistantDialog: React.FC<{
     onOpenFile,
     onOpenSettings,
     onPreviewDiff,
+    context,
   }) => {
     const [expanded, setExpanded] = useState(false);
     const resultRef = useRef<HTMLDivElement>(null);
@@ -92,6 +99,7 @@ export const AIAssistantDialog: React.FC<{
             </div>
           </div>
           <div className={styles.aiDialogBody} ref={resultRef}>
+            {context && <AssistantContextSection {...context} />}
             <AIView
               folderPath={folderPath}
               content={content}

@@ -1,0 +1,267 @@
+// AI 助手「上下文」分区：默认折叠的一行摘要，展开后为人物 / 设定 / 资料三块
+
+.section {
+  margin-bottom: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+  }
+}
+
+.caret {
+  width: 10px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--ui-fg-muted);
+}
+
+.toggleTitle {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.toggleScope {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-fg-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toggleSummary {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.58);
+  white-space: nowrap;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 10px 10px;
+}
+
+.block {
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.blockHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.blockTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0f0f0;
+}
+
+.blockCount {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #8c8c8c;
+}
+
+.linkButton {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: #9fc4e8;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--ui-interaction-hover-bg);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.itemTitle {
+  overflow: hidden;
+  color: #efefef;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.itemMeta {
+  margin-top: 2px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.empty {
+  font-size: 11px;
+  color: var(--ui-fg-muted);
+  line-height: 1.6;
+}
+
+.materialItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.materialLink {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #d9d9d9;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+
+  &:hover {
+    color: #ffffff;
+  }
+}
+
+.addRow {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: #232323;
+  color: #d9d9d9;
+  font-size: 12px;
+}
+
+.primaryButton {
+  flex-shrink: 0;
+  padding: 0 12px;
+  border: 1px solid rgba(0, 122, 204, 0.35);
+  border-radius: 6px;
+  background: rgba(0, 122, 204, 0.18);
+  color: #dff0ff;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.status {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.statusRunning {
+  border-color: rgba(0, 122, 204, 0.2);
+  background: rgba(0, 122, 204, 0.08);
+}
+
+.statusSuccess {
+  border-color: rgba(33, 150, 83, 0.18);
+  background: rgba(33, 150, 83, 0.08);
+}
+
+.statusEmpty {
+  border-color: rgba(214, 168, 89, 0.18);
+  background: rgba(214, 168, 89, 0.08);
+}
+
+.statusError {
+  border-color: rgba(223, 94, 94, 0.22);
+  background: rgba(223, 94, 94, 0.1);
+}
+
+.statusMessage {
+  color: #efefef;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.statusMeta {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.progressTrack {
+  height: 4px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5ca5e6 0%, #6fd1b8 100%);
+}

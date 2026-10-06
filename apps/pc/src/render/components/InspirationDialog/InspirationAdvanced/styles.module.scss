@@ -1,0 +1,143 @@
+// 灵感抽签「更多选项」：与弹窗主体同一套柔和琥珀色
+
+.advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.groupLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--ui-fg-muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+    color: var(--ui-fg-primary);
+  }
+}
+
+.chipActive {
+  border-color: rgba(215, 186, 125, 0.32);
+  background: rgba(215, 186, 125, 0.12);
+  color: #f2e4bf;
+}
+
+.termRow {
+  display: flex;
+  gap: 6px;
+}
+
+.select,
+.input {
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #232323;
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+
+  &:focus {
+    outline: none;
+    border-color: rgba(215, 186, 125, 0.4);
+  }
+}
+
+.input {
+  flex: 1;
+}
+
+.addButton {
+  flex-shrink: 0;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(215, 186, 125, 0.28);
+  background: rgba(215, 186, 125, 0.1);
+  color: #f2e4bf;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.notice {
+  font-size: 11px;
+  color: var(--ui-fg-muted);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 168px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.historyItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+  }
+}
+
+.historyTitle {
+  font-size: 11px;
+  color: var(--ui-fg-muted);
+}
+
+.historyText {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-fg-primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

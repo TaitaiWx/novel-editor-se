@@ -1,5 +1,5 @@
 import type { FileNode, OpenLocalResult } from '@/render/types/File';
-import type { PersistedOutlineVersionRow, StoryIdeaOutputRow } from '@/render/types/electron-api';
+import type { PersistedOutlineVersionRow } from '@/render/types/electron-api';
 import type {
   Character,
   CharacterTimelineItem,
@@ -20,17 +20,6 @@ import {
 } from '@/render/components/RightPanel/CharactersView/helpers';
 import type { TimelineIpcInvoker } from '@/render/components/RightPanel/CharactersView/helpers';
 import {
-  OPEN_STORY_IDEA_CARD_EVENT,
-  STORY_IDEA_TERM_CARD_DESCRIPTIONS,
-  STORY_IDEA_TERM_ORDER,
-  buildTransientStoryIdeaCard,
-  createGeneratedCardTitle,
-  createOutputFilterKey,
-  createPoolSourceFilterKey,
-  getTermSummary,
-  readOutputMeta,
-} from '@/render/components/RightPanel/ThreeSignView/helpers';
-import {
   OUTLINE_AI_PRESETS,
   OUTLINE_VERSION_SOURCE_LABELS,
   buildCompareLabel,
@@ -43,8 +32,6 @@ import {
   serializeCurrentEntries,
   serializeVersionTree,
 } from '@/render/components/RightPanel/OutlineView/helpers';
-import { createEmptyStoryIdeaDraft } from '@/render/components/RightPanel/story-idea';
-import type { StoryIdeaCardDraft } from '@/render/components/RightPanel/story-idea';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -242,93 +229,6 @@ describe('CharactersView/helpers', () => {
   });
 });
 
-// ---------------------------------------------------------------- ThreeSignView/helpers
-
-describe('ThreeSignView/helpers', () => {
-  const draft: StoryIdeaCardDraft = {
-    ...createEmptyStoryIdeaDraft(),
-    title: '雪夜剑客',
-    premise: '失忆剑客',
-    tags: ['武侠'],
-    source: 'ai',
-    status: 'exploring',
-    themeTerms: ['雪夜', '断剑', '孤城'],
-    conflictTerms: ['背叛', '追杀'],
-    twistTerms: ['镜像', '替身'],
-    selectedLogline: 'L',
-    selectedDirection: 'D',
-    note: 'N',
-  };
-
-  it('constants', () => {
-    expect(OPEN_STORY_IDEA_CARD_EVENT).toBe('open-story-idea-card');
-    expect(STORY_IDEA_TERM_ORDER).toEqual(['theme', 'conflict', 'twist']);
-    expect(Object.keys(STORY_IDEA_TERM_CARD_DESCRIPTIONS)).toEqual(STORY_IDEA_TERM_ORDER);
-  });
-
-  it('filter keys', () => {
-    expect(createPoolSourceFilterKey(null)).toBeNull();
-    expect(createPoolSourceFilterKey('/n')).toBe('novel-editor:story-idea-pool-filter:/n');
-    expect(createOutputFilterKey(null)).toBeNull();
-    expect(createOutputFilterKey('/n')).toBe('novel-editor:story-idea-output-filter:/n');
-  });
-
-  it('readOutputMeta parses JSON safely', () => {
-    const base: StoryIdeaOutputRow = {
-      id: 1,
-      idea_card_id: 1,
-      novel_id: 1,
-      type: 'logline',
-      content: '',
-      meta_json: '{"reason":"反转"}',
-      sort_order: 0,
-      is_selected: 0,
-      created_at: '',
-      updated_at: '',
-    };
-    expect(readOutputMeta(base)).toEqual({ reason: '反转' });
-    expect(readOutputMeta({ ...base, meta_json: '{oops' })).toEqual({});
-  });
-
-  it('getTermSummary joins up to 6 terms', () => {
-    expect(getTermSummary(draft)).toBe('雪夜 / 断剑 / 孤城 / 背叛 / 追杀 / 镜像');
-    expect(getTermSummary(createEmptyStoryIdeaDraft())).toBe('');
-  });
-
-  it('buildTransientStoryIdeaCard maps draft into a row', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-03-05T09:07:00.000Z'));
-    expect(buildTransientStoryIdeaCard(-1, draft)).toEqual({
-      id: -1,
-      novel_id: 0,
-      title: '雪夜剑客',
-      premise: '失忆剑客',
-      tags_json: '["武侠"]',
-      source: 'ai',
-      status: 'exploring',
-      theme_seed: '雪夜 / 断剑 / 孤城',
-      conflict_seed: '背叛 / 追杀',
-      twist_seed: '镜像 / 替身',
-      protagonist_wish: '',
-      core_obstacle: '',
-      irony_or_gap: '',
-      escalation_path: '',
-      payoff_hint: '',
-      selected_logline: 'L',
-      selected_direction: 'D',
-      note: 'N',
-      created_at: '2026-03-05T09:07:00.000Z',
-      updated_at: '2026-03-05T09:07:00.000Z',
-    });
-  });
-
-  it('createGeneratedCardTitle formats local time', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(2026, 11, 25, 8, 5));
-    expect(createGeneratedCardTitle()).toBe('创意卡 12/25 08:05');
-  });
-});
-
 // ---------------------------------------------------------------- OutlineView/helpers
 
 describe('OutlineView/helpers', () => {
@@ -436,24 +336,20 @@ describe('OutlineView/helpers', () => {
     expect(buildStoryIdeaCardTitle(makeVersion())).toBe('三签创意卡');
   });
 
-  it('jumpToStoryIdeaCard dispatches mode + card events', () => {
+  it('jumpToStoryIdeaCard 请求在灵感弹窗中回填三签卡', () => {
     const target = new EventTarget();
     const received: Array<{ type: string; detail: unknown }> = [];
     const listener = (event: Event) => {
       received.push({ type: event.type, detail: (event as CustomEvent<unknown>).detail });
     };
-    target.addEventListener('open-storyline-mode', listener);
-    target.addEventListener('open-story-idea-card', listener);
+    target.addEventListener('open-inspiration', listener);
     vi.stubGlobal('window', target);
 
     jumpToStoryIdeaCard(null);
     expect(received).toEqual([]);
 
     jumpToStoryIdeaCard(12);
-    expect(received).toEqual([
-      { type: 'open-storyline-mode', detail: { mode: 'ideas' } },
-      { type: 'open-story-idea-card', detail: { cardId: 12, expandOptionalInputs: true } },
-    ]);
+    expect(received).toEqual([{ type: 'open-inspiration', detail: { cardId: 12 } }]);
   });
 
   it('presets and source labels', () => {

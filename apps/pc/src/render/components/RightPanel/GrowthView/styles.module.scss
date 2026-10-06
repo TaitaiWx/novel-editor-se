@@ -13,17 +13,6 @@
   box-sizing: border-box;
 }
 
-// 右侧面板：紧凑摘要
-.growthPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 12px;
-}
-
 .placeholder {
   display: flex;
   flex-direction: column;

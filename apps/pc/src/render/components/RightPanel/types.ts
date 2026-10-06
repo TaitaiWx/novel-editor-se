@@ -2,7 +2,7 @@ import type { PersistedOutlineScopeInput } from '../../types/electron-api';
 
 export type TabType = 'storyline' | 'characters' | 'lore';
 
-export type StorylineViewMode = 'catalog' | 'outline' | 'acts' | 'ideas' | 'growth';
+export type StorylineViewMode = 'catalog' | 'outline' | 'acts';
 
 export type LoreCategory = 'world' | 'faction' | 'system' | 'term';
 
@@ -121,39 +121,12 @@ export interface RightPanelProps {
   scopeKind?: 'project' | 'volume' | 'chapter';
   scopeLabel?: string;
   outlineScope?: PersistedOutlineScopeInput | null;
-  materialFiles?: Array<{ path: string; name: string }>;
-  linkedMaterialPaths?: string[];
-  scopedCharacterGenerationStatus?: {
-    state: 'running' | 'success' | 'empty' | 'error';
-    message: string;
-    totalSteps: number;
-    completedSteps: number;
-    resultCount: number;
-    libraryCount: number;
-    createdCount: number;
-    updatedCount: number;
-    startedAt: string;
-    finishedAt: string | null;
-    scopeLabel: string;
-  } | null;
-  scopedCharacters?: Array<{ name: string; role?: string; description?: string }>;
-  scopedLoreEntries?: Array<{ title: string; category?: string; summary?: string }>;
-  scopedMaterials?: Array<{
-    title: string;
-    kind?: string;
-    summary?: string;
-    relatedChapter?: string;
-  }>;
   onToggle: () => void;
   onPopOut?: () => void;
-  onOpenMaterial?: (path: string) => void;
-  onAddMaterial?: (path: string) => void;
-  onRemoveMaterial?: (path: string) => void;
   onScrollToLine?: (line: number, contentKey?: string) => void;
   onReplaceLineText?: (line: number, text: string) => void;
   folderPath: string | null;
   dbReady: boolean;
-  currentLine?: number;
 }
 
 export interface CharacterCurrentStateItem {

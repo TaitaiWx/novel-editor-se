@@ -18,7 +18,6 @@ interface GrowthSetupProps {
   busy: boolean;
   /** 创建后自动为该角色建卡 */
   pendingName?: string | null;
-  compact?: boolean;
   error?: string | null;
   onCreate: (template: GrowthTemplate) => void;
   onOpenHelp: () => void;
@@ -28,7 +27,6 @@ interface GrowthSetupProps {
 export const GrowthSetup: React.FC<GrowthSetupProps> = ({
   busy,
   pendingName = null,
-  compact = false,
   error = null,
   onCreate,
   onOpenHelp,
@@ -36,10 +34,7 @@ export const GrowthSetup: React.FC<GrowthSetupProps> = ({
   const [template, setTemplate] = useState<GrowthTemplate>('dnd');
 
   return (
-    <section
-      className={`${styles.setup} ${compact ? styles.compact : ''}`}
-      aria-label="开始使用成长档案"
-    >
+    <section className={styles.setup} aria-label="开始使用成长档案">
       <h2 className={styles.title}>角色成长档案</h2>
       <p className={styles.summary}>{GROWTH_GUIDE_SUMMARY}</p>
       <ol className={styles.steps}>

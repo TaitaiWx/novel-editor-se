@@ -4,25 +4,28 @@ import type { StorylineViewMode } from './types';
 import { OutlineView } from './OutlineView';
 import { ActsView } from './ActsView';
 import { AiCacheProvider } from './AiCacheContext';
-import { ThreeSignView } from './ThreeSignView';
-import { GrowthView } from './GrowthView';
-import { inferChapterNumber } from '../../utils/growthIndex';
 import { useHorizontalOverflow } from './useHorizontalOverflow';
 import type {
   PersistedOutlineScopeInput,
   PersistedOutlineScopeKind,
 } from '../../types/electron-api';
 
-const OPEN_STORYLINE_MODE_EVENT = 'open-storyline-mode';
+/** 右侧「大纲」面板的三个视图：目录 / 章纲（作用域大纲）/ 卷纲（幕剧规划） */
+export const STORYLINE_MODES: ReadonlyArray<{ mode: StorylineViewMode; label: string }> = [
+  { mode: 'catalog', label: '目录' },
+  { mode: 'outline', label: '章纲' },
+  { mode: 'acts', label: '卷纲' },
+];
 
-function getOutlineModeLabel(scopeKind: PersistedOutlineScopeKind): string {
+/** 章纲按钮的提示：随当前作用域说明它展示的是哪一级大纲 */
+export function getOutlineModeTitle(scopeKind: PersistedOutlineScopeKind): string {
   switch (scopeKind) {
     case 'chapter':
-      return '本章大纲';
+      return '本章的章纲';
     case 'volume':
-      return '本卷大纲';
+      return '本卷各章的章纲';
     default:
-      return '作品大纲';
+      return '整部作品的章纲';
   }
 }
 
@@ -32,7 +35,6 @@ export const StorylineView: React.FC<{
   onReplaceLineText?: (line: number, text: string) => void;
   folderPath: string | null;
   dbReady: boolean;
-  currentLine?: number;
   scopeKind?: PersistedOutlineScopeKind;
   scopeLabel?: string;
   outlineScope?: PersistedOutlineScopeInput | null;
@@ -43,7 +45,6 @@ export const StorylineView: React.FC<{
     onReplaceLineText,
     folderPath,
     dbReady,
-    currentLine,
     scopeKind = 'project',
     scopeLabel = '当前作品',
     outlineScope = null,
@@ -59,20 +60,6 @@ export const StorylineView: React.FC<{
       .filter(Boolean)
       .join(' ');
 
-    React.useEffect(() => {
-      const handleOpenMode = (event: Event) => {
-        const customEvent = event as CustomEvent<{ mode?: StorylineViewMode }>;
-        if (customEvent.detail?.mode) {
-          setViewMode(customEvent.detail.mode);
-        }
-      };
-
-      window.addEventListener(OPEN_STORYLINE_MODE_EVENT, handleOpenMode as EventListener);
-      return () => {
-        window.removeEventListener(OPEN_STORYLINE_MODE_EVENT, handleOpenMode as EventListener);
-      };
-    }, []);
-
     return (
       <AiCacheProvider dbReady={dbReady}>
         <div className={styles.storylineView}>
@@ -82,37 +69,18 @@ export const StorylineView: React.FC<{
             data-overflow-start={toolbarOverflow.start || undefined}
             data-overflow-end={toolbarOverflow.end || undefined}
           >
-            <button
-              className={`${styles.storylineToggle} ${viewMode === 'catalog' ? styles.storylineToggleActive : ''}`}
-              onClick={() => setViewMode('catalog')}
-            >
-              目录
-            </button>
-            <button
-              className={`${styles.storylineToggle} ${viewMode === 'outline' ? styles.storylineToggleActive : ''}`}
-              onClick={() => setViewMode('outline')}
-            >
-              {getOutlineModeLabel(scopeKind)}
-            </button>
-            <button
-              className={`${styles.storylineToggle} ${viewMode === 'acts' ? styles.storylineToggleActive : ''}`}
-              onClick={() => setViewMode('acts')}
-            >
-              卷规划
-            </button>
-            <button
-              className={`${styles.storylineToggle} ${viewMode === 'ideas' ? styles.storylineToggleActive : ''}`}
-              onClick={() => setViewMode('ideas')}
-            >
-              三签卡
-            </button>
-            <button
-              className={`${styles.storylineToggle} ${viewMode === 'growth' ? styles.storylineToggleActive : ''}`}
-              onClick={() => setViewMode('growth')}
-              title="成长档案：本章出场角色的等级与经验，可直接记一笔（资料/记忆/）"
-            >
-              成长
-            </button>
+            {STORYLINE_MODES.map(({ mode, label }) => (
+              <button
+                key={mode}
+                type="button"
+                className={`${styles.storylineToggle} ${viewMode === mode ? styles.storylineToggleActive : ''}`}
+                aria-pressed={viewMode === mode}
+                title={mode === 'outline' ? getOutlineModeTitle(scopeKind) : undefined}
+                onClick={() => setViewMode(mode)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           {viewMode === 'catalog' ? (
             <OutlineView
@@ -135,22 +103,6 @@ export const StorylineView: React.FC<{
               scopeLabel={scopeLabel}
               onScrollToLine={onScrollToLine}
               onReplaceLineText={onReplaceLineText}
-            />
-          ) : viewMode === 'growth' ? (
-            <GrowthView
-              folderPath={folderPath}
-              dbReady={dbReady}
-              content={content}
-              currentChapter={
-                outlineScope?.kind === 'chapter' ? inferChapterNumber(outlineScope.path) : null
-              }
-            />
-          ) : viewMode === 'ideas' ? (
-            <ThreeSignView
-              content={content}
-              folderPath={folderPath}
-              dbReady={dbReady}
-              currentLine={currentLine}
             />
           ) : (
             <ActsView content={content} onScrollToLine={onScrollToLine} folderPath={folderPath} />

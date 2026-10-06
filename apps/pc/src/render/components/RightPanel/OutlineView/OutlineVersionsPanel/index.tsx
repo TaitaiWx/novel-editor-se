@@ -120,7 +120,7 @@ export const OutlineVersionsPanel: React.FC<OutlineVersionsPanelProps> = ({
                     onClick={() => jumpToStoryIdeaCard(version.story_idea_card_id)}
                     disabled={importing}
                   >
-                    跳回三签
+                    回到灵感
                   </button>
                 )}
                 <button
