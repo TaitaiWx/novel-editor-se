@@ -46,6 +46,7 @@ import {
   editorText,
   ensureRightPanelOpen,
   expandTreePath,
+  storyRow,
   focusEditorEnd,
   redo,
   statusBarStats,
@@ -96,6 +97,10 @@ describe('小说编辑器 GUI', () => {
       ])
     );
     expect(titles).toContain('资料');
+    // ne init 项目：作品直接作为顶层节点，不显示 novels 容器，也没有「未分卷」
+    expect(titles).toContain('项目文档');
+    expect(titles).not.toContain('novels');
+    expect(titles).not.toContain('未分卷');
 
     // 开发构建同样应能读到仓库里的 release-notes.json
     const changelog = await page.evaluate<string>(() =>
@@ -108,10 +113,53 @@ describe('小说编辑器 GUI', () => {
 
   it('2. 示例作品集开箱即用：欢迎使用、成长档案、人物与设定、幕剧与大纲都已预置', async () => {
     await ensureSidebarOpen();
-    // 文件树：两卷六章 + 第二部作品 + 资料
-    await expandTreePath(page, ['未分卷', 'novels', '星河旅人', '第二卷-星海', '004-星港城']);
-    await expandTreePath(page, ['未分卷', 'novels', '剑与诗', '001-少年']);
+    // 文件树：项目文档 + 两部作品（星河旅人两卷六章、剑与诗两章）+ 资料
+    await expandTreePath(page, ['星河旅人', '第二卷-星海', '004-星港城']);
+    await expandTreePath(page, ['剑与诗', '001-少年']);
     await captureForReview('sample-tree');
+
+    // 欢迎使用.md 是项目文档，不是「章」，在「项目文档」分区而不是正文树里
+    const welcome = await storyRow(page, '欢迎使用');
+    expect(welcome.text).toBe('欢迎使用');
+    expect(
+      await page.exists({ text: '欢迎使用', within: '[aria-label="项目文档"]', exact: true })
+    ).toBe(true);
+    // 作品 / 卷 / 章：徽章与统计
+    const star = await storyRow(page, '星河旅人');
+    expect(star.text).toMatch(/^作品 星河旅人 2卷 6章$/);
+    expect(star.tooltip).toBe('作品「星河旅人」· 2 卷 · 6 章');
+    expect((await storyRow(page, '剑与诗')).text).toMatch(/^作品 剑与诗 2章$/);
+    expect((await storyRow(page, '第一卷-离乡')).text).toMatch(/^卷 第一卷-离乡 3章$/);
+    expect((await storyRow(page, '第二卷-星海')).text).toMatch(/^卷 第二卷-星海 3章$/);
+    expect((await storyRow(page, '001-少年')).text).toMatch(/^章 001-少年$/);
+
+    // 长卷名：默认侧边栏宽度下省略显示，悬停时出现行内修改按钮，完整名称在悬停提示中
+    const longVolume = '第三卷-群星尽头的漫长归途与未竟之约';
+    await mkdir(fixture.resolve('novels/星河旅人', longVolume), { recursive: true });
+    await writeFile(fixture.resolve('novels/星河旅人', longVolume, '007-归途.md'), '归途\n');
+    try {
+      await page.click('[aria-label="重新扫描作品目录"]');
+      await page.waitForTarget({ text: longVolume, within: SEL.workspaceTree, exact: true });
+      expect((await storyRow(page, '星河旅人')).text).toMatch(/3卷 7章$/);
+      const titleClipped = await page.evaluate<boolean>(
+        (selector: string, wanted: string) => {
+          const node = Array.from(document.querySelectorAll<HTMLElement>(selector)).find(
+            (item) => item.textContent === wanted
+          );
+          return Boolean(node && node.scrollWidth > node.clientWidth && node.clientWidth > 60);
+        },
+        SEL.storyNodeTitle,
+        longVolume
+      );
+      expect(titleClipped, '长卷名省略显示，且仍保留足够的可见宽度').toBe(true);
+      await page.hover({ text: longVolume, within: SEL.workspaceTree, exact: true });
+      await page.waitForTarget(`button[aria-label="修改 ${longVolume}"]`);
+      await captureForReview('tree-long-volume-hover');
+    } finally {
+      await rm(fixture.resolve('novels/星河旅人', longVolume), { recursive: true, force: true });
+      await page.click('[aria-label="重新扫描作品目录"]');
+      await page.waitForGone({ text: longVolume, within: SEL.workspaceTree, exact: true });
+    }
 
     // 欢迎使用.md：功能导览
     await page.click({ text: '欢迎使用', within: SEL.workspaceTree, exact: true });
@@ -220,7 +268,8 @@ describe('小说编辑器 GUI', () => {
     });
     await page.waitForTarget({ text: '003-归来', within: SEL.workspaceTree, exact: true });
 
-    // 重命名：行内铅笔按钮
+    // 重命名：行内铅笔按钮（悬停时才出现）
+    await page.hover({ text: '003-归来', within: SEL.workspaceTree, exact: true });
     await page.click('button[aria-label="修改 003-归来"]');
     await answerPrompt(page, '003-重逢');
     await page.waitUntil(() => existsSync(path.join(chapterDir, '003-重逢.md')), {
@@ -672,7 +721,7 @@ describe('小说编辑器 GUI', () => {
       expect(exited, '第二个实例应在转发后立即退出').toBe(true);
 
       await waitForWorkspace(page, path.basename(other.root));
-      await expandTreePath(page, ['未分卷', 'novels', '另一部作品', '001-开端']);
+      await expandTreePath(page, ['另一部作品', '001-开端']);
       await page.waitForTarget({ text: '001-开端', within: SEL.workspaceTree, exact: true });
       // 原 Electron 进程仍在运行
       expect(app.process.exitCode).toBeNull();

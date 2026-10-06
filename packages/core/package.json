@@ -22,6 +22,7 @@
     "./text-stats": "./src/text-stats.ts",
     "./growth": "./src/growth/index.ts",
     "./material": "./src/material.ts",
+    "./story-layout": "./src/story-layout.ts",
     "./gui-session": "./src/gui-session.ts"
   }
 }

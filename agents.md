@@ -192,7 +192,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
   - `app.ts`: 用 `apps/pc/node_modules` 中的 electron 启动 `dist/main.mjs`，附加 `--remote-debugging-port=<空闲端口>`，最后一个参数是临时 fixture 项目目录（由 `launch-folder.ts` 打开）；环境变量 `NOVEL_EDITOR_E2E=1`（复用烟雾测试的 userData 隔离 `NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR`，但就绪后不自动退出）、`NOVEL_EDITOR_DISABLE_AUTO_UPDATER=1`；附加 `--disable-renderer-backgrounding` 等参数并关闭窗口 `backgroundThrottling`（窗口被遮挡时 Chromium 会节流定时器、暂停 rAF，曾导致用例偶发变慢 / 超时）；结束时整组杀进程并删除临时目录
   - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
   - `workbench.ts`: 本应用的高层操作（展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
-  - `fixture.ts`: 每次运行把示例作品集 `apps/pc/sample-data` 完整拷贝到临时目录（跳过本机数据库等运行产物，可用 `exclude` 去掉某些路径）；`FIXTURE_CHAPTERS` / `FIXTURE_CHAPTER_TREE` 指向其中的「星河旅人 / 第一卷-离乡」
+  - `fixture.ts`: 每次运行把示例作品集 `apps/pc/sample-data` 完整拷贝到临时目录（跳过本机数据库等运行产物，可用 `exclude` 去掉某些路径）；`FIXTURE_CHAPTERS` / `FIXTURE_CHAPTER_TREE` 指向其中的「星河旅人 / 第一卷-离乡」（正文树路径为 作品 → 卷，没有 novels / 未分卷 层级）
   - `suite.ts`: `setupAppSuite()` 为一个 `*.e2e.ts` 注册启动 / 关闭、失败截图、控制台错误检查；另有 `openChapter`、`captureForReview`、成长档案选择器等通用操作
 - 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、示例作品集开箱即用（欢迎使用、预置成长档案、种子人物 / 设定、幕剧、章纲）、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧面板与专注模式、GUI 与 CLI 共享写作日志和会话状态、关于小窗口、资料长文件名、单实例转发）；`growth.e2e.ts` 用去掉 `资料/记忆/` 的示例验证成长档案首次使用（开始使用、新建成长卡、引导、记一笔、提醒、总览、记忆库同步、人物详情入口）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据并写入种子人物
 - 示例项目的作品名来自 `seed.json`（「示例作品集」），标题栏显示它而不是临时目录名
@@ -253,6 +253,7 @@ ne open <path>                  # 用 GUI 打开指定文件夹/项目
 ne status                       # 输出当前项目状态（作品/字数、今日写作、GUI 打开的文件与未保存变更、daemon）
 ```
 
+- GUI 正文树与 CLI 同一口径：打开带 `.novel-editor/config.json` 的文件夹时，主进程 `refresh-folder` / `open-local-folder` 附带 core `readProjectLayout`（novelsDir + 作品列表），渲染进程 `utils/storyStructure.ts` 据此展示「作品 / 卷 / 章」（不显示 novels 容器），根目录文档（欢迎使用.md、README.md）放在文件面板顶部「项目文档」分区，不计章数、不启用章节助手、不计入写作日志（core `isProjectDocumentPath`）；普通文件夹沿用按名称推断卷的规则，只把 README / 欢迎使用 这类说明文档（或子目录装着章节时根目录的非章节文档）视为项目文档。命名与排序（序号前缀、中文数字卷名）在 `packages/core/src/story-layout.ts`，GUI 通过 `@novel-editor/core/story-layout` 引入
 - `ne status` 读取 `<project>/.novel-editor/session.json`（core `readGuiSession`）：GUI 渲染进程经 `gui-session-publish` IPC 防抖（500ms）上报打开的标签、当前文件、未保存文件，并每 60 秒心跳刷新；主进程补全 pid/版本/时间后写入。窗口销毁、切换文件夹时标记 `closed`
 - `--json` 下 `data.gui = { status, reason?, pid, appVersion, updatedAt, activeFile, openFiles, unsavedFiles }`；`status`: `active`（GUI 正在使用）/ `closed`（已关闭）/ `stale`（`reason`: `pid-not-alive` 进程已退出，或 `outdated` 超过 5 分钟未刷新）/ `none`（从未打开）。路径相对项目根，未命名标签为 `__untitled__:<名称>`
 - 未 `ne init` 的文件夹被 GUI 打开时，会话文件位于该文件夹的 `.novel-editor/`，在该目录执行 `ne status` 同样能看到

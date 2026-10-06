@@ -32,14 +32,18 @@ describe('首次启动', () => {
       timeout: 15_000,
       message: '示例数据已拷贝到隔离的文稿目录',
     });
-    await app.page.waitUntil(async () => (await treeTitles(app.page)).includes('未分卷'), {
+    await app.page.waitUntil(async () => (await treeTitles(app.page)).includes('星河旅人'), {
       timeout: 15_000,
       message: '文件树展示示例数据',
     });
-    await expandTreePath(app.page, ['未分卷', 'novels', '星河旅人']);
-    expect(await treeTitles(app.page)).toEqual(
-      expect.arrayContaining(['欢迎使用', 'novels', '星河旅人', '剑与诗'])
+    await expandTreePath(app.page, ['星河旅人', '第一卷-离乡']);
+    const titles = await treeTitles(app.page);
+    expect(titles).toEqual(
+      expect.arrayContaining(['项目文档', '欢迎使用', '星河旅人', '剑与诗', '第一卷-离乡'])
     );
+    // 示例是 ne init 项目：作品是顶层节点，欢迎使用.md 是项目文档而不是「未分卷」里的章
+    expect(titles).not.toContain('novels');
+    expect(titles).not.toContain('未分卷');
 
     // 种子数据：人物卡已写入示例项目的数据库（渲染进程以同一路径查询）
     const names = await app.page.waitUntil(

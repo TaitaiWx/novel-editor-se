@@ -11,9 +11,10 @@
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { isStoryFile } from './fs-ops';
+import { isStoryFile, pathExists } from './fs-ops';
 import { isGeneratedMaterialPath } from './material';
-import { findProjectRoot, isInside, PROJECT_META_DIR } from './project';
+import { findProjectRoot, getConfigPath, isInside, PROJECT_META_DIR } from './project';
+import { isProjectDocumentPath } from './story-layout';
 import { analyzeContentStats } from './text-stats';
 
 export const WRITING_LOG_FILE = 'writing-log.json';
@@ -147,11 +148,24 @@ async function applyWrites(projectRoot: string, events: WriteEvent[]): Promise<v
   await saveWritingLog(projectRoot, log);
 }
 
-/** 是否为需要计入写作日志的正文文件：正文扩展名，且不在 `资料/` 与 `.novel-editor/` 中 */
-export function isTrackedStoryPath(filePath: string, projectRoot: string): boolean {
+/**
+ * 是否为需要计入写作日志的正文文件：正文扩展名，不在 `资料/` 与 `.novel-editor/` 中，
+ * 且不是项目文档（根目录下的欢迎使用.md、README.md 等，见 `isProjectDocumentPath`）。
+ * `configured` 表示项目根有 `.novel-editor/config.json`，此时根目录下的文档都不算正文（与 GUI 正文树一致）。
+ */
+export function isTrackedStoryPath(
+  filePath: string,
+  projectRoot: string,
+  options: { configured?: boolean } = {}
+): boolean {
   if (!isStoryFile(filePath)) return false;
   if (isInside(path.join(projectRoot, PROJECT_META_DIR), filePath)) return false;
-  return !isGeneratedMaterialPath(path.resolve(filePath), path.resolve(projectRoot));
+  const absFile = path.resolve(filePath);
+  const absRoot = path.resolve(projectRoot);
+  if (isProjectDocumentPath(absFile, absRoot, { configured: options.configured === true })) {
+    return false;
+  }
+  return !isGeneratedMaterialPath(absFile, absRoot);
 }
 
 /**
@@ -184,10 +198,17 @@ export async function recordProjectWrites(
   options: { fallbackRoot?: string | null } = {}
 ): Promise<ProjectWritesResult[]> {
   const groups = new Map<string, WriteEvent[]>();
+  const configuredRoots = new Map<string, boolean>();
   for (const event of events) {
     if (!isStoryFile(event.path)) continue;
     const root = await resolveWritingLogRoot(event.path, options.fallbackRoot);
-    if (!root || !isTrackedStoryPath(event.path, root)) continue;
+    if (!root) continue;
+    let configured = configuredRoots.get(root);
+    if (configured === undefined) {
+      configured = await pathExists(getConfigPath(root));
+      configuredRoots.set(root, configured);
+    }
+    if (!isTrackedStoryPath(event.path, root, { configured })) continue;
     const list = groups.get(root) ?? [];
     list.push(event);
     groups.set(root, list);

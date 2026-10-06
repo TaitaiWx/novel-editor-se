@@ -61,6 +61,27 @@ export function countStoryStats(node: FileNode): { chapters: number; drafts: num
   );
 }
 
+/**
+ * 项目模式（作品 / 卷）的统计，与 core `getNovelInfo` 同一口径：
+ * 作品内所有正文文件都是章；卷数为含有章节的子目录数
+ */
+export function countProjectStoryStats(node: FileNode): { chapters: number; volumes: number } {
+  const volumeDirs = new Set<string>();
+  let chapters = 0;
+  const walk = (current: FileNode, parentDir: string | null) => {
+    if (current.type === 'file') {
+      chapters += 1;
+      if (parentDir) volumeDirs.add(parentDir);
+      return;
+    }
+    (current.children || []).forEach((child) =>
+      walk(child, current === node ? null : current.path)
+    );
+  };
+  walk(node, null);
+  return { chapters, volumes: volumeDirs.size };
+}
+
 /** 递归统计文件数量（不计目录） */
 export function countFiles(nodes: FileNode[]): number {
   return nodes.reduce((total, node) => {

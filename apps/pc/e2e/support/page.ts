@@ -298,6 +298,17 @@ export class Page {
     }
   }
 
+  /** 把鼠标移到元素中心（触发 :hover，例如悬停时才出现的行内按钮） */
+  async hover(target: Target): Promise<void> {
+    const point = await this.locate(target);
+    await this.cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: point.x,
+      y: point.y,
+      modifiers: 0,
+    });
+  }
+
   /** 以真实鼠标事件点击元素中心 */
   async click(target: Target, options: { button?: MouseButton; clickCount?: number } = {}) {
     const point = await this.locate(target);

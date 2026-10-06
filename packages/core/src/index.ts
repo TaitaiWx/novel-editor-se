@@ -10,6 +10,7 @@ export * from './text-stats';
 export * from './fs-ops';
 export * from './fs-workspace';
 export * from './search';
+export * from './story-layout';
 export * from './project';
 export * from './writing-log';
 export * from './gui-session';

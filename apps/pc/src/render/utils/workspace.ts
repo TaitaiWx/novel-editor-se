@@ -283,10 +283,7 @@ export function resolveOrderedStoryChildren(
     : [];
 }
 
-function classifyDirectoryZone(
-  name: string,
-  inheritedZone: 'story' | 'material' | null
-): 'story' | 'material' | null {
+function classifyDirectoryZone(name: string, inheritedZone: WorkspaceZone): WorkspaceZone {
   const normalized = normalizeName(name);
   if (MATERIAL_DIRECTORY_HINTS.some((hint) => normalized.includes(hint))) return 'material';
   if (STORY_DIRECTORY_HINTS.some((hint) => normalized.includes(hint))) return 'story';
@@ -375,9 +372,21 @@ export function shouldEnableChapterAssistant(
   return isUntitledWritingTab(path) || isStoryFilePath(path, projectRoot);
 }
 
+type WorkspaceZone = 'story' | 'material' | null;
+
+export interface SplitWorkspaceOptions {
+  /**
+   * 强制视为正文的目录（`ne init` 项目的作品根目录或各作品目录）：其中的子目录一律是卷、
+   * 正文文件一律是章，不再按目录名猜测（避免「素材之王」这类作品名被当成资料目录）
+   */
+  storyRoots?: readonly string[];
+}
+
 function partitionWorkspaceFiles(
   nodes: FileNode[],
-  inheritedZone: 'story' | 'material' | null = null
+  inheritedZone: WorkspaceZone,
+  storyRoots: ReadonlySet<string>,
+  lockedStory: boolean
 ): {
   storyNodes: FileNode[];
   materialNodes: FileNode[];
@@ -387,14 +396,19 @@ function partitionWorkspaceFiles(
 
   nodes.forEach((node) => {
     if (node.type === 'directory') {
-      const zone = classifyDirectoryZone(node.name, inheritedZone);
-      const partitioned = partitionWorkspaceFiles(node.children || [], zone);
+      const locked = lockedStory || storyRoots.has(normalizePath(node.path));
+      const zone = locked ? 'story' : classifyDirectoryZone(node.name, inheritedZone);
+      const partitioned = partitionWorkspaceFiles(node.children || [], zone, storyRoots, locked);
 
       if (zone === 'story') {
         storyNodes.push({
           ...node,
           children: partitioned.storyNodes,
         });
+        // 作品目录里的图片等非正文文件仍归入资料分区
+        if (locked && partitioned.materialNodes.length > 0) {
+          materialNodes.push({ ...node, children: partitioned.materialNodes });
+        }
         return;
       }
 
@@ -432,11 +446,15 @@ function partitionWorkspaceFiles(
   return { storyNodes, materialNodes };
 }
 
-export function splitWorkspaceFiles(nodes: FileNode[]): {
+export function splitWorkspaceFiles(
+  nodes: FileNode[],
+  options: SplitWorkspaceOptions = {}
+): {
   storyNodes: FileNode[];
   materialNodes: FileNode[];
 } {
-  return partitionWorkspaceFiles(nodes);
+  const storyRoots = new Set((options.storyRoots ?? []).map(normalizePath));
+  return partitionWorkspaceFiles(nodes, null, storyRoots, false);
 }
 
 export function flattenFileNodes(nodes: FileNode[]): FileNode[] {

@@ -26,6 +26,7 @@ import {
   isMaterialLikeName,
   stripExtension,
 } from '@/render/app/fileTreeUtils';
+import { resolveDefaultWorkPath } from '@/render/utils/storyStructure';
 import { loadLoreEntriesByFolder } from '@/render/components/RightPanel/lore-data';
 import type { WorkspaceState } from './state/useWorkspaceState';
 import type { TabsState } from './state/useTabsState';
@@ -37,7 +38,7 @@ import type { ProjectLoaderApi } from './useProjectLoader';
 
 export type UseWorkspaceCreationContext = Pick<
   WorkspaceState,
-  'files' | 'filesRef' | 'folderPath' | 'folderPathRef'
+  'files' | 'filesRef' | 'folderPath' | 'folderPathRef' | 'projectLayout'
 > &
   Pick<
     TabsState,
@@ -70,6 +71,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
     folderPathRef,
     openFileInTab,
     openTabsRef,
+    projectLayout,
     refreshCurrentFolder,
     setActiveTab,
     setCreatingType,
@@ -223,18 +225,20 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
         ? findNodeInTree(splitWorkspaceFiles(filesRef.current).storyNodes, currentTab)
         : null;
 
-      if (kind === 'volume') return folder;
+      // `ne init` 项目：卷建在当前作品下；章节不能落在项目根目录（那里是项目文档）
+      const defaultWorkPath = resolveDefaultWorkPath(projectLayout, activeVolumePath ?? currentTab);
+      if (kind === 'volume') return defaultWorkPath ?? folder;
 
       if (kind === 'chapter') {
-        if (activeVolumePath) return activeVolumePath;
+        if (activeVolumePath && activeVolumePath !== folder) return activeVolumePath;
         if (selectedStoryNode?.type === 'directory' && !isDraftLikeName(selectedStoryNode.name)) {
           return selectedStoryNode.path;
         }
         if (selectedStoryNode?.type === 'file') {
           const parentDir = getParentDirectory(selectedStoryNode.path);
-          if (parentDir) return parentDir;
+          if (parentDir && (!defaultWorkPath || parentDir !== folder)) return parentDir;
         }
-        return folder;
+        return defaultWorkPath ?? folder;
       }
 
       if (kind === 'draft-folder' || kind === 'draft') {
@@ -249,7 +253,7 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
 
       return folder;
     },
-    [activeTabRef, filesRef, folderPathRef]
+    [activeTabRef, filesRef, folderPathRef, projectLayout]
   );
 
   const suggestStoryCreateName = useCallback(

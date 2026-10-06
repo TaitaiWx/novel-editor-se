@@ -1,11 +1,15 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { AiOutlineFolderOpen, AiOutlineUser, AiOutlineFolder } from 'react-icons/ai';
+import {
+  AiOutlineFileText,
+  AiOutlineFolderOpen,
+  AiOutlineUser,
+  AiOutlineFolder,
+} from 'react-icons/ai';
 import LoadingSpinner from '../LoadingSpinner';
 import EmptyState from '../EmptyState';
 import FileTree from '../FileTree';
 import { isImeComposing } from '../../utils/ime';
 import {
-  buildStoryDisplayNodes,
   createCharacterWorkspaceTab,
   createLoreWorkspaceTab,
   parseVolumeWorkspaceTab,
@@ -14,6 +18,7 @@ import {
   WORKSPACE_TAB_LORE,
   type StoryOrderMap,
 } from '../../utils/workspace';
+import { buildStoryStructure, getSplitWorkspaceOptions } from '../../utils/storyStructure';
 import type { FilePanelProps, ObjectContextMenuTarget } from './types';
 import {
   countFiles,
@@ -63,6 +68,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     selectedFile,
     activeWorkspaceTab,
     folderPath,
+    projectLayout = null,
     storyOrderMap = EMPTY_STORY_ORDER_MAP,
     showFileSizes = true,
     quickOpenShortcut = 'Mod+P',
@@ -144,12 +150,18 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       return filterTree(files, searchQuery.trim());
     }, [files, searchQuery]);
     const { storyNodes, materialNodes } = useMemo(
-      () => splitWorkspaceFiles(filteredFiles),
-      [filteredFiles]
+      () => splitWorkspaceFiles(filteredFiles, getSplitWorkspaceOptions(projectLayout)),
+      [filteredFiles, projectLayout]
     );
-    const storyDisplayNodes = useMemo(
-      () => buildStoryDisplayNodes(storyNodes, folderPath, storyOrderMap),
-      [folderPath, storyNodes, storyOrderMap]
+    // 正文结构：项目文档 + 作品 / 卷 / 章（`ne init` 项目）或按名称推断的卷（普通文件夹）
+    const storyStructure = useMemo(
+      () => buildStoryStructure(storyNodes, folderPath, projectLayout, storyOrderMap),
+      [folderPath, projectLayout, storyNodes, storyOrderMap]
+    );
+    const storyDisplayNodes = storyStructure.displayNodes;
+    const projectDocNodes = useMemo(
+      () => storyStructure.projectDocs.map((node) => ({ ...node, storyKind: 'document' as const })),
+      [storyStructure]
     );
     const materialFileCount = useMemo(() => countFiles(materialNodes), [materialNodes]);
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -311,6 +323,33 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   onContextMenu={(event) => emitObjectContextMenu(event, { kind: 'project-root' })}
                 />
                 <div className={styles.workspaceTree}>
+                  {projectDocNodes.length > 0 && (
+                    <section className={styles.objectSection} aria-label="项目文档">
+                      <SectionHeader
+                        title="项目文档"
+                        icon={<AiOutlineFileText />}
+                        count={projectDocNodes.length}
+                        singleClickOnly
+                        onToggle={() => toggleSection('docs')}
+                        onContextMenu={(event) =>
+                          emitObjectContextMenu(event, { kind: 'project-root' })
+                        }
+                      />
+                      {!collapsedSections.docs && (
+                        <div className={styles.storyTree}>
+                          {projectDocNodes.map((node) => (
+                            <StoryTreeNode
+                              key={node.path}
+                              node={node}
+                              level={0}
+                              parentPath={null}
+                              tree={storyTree}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )}
                   <section className={styles.objectSection}>
                     <SectionHeader
                       title="正文"
@@ -328,7 +367,11 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                               key={node.path}
                               node={node}
                               level={0}
-                              parentPath={folderPath || null}
+                              parentPath={
+                                node.storyKind === 'work'
+                                  ? storyStructure.worksParentPath
+                                  : folderPath || null
+                              }
                               tree={storyTree}
                             />
                           ))}

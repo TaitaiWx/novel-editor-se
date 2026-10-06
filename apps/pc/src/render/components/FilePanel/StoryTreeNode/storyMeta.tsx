@@ -4,16 +4,17 @@ import {
   isDraftLikeStoryName,
   isVolumeLikeStoryName,
 } from '../../../utils/workspace';
+import type { StoryNodeKind } from '../../../utils/storyStructure';
 
-export type StoryDirectoryLabel = '稿夹' | '正文夹' | '卷';
-export type StoryFileLabel = '稿' | '章';
+export type StoryDirectoryLabel = '作品' | '稿夹' | '正文夹' | '卷';
+export type StoryFileLabel = '稿' | '章' | '文档';
 
 export interface StoryNodeMeta<TLabel extends string> {
   label: TLabel;
   icon: React.ReactNode;
 }
 
-/** 目录类型：稿夹 / 正文夹 / 卷 */
+/** 按名称推断的目录类型：稿夹 / 正文夹 / 卷 */
 export function getStoryDirectoryLabel(name: string): StoryDirectoryLabel {
   if (isDraftLikeStoryName(name)) return '稿夹';
   if (!isVolumeLikeStoryName(name) && name !== '未分卷') return '正文夹';
@@ -127,7 +128,41 @@ const CHAPTER_FILE_ICON = (
   </svg>
 );
 
+const WORK_ICON = (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path
+      d="M3 3.2c1.6-.6 3.3-.5 5 .6 1.7-1.1 3.4-1.2 5-.6v9.4c-1.6-.6-3.3-.5-5 .6-1.7-1.1-3.4-1.2-5-.6z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />
+    <path d="M8 3.8v9.4" fill="none" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+);
+
+const DOCUMENT_ICON = (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path
+      d="M4 2.5h5.5L13 6v7.5H4z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    />
+    <path
+      d="M9.5 2.5V6H13M6.4 9.6h.01M8.5 8.6v3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const DIRECTORY_ICONS: Record<StoryDirectoryLabel, React.ReactNode> = {
+  作品: WORK_ICON,
   稿夹: DRAFT_FOLDER_ICON,
   正文夹: GROUP_FOLDER_ICON,
   卷: VOLUME_ICON,
@@ -136,14 +171,33 @@ const DIRECTORY_ICONS: Record<StoryDirectoryLabel, React.ReactNode> = {
 const FILE_ICONS: Record<StoryFileLabel, React.ReactNode> = {
   稿: DRAFT_FILE_ICON,
   章: CHAPTER_FILE_ICON,
+  文档: DOCUMENT_ICON,
 };
 
-export function getStoryDirectoryMeta(name: string): StoryNodeMeta<StoryDirectoryLabel> {
-  const label = getStoryDirectoryLabel(name);
+const KIND_DIRECTORY_LABELS: Partial<Record<StoryNodeKind, StoryDirectoryLabel>> = {
+  work: '作品',
+  volume: '卷',
+};
+
+const KIND_FILE_LABELS: Partial<Record<StoryNodeKind, StoryFileLabel>> = {
+  chapter: '章',
+  document: '文档',
+};
+
+/** 目录元信息：项目模式下由结构给出的 kind 决定（作品 / 卷），否则按名称推断 */
+export function getStoryDirectoryMeta(
+  name: string,
+  kind?: StoryNodeKind
+): StoryNodeMeta<StoryDirectoryLabel> {
+  const label = (kind && KIND_DIRECTORY_LABELS[kind]) || getStoryDirectoryLabel(name);
   return { label, icon: DIRECTORY_ICONS[label] };
 }
 
-export function getStoryFileMeta(name: string): StoryNodeMeta<StoryFileLabel> {
-  const label = getStoryFileLabel(name);
+/** 文件元信息：项目模式下作品内的文件一律是章，项目文档是文档，否则按名称推断 */
+export function getStoryFileMeta(
+  name: string,
+  kind?: StoryNodeKind
+): StoryNodeMeta<StoryFileLabel> {
+  const label = (kind && KIND_FILE_LABELS[kind]) || getStoryFileLabel(name);
   return { label, icon: FILE_ICONS[label] };
 }

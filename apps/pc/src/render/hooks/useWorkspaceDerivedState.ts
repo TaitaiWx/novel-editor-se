@@ -1,13 +1,13 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { AssistantScopeTarget } from '@/render/app/types';
 import type { FileNode } from '@/render/types';
 import type { PersistedOutlineScopeInput } from '@/render/types/electron-api';
+import { findNodeInTree, getNodeDisplayName, isUntitledTabPath } from '@/render/app/fileTreeUtils';
 import {
-  findNodeInTree,
-  getNodeDisplayName,
-  isUntitledTabPath,
-  isVolumeLikeName,
-} from '@/render/app/fileTreeUtils';
+  buildStoryStructure,
+  getProjectDocPathSet,
+  getSplitWorkspaceOptions,
+} from '@/render/utils/storyStructure';
 import {
   flattenFileNodes,
   isStoryFilePath,
@@ -22,7 +22,10 @@ import type { WorkspaceState } from './state/useWorkspaceState';
 import type { TabsState } from './state/useTabsState';
 import type { EntitiesState } from './state/useEntitiesState';
 
-export type UseWorkspaceDerivedStateContext = Pick<WorkspaceState, 'files' | 'folderPath'> &
+export type UseWorkspaceDerivedStateContext = Pick<
+  WorkspaceState,
+  'files' | 'folderPath' | 'projectLayout'
+> &
   Pick<TabsState, 'activeTab' | 'untitledTabContents'> &
   Pick<EntitiesState, 'chapterMaterialPaths' | 'workspaceProjectName'>;
 
@@ -35,6 +38,7 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     chapterMaterialPaths,
     files,
     folderPath,
+    projectLayout,
     untitledTabContents,
     workspaceProjectName,
   } = ctx;
@@ -51,10 +55,6 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     () => (isWorkspaceTab(activeTab) ? null : activeTab),
     [activeTab]
   );
-  const chapterAssistantEnabled = useMemo(
-    () => shouldEnableChapterAssistant(activeDocumentTab, folderPath),
-    [activeDocumentTab, folderPath]
-  );
   const selectedCharacterTabId = useMemo(
     () => parseCharacterWorkspaceTab(activeWorkspaceTab),
     [activeWorkspaceTab]
@@ -68,8 +68,25 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     [activeWorkspaceTab]
   );
   const { storyNodes: workspaceStoryNodes, materialNodes: workspaceMaterialNodes } = useMemo(
-    () => splitWorkspaceFiles(files),
-    [files]
+    () => splitWorkspaceFiles(files, getSplitWorkspaceOptions(projectLayout)),
+    [files, projectLayout]
+  );
+  const storyStructure = useMemo(
+    () => buildStoryStructure(workspaceStoryNodes, folderPath, projectLayout),
+    [folderPath, projectLayout, workspaceStoryNodes]
+  );
+  // 项目文档（欢迎使用.md、README.md 等）不是章节：不启用章节助手、不计入正文统计
+  const projectDocPaths = useMemo(() => getProjectDocPathSet(storyStructure), [storyStructure]);
+  const isChapterDocument = useCallback(
+    (path: string | null) =>
+      Boolean(path) && !projectDocPaths.has(path as string) && isStoryFilePath(path, folderPath),
+    [folderPath, projectDocPaths]
+  );
+  const chapterAssistantEnabled = useMemo(
+    () =>
+      shouldEnableChapterAssistant(activeDocumentTab, folderPath) &&
+      !(activeDocumentTab && projectDocPaths.has(activeDocumentTab)),
+    [activeDocumentTab, folderPath, projectDocPaths]
   );
   const materialFiles = useMemo(
     () => flattenFileNodes(workspaceMaterialNodes),
@@ -84,19 +101,7 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
       chapterMaterialPaths.map((path) => materialFileMap.get(path)).filter(Boolean) as FileNode[],
     [chapterMaterialPaths, materialFileMap]
   );
-  const rootVolumeNode = useMemo(() => {
-    if (!folderPath) return null;
-    const looseNodes = workspaceStoryNodes.filter(
-      (node) => !(node.type === 'directory' && isVolumeLikeName(node.name))
-    );
-    if (looseNodes.length === 0) return null;
-    return {
-      name: '未分卷',
-      path: folderPath,
-      type: 'directory' as const,
-      children: looseNodes,
-    };
-  }, [folderPath, workspaceStoryNodes]);
+  const rootVolumeNode = storyStructure.unassignedNode;
   const selectedVolumeNode = useMemo(() => {
     if (!selectedVolumePath) return null;
     const existingNode = findNodeInTree(files, selectedVolumePath);
@@ -107,7 +112,7 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     return null;
   }, [files, folderPath, rootVolumeNode, selectedVolumePath]);
   const currentAssistantScope = useMemo<AssistantScopeTarget | null>(() => {
-    if (activeDocumentTab && isStoryFilePath(activeDocumentTab, folderPath)) {
+    if (activeDocumentTab && isChapterDocument(activeDocumentTab)) {
       return {
         kind: 'chapter',
         path: activeDocumentTab,
@@ -128,7 +133,14 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
       path: folderPath,
       label: workspaceProjectName?.trim() || getNodeDisplayName(folderPath),
     };
-  }, [activeDocumentTab, folderPath, selectedVolumeNode, selectedVolumePath, workspaceProjectName]);
+  }, [
+    activeDocumentTab,
+    folderPath,
+    isChapterDocument,
+    selectedVolumeNode,
+    selectedVolumePath,
+    workspaceProjectName,
+  ]);
   const currentOutlineScope = useMemo<PersistedOutlineScopeInput | null>(() => {
     if (!currentAssistantScope) return null;
     return {
@@ -140,9 +152,9 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     () =>
       flattenFileNodes(workspaceStoryNodes).filter(
         (node): node is FileNode & { type: 'file' } =>
-          node.type === 'file' && isStoryFilePath(node.path, folderPath)
+          node.type === 'file' && isChapterDocument(node.path)
       ),
-    [folderPath, workspaceStoryNodes]
+    [isChapterDocument, workspaceStoryNodes]
   );
 
   return {
@@ -159,6 +171,8 @@ export function useWorkspaceDerivedState(ctx: UseWorkspaceDerivedStateContext) {
     materialFileMap,
     linkedMaterialFiles,
     rootVolumeNode,
+    storyStructure,
+    projectDocPaths,
     selectedVolumeNode,
     currentAssistantScope,
     currentOutlineScope,

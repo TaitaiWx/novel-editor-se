@@ -17,7 +17,7 @@ export type UseProjectLoaderContext = Pick<
   | 'folderPathRef'
   | 'refreshCurrentFolderRef'
   | 'setDbReady'
-  | 'setFiles'
+  | 'applyFolderTree'
   | 'setFolderPath'
   | 'setIsLoading'
 > &
@@ -40,7 +40,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     setActiveTab,
     setAppSettings,
     setDbReady,
-    setFiles,
+    applyFolderTree,
     setFolderPath,
     setIsLoading,
     setOpenTabs,
@@ -85,7 +85,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
       }
       const result = await window.electron.ipcRenderer.invoke('refresh-folder', currentFolderPath);
       if (result) {
-        setFiles(result.files);
+        applyFolderTree(result);
       }
     } catch (error) {
       console.error('Error refreshing folder:', error);
@@ -93,7 +93,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     } finally {
       setIsLoading(false);
     }
-  }, [folderPathRef, setFiles, setIsLoading, toast]);
+  }, [applyFolderTree, folderPathRef, setIsLoading, toast]);
   // 同步最新引用，供声明顺序靠前的 effect 通过 ref 访问
   refreshCurrentFolderRef.current = refreshCurrentFolder;
 
@@ -139,7 +139,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
           void ipc.invoke('add-recent-folder', lastFolder);
           if (result) {
             setFolderPath(result.path);
-            setFiles(result.files);
+            applyFolderTree(result);
           }
         }
       } else {
@@ -152,10 +152,10 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
           setWorkspaceProjectName(null);
           if (result) {
             setFolderPath(result.path);
-            setFiles(result.files);
+            applyFolderTree(result);
           } else {
             setFolderPath(null);
-            setFiles([]);
+            applyFolderTree(null);
           }
         }
       }
@@ -186,7 +186,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     setRightPanelCollapsed,
     initializeProjectStore,
     setFolderPath,
-    setFiles,
+    applyFolderTree,
     setWorkspaceProjectName,
     openFileInTab,
   ]);
@@ -206,7 +206,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
         await window.electron.ipcRenderer.invoke('add-recent-folder', result.path);
         if (!isLatestLoad(gen)) return;
         setFolderPath(result.path);
-        setFiles(result.files);
+        applyFolderTree(result);
         setWorkspaceProjectName(null);
         setOpenTabs([]);
         setActiveTab(null);
@@ -224,7 +224,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     initializeProjectStore,
     isLatestLoad,
     setFolderPath,
-    setFiles,
+    applyFolderTree,
     setWorkspaceProjectName,
     setOpenTabs,
     setActiveTab,
@@ -242,7 +242,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
       if (!isLatestLoad(gen)) return;
       if (result) {
         setFolderPath(result.path);
-        setFiles(result.files);
+        applyFolderTree(result);
         setWorkspaceProjectName(null);
         setOpenTabs([]);
         setActiveTab(null);
@@ -258,7 +258,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     initializeProjectStore,
     isLatestLoad,
     setFolderPath,
-    setFiles,
+    applyFolderTree,
     setWorkspaceProjectName,
     setOpenTabs,
     setActiveTab,
@@ -287,7 +287,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
         if (!isLatestLoad(gen)) return;
         if (result) {
           setFolderPath(result.path);
-          setFiles(result.files);
+          applyFolderTree(result);
           setWorkspaceProjectName(null);
           setOpenTabs([]);
           setActiveTab(null);
@@ -308,7 +308,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     isLatestLoad,
     setIsLoading,
     setFolderPath,
-    setFiles,
+    applyFolderTree,
     setWorkspaceProjectName,
     setOpenTabs,
     setActiveTab,

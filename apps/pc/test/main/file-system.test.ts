@@ -163,6 +163,8 @@ describe('文件树：open-local-folder / refresh-folder', () => {
     const legacy = {
       path: dir,
       files: withoutHidden(legacyTree?.children ? legacyTree.children.map(convertLegacy) : []),
+      // 没有 .novel-editor/config.json：普通文件夹，不附带项目结构
+      project: null,
     };
     const result = await invoke<{ files: LegacyNode[] }>('refresh-folder', dir);
     expect(result).toEqual(legacy);
@@ -181,7 +183,34 @@ describe('文件树：open-local-folder / refresh-folder', () => {
 
   it('目录不存在时返回空列表', async () => {
     const missing = path.join(dir, 'missing');
-    expect(await invoke('refresh-folder', missing)).toEqual({ path: missing, files: [] });
+    expect(await invoke('refresh-folder', missing)).toEqual({
+      path: missing,
+      files: [],
+      project: null,
+    });
+  });
+
+  it('ne init 项目附带作品结构（与 ne novel list 同一口径），配置损坏时按普通文件夹处理', async () => {
+    await touch(
+      '.novel-editor/config.json',
+      JSON.stringify({ name: '作品集', novelsDir: 'novels' })
+    );
+    await touch('欢迎使用.md');
+    await touch('novels/乙/001-开端.md');
+    await touch('novels/甲/第一卷/001-a.md');
+    const result = await invoke<{ project: unknown }>('refresh-folder', dir);
+    expect(result.project).toEqual({
+      name: '作品集',
+      novelsDir: 'novels',
+      novelsPath: path.join(dir, 'novels'),
+      novels: ['乙', '甲'].sort(new Intl.Collator('zh-Hans-CN', { numeric: true }).compare),
+    });
+
+    await touch('.novel-editor/config.json', '{oops');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect((await invoke<{ project: unknown }>('refresh-folder', dir)).project).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('open-local-folder：选择后记录最近文件夹并返回树；取消返回 null', async () => {
@@ -190,6 +219,7 @@ describe('文件树：open-local-folder / refresh-folder', () => {
     expect(await invoke('open-local-folder')).toEqual({
       path: dir,
       files: [{ name: 'a.md', path: path.join(dir, 'a.md'), type: 'file' }],
+      project: null,
     });
     expect(mocks.addRecentFolder).toHaveBeenCalledWith(dir);
 

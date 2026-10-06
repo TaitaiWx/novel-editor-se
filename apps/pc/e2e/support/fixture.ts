@@ -22,9 +22,12 @@ export interface FixtureProject {
   dispose(): Promise<void>;
 }
 
-/** 文件树中「星河旅人」第一卷所在的路径（「未分卷」是文件面板对非卷目录的分组） */
+/**
+ * 「星河旅人」第一卷在磁盘与正文树中的路径。示例是 `ne init` 项目，正文树按「作品 / 卷 / 章」
+ * 展示：作品（novels/ 下的目录）是顶层节点，不显示 novels 容器本身
+ */
 export const FIXTURE_VOLUME_DIR = 'novels/星河旅人/第一卷-离乡';
-export const FIXTURE_CHAPTER_TREE = ['未分卷', 'novels', '星河旅人', '第一卷-离乡'] as const;
+export const FIXTURE_CHAPTER_TREE = ['星河旅人', '第一卷-离乡'] as const;
 
 export const FIXTURE_CHAPTERS = {
   first: { file: `${FIXTURE_VOLUME_DIR}/001-启程.md`, title: '001-启程.md' },

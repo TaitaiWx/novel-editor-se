@@ -58,7 +58,7 @@ const App: React.FC = () => {
   } = useAppController();
 
   // ─── 渲染所需字段 ──────────────────────────────────────────────
-  const { files, folderPath, isLoading, storyOrderMap, dbReady } = workspaceState;
+  const { files, folderPath, projectLayout, isLoading, storyOrderMap, dbReady } = workspaceState;
   const { openTabs, activeTab, setActiveTab } = tabsState;
   const {
     sidebarCollapsed,
@@ -241,6 +241,7 @@ const App: React.FC = () => {
                   selectedFile={activeDocumentTab}
                   activeWorkspaceTab={activeWorkspaceTab}
                   folderPath={folderPath}
+                  projectLayout={projectLayout}
                   showFileSizes={appSettings.general.showFileSizes}
                   quickOpenShortcut={appSettings.shortcuts.quickOpen}
                   revealFileRequest={filePanelRevealRequest}

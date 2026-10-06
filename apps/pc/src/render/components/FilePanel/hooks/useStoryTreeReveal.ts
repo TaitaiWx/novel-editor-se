@@ -33,6 +33,7 @@ export function useStoryTreeReveal({
 }: UseStoryTreeRevealOptions) {
   const [revealPath, setRevealPath] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSections>({
+    docs: false,
     story: false,
     characters: false,
     lore: false,

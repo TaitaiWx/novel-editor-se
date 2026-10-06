@@ -1,5 +1,5 @@
 import type { ContextMenuEvent } from '../FileTree';
-import type { FileNode } from '../../types';
+import type { FileNode, WorkspaceProjectLayout } from '../../types';
 import type { Character, LoreEntry } from '../RightPanel/types';
 import type { StoryOrderMap } from '../../utils/workspace';
 import type { AssistantArtifactGenerationStatus } from '../../utils/assistantGeneration';
@@ -8,7 +8,7 @@ import type { GrowthIndex } from '../../utils/growthIndex';
 export type ObjectContextMenuTarget =
   | { kind: 'project-root' }
   | { kind: 'story-root' }
-  | { kind: 'volume-item'; volumePath: string; isSynthetic: boolean }
+  | { kind: 'volume-item'; volumePath: string; isSynthetic: boolean; isWork?: boolean }
   | { kind: 'characters-root' }
   | { kind: 'lore-root' }
   | { kind: 'materials-root' }
@@ -37,7 +37,7 @@ export interface StoryDropTarget {
 }
 
 /** 可折叠的对象分区 */
-export type FilePanelSection = 'story' | 'characters' | 'lore' | 'growth' | 'materials';
+export type FilePanelSection = 'docs' | 'story' | 'characters' | 'lore' | 'growth' | 'materials';
 
 export type CollapsedSections = Record<FilePanelSection, boolean>;
 
@@ -51,6 +51,8 @@ export interface FilePanelProps {
   selectedFile: string | null;
   activeWorkspaceTab?: string | null;
   folderPath: string | null;
+  /** `ne init` 项目结构；普通文件夹为 null（正文按名称推断卷 / 章） */
+  projectLayout?: WorkspaceProjectLayout | null;
   storyOrderMap?: StoryOrderMap;
   showFileSizes?: boolean;
   quickOpenShortcut?: string;

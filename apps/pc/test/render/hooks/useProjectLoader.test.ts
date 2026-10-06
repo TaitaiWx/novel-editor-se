@@ -25,7 +25,7 @@ function setup(options: { handler?: InvokeHandler; noIpc?: boolean; folder?: str
     setActiveTab: vi.fn(),
     setAppSettings: vi.fn(),
     setDbReady: vi.fn(),
-    setFiles: vi.fn(),
+    applyFolderTree: vi.fn(),
     setFolderPath: vi.fn(),
     setIsLoading: vi.fn(),
     setOpenTabs: vi.fn(),
@@ -88,7 +88,7 @@ describe('useProjectLoader · 启动恢复', () => {
     expect(electron?.invoke).toHaveBeenCalledWith('db-novel-create', 'p', '/p', '');
     expect(electron?.invoke).toHaveBeenCalledWith('add-recent-folder', '/p');
     expect(ctx.setFolderPath).toHaveBeenCalledWith('/p');
-    expect(ctx.setFiles).toHaveBeenCalledWith(FILES);
+    expect(ctx.applyFolderTree).toHaveBeenCalledWith(expect.objectContaining({ files: FILES }));
     expect(ctx.setIsLoading).toHaveBeenLastCalledWith(false);
     // 默认设置 openChangelogAfterUpdate 决定是否打开更新日志
     if (DEFAULT_SETTINGS_DRAFT.general.openChangelogAfterUpdate) {
@@ -148,7 +148,7 @@ describe('useProjectLoader · 启动恢复', () => {
     });
     await flushStartup();
     expect(ctx.setFolderPath).toHaveBeenCalledWith(null);
-    expect(ctx.setFiles).toHaveBeenCalledWith([]);
+    expect(ctx.applyFolderTree).toHaveBeenCalledWith(null);
   });
 
   it('读取设置失败时回退默认设置', async () => {
@@ -228,7 +228,7 @@ describe('useProjectLoader · 刷新', () => {
     expect(ctx.refreshCurrentFolderRef.current).toBe(result.current.refreshCurrentFolder);
     await act(() => result.current.refreshCurrentFolder());
     expect(electron?.invoke).toHaveBeenCalledWith('refresh-folder', '/p');
-    expect(ctx.setFiles).toHaveBeenCalledWith(FILES);
+    expect(ctx.applyFolderTree).toHaveBeenCalledWith(expect.objectContaining({ files: FILES }));
   });
 
   it('没有工作区直接返回；IPC 不可用 / 失败时提示；空结果不覆盖', async () => {
@@ -256,7 +256,7 @@ describe('useProjectLoader · 刷新', () => {
 
     const d = setup({ folder: '/p', handler: () => null });
     await act(() => d.result.current.refreshCurrentFolder());
-    expect(d.ctx.setFiles).not.toHaveBeenCalled();
+    expect(d.ctx.applyFolderTree).not.toHaveBeenCalled();
   });
 });
 
@@ -317,7 +317,7 @@ describe('useProjectLoader · 打开文件夹', () => {
     await act(() => result.current.handleOpenSampleData());
     expect(electron?.invoke).toHaveBeenCalledWith('add-recent-folder', '/sample');
     expect(ctx.setFolderPath).toHaveBeenCalledWith('/sample');
-    expect(ctx.setFiles).toHaveBeenCalledWith(FILES);
+    expect(ctx.applyFolderTree).toHaveBeenCalledWith(expect.objectContaining({ files: FILES }));
   });
 
   it('示例数据失败时只记录日志；无 IPC 时直接返回', async () => {

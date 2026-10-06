@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import type { FileNode } from '@/render/types';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import type { FileNode, OpenLocalResult, WorkspaceProjectLayout } from '@/render/types';
 import { type StoryOrderMap, createStoryOrderStorageKey } from '@/render/utils/workspace';
 
 /**
@@ -9,6 +9,8 @@ import { type StoryOrderMap, createStoryOrderStorageKey } from '@/render/utils/w
 export function useWorkspaceState() {
   const [files, setFiles] = useState<FileNode[]>([]);
   const [folderPath, setFolderPath] = useState<string | null>(null);
+  // `ne init` 项目结构（作品根目录与作品列表）；普通文件夹为 null
+  const [projectLayout, setProjectLayout] = useState<WorkspaceProjectLayout | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [dbReady, setDbReady] = useState(false);
   const [storyOrderMap, setStoryOrderMap] = useState<StoryOrderMap>({});
@@ -25,9 +27,17 @@ export function useWorkspaceState() {
   // 通过 ref 间接引用 refreshCurrentFolder，避免跨声明顺序依赖（TDZ）
   const refreshCurrentFolderRef = useRef<(() => Promise<void>) | null>(null);
 
+  /** 写入 open-local-folder / refresh-folder 的结果：文件树与项目结构一起更新；null 表示清空 */
+  const applyFolderTree = useCallback((result: OpenLocalResult | null) => {
+    setFiles(result?.files ?? []);
+    setProjectLayout(result?.project ?? null);
+  }, []);
+
   return {
     files,
     setFiles,
+    projectLayout,
+    applyFolderTree,
     folderPath,
     setFolderPath,
     isLoading,

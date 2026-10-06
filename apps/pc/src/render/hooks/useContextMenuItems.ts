@@ -173,7 +173,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
             menuItem('AI 生成资料', () => void handleGenerateScopedMaterials(scope)),
             menuItem('', () => {}, { separator: true }),
             menuItem(
-              '删除卷',
+              target.isWork ? '删除作品' : '删除卷',
               () => void handleDeleteVolumeNode(target.volumePath, target.isSynthetic),
               {
                 danger: true,

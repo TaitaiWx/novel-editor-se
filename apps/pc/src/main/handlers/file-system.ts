@@ -26,6 +26,7 @@ import {
   pastePaths,
   readFileBinary,
   readFolderTree,
+  readProjectLayout,
   readTextFileWithEncoding,
   recordStoryFileSave,
   renamePath,
@@ -55,6 +56,19 @@ async function readPreviousContent(filePath: string): Promise<string | null> {
   }
 }
 
+/**
+ * 读取文件夹树，并附带 `ne init` 项目结构（作品根目录与作品列表，没有配置时为 null），
+ * 渲染进程据此按「作品 / 卷 / 章」展示正文，与 CLI 的 `ne novel list` / `ne chapter list` 同一口径
+ */
+async function readWorkspaceTree(folderPath: string) {
+  const tree = await readFolderTree(folderPath);
+  const project = await readProjectLayout(folderPath).catch((error: unknown) => {
+    console.warn('[project] 读取项目配置失败，按普通文件夹展示:', errorMessage(error));
+    return null;
+  });
+  return { ...tree, project };
+}
+
 // ─── File watchers ──────────────────────────────────────────────────────────
 
 const fileWatchers = new Map<string, FSWatcher>();
@@ -70,7 +84,7 @@ export function registerFileSystemHandlers(): void {
     if (!result.canceled && result.filePaths.length > 0) {
       const folderPath = result.filePaths[0];
       addRecentFolder(folderPath);
-      return readFolderTree(folderPath);
+      return readWorkspaceTree(folderPath);
     }
     return null;
   });
@@ -200,7 +214,7 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('refresh-folder', async (_event, folderPath: string) => {
     try {
-      return await readFolderTree(folderPath);
+      return await readWorkspaceTree(folderPath);
     } catch {
       throw new Error(`Failed to refresh folder: ${folderPath}`);
     }

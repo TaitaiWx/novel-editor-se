@@ -15,8 +15,9 @@
  *           ├── 002-第二章.md
  *           └── 第2卷/           可选子目录，视为「卷」，其中章节同样按序号排序
  *
- * GUI 打开的是任意文件夹，并把其中的 .md/.markdown/.txt 视为正文、子目录视为卷，
- * 因此直接用 GUI 打开 <project> 即可看到同样的结构；章节序号前缀与 GUI 的自然排序一致。
+ * GUI 打开 <project> 时通过 `readProjectLayout` 读取同一份配置：novelsDir 下每个目录是「作品」、
+ * 子目录是「卷」、正文文件是「章」，项目根目录下的文档（欢迎使用.md 等）是项目文档而不是章节；
+ * 命名与排序规则（序号前缀、中文数字卷名）在 story-layout.ts 中与 GUI 共用。
  */
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -34,6 +35,11 @@ import {
   writeTextFile,
   type WriteResult,
 } from './fs-ops';
+import {
+  compareChapterFileNames,
+  compareVolumeDirNames,
+  parseChapterFileName,
+} from './story-layout';
 import { computeTextStats, sumTextStats, type TextStats } from './text-stats';
 
 export const PROJECT_META_DIR = '.novel-editor';
@@ -244,6 +250,31 @@ export async function listNovelNames(project: Project): Promise<string[]> {
   );
 }
 
+/** GUI 打开文件夹时使用的项目结构：作品根目录与作品列表（与 `ne novel list` 同一口径） */
+export interface ProjectLayout {
+  name: string;
+  novelsDir: string;
+  novelsPath: string;
+  /** 作品名（novelsDir 下的作品目录，自然排序） */
+  novels: string[];
+}
+
+/**
+ * 读取文件夹自身的项目结构；文件夹没有 `.novel-editor/config.json` 时返回 null（普通文件夹）。
+ * 只看该文件夹本身，不向上查找：GUI 打开的是项目里的子目录时按普通文件夹展示。
+ */
+export async function readProjectLayout(folderPath: string): Promise<ProjectLayout | null> {
+  const configPath = getConfigPath(path.resolve(folderPath));
+  if (!(await pathExists(configPath))) return null;
+  const project = await loadProjectFromConfig(configPath);
+  return {
+    name: project.config.name,
+    novelsDir: project.config.novelsDir,
+    novelsPath: project.novelsPath,
+    novels: await listNovelNames(project),
+  };
+}
+
 export async function resolveNovelPath(project: Project, name: string): Promise<string> {
   const names = await listNovelNames(project);
   if (names.includes(name)) return path.join(project.novelsPath, name);
@@ -292,79 +323,9 @@ export async function getNovelInfo(project: Project, name: string): Promise<Nove
 
 // ─── 章节 ────────────────────────────────────────────────────────────────────
 
-const CHAPTER_PREFIX = /^(\d+)[-_.\s]\s*(.*)$/;
-
-export function parseChapterFileName(fileName: string): { order: number | null; title: string } {
-  const base = fileName.replace(/\.[^.]+$/, '');
-  const matched = CHAPTER_PREFIX.exec(base);
-  if (matched) return { order: Number(matched[1]), title: matched[2] || base };
-  return { order: null, title: base };
-}
-
 export function formatChapterFileName(order: number, title: string, ext: string): string {
   const width = Math.max(3, String(order).length);
   return `${String(order).padStart(width, '0')}-${sanitizeFileName(title)}${ext}`;
-}
-
-function compareChapterFiles(a: string, b: string): number {
-  const pa = parseChapterFileName(a);
-  const pb = parseChapterFileName(b);
-  if (pa.order !== null && pb.order !== null && pa.order !== pb.order) return pa.order - pb.order;
-  if (pa.order !== null && pb.order === null) return -1;
-  if (pa.order === null && pb.order !== null) return 1;
-  return naturalCollator.compare(a, b);
-}
-
-const CHINESE_DIGITS: Record<string, number> = {
-  零: 0,
-  〇: 0,
-  一: 1,
-  二: 2,
-  两: 2,
-  三: 3,
-  四: 4,
-  五: 5,
-  六: 6,
-  七: 7,
-  八: 8,
-  九: 9,
-};
-const CHINESE_UNITS: Record<string, number> = { 十: 10, 百: 100, 千: 1000 };
-
-/** 解析不超过万位的中文数字（一、十二、一百零三）；无法解析时返回 null */
-function parseSmallChineseNumber(raw: string): number | null {
-  let total = 0;
-  let digit: number | null = null;
-  for (const char of raw) {
-    if (char in CHINESE_DIGITS) {
-      digit = CHINESE_DIGITS[char];
-    } else if (char in CHINESE_UNITS) {
-      total += (digit ?? 1) * CHINESE_UNITS[char];
-      digit = null;
-    } else {
-      return null;
-    }
-  }
-  return total + (digit ?? 0);
-}
-
-/** 卷目录的序号：「第一卷」「第12卷」「卷3」「Volume 2」；无序号返回 null */
-export function parseVolumeOrder(dirName: string): number | null {
-  const matched =
-    /^第([\d零〇一二两三四五六七八九十百千]+)[卷部]/.exec(dirName) ??
-    /^(?:卷|volume|vol\.?|part)[\s_-]*(\d+)/i.exec(dirName);
-  if (!matched) return null;
-  return /^\d+$/.test(matched[1]) ? Number(matched[1]) : parseSmallChineseNumber(matched[1]);
-}
-
-/** 卷目录排序：有序号的按序号（支持中文数字），其余按自然顺序排在后面 */
-function compareVolumeDirs(a: string, b: string): number {
-  const oa = parseVolumeOrder(a);
-  const ob = parseVolumeOrder(b);
-  if (oa !== null && ob !== null && oa !== ob) return oa - ob;
-  if (oa !== null && ob === null) return -1;
-  if (oa === null && ob !== null) return 1;
-  return naturalCollator.compare(a, b);
 }
 
 /** 递归收集作品下的章节：根目录章节在前，然后按卷序号（第一卷、第二卷…）排序 */
@@ -375,12 +336,12 @@ async function collectChapterFiles(novelPath: string): Promise<string[]> {
     const files = entries
       .filter((entry) => entry.isFile() && isStoryFile(entry.name) && !entry.name.startsWith('.'))
       .map((entry) => entry.name)
-      .sort(compareChapterFiles);
+      .sort(compareChapterFileNames);
     result.push(...files.map((name) => path.join(dir, name)));
     const dirs = entries
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
       .map((entry) => entry.name)
-      .sort(compareVolumeDirs);
+      .sort(compareVolumeDirNames);
     for (const sub of dirs) await walk(path.join(dir, sub));
   };
   await walk(novelPath);

@@ -36,6 +36,24 @@ export function treeTitles(page: Page): Promise<string[]> {
   );
 }
 
+/** 正文树中某个节点整行的可见文本（含类型徽章与章数统计）与悬停提示 */
+export function storyRow(page: Page, title: string): Promise<{ text: string; tooltip: string }> {
+  return page.evaluate<{ text: string; tooltip: string }>(
+    (selector: string, wanted: string) => {
+      const titleNode = Array.from(document.querySelectorAll<HTMLElement>(selector)).find(
+        (node) => node.textContent === wanted
+      );
+      const row = titleNode?.closest<HTMLElement>('[role="button"]');
+      return {
+        text: (row?.innerText ?? '').replace(/\s+/g, ' ').trim(),
+        tooltip: titleNode?.getAttribute('title') ?? '',
+      };
+    },
+    SEL.storyNodeTitle,
+    title
+  );
+}
+
 /**
  * 按路径展开文件树，直到路径中最后一个节点可见。
  * 只点击「子节点尚不可见」的目录，已展开的目录不会被误折叠

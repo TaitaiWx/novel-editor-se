@@ -9,9 +9,19 @@ export interface FileNode {
   children?: FileNode[];
 }
 
+/** `ne init` 项目结构（core `readProjectLayout`），文件夹没有 .novel-editor/config.json 时为 null */
+export interface WorkspaceProjectLayout {
+  name: string;
+  novelsDir: string;
+  novelsPath: string;
+  /** 作品名（novelsDir 下的作品目录，与 `ne novel list` 一致） */
+  novels: string[];
+}
+
 export interface OpenLocalResult {
   path: string;
   files: FileNode[];
+  project?: WorkspaceProjectLayout | null;
 }
 
 export interface FileInfo {

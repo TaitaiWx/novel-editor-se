@@ -32,3 +32,16 @@ describe('storyMeta', () => {
     expect(getStoryFileMeta('第一章.md').icon).not.toBe(file.icon);
   });
 });
+
+describe('storyMeta · 项目结构给出的类型', () => {
+  it('作品 / 卷 / 章 / 文档优先于名称推断', () => {
+    expect(getStoryDirectoryMeta('星河旅人', 'work').label).toBe('作品');
+    expect(getStoryDirectoryMeta('番外', 'volume').label).toBe('卷');
+    expect(getStoryDirectoryMeta('番外').label).toBe('正文夹');
+    expect(getStoryFileMeta('草稿.md', 'chapter').label).toBe('章');
+    expect(getStoryFileMeta('欢迎使用.md', 'document').label).toBe('文档');
+    expect(getStoryFileMeta('欢迎使用.md', 'document').icon).not.toBe(
+      getStoryFileMeta('第一章.md').icon
+    );
+  });
+});

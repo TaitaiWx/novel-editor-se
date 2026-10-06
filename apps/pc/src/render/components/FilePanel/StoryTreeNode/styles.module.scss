@@ -62,16 +62,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  height: 18px;
-  padding: 0 6px;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 600;
+  line-height: 1;
   flex-shrink: 0;
   border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.04);
   color: #9ca3ad;
+}
+
+.storyNodeTypeWork {
+  background: rgba(150, 134, 196, 0.12);
+  border-color: rgba(150, 134, 196, 0.2);
+  color: #b9addf;
 }
 
 .storyNodeTypeVolume {
@@ -103,8 +110,19 @@
   @include row.row-icon;
 }
 
+.storyNodeIconDocument {
+  color: var(--ui-fg-muted);
+}
+
 .storyNodeTitle {
   @include row.row-title;
+}
+
+// 「001-」这类序号前缀弱化显示，视线落在章节标题上
+.storyNodeIndex {
+  color: var(--ui-fg-muted);
+  font-variant-numeric: tabular-nums;
+  margin-right: 1px;
 }
 
 .storyNodePrimary {
@@ -116,13 +134,14 @@
 }
 
 .storyNodeAction {
+  // 只在悬停 / 键盘聚焦 / 选中时出现，不占用标题宽度
+  display: none;
   width: 18px;
   height: 18px;
   border: none;
   border-radius: 4px;
   background: transparent;
   color: var(--ui-fg-disabled);
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -140,7 +159,7 @@
 .storyNodeStats {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -149,19 +168,33 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  height: 18px;
-  padding: 0 6px;
+  min-width: 26px;
+  height: 16px;
+  padding: 0 5px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
   color: #88bde8;
   background: rgba(0, 122, 204, 0.08);
   border: 1px solid rgba(0, 122, 204, 0.14);
+}
+
+.storyNodeStatBadgeQuiet {
+  color: #9ca3ad;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .storyNodeStatBadgeMuted {
   color: #d6b978;
   background: rgba(214, 168, 89, 0.08);
   border-color: rgba(214, 168, 89, 0.14);
+}
+
+.storyNodeButton:hover .storyNodeAction,
+.storyNodeButton:focus-within .storyNodeAction,
+.storyNodeButtonActive .storyNodeAction {
+  display: inline-flex;
 }
