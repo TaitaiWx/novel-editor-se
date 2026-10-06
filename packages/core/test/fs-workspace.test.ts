@@ -9,6 +9,8 @@ import {
   deleteDirectory,
   deleteFile,
   ensureSeededDirectory,
+  readSeedVersion,
+  syncSeededDirectory,
   getFileInfo,
   isSeedRuntimeArtifact,
   getFileInfoBatch,
@@ -342,6 +344,78 @@ describe('ensureSeededDirectory', () => {
     const target = path.join(dir, 'x', 'sample-data');
     await ensureSeededDirectory(target, path.join(dir, 'no-seed'));
     expect(await readdir(target)).toEqual([]);
+  });
+});
+
+describe('syncSeededDirectory（示例数据版本同步）', () => {
+  const seedVersion = (dir: string, version: number) =>
+    touch(`${dir}/.novel-editor/sample.json`, JSON.stringify({ sampleVersion: version }));
+
+  it('目标不存在时整体拷贝 → created，并跳过数据库等运行产物', async () => {
+    await touch('seed/欢迎使用.md', 'v2');
+    await seedVersion('seed', 2);
+    await touch('seed/.novel-editor/novel-editor.db', 'dev-db');
+    const target = path.join(dir, 'docs', 'sample-data');
+    const result = await syncSeededDirectory(target, path.join(dir, 'seed'));
+    expect(result).toMatchObject({ status: 'created', version: 2 });
+    expect(await readFile(path.join(target, '欢迎使用.md'), 'utf-8')).toBe('v2');
+    expect(await readSeedVersion(target)).toBe(2);
+    await expect(readFile(path.join(target, '.novel-editor', 'novel-editor.db'))).rejects.toThrow();
+  });
+
+  it('旧版副本（无版本文件）升级：整体备份后换成新版，备份保留用户改动与数据库', async () => {
+    await touch('seed/欢迎使用.md', 'v2');
+    await seedVersion('seed', 2);
+    await touch('target/第1卷/first-draft.md', '用户改过的旧稿');
+    await touch('target/.novel-editor/novel-editor.db', 'user-db');
+    const target = path.join(dir, 'target');
+    const now = new Date(2026, 9, 7, 9, 30, 5);
+
+    const result = await syncSeededDirectory(target, path.join(dir, 'seed'), now);
+
+    expect(result.status).toBe('upgraded');
+    expect(result.backupPath).toBe(`${target}-旧版-20261007-093005`);
+    expect(await readFile(path.join(target, '欢迎使用.md'), 'utf-8')).toBe('v2');
+    await expect(readFile(path.join(target, '第1卷', 'first-draft.md'))).rejects.toThrow();
+    const backup = result.backupPath as string;
+    expect(await readFile(path.join(backup, '第1卷', 'first-draft.md'), 'utf-8')).toBe(
+      '用户改过的旧稿'
+    );
+    expect(await readFile(path.join(backup, '.novel-editor', 'novel-editor.db'), 'utf-8')).toBe(
+      'user-db'
+    );
+  });
+
+  it('同名备份已存在时追加序号，不覆盖之前的备份', async () => {
+    await seedVersion('seed', 3);
+    await touch('seed/a.md', 'v3');
+    await touch('target/old.md', 'old');
+    const now = new Date(2026, 9, 7, 9, 30, 5);
+    await touch('target-旧版-20261007-093005/keep.md', 'earlier backup');
+    const result = await syncSeededDirectory(path.join(dir, 'target'), path.join(dir, 'seed'), now);
+    expect(result.backupPath).toBe(`${path.join(dir, 'target')}-旧版-20261007-093005-2`);
+    expect(await readFile(path.join(dir, 'target-旧版-20261007-093005', 'keep.md'), 'utf-8')).toBe(
+      'earlier backup'
+    );
+  });
+
+  it('版本相同或本机更新时保持不动 → unchanged', async () => {
+    await seedVersion('seed', 2);
+    await touch('seed/a.md', 'seed');
+    await seedVersion('target', 2);
+    const mine = await touch('target/a.md', 'mine');
+    const result = await syncSeededDirectory(path.join(dir, 'target'), path.join(dir, 'seed'));
+    expect(result.status).toBe('unchanged');
+    expect(await readFile(mine, 'utf-8')).toBe('mine');
+  });
+
+  it('只有隐藏项的空目录补齐 → filled', async () => {
+    await seedVersion('seed', 2);
+    await touch('seed/a.md', 'seed');
+    await touch('target/.novel-editor/novel-editor.db', 'db');
+    const result = await syncSeededDirectory(path.join(dir, 'target'), path.join(dir, 'seed'));
+    expect(result.status).toBe('filled');
+    expect(await readFile(path.join(dir, 'target', 'a.md'), 'utf-8')).toBe('seed');
   });
 });
 

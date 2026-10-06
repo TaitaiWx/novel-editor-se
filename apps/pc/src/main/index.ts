@@ -11,6 +11,7 @@ import { detectSystemProfile } from './system-profile';
 import { configureWebAuthn, registerWebAuthnSessionHandlers } from './webauthn';
 import { resolveLaunchFolder } from './launch-folder';
 import { addRecentFolder } from './recent-folders';
+import { syncSampleData } from './sample-data';
 import { setupCrashLogUpload } from './log-upload';
 
 applySmokeTestPaths();
@@ -48,6 +49,8 @@ app.whenReady().then(() => {
   if (launchFolder) {
     addRecentFolder(launchFolder);
   }
+  // 示例作品集版本同步：后台尽早开始，get-last-folder / open-sample-data 会等待它完成
+  void syncSampleData();
   // 2) WebAuthn / passkey：macOS Touch ID 需要在窗口创建前完成配置
   configureWebAuthn();
   registerWebAuthnSessionHandlers();

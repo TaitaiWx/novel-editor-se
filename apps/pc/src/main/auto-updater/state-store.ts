@@ -52,17 +52,29 @@ export async function loadUpdaterState() {
   return updaterState;
 }
 
-export async function persistUpdaterState() {
+/** 写入串行化：多个调用方（状态查询、通道切换、下载事件）并发持久化时依次执行 */
+let persistChain: Promise<void> = Promise.resolve();
+let persistSeq = 0;
+
+async function writeUpdaterStateFile(): Promise<void> {
   if (!updaterState) {
     return;
   }
 
   const statePath = getUpdaterStatePath();
-  const tmpPath = `${statePath}.tmp`;
+  // 每次写入使用唯一的临时文件，避免并发写入时互相 rename 掉对方的临时文件（ENOENT）
+  persistSeq += 1;
+  const tmpPath = `${statePath}.${process.pid}.${persistSeq}.tmp`;
   await mkdir(app.getPath('userData'), { recursive: true });
   // 原子写入：先写临时文件再 rename，防止崩溃导致 JSON 损坏
   await writeFile(tmpPath, JSON.stringify(updaterState, null, 2), 'utf8');
   await rename(tmpPath, statePath);
+}
+
+export function persistUpdaterState(): Promise<void> {
+  const run = persistChain.then(writeUpdaterStateFile, writeUpdaterStateFile);
+  persistChain = run.catch(() => undefined);
+  return run;
 }
 
 /** 用最新的通道元数据同步状态快照（灰度比例、资格、回滚信息） */

@@ -151,6 +151,7 @@ export interface ElectronAPI {
     invoke(channel: 'get-default-data-path'): Promise<string>;
     invoke(channel: 'get-recent-folders'): Promise<string[]>;
     invoke(channel: 'get-last-folder'): Promise<string | null>;
+    invoke(channel: 'sample-data-take-upgrade-notice'): Promise<{ backupPath: string } | null>;
     invoke(channel: 'add-recent-folder', folderPath: string): Promise<void>;
     invoke(channel: 'open-sample-data'): Promise<string>;
     invoke(channel: 'get-changelog'): Promise<string>;

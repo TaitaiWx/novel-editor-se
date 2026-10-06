@@ -264,6 +264,30 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     setActiveTab,
   ]);
 
+  // 示例作品集升级到新版时提示一次（旧副本已整体备份，保留用户改动）
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    let cancelled = false;
+    // 与启动加载同样延后，挂载后立即卸载（如 StrictMode 双挂载）时不发起请求
+    const timer = setTimeout(() => {
+      void ipc
+        .invoke('sample-data-take-upgrade-notice')
+        .then((notice) => {
+          if (!cancelled && notice) {
+            toast.info(`示例作品集已更新到新版，旧版已备份到：${notice.backupPath}`, 8000);
+          }
+        })
+        .catch(() => {
+          // 提示失败不影响启动
+        });
+    }, 100);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [toast]);
+
   React.useEffect(() => {
     const timer = setTimeout(() => {
       loadDefaultPath();

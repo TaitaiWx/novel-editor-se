@@ -7,7 +7,6 @@
  */
 import { existsSync } from 'node:fs';
 import {
-  access,
   copyFile,
   cp,
   lstat,
@@ -15,6 +14,7 @@ import {
   readFile,
   readdir,
   realpath,
+  rename,
   rm,
   rmdir,
   stat,
@@ -257,10 +257,6 @@ export async function copyProjectTo(folderPath: string, destParent: string): Pro
   return finalDest;
 }
 
-/**
- * 确保 targetDir 存在：首次调用时从 sourceDir 复制种子数据（例如示例项目），
- * 种子不存在或复制失败时创建空目录。已存在时不做任何改动。
- */
 /** 目录是否没有任何可见内容（忽略 .novel-editor 等隐藏项） */
 async function hasNoVisibleEntries(dirPath: string): Promise<boolean> {
   try {
@@ -288,28 +284,97 @@ export function isSeedRuntimeArtifact(relativePath: string): boolean {
   return false;
 }
 
-/**
- * 确保 targetDir 存在并带有 sourceDir 的示例内容：
- * - 不存在：整体拷贝（跳过 isSeedRuntimeArtifact 识别的本机运行产物）
- * - 已存在但没有可见内容（例如此前源路径错误只建了空目录）：补拷贝，不覆盖已有文件
- * - 已有用户内容：保持不动
- */
-export async function ensureSeededDirectory(targetDir: string, sourceDir: string): Promise<string> {
-  const exists = await pathExists(targetDir);
-  if (exists && !(await hasNoVisibleEntries(targetDir))) return targetDir;
+/** 种子目录（示例项目）的版本文件：`<项目>/.novel-editor/sample.json` → `{ "sampleVersion": N }` */
+export const SEED_VERSION_FILE = 'sample.json';
+
+/** 读取种子目录版本；没有版本文件（旧版示例）视为 0 */
+export async function readSeedVersion(dir: string): Promise<number> {
   try {
-    await access(sourceDir);
-    await mkdir(path.dirname(targetDir), { recursive: true });
-    await cp(sourceDir, targetDir, {
-      recursive: true,
-      force: false,
-      errorOnExist: false,
-      filter: (source) => !isSeedRuntimeArtifact(path.relative(sourceDir, source)),
-    });
+    const raw = await readFile(path.join(dir, PROJECT_META_DIR, SEED_VERSION_FILE), 'utf-8');
+    const version = (JSON.parse(raw) as { sampleVersion?: unknown }).sampleVersion;
+    return typeof version === 'number' && Number.isFinite(version) ? version : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export type SeedSyncStatus = 'created' | 'filled' | 'upgraded' | 'unchanged';
+
+export interface SeedSyncResult {
+  path: string;
+  status: SeedSyncStatus;
+  /** status 为 upgraded 时，旧副本被整体改名保存到的位置 */
+  backupPath?: string;
+  version: number;
+}
+
+function formatBackupStamp(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(
+    date.getHours()
+  )}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+async function copySeed(sourceDir: string, targetDir: string): Promise<void> {
+  await mkdir(path.dirname(targetDir), { recursive: true });
+  await cp(sourceDir, targetDir, {
+    recursive: true,
+    force: false,
+    errorOnExist: false,
+    filter: (source) => !isSeedRuntimeArtifact(path.relative(sourceDir, source)),
+  });
+}
+
+/**
+ * 让 targetDir 与 sourceDir 的示例内容保持同步：
+ * - 不存在：整体拷贝（跳过 isSeedRuntimeArtifact 识别的本机运行产物）→ created
+ * - 已存在但没有可见内容（例如此前源路径错误只建了空目录）：补拷贝，不覆盖已有文件 → filled
+ * - 种子版本高于本机副本（旧版示例没有版本文件视为 0）：旧副本整体改名备份为
+ *   `<目录>-旧版-<时间>`（保留用户在其中的改动与数据库），再拷贝新版 → upgraded
+ * - 其余情况保持不动 → unchanged
+ */
+export async function syncSeededDirectory(
+  targetDir: string,
+  sourceDir: string,
+  now: Date = new Date()
+): Promise<SeedSyncResult> {
+  if (!(await pathExists(sourceDir))) {
+    await mkdir(targetDir, { recursive: true });
+    return { path: targetDir, status: 'unchanged', version: 0 };
+  }
+  const sourceVersion = await readSeedVersion(sourceDir);
+
+  if (!(await pathExists(targetDir))) {
+    await copySeed(sourceDir, targetDir);
+    return { path: targetDir, status: 'created', version: sourceVersion };
+  }
+  if (await hasNoVisibleEntries(targetDir)) {
+    await copySeed(sourceDir, targetDir);
+    return { path: targetDir, status: 'filled', version: sourceVersion };
+  }
+
+  const targetVersion = await readSeedVersion(targetDir);
+  if (sourceVersion <= targetVersion) {
+    return { path: targetDir, status: 'unchanged', version: targetVersion };
+  }
+
+  let backupPath = `${targetDir}-旧版-${formatBackupStamp(now)}`;
+  for (let index = 2; await pathExists(backupPath); index += 1) {
+    backupPath = `${targetDir}-旧版-${formatBackupStamp(now)}-${index}`;
+  }
+  await rename(targetDir, backupPath);
+  await copySeed(sourceDir, targetDir);
+  return { path: targetDir, status: 'upgraded', backupPath, version: sourceVersion };
+}
+
+/** 兼容旧调用：同步示例目录并返回其路径 */
+export async function ensureSeededDirectory(targetDir: string, sourceDir: string): Promise<string> {
+  try {
+    return (await syncSeededDirectory(targetDir, sourceDir)).path;
   } catch {
     await mkdir(targetDir, { recursive: true });
+    return targetDir;
   }
-  return targetDir;
 }
 
 // ─── 生成资料空目录清理 ────────────────────────────────────────────────────

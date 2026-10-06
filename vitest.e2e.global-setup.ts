@@ -8,6 +8,7 @@
  */
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { createConnection } from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { E2E_ARTIFACT_DIRS, REPO_ROOT, cleanTestArtifacts } from './vitest.shared';
@@ -84,8 +85,35 @@ async function buildApp(): Promise<void> {
   }
 }
 
+/** `pnpm dev` 的 Vite 开发服务器端口；被占用说明开发模式正在运行 */
+const DEV_SERVER_PORT = 5173;
+
+function isPortInUse(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: '127.0.0.1', port });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', () => resolve(false));
+    socket.setTimeout(500, () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
+}
+
 export default async function setup(): Promise<void> {
   cleanTestArtifacts('e2e', E2E_ARTIFACT_DIRS);
+
+  if (await isPortInUse(DEV_SERVER_PORT)) {
+    // pnpm dev 的 nodemon 会在主进程源码变化时重建 apps/pc/dist 并重启 Electron，
+    // 与 E2E 争用同一份构建产物和 CPU，容易造成偶发超时
+    console.warn(
+      '[e2e] 检测到 pnpm dev 正在运行（127.0.0.1:5173）：它会与 E2E 争用 apps/pc/dist 和 CPU，' +
+        '可能导致偶发失败。建议先停止 pnpm dev 再运行 E2E。'
+    );
+  }
 
   if (process.env.NOVEL_EDITOR_E2E_SKIP_BUILD === '1') {
     console.info('[e2e] NOVEL_EDITOR_E2E_SKIP_BUILD=1，跳过构建');

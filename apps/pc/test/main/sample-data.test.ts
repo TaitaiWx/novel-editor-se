@@ -18,6 +18,7 @@ import {
   normalizePartyBook,
   normalizeRuleset,
   normalizeSheet,
+  readSeedVersion,
   type LoadedMemory,
   type Project,
 } from '@novel-editor/core';
@@ -78,6 +79,10 @@ describe('示例作品集 sample-data', () => {
       ['第二卷-星海', 5],
       ['第二卷-星海', 6],
     ]);
+  });
+
+  it('带版本文件，旧版本机副本会在启动时被升级（改动示例内容时请递增 sampleVersion）', async () => {
+    expect(await readSeedVersion(ROOT)).toBeGreaterThanOrEqual(2);
   });
 
   it('E2E 依赖的开篇文本保持不变', async () => {

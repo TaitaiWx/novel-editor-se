@@ -32,6 +32,7 @@ import { isE2ETestMode, isSmokeTestMode } from '../launch-mode';
 import { getReleaseNotesCandidates, isJustUpdated } from '../changelog';
 import { detectSystemProfile } from '../system-profile';
 import { getWebAuthnSupportInfo } from '../webauthn';
+import { syncSampleData } from '../sample-data';
 
 const DOCUMENT_CACHE_PREFIXES = [
   'novel-editor:lore:',
@@ -125,7 +126,11 @@ export function registerWindowAppHandlers(): void {
   // ─── Recent Folders ───────────────────────────────────────────────────────
 
   ipcMain.handle('get-recent-folders', () => getRecentFolders());
-  ipcMain.handle('get-last-folder', () => getLastFolder());
+  // 上次目录可能就是示例作品集：等启动时的示例版本同步完成，避免读到正在被替换的旧副本
+  ipcMain.handle('get-last-folder', async () => {
+    await syncSampleData();
+    return getLastFolder();
+  });
   ipcMain.handle('add-recent-folder', (_event, folderPath: string) => {
     addRecentFolder(folderPath);
   });

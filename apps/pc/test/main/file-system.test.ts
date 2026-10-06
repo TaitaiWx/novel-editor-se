@@ -114,6 +114,7 @@ describe('通道注册', () => {
         'read-clipboard-file-paths',
         'get-default-data-path',
         'open-sample-data',
+        'sample-data-take-upgrade-notice',
         'export-project',
       ].sort()
     );

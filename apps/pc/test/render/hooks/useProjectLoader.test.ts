@@ -138,6 +138,31 @@ describe('useProjectLoader · 启动恢复', () => {
     expect(ctx.setWorkspaceProjectName).toHaveBeenCalledWith(null);
   });
 
+  it('示例作品集刚升级到新版时提示一次旧版备份位置', async () => {
+    const { toast } = setup({
+      handler: (channel) => {
+        if (channel === 'check-just-updated') return { updated: false };
+        if (channel === 'sample-data-take-upgrade-notice') {
+          return { backupPath: '/docs/Novel Editor/sample-data-旧版-20261007-093005' };
+        }
+        return undefined;
+      },
+    });
+    await flushStartup();
+    expect(toast.info).toHaveBeenCalledWith(
+      '示例作品集已更新到新版，旧版已备份到：/docs/Novel Editor/sample-data-旧版-20261007-093005',
+      8000
+    );
+  });
+
+  it('没有升级时不提示', async () => {
+    const { toast } = setup({
+      handler: (channel) => (channel === 'check-just-updated' ? { updated: false } : undefined),
+    });
+    await flushStartup();
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
   it('示例数据刷新失败时清空工作区状态', async () => {
     const { ctx } = setup({
       handler: (channel) => {

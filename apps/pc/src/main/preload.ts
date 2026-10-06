@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('electron', {
         'get-default-data-path',
         'get-recent-folders',
         'get-last-folder',
+        'sample-data-take-upgrade-notice',
         'add-recent-folder',
         'app-cache-clear',
         'open-sample-data',

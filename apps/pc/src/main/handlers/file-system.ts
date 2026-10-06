@@ -33,7 +33,7 @@ import {
   saveTextFile,
 } from '@novel-editor/core';
 import { addRecentFolder } from '../recent-folders';
-import { getSampleDataPaths } from '../sample-data';
+import { getSampleDataPaths, syncSampleData, takeSampleUpgradeNotice } from '../sample-data';
 import { getWorkspaceRootForSender } from './session';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -308,6 +308,7 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('get-default-data-path', async () => {
     try {
+      await syncSampleData();
       const { userSamplePath, sourcePath } = getSampleDataPaths();
       return await ensureSeededDirectory(userSamplePath, sourcePath);
     } catch {
@@ -316,8 +317,15 @@ export function registerFileSystemHandlers(): void {
   });
 
   ipcMain.handle('open-sample-data', async () => {
+    // 先完成版本同步（旧版副本会被备份并替换为新版），再确保目录存在
+    await syncSampleData();
     const { userSamplePath, sourcePath } = getSampleDataPaths();
     return ensureSeededDirectory(userSamplePath, sourcePath);
+  });
+
+  ipcMain.handle('sample-data-take-upgrade-notice', async () => {
+    await syncSampleData();
+    return takeSampleUpgradeNotice();
   });
 
   ipcMain.handle('export-project', async (_event, folderPath: string) => {
