@@ -61,8 +61,10 @@ export type UseWorkspaceTabContentContext = Pick<
   Pick<WorkspaceCreationApi, 'handleCreateStoryItem'> &
   Pick<EditorInteractions, 'handleOpenSourceLocation'> &
   Pick<TabActions, 'openFileInTab'> &
+  Partial<Pick<TabActions, 'closeTab'>> &
   Pick<WorkspaceEntityActions, 'syncWorkspaceCharacters' | 'syncWorkspaceLoreEntries'> &
-  Pick<GrowthEntryApi, 'growthIndex' | 'handleOpenGrowth'>;
+  Pick<GrowthEntryApi, 'growthIndex' | 'handleOpenGrowth'> &
+  Partial<Pick<GrowthEntryApi, 'growthChapter' | 'handleCreateGrowthSheet'>>;
 
 /**
  * 工作区虚拟标签页（人物 / 设定 / 卷 / 成长档案）的标题与内容
@@ -70,11 +72,14 @@ export type UseWorkspaceTabContentContext = Pick<
 export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
   const {
     activeWorkspaceTab,
+    closeTab,
     dbReady,
     editorContent,
     files,
     folderPath,
+    growthChapter = null,
     growthIndex,
+    handleCreateGrowthSheet,
     handleCreateStoryItem,
     handleOpenGrowth,
     handleOpenSourceLocation,
@@ -205,7 +210,18 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
                 dbReady={dbReady}
                 layout="workspace"
                 initialCharacter={parseGrowthWorkspaceTab(activeGrowthTab)}
+                currentChapter={growthChapter}
                 onNavigateCharacter={handleOpenGrowth}
+                onCreateSheet={
+                  handleCreateGrowthSheet
+                    ? (options) => void handleCreateGrowthSheet(options)
+                    : undefined
+                }
+                onSheetDeleted={(name) => {
+                  // 先关闭该角色的标签，再打开总览（后设置的活动标签生效）
+                  closeTab?.(createGrowthWorkspaceTab(name));
+                  handleOpenGrowth(null);
+                }}
               />
             ),
           }
@@ -230,10 +246,13 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
     [
       activeGrowthTab,
       activeWorkspaceTab,
+      closeTab,
       dbReady,
       editorContent,
       folderPath,
+      growthChapter,
       growthLevels,
+      handleCreateGrowthSheet,
       openFileInTab,
       handleCreateStoryItem,
       handleOpenGrowth,

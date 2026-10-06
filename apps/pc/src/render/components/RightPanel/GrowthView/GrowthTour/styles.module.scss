@@ -1,0 +1,90 @@
+@use '../growth-ui' as ui;
+
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 9100;
+}
+
+.dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.spot {
+  position: absolute;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(ui.$info-rgb, 0.7),
+    0 0 0 9999px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+}
+
+.card {
+  @include ui.floating-surface;
+  position: absolute;
+  width: 300px;
+  padding: 14px 16px 12px;
+  box-sizing: border-box;
+  animation: rise 0.18s ease-out;
+}
+
+.progress {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  color: ui.$info-fg;
+}
+
+.text {
+  margin: 6px 0 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.skip {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ui.$muted;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: ui.$fg;
+  }
+}
+
+.secondary {
+  @include ui.ghost-button;
+  height: 26px;
+}
+
+.primary {
+  @include ui.primary-solid;
+  height: 26px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}

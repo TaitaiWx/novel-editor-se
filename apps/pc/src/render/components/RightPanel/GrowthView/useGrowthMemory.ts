@@ -16,6 +16,7 @@ import {
   emitGrowthMemoryChanged,
   type GrowthMemoryChangedDetail,
 } from '../../../utils/growthIndex';
+import { describeRecordResult, sheetFilePaths } from './growthText';
 
 export interface GrowthCharacterOption {
   name: string;
@@ -195,11 +196,8 @@ export function useGrowthMemory({
         () => ipc()?.invoke('growth-ensure-sheet', folderPath, name, aliases),
         (data) => data
       );
-      // 建卡成功后再切换，避免「默认选中」逻辑把尚不存在的角色重置掉
-      if (!err) {
-        setSelectedName(name);
-        setNotice(`已为「${name}」创建成长卡`);
-      }
+      // 建卡成功后再切换，避免「默认选中」逻辑把尚不存在的角色重置掉；新卡片本身就是反馈，不再弹提示
+      if (!err) setSelectedName(name);
       return err;
     },
     [characters, folderPath, run, snapshot?.sheets]
@@ -212,26 +210,39 @@ export function useGrowthMemory({
         () => ipc()?.invoke('growth-init', folderPath, template),
         (data) => data
       );
-      if (!err) setNotice('记忆库已创建：资料/记忆/');
       return err;
     },
     [folderPath, run]
   );
 
+  /** 记一笔：默认写入当前选中的角色，也可指定角色（右侧面板摘要中直接记录） */
   const applyEvent = useCallback(
-    async (event: GrowthEventInput, force = false): Promise<GrowthActionError> => {
-      if (!folderPath || !selectedName) return '请先选择角色';
+    async (
+      event: GrowthEventInput,
+      force = false,
+      name: string | null = selectedName
+    ): Promise<GrowthActionError> => {
+      if (!folderPath || !name) return '请先选择角色';
+      const before = snapshot?.sheets.find((item) => item.name === name) ?? null;
       const { data, error: err } = await run(
-        () => ipc()?.invoke('growth-apply-event', folderPath, selectedName, event, { force }),
+        () => ipc()?.invoke('growth-apply-event', folderPath, name, event, { force }),
         (outcome) => outcome.snapshot
       );
-      if (data && data.levelUps > 0) {
-        const sheet = data.snapshot.sheets.find((item) => item.name === selectedName);
-        setNotice(`升级！${selectedName} 升到 ${sheet?.level ?? ''} 级`);
+      if (data) {
+        setNotice(
+          describeRecordResult({
+            name,
+            ruleset: data.snapshot.ruleset,
+            event,
+            before,
+            after: data.snapshot.sheets.find((item) => item.name === name) ?? null,
+            levelUps: data.levelUps,
+          })
+        );
       }
       return err;
     },
-    [folderPath, run, selectedName]
+    [folderPath, run, selectedName, snapshot?.sheets]
   );
 
   const updateNotes = useCallback(
@@ -327,6 +338,41 @@ export function useGrowthMemory({
     return err;
   }, [folderPath, run]);
 
+  /** 删除成长卡：移除 角色/<名>.json 与派生的 .md，然后重新读取并广播 */
+  const deleteSheet = useCallback(
+    async (name: string): Promise<GrowthActionError> => {
+      const api = ipc();
+      if (!folderPath || !snapshot || !api) return '未打开项目';
+      const [jsonFile, mdFile] = sheetFilePaths(snapshot.dir, name);
+      try {
+        await api.invoke('delete-file', jsonFile);
+      } catch (err) {
+        return err instanceof Error ? err.message : String(err);
+      }
+      // 派生的 Markdown 可能不存在，忽略失败
+      await api.invoke('delete-file', mdFile).catch(() => undefined);
+      const { error: err } = await run(
+        () => api.invoke('growth-load', folderPath),
+        (data) => data
+      );
+      if (!err) setNotice(`已删除「${name}」的成长卡`);
+      return err;
+    },
+    [folderPath, run, snapshot]
+  );
+
+  /** 在系统文件管理器中打开 资料/记忆/ */
+  const openDataFolder = useCallback(async (): Promise<GrowthActionError> => {
+    const api = ipc();
+    if (!snapshot?.dir || !api) return '未打开项目';
+    try {
+      await api.invoke('open-in-system-app', snapshot.dir);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  }, [snapshot?.dir]);
+
   return {
     snapshot,
     characters,
@@ -348,6 +394,8 @@ export function useGrowthMemory({
     simulate,
     applyBranch,
     syncSnapshots,
+    deleteSheet,
+    openDataFolder,
   };
 }
 

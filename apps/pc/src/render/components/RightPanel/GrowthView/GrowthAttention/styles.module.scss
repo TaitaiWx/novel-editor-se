@@ -1,0 +1,114 @@
+@use '../growth-ui' as ui;
+
+.banner {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(ui.$warn-rgb, 0.06);
+  border: 1px solid rgba(ui.$warn-rgb, 0.16);
+}
+
+.bannerError {
+  background: rgba(ui.$danger, 0.06);
+  border-color: rgba(ui.$danger, 0.18);
+
+  .dot {
+    background: ui.$danger;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ui.$warn;
+}
+
+.toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more {
+  flex: none;
+  color: ui.$muted;
+  font-size: 11px;
+
+  .toggle:hover & {
+    color: ui.$fg;
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 2px;
+  padding: 10px 0 0 14px;
+  list-style: none;
+  border-top: 1px solid ui.$line;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.tag {
+  flex: none;
+  margin-top: 1px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 17px;
+  color: ui.$warn;
+  background: rgba(ui.$warn-rgb, 0.12);
+}
+
+.tagError {
+  color: ui.$danger-fg;
+  background: rgba(ui.$danger, 0.12);
+}
+
+.tagCompanion {
+  color: ui.$info-fg;
+  background: rgba(ui.$info-rgb, 0.12);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hint {
+  font-size: 11px;
+  color: ui.$muted;
+}

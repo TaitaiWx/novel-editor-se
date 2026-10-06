@@ -1,0 +1,138 @@
+@use '../growth-ui' as ui;
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 520px;
+  margin: 48px auto;
+  padding: 24px 28px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: ui.$surface;
+  border: 1px solid ui.$line;
+}
+
+.compact {
+  margin: 0;
+  padding: 14px;
+  gap: 10px;
+
+  .title {
+    font-size: 14px;
+  }
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: ui.$fg;
+}
+
+.summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.82);
+  }
+}
+
+.stepIndex {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  color: ui.$info-fg;
+  background: rgba(ui.$info-rgb, 0.14);
+}
+
+.templates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid ui.$line;
+  cursor: pointer;
+
+  input {
+    margin: 0;
+    accent-color: #d7ba7d;
+  }
+}
+
+.templateActive {
+  border-color: rgba(ui.$info-rgb, 0.35);
+  background: rgba(ui.$info-rgb, 0.05);
+}
+
+.templateName {
+  font-size: 13px;
+  color: ui.$fg;
+  white-space: nowrap;
+}
+
+.templateDesc {
+  font-size: 12px;
+  color: ui.$muted;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: ui.$info-fg;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.primary {
+  @include ui.primary-solid;
+}
+
+.secondary {
+  @include ui.ghost-button;
+}
+
+.footnote {
+  margin: 0;
+  font-size: 11px;
+  color: ui.$disabled;
+}
+
+.error {
+  font-size: 12px;
+  color: ui.$danger-fg;
+}

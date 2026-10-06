@@ -1,116 +1,23 @@
 @use './growth-ui' as ui;
 
-.view {
+// 工作区标签：内容限宽居中，留出舒适的边距
+.growthWorkspace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 1080px;
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 24px 28px 32px;
+  box-sizing: border-box;
+}
+
+// 右侧面板：紧凑摘要
+.growthPanel {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
-
-.toolbar,
-.newCharacter {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.select,
-.input {
-  @include ui.input;
-  flex: 1;
-}
-
-.button {
-  @include ui.button;
-}
-
-.primary {
-  @include ui.button-primary;
-  align-self: flex-start;
-  padding: 5px 14px;
-}
-
-.summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  color: ui.$muted;
-  background: rgba(ui.$info-rgb, 0.05);
-  border: 1px solid rgba(ui.$info-rgb, 0.1);
-  cursor: help;
-}
-
-.summaryError {
-  background: rgba(ui.$danger, 0.06);
-  border-color: rgba(ui.$danger, 0.18);
-}
-
-.messages {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.notice {
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  color: rgba(ui.$success, 0.95);
-  background: rgba(ui.$success, 0.08);
-  border: 1px solid rgba(ui.$success, 0.2);
-}
-
-.errorText {
-  font-size: 11px;
-  line-height: 16px;
-  color: ui.$danger-fg;
-}
-
-.tabs {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.tab {
-  position: relative;
-  padding: 6px 10px;
-  font-size: 12px;
-  border: none;
-  background: transparent;
-  color: ui.$muted;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-
-  &:hover {
-    color: ui.$fg;
-  }
-}
-
-.tabActive {
-  color: ui.$info-fg;
-  border-bottom-color: rgba(ui.$info-rgb, 0.7);
-}
-
-.badge {
-  margin-left: 4px;
-  padding: 0 5px;
-  border-radius: 999px;
-  font-size: 10px;
-  line-height: 14px;
-  color: var(--rp-accent-text, #d8b08e);
-  background: rgba(ui.$accent-rgb, 0.18);
-}
-
-.body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -122,96 +29,33 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 24px 12px;
+  padding: 32px 12px;
   font-size: 12px;
   color: ui.$muted;
   text-align: center;
 }
 
-.intro {
-  @include ui.card;
+.messages {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
+  gap: 4px;
 }
 
-.introTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: ui.$info-fg;
-}
-
-.introText {
-  margin: 0;
+.notice {
+  padding: 6px 10px;
+  border-radius: 6px;
   font-size: 12px;
-  line-height: 20px;
-  color: rgba(255, 255, 255, 0.7);
-
-  code {
-    margin: 0 2px;
-    padding: 0 4px;
-    border-radius: 3px;
-    background: rgba(255, 255, 255, 0.06);
-    font-size: 11px;
-  }
+  color: rgba(ui.$success, 0.95);
+  background: rgba(ui.$success, 0.08);
+  border: 1px solid rgba(ui.$success, 0.2);
 }
 
-.templates {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.template {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.errorText {
   font-size: 12px;
-  color: ui.$fg;
-  cursor: pointer;
+  line-height: 1.6;
+  color: ui.$danger-fg;
 }
 
-// ─── 工作区标签宽布局 ─────────────────────────────────────────
-// 与人物 / 设定工作区一致的内边距；内容限宽居中，避免超宽屏下行过长
-
-.viewWorkspace {
-  gap: 12px;
-  width: 100%;
-  max-width: 1180px;
-  min-height: 100%;
-  margin: 0 auto;
-  padding: 16px 18px 20px;
-  box-sizing: border-box;
-  container-type: inline-size;
-
-  .body {
-    overflow: visible;
-  }
-}
-
-.introWorkspace {
-  max-width: 640px;
-  margin: 40px auto;
-  padding: 20px 22px;
-}
-
-.sheetGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-
-.sheetColumn {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-
-@container (min-width: 760px) {
-  .sheetGrid {
-    grid-template-columns: minmax(0, 1.15fr) minmax(300px, 1fr);
-  }
+.button {
+  @include ui.ghost-button;
 }

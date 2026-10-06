@@ -110,6 +110,19 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - 日志上传在主进程 `src/main/log-upload/`：白名单打包（diagnostics.json + electron-log 日志 + 小状态文件，主目录脱敏为 `~`，绝不包含作品正文与 SQLite 数据库）→ 已配置地址时上传（`NOVEL_EDITOR_LOG_UPLOAD_URL` 或 `config.ts` 常量，默认为空）→ 未配置或失败时保存到「下载」目录并定位。崩溃钩子只在配置了地址且开关开启时上传，否则只保存到 `userData/crash-reports/`（最多 5 个），10 分钟最多一次，E2E / 烟雾测试下不安装
 - 服务端接口约定（请求头、请求体、响应、大小限制、隐私）见 `docs/log-upload.md`；IPC 通道 `log-upload-run` / `log-upload-get-settings` / `log-upload-set-settings`（`main/handlers/log-upload.ts`）
 
+### 应用菜单 / 快捷键
+
+- 菜单模板在 `src/main/shortcuts/menuTemplate.ts`（纯函数，`registerAllShortcuts.ts` 负责 `Menu.setApplicationMenu` 与重建），参照 VS Code / Typora：
+  - macOS：「小说编辑器」（关于、检查更新…、设置… ⌘,、服务、隐藏 / 隐藏其他 / 全部显示、退出）/ 文件 / 编辑 / 视图 / 窗口 / 帮助
+  - Windows / Linux：没有应用菜单，设置… 与 退出 在「文件」末尾，检查更新… 与 关于 在「帮助」末尾
+  - 文件：新建文件 ⌘N（与按键一致：新建未命名标签）、打开文件夹… ⌘O、打开最近使用 ▸（`recent-folders` 变化时自动重建，点击走 `open-folder-request`）、保存 ⌘S、另存为… ⇧⌘S、导出项目… ⇧⌘E
+  - 编辑：撤销 / 重做 / 剪切 / 复制 / 粘贴 / 全选（原生 role）、查找 ⌘F；视图：切换侧边栏、切换右侧面板、专注写作、放大 / 缩小 / 实际大小、切换全屏（macOS ⌃⌘F；Win/Linux 不设加速键，F11 留给专注模式），开发模式另有 重新加载 / 开发者工具；窗口：最小化 ⌘M、缩放、前置全部窗口；帮助：快捷键说明、更新日志、上传日志…、问题反馈（GitHub issues），打包版本另有 切换开发者工具
+- 所有名称用 `APP_DISPLAY_NAME`，菜单里不得出现 `app.name`（dev 下是 `@novel-editor/pc`）；不使用英文 role 菜单（`editMenu` / `fileMenu` 等），也不再有隐藏的「快捷键」菜单——每个快捷键都对应一个可见菜单项或渲染进程 keydown
+- 一致性：菜单加速键与快捷键总览共用 `shortcuts/config.ts`（`getShortcutConfigs()`），`getAllShortcuts.ts` 只额外列出纯渲染进程按键；设置中心可自定义的「切换侧边栏 / 专注写作」由渲染进程经 `menu-sync-shortcuts` 同步到菜单（`useAppMenu`，主进程按白名单校验）。新增快捷键时同时改 config / 渲染进程 keydown / 总览，`test/main/app-menu.test.ts` 会校验菜单每个加速键都在总览中
+- 渲染进程也处理的按键（⌘N / ⌘S / ⌘F / ⌘Z / ⌘Q 等）必须 `preventDefault`：Electron 只把渲染进程未处理的按键交给菜单，因此不会重复执行，焦点不在编辑器时由菜单兜底
+- 菜单 → 渲染进程事件：`shortcut-*`、`menu-export-project`、`menu-open-about`，以及 `src/shared/app-menu.ts` 的 `APP_MENU_EVENTS`（设置、检查更新、视图切换、查找、快捷键说明、更新日志、上传日志），渲染进程统一在 `hooks/useAppMenu.ts` 处理；保存 / 另存为 / 查找作用于最近聚焦的编辑器（`TextEditor/active-editor.ts`）
+- macOS 菜单栏标题来自 bundle 的 CFBundleName：打包时 `scripts/mac-localized-app-name.mjs`（electron-builder `afterPack`）在每个 `*.lproj` 写入 `InfoPlist.strings`，显示「小说编辑器」。不要改 `productName` 或用 `mac.extendInfo` 覆盖 CFBundleName——前者改变安装路径 / 更新产物，后者会让 Electron 找不到 `<名称> Helper.app` 而启动崩溃；`app.getName()` 与 userData 由 package.json 决定，不受影响。开发模式（`pnpm dev`）菜单栏标题固定为「Electron」（来自 node_modules 中 Electron.app 的 Info.plist），属预期，不要修改 node_modules
+
 ## 代码规范
 
 ### 路径别名

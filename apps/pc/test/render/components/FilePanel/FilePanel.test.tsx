@@ -145,7 +145,7 @@ describe('FilePanel', () => {
     expect(screen.getByText('Lv.3')).toBeTruthy();
     fireEvent.click(screen.getByText('Lv.3'));
     expect(onOpenGrowth).toHaveBeenCalledWith('白芷');
-    fireEvent.click(screen.getByLabelText('新建成长档案'));
+    fireEvent.click(screen.getByLabelText('新建成长卡'));
     expect(onCreateGrowthSheet).toHaveBeenCalledTimes(1);
     unmount();
 

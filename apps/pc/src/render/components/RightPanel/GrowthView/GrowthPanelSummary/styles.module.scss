@@ -1,0 +1,123 @@
+@use '../growth-ui' as ui;
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.caption {
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.iconButton {
+  @include ui.icon-button;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 8px;
+  background: ui.$surface;
+  border: 1px solid ui.$line;
+}
+
+.rowMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover .name {
+    color: ui.$info-fg;
+  }
+}
+
+.rowTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: ui.$fg;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.level {
+  @include ui.level-badge;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ui.$warn;
+}
+
+.track {
+  @include ui.exp-track;
+  height: 3px;
+}
+
+.meta {
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.others {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.othersLabel {
+  font-size: 11px;
+  color: ui.$disabled;
+}
+
+.chip {
+  @include ui.chip;
+  cursor: pointer;
+
+  &:hover {
+    color: ui.$fg;
+    background: ui.$surface-hover;
+  }
+}
+
+.open {
+  @include ui.ghost-button;
+  justify-content: center;
+  margin-top: 4px;
+}

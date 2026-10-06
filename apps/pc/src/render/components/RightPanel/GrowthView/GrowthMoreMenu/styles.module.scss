@@ -1,0 +1,59 @@
+@use '../growth-ui' as ui;
+
+.trigger {
+  @include ui.icon-button;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.menu {
+  @include ui.floating-surface;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 5px;
+  box-sizing: border-box;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: ui.$surface-hover;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.danger {
+  color: ui.$danger-fg;
+}
+
+.confirm {
+  background: rgba(ui.$danger, 0.08);
+}
+
+.sub {
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: ui.$line;
+}

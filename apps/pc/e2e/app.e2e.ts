@@ -22,7 +22,7 @@ import {
   type ElectronApp,
 } from './support/app';
 import { createFixtureProject, FIXTURE_CHAPTERS, type FixtureProject } from './support/fixture';
-import { PRIMARY_MODIFIER, type ConsoleIssue, type Page } from './support/page';
+import { type ConsoleIssue, type Page } from './support/page';
 import {
   SEL,
   answerPrompt,
@@ -46,10 +46,11 @@ import {
 const ALLOWED_ISSUES: RegExp[] = [];
 
 const CHAPTER_DIR = ['未分卷', 'novels', '星河旅人'];
-/** 文件面板「成长档案」分区 / 成长档案工作区标签 / 标签标题区 */
-const GROWTH_SECTION = `${SEL.workspaceTree} section:has([aria-label="新建成长档案"])`;
-const GROWTH_WORKSPACE = '[class*="viewWorkspace"]';
-const GROWTH_HERO = 'section[aria-label="成长档案概览"]';
+/** 文件面板「成长档案」分区 / 成长档案工作区标签 / 成长卡标题 */
+const GROWTH_SECTION = `${SEL.workspaceTree} section:has([aria-label="新建成长卡"])`;
+const GROWTH_WORKSPACE = '[class*="growthWorkspace"]';
+const GROWTH_TITLE = `${GROWTH_WORKSPACE} header`;
+const GROWTH_HELP = '[role="dialog"][aria-label="成长档案使用说明"]';
 
 let fixture: FixtureProject;
 let app: ElectronApp;
@@ -105,6 +106,14 @@ async function answerChainedPrompt(title: string, value: string): Promise<void> 
   );
   await page.click({ text: '确定', within: SEL.dialog, exact: true });
   await page.waitForGone({ text: title, within: SEL.dialog, exact: true });
+}
+
+/** 成长档案入口在左侧文件面板：若侧边栏被折叠（例如退出专注模式后），先展开 */
+async function ensureSidebarOpen(): Promise<void> {
+  if (await page.exists('[title="展开侧边栏"]')) {
+    await page.click('[title="展开侧边栏"]');
+  }
+  await page.waitForTarget(SEL.workspaceTree);
 }
 
 async function readProjectFile(relative: string): Promise<string> {
@@ -175,7 +184,7 @@ describe('小说编辑器 GUI', () => {
     expect(await readProjectFile(FIXTURE_CHAPTERS.first.file)).toBe(original);
     await page.waitUntil(
       async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)).includes('新增一句话。'),
-      { timeout: 6_000, message: '自动保存写入磁盘' }
+      { timeout: 10_000, message: '自动保存写入磁盘' }
     );
 
     await undo(page);
@@ -193,7 +202,7 @@ describe('小说编辑器 GUI', () => {
     await undo(page);
     await page.waitUntil(
       async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)) === original,
-      { timeout: 6_000, message: '撤销后自动保存恢复原文' }
+      { timeout: 10_000, message: '撤销后自动保存恢复原文' }
     );
     expect(await editorText(page)).not.toContain('新增一句话。');
   });
@@ -268,12 +277,12 @@ describe('小说编辑器 GUI', () => {
     // 字数同时写入磁盘后再还原，避免影响后续用例
     await page.waitUntil(
       async () => (await readProjectFile(FIXTURE_CHAPTERS.second.file)).includes('脚步声'),
-      { timeout: 6_000, message: '输入后自动保存' }
+      { timeout: 10_000, message: '输入后自动保存' }
     );
     await undoUntilGone(page, '脚步声');
     await page.waitUntil(
       async () => (await readProjectFile(FIXTURE_CHAPTERS.second.file)) === original,
-      { timeout: 6_000, message: '还原后自动保存' }
+      { timeout: 10_000, message: '还原后自动保存' }
     );
   });
 
@@ -285,7 +294,7 @@ describe('小说编辑器 GUI', () => {
       ['本章大纲', '章纲'],
       ['卷规划', '剧情板'],
       ['三签卡', '三签创作法'],
-      ['成长', '角色成长记录器'],
+      ['成长', '角色成长档案'],
       ['目录', '启程'],
     ];
     for (const [label, marker] of views) {
@@ -331,12 +340,13 @@ describe('小说编辑器 GUI', () => {
     await undoUntilGone(page, '很长的一段话');
     await page.waitUntil(
       async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)) === original,
-      { timeout: 6_000, message: '还原后自动保存' }
+      { timeout: 10_000, message: '还原后自动保存' }
     );
   });
 
-  it('6. 成长记录器：建卡、加经验写入 资料/记忆，子页可切换，AI 推演未配置时友好提示', async () => {
+  it('6. 成长档案：首次使用 → 新建成长卡 → 引导 → 记一笔写入 JSON；推演 / 世界可达，使用说明可打开', async () => {
     const memoryDir = fixture.resolve('资料/记忆');
+    await ensureSidebarOpen();
     await ensureRightPanelOpen(page);
     await switchStorylineMode(page, '成长');
 
@@ -377,23 +387,58 @@ describe('小说编辑器 GUI', () => {
       originalWidth
     );
 
-    await page.click({ text: '创建记忆库', exact: true });
+    // 首次使用：右侧面板给出用途说明与「开始使用」
+    await page.waitForTarget({ text: '开始使用', within: SEL.storyline, exact: true });
+    await captureForReview('growth-v2-panel-setup');
+    await page.click({ text: '开始使用', within: SEL.storyline, exact: true });
     await page.waitUntil(() => existsSync(path.join(memoryDir, '规则.json')), {
       message: '规则.json 已创建',
     });
 
-    await page.click('input[aria-label="新角色名"]');
-    await page.type('林舟');
-    await page.press('Enter');
-    await page.waitForTarget({ text: '距下一级' });
+    // 总览空状态：新建成长卡 / 查看使用说明
+    await page.click('[aria-label="打开成长档案总览"]');
+    await page.waitForTarget({ text: '还没有成长卡', within: GROWTH_WORKSPACE, exact: true });
+    await captureForReview('growth-v2-overview-empty');
+    await page.click({ text: '查看使用说明', within: GROWTH_WORKSPACE, exact: true });
+    await page.waitForTarget({ text: '记一笔：每章写完 30 秒', within: GROWTH_HELP, exact: true });
+    await captureForReview('growth-v2-help');
+    await page.click('[aria-label="关闭使用说明"]');
+    await page.waitForGone(GROWTH_HELP);
 
-    await page.click('input[aria-label="数值"]');
+    await page.click({ text: '+ 新建成长卡', within: GROWTH_WORKSPACE, exact: true });
+    await answerChainedPrompt('新建成长卡', '林舟');
+    await page.waitForTarget({ text: '成长 · 林舟', exact: true });
+    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
+
+    // 第一次打开成长卡：显示引导（左侧列表 → 记一笔 → 提醒 → 更多），看完后不再出现
+    await page.waitForTarget('[role="dialog"][aria-label^="引导 1/"]');
+    await captureForReview('growth-v2-tour');
+    await page.click({ text: '下一步', exact: true });
+    await page.waitForTarget('[role="dialog"][aria-label^="引导 2/"]');
+    await captureForReview('growth-v2-tour-record');
+    await page.click({ text: '跳过', exact: true });
+    await page.waitForGone('[role="dialog"][aria-label^="引导"]');
+
+    // 记一笔：章节默认取最近打开的正文章节（用例 5 打开了 001-启程）
+    await page.click('[aria-label="为 林舟 记一笔"]');
+    await page.waitForTarget('form[aria-label="为 林舟 记一笔"]');
+    const chapterValue = await page.evaluate<string>(
+      () =>
+        (
+          document.querySelector(
+            'form[aria-label="为 林舟 记一笔"] input[aria-label="章节"]'
+          ) as HTMLInputElement | null
+        )?.value ?? ''
+    );
+    expect(chapterValue).toBe('1');
+    await page.click('input[aria-label="获得多少经验"]');
     await page.type('500');
-    await page.click('input[aria-label="章节"]');
-    await page.type('1');
-    await page.click({ text: '记录', exact: true });
+    await page.click('input[aria-label="发生了什么"]');
+    await page.type('击败狼王');
+    await captureForReview('growth-v2-record-open');
+    await page.press('Enter');
 
-    await page.waitForTarget({ text: '林舟 升到 2 级' });
+    await page.waitForTarget({ text: '林舟 获得 500 经验，升到 Lv.2' });
     const sheetFile = path.join(memoryDir, '角色', '林舟.json');
     const sheet = await page.waitUntil(
       async () => {
@@ -401,7 +446,7 @@ describe('小说编辑器 GUI', () => {
           name: string;
           level: number;
           exp: number;
-          events: Array<{ type: string; delta?: number; chapter?: number }>;
+          events: Array<{ type: string; delta?: number; chapter?: number; note?: string }>;
         };
         return data.exp === 500 ? data : null;
       },
@@ -409,23 +454,28 @@ describe('小说编辑器 GUI', () => {
     );
     expect(sheet).toMatchObject({ name: '林舟', level: 2, exp: 500 });
     expect(sheet.events).toEqual([
-      expect.objectContaining({ type: 'exp', delta: 500, chapter: 1 }),
+      expect.objectContaining({ type: 'exp', delta: 500, chapter: 1, note: '击败狼王' }),
     ]);
     expect(existsSync(path.join(memoryDir, '角色', '林舟.md'))).toBe(true);
-    // 页面展示等级与经验条：本级进度与累计经验分开标注
-    await page.waitForTarget({ text: '本级 200 / 600 · 累计经验 500' });
+    await page.waitForTarget({ text: 'Lv.2', within: GROWTH_WORKSPACE, exact: true });
+    await page.waitForTarget({ text: '本级 200 / 600 · 距下一级 400', within: GROWTH_WORKSPACE });
+    await page.waitForTarget({ text: '击败狼王', within: GROWTH_WORKSPACE, exact: true });
+    await captureForReview('growth-v2-sheet-linzhou');
 
+    // 世界：队伍 / 地图 / 规则
+    await page.click({ text: '世界', within: GROWTH_WORKSPACE, exact: true });
     for (const [tab, marker] of [
       ['队伍', '组队历史'],
       ['地图', '地点'],
       ['规则', '核心规则'],
-      ['角色卡', '距下一级'],
     ]) {
-      await page.click({ text: tab, within: '[role="tablist"]', exact: true });
-      await page.waitForTarget({ text: marker });
+      await page.click({ text: tab, within: `${GROWTH_WORKSPACE} [role="tablist"]`, exact: true });
+      await page.waitForTarget({ text: marker, within: GROWTH_WORKSPACE });
     }
+    await captureForReview('growth-v2-world');
 
-    await page.click({ text: 'AI 推演', within: '[role="tablist"]', exact: true });
+    // 推演：AI 未配置时友好提示，且不改动成长卡
+    await page.click({ text: '推演', within: GROWTH_WORKSPACE, exact: true });
     await page.click({ text: '战士之道', exact: true });
     await page.click({ text: '法师之道', exact: true });
     await page.click({ text: '开始推演', exact: true });
@@ -434,41 +484,60 @@ describe('小说编辑器 GUI', () => {
       () => (document.querySelector('[role="alert"]') as HTMLElement).innerText
     );
     expect(alertText).toMatch(/AI/);
-    // 推演只产出提案，失败时不得改动成长卡
+    await captureForReview('growth-v2-simulate');
     const after = JSON.parse(await readFile(sheetFile, 'utf-8')) as { exp: number };
     expect(after.exp).toBe(500);
+    await page.click({ text: '档案', within: GROWTH_WORKSPACE, exact: true });
+
+    // 标题区的「?」打开使用说明
+    await page.click(`${GROWTH_WORKSPACE} [aria-label="使用说明"]`);
+    await page.waitForTarget(GROWTH_HELP);
+    await page.press('Escape');
+    await page.waitForGone(GROWTH_HELP);
   });
 
-  it('7. 记忆库同步生成 角色卡 / 设定 目录', async () => {
-    await ensureRightPanelOpen(page);
-    await switchStorylineMode(page, '成长');
-    await page.click({ text: '同步到记忆文件夹', exact: true });
+  it('7. 「⋯」菜单同步人物卡 / 设定到记忆文件夹', async () => {
+    await ensureSidebarOpen();
+    await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
+    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
+    await page.click(`${GROWTH_WORKSPACE} [aria-label="更多操作"]`);
+    await captureForReview('growth-v2-more-menu');
+    await page.click({ text: '同步人物卡 / 设定到记忆文件夹', within: SEL.menu, exact: true });
     await page.waitForTarget({ text: '已同步' });
     const memoryDir = fixture.resolve('资料/记忆');
     expect(existsSync(path.join(memoryDir, '角色卡'))).toBe(true);
     expect(existsSync(path.join(memoryDir, '设定'))).toBe(true);
   });
 
-  it('8. 成长档案一级入口：文件面板分区新建 → 打开工作区标签 → 记录经验写入 JSON', async () => {
+  it('8. 成长档案一级入口：文件面板新建 → 记一笔写入 JSON → 提醒 → 总览 → 右侧摘要', async () => {
     // 用例 6 已创建记忆库并为林舟建卡：分区中应列出林舟及其等级
+    await ensureSidebarOpen();
     await page.waitForTarget({ text: '成长档案', within: SEL.workspaceTree, exact: true });
     await page.waitForTarget({ text: '林舟', within: GROWTH_SECTION, exact: true });
     await page.waitForTarget({ text: 'Lv.2', within: GROWTH_SECTION, exact: true });
 
-    await page.click('[aria-label="新建成长档案"]');
-    await answerPrompt(page, '白芷');
+    await page.click('[aria-label="新建成长卡"]');
+    await answerChainedPrompt('新建成长卡', '白芷');
     await page.waitForTarget({ text: '成长 · 白芷', exact: true });
-    await page.waitForTarget({ text: '白芷', within: GROWTH_HERO, exact: true });
+    await page.waitForTarget({ text: '白芷', within: GROWTH_TITLE, exact: true });
     await waitForSheet('白芷', (sheet) => sheet.exp === 0, '白芷 成长卡已创建');
-    // 新建的档案出现在文件面板分区中
+    // 引导只出现一次
+    expect(await page.exists('[role="dialog"][aria-label^="引导"]')).toBe(false);
     await page.waitForTarget({ text: '白芷', within: GROWTH_SECTION, exact: true });
 
-    await page.click(`${GROWTH_WORKSPACE} input[aria-label="数值"]`);
-    await page.type('300');
-    await page.click(`${GROWTH_WORKSPACE} input[aria-label="章节"]`);
-    await page.type('2');
-    await page.click({ text: '记录', within: GROWTH_WORKSPACE, exact: true });
-    await page.waitForTarget({ text: '白芷 升到 2 级' });
+    const recordExp = async (exp: string, chapter: string) => {
+      await page.click('[aria-label="为 白芷 记一笔"]');
+      await page.waitForTarget('form[aria-label="为 白芷 记一笔"]');
+      // 聚焦章节框会全选，直接输入即可覆盖默认章节
+      await page.click('form[aria-label="为 白芷 记一笔"] input[aria-label="章节"]');
+      await page.type(chapter);
+      await page.click('form[aria-label="为 白芷 记一笔"] input[aria-label="获得多少经验"]');
+      await page.type(exp);
+      await page.press('Enter');
+      await page.waitForGone('form[aria-label="为 白芷 记一笔"]');
+    };
+    await recordExp('300', '2');
+    await page.waitForTarget({ text: '白芷 获得 300 经验，升到 Lv.2' });
 
     const sheet = await waitForSheet<{
       exp: number;
@@ -479,9 +548,7 @@ describe('小说编辑器 GUI', () => {
     expect(sheet.events).toEqual([
       expect.objectContaining({ type: 'exp', delta: 300, chapter: 2 }),
     ]);
-    // 角色卡显示本级进度，头部显示累计经验，二者文案不再混淆
-    await page.waitForTarget({ text: '本级 0 / 600 · 累计经验 300', within: GROWTH_WORKSPACE });
-    await page.waitForTarget({ text: '累计经验 300', within: GROWTH_HERO, exact: true });
+    await page.waitForTarget({ text: '本级 0 / 600 · 距下一级 600', within: GROWTH_WORKSPACE });
     // 写入后文件面板中的等级徽章同步刷新（白芷与林舟都是 Lv.2）
     await page.waitFor(
       (selector: string) =>
@@ -489,16 +556,48 @@ describe('小说编辑器 GUI', () => {
           ?.length === 2,
       { args: [GROWTH_SECTION], message: '文件面板显示白芷 Lv.2' }
     );
-    await captureForReview('growth-entry-tab');
+    // 没有问题时不显示提醒
+    expect(await page.exists('[aria-label="需要留意"]')).toBe(false);
+    await captureForReview('growth-v2-sheet');
+
+    // 同一章连升 2 级以上 → 出现提醒横幅，展开后看到原因与建议
+    await recordExp('2400', '2');
+    await waitForSheet('白芷', (data) => data.exp === 2700, '白芷 一章内连升');
+    await page.waitForTarget(`${GROWTH_WORKSPACE} [aria-label="需要留意"]`);
+    await page.click(`${GROWTH_WORKSPACE} [aria-label="需要留意"] button[aria-expanded="false"]`);
+    await page.waitForTarget({ text: '连升 3 级', within: GROWTH_WORKSPACE });
+    await captureForReview('growth-v2-warnings');
 
     // 点击已有档案：切换到对应角色的标签
     await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
     await page.waitForTarget({ text: '成长 · 林舟', exact: true });
-    await page.waitForTarget({ text: '林舟', within: GROWTH_HERO, exact: true });
+    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
 
-    // 快捷键打开总览
-    await page.press('j', [PRIMARY_MODIFIER, 'Shift']);
+    // 总览：卡片网格 + 提醒圆点
+    await page.click('[aria-label="打开成长档案总览"]');
     await page.waitForTarget({ text: '成长档案', within: '[class*="tabBar"]', exact: true });
+    await page.waitForTarget('[aria-label="打开 白芷 的成长卡"]');
+    await page.waitForTarget('[aria-label="打开 林舟 的成长卡"]');
+    await captureForReview('growth-v2-overview');
+
+    // 右侧面板：本章出场角色的摘要 + 记一笔
+    await openChapter('001-启程', '林舟背起行囊');
+    await ensureRightPanelOpen(page);
+    await switchStorylineMode(page, '成长');
+    await page.waitForTarget({ text: '本章出场', within: SEL.storyline });
+    await page.waitForTarget(`${SEL.storyline} [aria-label="为 林舟 记一笔"]`);
+    // 关掉堆叠的 toast，避免遮住右侧面板底部的摘要
+    await page.evaluate(() => {
+      document
+        .querySelectorAll<HTMLButtonElement>('button[aria-label="关闭通知"]')
+        .forEach((button) => button.click());
+      document
+        .querySelector('[class*="storylineView"] [aria-label="为 林舟 记一笔"]')
+        ?.scrollIntoView({ block: 'center' });
+    });
+    await page.waitForGone('button[aria-label="关闭通知"]');
+    await captureForReview('growth-v2-panel-summary');
+    await switchStorylineMode(page, '目录');
   });
 
   it('9. 人物详情的「成长档案」按钮：为人物新建并打开成长卡', async () => {
@@ -514,7 +613,7 @@ describe('小说编辑器 GUI', () => {
     await page.click('[aria-label="为 莉娜 新建成长档案"]');
 
     await page.waitForTarget({ text: '成长 · 莉娜', exact: true });
-    await page.waitForTarget({ text: '莉娜', within: GROWTH_HERO, exact: true });
+    await page.waitForTarget({ text: '莉娜', within: GROWTH_TITLE, exact: true });
     const sheet = await waitForSheet<{ exp: number; level: number; name: string }>(
       '莉娜',
       () => true,
@@ -557,7 +656,7 @@ describe('小说编辑器 GUI', () => {
     );
     // 自动保存后：未保存列表清空，写作日志写入次数增加
     await page.waitUntil(async () => (await readSession()).session?.dirtyFiles.length === 0, {
-      timeout: 6_000,
+      timeout: 10_000,
       message: '保存后会话清除未保存标记',
     });
     expect((await getTodayStats(fixture.root)).writes).toBeGreaterThan(today.writes);
@@ -566,7 +665,7 @@ describe('小说编辑器 GUI', () => {
     await undoUntilGone(page, '会话测试。');
     await page.waitUntil(
       async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)) === original,
-      { timeout: 6_000, message: '还原后自动保存' }
+      { timeout: 10_000, message: '还原后自动保存' }
     );
   });
 

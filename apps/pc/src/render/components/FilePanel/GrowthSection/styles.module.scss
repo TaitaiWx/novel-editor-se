@@ -96,3 +96,25 @@
     background: rgba(215, 186, 125, 0.2);
   }
 }
+
+.hintActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hintLink {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #9a9a9a;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.2);
+  text-underline-offset: 2px;
+
+  &:hover {
+    color: #d4d4d4;
+  }
+}

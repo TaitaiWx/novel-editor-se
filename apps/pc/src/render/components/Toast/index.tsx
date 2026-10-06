@@ -141,4 +141,7 @@ export const useToast = (): ToastContextValue => {
   return context;
 };
 
+/** 不强制要求 ToastProvider 的版本：独立窗口 / 组件测试中返回 null，由调用方自行降级展示 */
+export const useOptionalToast = (): ToastContextValue | null => useContext(ToastContext);
+
 export default ToastProvider;

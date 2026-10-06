@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import {
   WORKSPACE_TAB_GROWTH,
@@ -14,7 +14,11 @@ import {
   GROWTH_MEMORY_CHANGED_EVENT,
   emitGrowthMemoryChanged,
   findGrowthSheetSummary,
+  findMentionedNames,
   formatGrowthSheetMeta,
+  inferChapterNumber,
+  parseChineseNumber,
+  requestOpenGrowth,
   summarizeGrowthSnapshot,
   type GrowthSheetSummary,
 } from '@/render/utils/growthIndex';
@@ -23,6 +27,7 @@ import GrowthSection from '@/render/components/FilePanel/GrowthSection';
 import { filterGrowthSheets, shouldShowGrowthSection } from '@/render/components/FilePanel/utils';
 import { CharacterGrowthButton } from '@/render/components/RightPanel/CharactersView/CharacterGrowthButton';
 import { GrowthView } from '@/render/components/RightPanel/GrowthView';
+import { GROWTH_TOUR_STORAGE_KEY } from '@/render/components/RightPanel/GrowthView/growthGuide';
 import type { GrowthSnapshot } from '@/render/types/growth-api';
 import { installElectronMock, uninstallElectronMock } from '../hooks/electronMock';
 import { makeDialog, makeToast } from '../hooks/hookCtx';
@@ -142,6 +147,65 @@ describe('useGrowthEntry', () => {
     expect(openFileInTab).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledTimes(1);
   });
+
+  it('新建前可先执行 beforeOpen（例如创建记忆库），失败时不打开标签', async () => {
+    installElectronMock(() => ok(buildSnapshot()));
+    const { ctx, openFileInTab, toast } = setup(['白芷', '林舟']);
+    const { result } = renderHook(() => useGrowthEntry(ctx));
+    const beforeOpen = vi.fn(async (name: string) => (name === '林舟' ? '记忆库创建失败' : null));
+    await act(() => result.current.handleCreateGrowthSheet({ beforeOpen }));
+    expect(beforeOpen).toHaveBeenCalledWith('白芷');
+    expect(openFileInTab).toHaveBeenLastCalledWith('__workspace__:growth:白芷');
+    openFileInTab.mockClear();
+    await act(() => result.current.handleCreateGrowthSheet({ beforeOpen }));
+    expect(openFileInTab).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('记忆库创建失败');
+  });
+
+  it('记住最近打开的正文章节号，切到成长标签后仍沿用；响应打开请求事件', async () => {
+    installElectronMock(() => ok(buildSnapshot()));
+    const { ctx, openFileInTab } = setup();
+    const { result, rerender } = renderHook(
+      (props: { tab: string | null }) => useGrowthEntry({ ...ctx, activeDocumentTab: props.tab }),
+      { initialProps: { tab: `${FOLDER}/正文/第十二章 风起.md` } }
+    );
+    expect(result.current.growthChapter).toBe(12);
+    rerender({ tab: '__workspace__:growth:阿尔' });
+    expect(result.current.growthChapter).toBe(12);
+    rerender({ tab: `${FOLDER}/正文/003-雾林.md` });
+    expect(result.current.growthChapter).toBe(3);
+
+    act(() => requestOpenGrowth('阿尔'));
+    expect(openFileInTab).toHaveBeenLastCalledWith('__workspace__:growth:阿尔');
+    act(() => requestOpenGrowth());
+    expect(openFileInTab).toHaveBeenLastCalledWith(WORKSPACE_TAB_GROWTH);
+  });
+});
+
+describe('章节号推断与本章角色', () => {
+  it('从文件名推断章节号', () => {
+    expect(inferChapterNumber('/n/正文/001-启程.md')).toBe(1);
+    expect(inferChapterNumber('C:\\n\\第12章 风起.md')).toBe(12);
+    expect(inferChapterNumber('/n/第三十章.md')).toBe(30);
+    expect(inferChapterNumber('/n/第一百零五回.txt')).toBe(105);
+    expect(inferChapterNumber('/n/序章.md')).toBeNull();
+    expect(inferChapterNumber(null)).toBeNull();
+    expect(parseChineseNumber('两千零八')).toBe(2008);
+    expect(parseChineseNumber('十五')).toBe(15);
+    expect(parseChineseNumber('abc')).toBeNull();
+  });
+
+  it('按名字或别名找出正文中提到的角色', () => {
+    const sheets = [
+      { name: '林舟', aliases: ['舟'] },
+      { name: '苏晴', aliases: ['晴儿'] },
+      { name: '老周', aliases: [] },
+    ];
+    expect(findMentionedNames('晴儿笑了，林舟没说话。', sheets)).toEqual(['林舟', '苏晴']);
+    // 单字别名不参与匹配，避免误报
+    expect(findMentionedNames('一叶扁舟', sheets)).toEqual([]);
+    expect(findMentionedNames('', sheets)).toEqual([]);
+  });
 });
 
 describe('GrowthSection', () => {
@@ -171,7 +235,7 @@ describe('GrowthSection', () => {
     expect(props.onOpen).toHaveBeenCalledWith('阿尔');
     fireEvent.click(screen.getByLabelText('打开成长档案总览'));
     expect(props.onOpen).toHaveBeenCalledWith(null);
-    fireEvent.click(screen.getByLabelText('新建成长档案'));
+    fireEvent.click(screen.getByLabelText('新建成长卡'));
     expect(props.onCreate).toHaveBeenCalledTimes(1);
     fireEvent.contextMenu(screen.getByText('阿尔'));
     expect(props.onContextMenu).toHaveBeenCalledWith(expect.anything(), {
@@ -183,9 +247,19 @@ describe('GrowthSection', () => {
   it('没有成长卡时显示用途说明与新建按钮；筛选时显示简短提示', () => {
     const props = renderSection({ sheets: [], initialized: false });
     expect(screen.getByRole('note').textContent).toContain('战力崩溃');
-    expect(screen.getByRole('note').textContent).toContain('首次使用会先创建记忆库');
-    fireEvent.click(screen.getByText('新建成长档案'));
+    expect(screen.getByRole('note').textContent).toContain('首次使用会先选择规则模板');
+    fireEvent.click(screen.getByText('新建成长卡'));
     expect(props.onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('标题行与空状态都能打开使用说明', () => {
+    renderSection({ sheets: [] });
+    fireEvent.click(screen.getByLabelText('成长档案使用说明'));
+    expect(screen.getByRole('dialog', { name: '成长档案使用说明' })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('关闭使用说明'));
+    expect(screen.queryByRole('dialog', { name: '成长档案使用说明' })).toBeNull();
+    fireEvent.click(screen.getByText('怎么用？'));
+    expect(screen.getByRole('dialog', { name: '成长档案使用说明' })).toBeTruthy();
   });
 
   it('筛选无结果与折叠', () => {
@@ -222,6 +296,10 @@ describe('CharacterGrowthButton', () => {
 });
 
 describe('GrowthView 工作区布局', () => {
+  beforeEach(() => {
+    window.localStorage.setItem(GROWTH_TOUR_STORAGE_KEY, '1');
+  });
+
   it('指定角色时自动建卡，标题区显示角色与等级；写入后广播索引', async () => {
     let snapshot: GrowthSnapshot = buildSnapshot();
     const electron = installElectronMock((channel, ...args) => {
@@ -246,10 +324,12 @@ describe('GrowthView 工作区布局', () => {
           initialCharacter="白芷"
         />
       );
-      const hero = await screen.findByRole('region', { name: '成长档案概览' });
-      await waitFor(() => expect(hero.querySelector('h2')?.textContent).toBe('白芷'));
-      expect(hero.textContent).toContain('Lv.1');
-      expect(hero.textContent).toContain('战力崩溃');
+      const heading = await screen.findByRole('heading', { level: 1, name: '白芷' });
+      expect(heading).toBeTruthy();
+      expect(screen.getByLabelText('等级 1')).toBeTruthy();
+      // 页面里不再有角色选择器与新建输入框（通过左侧列表切换）
+      expect(screen.queryByLabelText('选择角色')).toBeNull();
+      expect(screen.queryByLabelText('新角色名')).toBeNull();
       expect(electron.invoke).toHaveBeenCalledWith('growth-ensure-sheet', FOLDER, '白芷', []);
       expect(changed).toHaveBeenCalledTimes(1);
     } finally {
@@ -257,7 +337,7 @@ describe('GrowthView 工作区布局', () => {
     }
   });
 
-  it('固定角色的标签中切换角色时交给外部导航', async () => {
+  it('总览卡片点击后交给外部导航', async () => {
     installElectronMock((channel) => (channel === 'growth-load' ? ok(buildSnapshot()) : null));
     const onNavigate = vi.fn();
     render(
@@ -265,15 +345,11 @@ describe('GrowthView 工作区布局', () => {
         folderPath={FOLDER}
         dbReady={false}
         layout="workspace"
-        initialCharacter="阿尔"
         onNavigateCharacter={onNavigate}
       />
     );
-    await screen.findByRole('region', { name: '成长档案概览' });
-    const input = screen.getByLabelText('新角色名') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: '林舟' } });
-    fireEvent.submit(input.closest('form') as HTMLFormElement);
-    expect(onNavigate).toHaveBeenCalledWith('林舟');
+    fireEvent.click(await screen.findByLabelText('打开 阿尔 的成长卡'));
+    expect(onNavigate).toHaveBeenCalledWith('阿尔');
   });
 
   it('记忆库未创建时提示创建后自动为该角色建卡', async () => {
@@ -283,6 +359,6 @@ describe('GrowthView 工作区布局', () => {
     render(
       <GrowthView folderPath={FOLDER} dbReady={false} layout="workspace" initialCharacter="白芷" />
     );
-    expect(await screen.findByText('创建记忆库后会自动为「白芷」建立成长卡。')).toBeTruthy();
+    expect(await screen.findByText('开始后会自动为「白芷」建立成长卡。')).toBeTruthy();
   });
 });

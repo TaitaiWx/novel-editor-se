@@ -1,0 +1,196 @@
+@use '../growth-ui' as ui;
+
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: ui.$fg;
+}
+
+.count {
+  font-size: 12px;
+  color: ui.$muted;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  > :first-child {
+    margin-right: 4px;
+  }
+}
+
+.primary {
+  @include ui.primary-solid;
+}
+
+.secondary {
+  @include ui.ghost-button;
+}
+
+.iconButton {
+  @include ui.icon-button;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sections {
+  @include ui.segmented;
+  align-self: flex-start;
+}
+
+.section {
+  @include ui.segment;
+  padding: 0 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid ui.$line;
+  background: ui.$surface;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: ui.$surface-hover;
+    border-color: ui.$line-strong;
+  }
+
+  &:focus-visible {
+    outline: 1px solid rgba(ui.$info-rgb, 0.5);
+  }
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cardName {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  color: ui.$fg;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.level {
+  @include ui.level-badge;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: ui.$warn;
+}
+
+.dotError {
+  background: ui.$danger;
+}
+
+.track {
+  @include ui.exp-track;
+  height: 4px;
+}
+
+.cardMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: ui.$muted;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 28px 28px 26px;
+  border-radius: 12px;
+  border: 1px dashed ui.$line-strong;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: ui.$fg;
+}
+
+.emptyText {
+  max-width: 520px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.emptyActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.suggestLabel {
+  font-size: 12px;
+  color: ui.$muted;
+}
+
+.suggestItem {
+  @include ui.ghost-button;
+  height: 24px;
+  padding: 0 10px;
+  border-style: dashed;
+  font-size: 12px;
+}

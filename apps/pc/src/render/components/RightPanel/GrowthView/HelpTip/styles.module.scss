@@ -1,0 +1,24 @@
+@use '../growth-ui' as ui;
+
+.tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  color: ui.$muted;
+  cursor: help;
+  user-select: none;
+
+  &:hover,
+  &:focus-visible {
+    color: ui.$fg;
+    border-color: rgba(255, 255, 255, 0.3);
+    outline: none;
+  }
+}

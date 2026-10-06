@@ -15,8 +15,8 @@ $success: #7ab896;
 $radius: 8px;
 
 @mixin card {
-  padding: 10px 12px;
-  border-radius: $radius;
+  padding: 14px 16px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -26,11 +26,10 @@ $radius: 8px;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
-  font-size: 11px;
+  margin-bottom: 10px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  color: $muted;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 @mixin button {
@@ -109,4 +108,175 @@ $radius: 8px;
   font-size: 12px;
   color: $disabled;
   text-align: center;
+}
+
+// ─── 成长档案 v2：安静的层级（标题 / 正文 / 次要） ─────────────────────────
+
+$line: rgba(255, 255, 255, 0.06);
+$line-strong: rgba(255, 255, 255, 0.1);
+$surface: rgba(255, 255, 255, 0.025);
+$surface-hover: rgba(255, 255, 255, 0.05);
+$warn: #d9a35b;
+$warn-rgb: var(--growth-warn-rgb, 217, 163, 91);
+
+@mixin card-v2 {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: $surface;
+  border: 1px solid $line;
+}
+
+@mixin card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+@mixin icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $muted;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: $surface-hover;
+    color: $fg;
+  }
+
+  &:focus-visible {
+    outline: 1px solid rgba($info-rgb, 0.5);
+  }
+}
+
+@mixin primary-solid {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid rgba($info-rgb, 0.35);
+  background: rgba($info-rgb, 0.16);
+  color: $info-fg;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba($info-rgb, 0.24);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+@mixin ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid $line-strong;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: $surface-hover;
+    color: $fg;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+@mixin segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid $line;
+}
+
+@mixin segment {
+  height: 24px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: $muted;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: $fg;
+  }
+
+  &[aria-selected='true'],
+  &[aria-pressed='true'] {
+    background: rgba(255, 255, 255, 0.08);
+    color: $fg;
+  }
+}
+
+@mixin exp-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+
+  > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba($info-rgb, 0.55), rgba($info-rgb, 0.9));
+  }
+}
+
+@mixin level-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $info-fg;
+  background: rgba($info-rgb, 0.12);
+  border: 1px solid rgba($info-rgb, 0.24);
+  white-space: nowrap;
+}
+
+@mixin floating-surface {
+  border-radius: 10px;
+  background: #252526;
+  border: 1px solid $line-strong;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }

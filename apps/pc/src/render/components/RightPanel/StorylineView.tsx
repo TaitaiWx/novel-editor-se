@@ -6,6 +6,7 @@ import { ActsView } from './ActsView';
 import { AiCacheProvider } from './AiCacheContext';
 import { ThreeSignView } from './ThreeSignView';
 import { GrowthView } from './GrowthView';
+import { inferChapterNumber } from '../../utils/growthIndex';
 import { useHorizontalOverflow } from './useHorizontalOverflow';
 import type {
   PersistedOutlineScopeInput,
@@ -108,7 +109,7 @@ export const StorylineView: React.FC<{
             <button
               className={`${styles.storylineToggle} ${viewMode === 'growth' ? styles.storylineToggleActive : ''}`}
               onClick={() => setViewMode('growth')}
-              title="角色成长记录器：等级、技能、抉择、队伍、地图与 AI 推演（资料/记忆/）"
+              title="成长档案：本章出场角色的等级与经验，可直接记一笔（资料/记忆/）"
             >
               成长
             </button>
@@ -136,7 +137,14 @@ export const StorylineView: React.FC<{
               onReplaceLineText={onReplaceLineText}
             />
           ) : viewMode === 'growth' ? (
-            <GrowthView folderPath={folderPath} dbReady={dbReady} />
+            <GrowthView
+              folderPath={folderPath}
+              dbReady={dbReady}
+              content={content}
+              currentChapter={
+                outlineScope?.kind === 'chapter' ? inferChapterNumber(outlineScope.path) : null
+              }
+            />
           ) : viewMode === 'ideas' ? (
             <ThreeSignView
               content={content}

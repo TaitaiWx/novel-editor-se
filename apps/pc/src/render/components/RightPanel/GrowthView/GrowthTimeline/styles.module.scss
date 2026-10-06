@@ -1,101 +1,62 @@
 @use '../growth-ui' as ui;
 
-.wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .card {
-  @include ui.card;
+  @include ui.card-v2;
 }
 
 .title {
-  @include ui.section-title;
+  @include ui.card-title;
 }
 
 .meta {
+  margin-left: auto;
+  font-size: 11px;
   font-weight: 400;
-  cursor: help;
-}
-
-.empty {
-  @include ui.empty;
-}
-
-.note {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: ui.$fg;
-}
-
-.remove {
-  border: none;
-  background: transparent;
-  color: ui.$disabled;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 18px;
-
-  &:hover:not(:disabled) {
-    color: ui.$danger-fg;
-  }
-}
-
-.noteForm {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.input {
-  @include ui.input;
-  flex: 1;
-}
-
-.button {
-  @include ui.button;
-}
-
-.timeline {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 46px;
-    top: 4px;
-    bottom: 4px;
-    width: 1px;
-    background: rgba(255, 255, 255, 0.06);
-  }
-}
-
-.item {
-  display: flex;
-  gap: 14px;
-  padding: 5px 0;
-}
-
-.chapter {
-  flex: 0 0 40px;
-  font-size: 10px;
-  line-height: 18px;
-  text-align: right;
   color: ui.$muted;
 }
 
-.body {
-  flex: 1;
-  min-width: 0;
+.empty {
+  font-size: 12px;
+  line-height: 1.6;
+  color: ui.$disabled;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid ui.$line;
+
+  &:first-child {
+    padding-top: 0;
+    border-top: none;
+  }
+}
+
+.chapter {
+  padding-top: 1px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: ui.$muted;
+  white-space: nowrap;
+}
+
+.events {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .what {
@@ -103,34 +64,39 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 1.5;
   color: ui.$fg;
 }
 
 .levelUp {
-  @include ui.chip;
-  padding: 0 6px;
+  @include ui.level-badge;
+  height: 18px;
   font-size: 10px;
-  color: var(--rp-accent-text, #d8b08e);
-  border-color: rgba(ui.$accent-rgb, 0.3);
-  background: rgba(ui.$accent-rgb, 0.1);
 }
 
 .source {
-  @include ui.chip;
-  padding: 0 6px;
   font-size: 10px;
+  color: ui.$muted;
 }
 
 .why {
-  font-size: 11px;
-  line-height: 16px;
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.5;
   color: ui.$muted;
 }
 
 .more {
-  @include ui.button;
-  width: 100%;
-  margin-top: 6px;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ui.$muted;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: ui.$fg;
+  }
 }
