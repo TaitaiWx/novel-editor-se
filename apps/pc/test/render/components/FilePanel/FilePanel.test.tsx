@@ -330,39 +330,34 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
     expect(screen.getByText('剑与诗')).toBeTruthy();
   });
 
-  it('根目录文档在底部「项目说明」分区，默认折叠，带用途说明，展开后点击打开', () => {
+  it('根目录文档收在项目名旁的「项目说明」按钮里（带数量），不再占用底部分区，点击打开', () => {
     const { props } = renderPanel({
       files: sampleFiles,
       folderPath: '/s',
       projectLayout,
       workScope: star,
     });
-    const notes = screen.getByRole('region', { name: '项目说明' });
-    const header = notes.querySelector('button[aria-expanded]') as HTMLElement;
-    expect(header.getAttribute('aria-expanded')).toBe('false');
-    expect(header.getAttribute('title')).toContain('不属于任何作品');
+    expect(screen.queryByRole('region', { name: '项目说明' })).toBeNull();
     expect(screen.queryByText('欢迎使用')).toBeNull();
-    // 位于所有分区之后
-    const sections = Array.from(document.querySelectorAll('section'));
-    expect(sections[sections.length - 1]).toBe(notes);
-
-    fireEvent.click(header, { detail: 1 });
-    expect(header.getAttribute('aria-expanded')).toBe('true');
-    const welcome = rowOf('欢迎使用');
-    expect(welcome.textContent).not.toContain('章');
-    expect(welcome.getAttribute('draggable')).toBe('false');
-    fireEvent.click(welcome);
+    const trigger = screen.getByLabelText('项目说明（1 个文件）');
+    // 位于项目名旁（文件面板顶部），而不是任何分区里
+    expect(trigger.closest('section')).toBeNull();
+    fireEvent.click(trigger);
+    const list = screen.getByRole('list', { name: '项目说明' });
+    expect(list.textContent).toContain('欢迎使用');
+    expect(list.textContent).not.toContain('章');
+    fireEvent.click(screen.getByText('欢迎使用'));
     expect(props.onFileSelect).toHaveBeenCalledWith('/s/欢迎使用.md');
   });
 
-  it('没有根目录文档时不显示「项目说明」', () => {
+  it('没有根目录文档时不显示「项目说明」按钮', () => {
     renderPanel({
       files: sampleFiles.slice(1),
       folderPath: '/s',
       projectLayout,
       workScope: star,
     });
-    expect(screen.queryByRole('region', { name: '项目说明' })).toBeNull();
+    expect(screen.queryByLabelText(/^项目说明/)).toBeNull();
   });
 
   it('普通文件夹：没有作品切换器；根目录说明文档放进项目说明，不计入未分卷章数', () => {
@@ -374,9 +369,8 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
       folderPath: '/p',
     });
     expect(screen.queryByTestId('work-switcher')).toBeNull();
-    const notes = screen.getByRole('region', { name: '项目说明' });
-    fireEvent.click(notes.querySelector('button[aria-expanded]') as HTMLElement, { detail: 1 });
-    expect(notes.textContent).toContain('README');
+    fireEvent.click(screen.getByLabelText('项目说明（1 个文件）'));
+    expect(screen.getByRole('list', { name: '项目说明' }).textContent).toContain('README');
     expect(rowOf('未分卷').textContent).toContain('1章');
   });
 });

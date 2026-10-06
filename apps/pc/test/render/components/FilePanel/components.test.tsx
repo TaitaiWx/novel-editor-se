@@ -63,7 +63,7 @@ describe('StoryTreeNode', () => {
     expect(tree.onToggleDirectory).toHaveBeenCalledWith('/p/v1');
   });
 
-  it('展开后递归渲染子节点，点击文件触发选择，修改按钮不冒泡', () => {
+  it('展开后递归渲染子节点，点击文件触发选择，双击名称行内重命名', () => {
     const tree = makeTree({
       expandedStoryDirs: new Set(['/p/v1']),
       selectedFile: '/p/v1/c1.md',
@@ -76,17 +76,28 @@ describe('StoryTreeNode', () => {
     fireEvent.click(screen.getByText('草稿'));
     expect(tree.onSelectFile).toHaveBeenCalledWith('/p/v1/d1.md');
 
-    fireEvent.click(screen.getByLabelText('修改 第一章'));
-    expect(tree.onRenameNode).toHaveBeenCalledWith('/p/v1/c1.md');
+    // 没有常驻 / 悬停的铅笔按钮
+    expect(screen.queryByLabelText(/^修改 /)).toBeNull();
+    fireEvent.doubleClick(screen.getByText('第一章'));
+    const input = screen.getByLabelText('重命名 第一章') as HTMLInputElement;
+    expect(input.value).toBe('第一章');
+    fireEvent.change(input, { target: { value: '第一章-改' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(tree.onRenameNode).toHaveBeenCalledWith('/p/v1/c1.md', '第一章-改');
+    expect(screen.queryByLabelText('重命名 第一章')).toBeNull();
+    // 输入框内的按键不会冒泡到行（不会触发打开 / 行键盘处理）
+    expect(tree.onRowKeyDown).not.toHaveBeenCalled();
     expect(tree.onSelectFile).toHaveBeenCalledTimes(1);
     expect(tree.registerNodeRef).toHaveBeenCalledWith('/p/v1/c1.md', expect.any(HTMLElement));
   });
 
-  it('卷节点右键发出对象菜单事件；未分卷不显示修改按钮', () => {
+  it('卷节点右键发出对象菜单事件；未分卷不能重命名', () => {
     const tree = makeTree();
     const synthetic: FileNode = { name: '未分卷', path: '/p', type: 'directory', children: [] };
     render(<StoryTreeNode node={synthetic} parentPath={null} tree={tree} />);
-    expect(screen.queryByLabelText('修改 未分卷')).toBeNull();
+    fireEvent.doubleClick(screen.getByText('未分卷'));
+    fireEvent.keyDown(rowOf('未分卷'), { key: 'F2' });
+    expect(screen.queryByLabelText('重命名 未分卷')).toBeNull();
     fireEvent.contextMenu(rowOf('未分卷'));
     expect(tree.onObjectContextMenu).toHaveBeenCalledWith(expect.anything(), {
       kind: 'volume-item',
@@ -165,7 +176,7 @@ describe('SectionHeader', () => {
 });
 
 describe('ObjectItemRow', () => {
-  it('打开 / 修改 / 删除 / 键盘激活', () => {
+  it('打开 / 双击重命名 / 删除 / 键盘激活', () => {
     const handlers = {
       onOpen: vi.fn(),
       onRename: vi.fn(),
@@ -192,8 +203,12 @@ describe('ObjectItemRow', () => {
     });
     expect(handlers.onOpen).toHaveBeenCalledTimes(2);
 
-    fireEvent.click(screen.getByLabelText('修改人物 林舟'));
-    expect(handlers.onRename).toHaveBeenCalled();
+    expect(screen.queryByLabelText('修改人物 林舟')).toBeNull();
+    fireEvent.doubleClick(screen.getByText('林舟'));
+    const input = screen.getByLabelText('重命名人物 林舟');
+    fireEvent.change(input, { target: { value: '林舟舟' } });
+    fireEvent.blur(input);
+    expect(handlers.onRename).toHaveBeenCalledWith('林舟舟');
     fireEvent.click(screen.getByLabelText('删除人物 林舟'));
     expect(handlers.onDelete).toHaveBeenCalled();
     expect(handlers.onOpen).toHaveBeenCalledTimes(2);
@@ -261,7 +276,9 @@ describe('WorkspaceHeader', () => {
     expect(screen.getByText('我的小说')).toBeTruthy();
     expect(screen.getByText('正在切换作品…')).toBeTruthy();
     expect(screen.getByLabelText('更换文件夹')).toBeTruthy();
-    expect((screen.getByLabelText('修改作品名') as HTMLButtonElement).disabled).toBe(true);
+    // 切换作品中：项目名暂不可重命名，也没有铅笔按钮
+    expect(screen.queryByLabelText('修改作品名')).toBeNull();
+    expect(screen.queryByLabelText(/双击或按 F2 重命名/)).toBeNull();
     expect(screen.queryByLabelText('折叠侧边栏')).toBeNull();
 
     fireEvent.click(screen.getByLabelText(/搜索文件/));

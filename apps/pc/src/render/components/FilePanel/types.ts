@@ -38,7 +38,7 @@ export interface StoryDropTarget {
 }
 
 /** 可折叠的对象分区 */
-export type FilePanelSection = 'docs' | 'story' | 'characters' | 'lore' | 'growth' | 'materials';
+export type FilePanelSection = 'story' | 'characters' | 'lore' | 'growth' | 'materials';
 
 export type CollapsedSections = Record<FilePanelSection, boolean>;
 
@@ -72,9 +72,10 @@ export interface FilePanelProps {
   onOpenLoreNode: (entryId: number) => void;
   onDeleteCharacterNode: (characterId: number) => void;
   onDeleteLoreNode: (entryId: number) => void;
-  onRenameCharacterNode: (characterId: number) => void;
-  onRenameLoreNode: (entryId: number) => void;
-  onRenameNode: (path: string) => void;
+  /** 行内重命名（双击名称 / F2）：传入新名称；右键菜单「重命名」仍走对话框 */
+  onRenameCharacterNode: (characterId: number, nextName: string) => void;
+  onRenameLoreNode: (entryId: number, nextName: string) => void;
+  onRenameNode: (path: string, nextName: string) => void;
   onReorderStoryNode?: (sourcePath: string, targetPath: string, mode: StoryDropMode) => void;
   onCreateVolume: () => void;
   onCreateChapter: () => void;
@@ -90,7 +91,8 @@ export interface FilePanelProps {
   onCreateGrowthSheet?: () => void;
   onRefresh: () => void;
   onOpenFolder: () => void;
-  onRenameProject?: () => void;
+  /** 双击项目名行内重命名后提交新名称 */
+  onRenameProject?: (nextName: string) => void;
   onImportFile?: () => void;
   onCollapse?: () => void;
   onContextMenu?: (event: ContextMenuEvent) => void;

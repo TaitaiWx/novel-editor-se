@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  AiOutlineEdit,
+  AiOutlineDoubleLeft,
   AiOutlineFolderOpen,
   AiOutlinePlus,
   AiOutlineReload,
@@ -8,6 +8,7 @@ import {
 } from 'react-icons/ai';
 import Popover from '../../Popover';
 import Tooltip from '../../Tooltip';
+import InlineRenameInput, { isRenameShortcut } from '../../InlineRenameInput';
 import { formatShortcutLabel } from '../../../utils/appSettings';
 import styles from './styles.module.scss';
 
@@ -57,7 +58,10 @@ interface WorkspaceHeaderProps {
   /** 新建菜单开关状态由 FilePanel 持有，保证面板内容切换时状态不丢失 */
   createMenuOpen: boolean;
   onCreateMenuOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
-  onRenameProject?: () => void;
+  /** 双击项目名（或聚焦后按 F2 / Enter）行内重命名，提交新名称；未提供时项目名不可编辑 */
+  onRenameProject?: (nextName: string) => void;
+  /** 项目名右侧的附加内容（「项目说明」按钮） */
+  identityExtra?: React.ReactNode;
   onOpenFolder: () => void;
   onToggleSearch: () => void;
   onCollapse?: () => void;
@@ -65,7 +69,7 @@ interface WorkspaceHeaderProps {
   onContextMenu: (event: React.MouseEvent) => void;
 }
 
-/** 文件面板顶部：作品名 + 打开/搜索/折叠/新建/刷新操作 */
+/** 文件面板顶部：项目名（双击重命名）+ 项目说明 | 打开/搜索/新建/刷新 | 折叠侧边栏（最右侧） */
 const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   workspaceLabel,
   isWorkspaceBusy,
@@ -77,6 +81,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   createMenuOpen,
   onCreateMenuOpenChange: setCreateMenuOpen,
   onRenameProject,
+  identityExtra,
   onOpenFolder,
   onToggleSearch,
   onCollapse,
@@ -84,6 +89,9 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   onContextMenu,
 }) => {
   const createMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const nameRef = useRef<HTMLSpanElement>(null);
+  const [renaming, setRenaming] = useState(false);
+  const canRename = Boolean(onRenameProject) && !isWorkspaceBusy && Boolean(workspaceLabel);
   const searchLabel = `搜索文件 (${formatShortcutLabel(quickOpenShortcut)})`;
 
   const renderIconButton = (
@@ -110,25 +118,51 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   return (
     <div className={styles.workspaceHeader} onContextMenu={onContextMenu}>
       <div className={styles.workspaceIdentity}>
-        <span className={styles.workspaceName}>{workspaceLabel}</span>
+        {renaming && onRenameProject ? (
+          <InlineRenameInput
+            className={styles.projectNameInput}
+            initialValue={workspaceLabel ?? ''}
+            ariaLabel="重命名项目"
+            restoreFocusRef={nameRef}
+            onCommit={(nextName) => {
+              setRenaming(false);
+              onRenameProject(nextName);
+            }}
+            onCancel={() => setRenaming(false)}
+          />
+        ) : canRename ? (
+          <span className={styles.nameSlot}>
+            <Tooltip content="双击重命名" position="bottom">
+              <span
+                ref={nameRef}
+                className={`${styles.workspaceName} ${styles.editableName}`}
+                tabIndex={0}
+                aria-label={`项目名 ${workspaceLabel}，双击或按 F2 重命名`}
+                aria-keyshortcuts="F2"
+                onDoubleClick={(event) => {
+                  event.preventDefault();
+                  setRenaming(true);
+                }}
+                onKeyDown={(event) => {
+                  if (isRenameShortcut(event) || event.key === 'Enter') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setRenaming(true);
+                  }
+                }}
+              >
+                {workspaceLabel}
+              </span>
+            </Tooltip>
+          </span>
+        ) : (
+          <span className={styles.workspaceName}>{workspaceLabel}</span>
+        )}
+        {!renaming && identityExtra}
         {isWorkspaceBusy && (
           <span className={styles.workspaceStatus} aria-live="polite">
             正在切换作品…
           </span>
-        )}
-        {onRenameProject && (
-          <Tooltip content="修改作品名" position="bottom">
-            <button
-              type="button"
-              className={styles.workspaceNameAction}
-              onClick={onRenameProject}
-              title="修改作品名"
-              aria-label="修改作品名"
-              disabled={isWorkspaceBusy}
-            >
-              <AiOutlineEdit />
-            </button>
-          </Tooltip>
         )}
       </div>
       <div className={styles.workspaceActions}>
@@ -149,19 +183,6 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             <AiOutlineSearch />
           </button>
         </Tooltip>
-        {onCollapse && (
-          <Tooltip content="折叠侧边栏" position="bottom">
-            <button
-              className={styles.workspaceAction}
-              onClick={onCollapse}
-              title="折叠侧边栏"
-              aria-label="折叠侧边栏"
-              type="button"
-            >
-              ◀
-            </button>
-          </Tooltip>
-        )}
         <Tooltip content="新建" position="bottom">
           <button
             ref={createMenuButtonRef}
@@ -176,6 +197,12 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
           </button>
         </Tooltip>
         {renderIconButton('重新扫描作品目录', onRefresh, <AiOutlineReload />, isLoading)}
+        {onCollapse && (
+          <>
+            <span className={styles.workspaceActionDivider} aria-hidden="true" />
+            {renderIconButton('折叠侧边栏', onCollapse, <AiOutlineDoubleLeft />)}
+          </>
+        )}
       </div>
       <Popover
         open={createMenuOpen}

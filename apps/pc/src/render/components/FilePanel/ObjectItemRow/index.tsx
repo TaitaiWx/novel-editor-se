@@ -1,6 +1,7 @@
-import React from 'react';
-import { AiOutlineDelete, AiOutlineEdit } from 'react-icons/ai';
+import React, { useRef, useState } from 'react';
+import { AiOutlineDelete } from 'react-icons/ai';
 import Tooltip from '../../Tooltip';
+import InlineRenameInput, { isRenameShortcut } from '../../InlineRenameInput';
 import { handleRowActivationKey } from '../utils';
 import styles from './styles.module.scss';
 
@@ -14,14 +15,14 @@ interface ObjectItemRowProps {
   /** 标题后的小徽章，例如成长档案的等级「Lv.3」 */
   badge?: string;
   onOpen: () => void;
-  /** 未提供时不显示「修改」按钮 */
-  onRename?: () => void;
+  /** 行内重命名提交（双击名称 / F2）；未提供时不可重命名 */
+  onRename?: (nextName: string) => void;
   /** 未提供时不显示「删除」按钮 */
   onDelete?: () => void;
   onContextMenu: (event: React.MouseEvent) => void;
 }
 
-/** 角色 / 设定 / 成长档案等对象条目行：点击打开，右侧提供修改与删除操作（可选） */
+/** 角色 / 设定 / 成长档案等对象条目行：点击打开，双击名称或 F2 行内重命名，右侧可选删除操作 */
 const ObjectItemRow: React.FC<ObjectItemRowProps> = ({
   kindLabel,
   title,
@@ -33,59 +34,79 @@ const ObjectItemRow: React.FC<ObjectItemRowProps> = ({
   onRename,
   onDelete,
   onContextMenu,
-}) => (
-  <div
-    className={`${styles.objectNodeShell} ${active ? styles.objectNodeShellActive : ''}`}
-    style={{ marginLeft: '28px', marginRight: '12px' }}
-    onContextMenu={onContextMenu}
-  >
+}) => {
+  const [renaming, setRenaming] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const startRename = (event: React.SyntheticEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setRenaming(true);
+  };
+
+  return (
     <div
-      role="button"
-      tabIndex={0}
-      className={styles.objectNode}
-      onClick={onOpen}
-      onKeyDown={(event) => handleRowActivationKey(event, onOpen)}
+      className={`${styles.objectNodeShell} ${active ? styles.objectNodeShellActive : ''}`}
+      style={{ marginLeft: '28px', marginRight: '12px' }}
+      onContextMenu={onContextMenu}
     >
-      <span className={styles.objectNodeMarker}>{icon}</span>
-      <span className={styles.objectNodePrimary}>
-        <span className={styles.objectNodeTitle}>{title}</span>
-        {badge && <span className={styles.objectNodeBadge}>{badge}</span>}
-        {onRename && (
-          <Tooltip content={`修改${kindLabel}`} position="top">
-            <button
-              type="button"
-              className={styles.objectNodeAction}
-              onClick={(event) => {
-                event.stopPropagation();
-                onRename();
+      <div
+        ref={rowRef}
+        role="button"
+        tabIndex={0}
+        aria-keyshortcuts={onRename ? 'F2' : undefined}
+        className={styles.objectNode}
+        onClick={onOpen}
+        onKeyDown={(event) => {
+          if (onRename && isRenameShortcut(event)) {
+            startRename(event);
+            return;
+          }
+          handleRowActivationKey(event, onOpen);
+        }}
+      >
+        <span className={styles.objectNodeMarker}>{icon}</span>
+        <span className={styles.objectNodePrimary}>
+          {renaming && onRename ? (
+            <InlineRenameInput
+              initialValue={title}
+              ariaLabel={`重命名${kindLabel} ${title}`}
+              restoreFocusRef={rowRef}
+              onCommit={(nextName) => {
+                setRenaming(false);
+                onRename(nextName);
               }}
-              aria-label={`修改${kindLabel} ${title}`}
-              title={`修改${kindLabel} ${title}`}
+              onCancel={() => setRenaming(false)}
+            />
+          ) : (
+            <span
+              className={styles.objectNodeTitle}
+              onDoubleClick={onRename ? startRename : undefined}
             >
-              <AiOutlineEdit />
-            </button>
-          </Tooltip>
-        )}
-      </span>
-      <span className={styles.objectNodeMetaInline}>{meta}</span>
+              {title}
+            </span>
+          )}
+          {badge && <span className={styles.objectNodeBadge}>{badge}</span>}
+        </span>
+        <span className={styles.objectNodeMetaInline}>{meta}</span>
+      </div>
+      {onDelete && (
+        <Tooltip content={`删除${kindLabel}`} position="top">
+          <button
+            type="button"
+            className={styles.objectNodeAction}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+            aria-label={`删除${kindLabel} ${title}`}
+            title={`删除${kindLabel} ${title}`}
+          >
+            <AiOutlineDelete />
+          </button>
+        </Tooltip>
+      )}
     </div>
-    {onDelete && (
-      <Tooltip content={`删除${kindLabel}`} position="top">
-        <button
-          type="button"
-          className={styles.objectNodeAction}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete();
-          }}
-          aria-label={`删除${kindLabel} ${title}`}
-          title={`删除${kindLabel} ${title}`}
-        >
-          <AiOutlineDelete />
-        </button>
-      </Tooltip>
-    )}
-  </div>
-);
+  );
+};
 
 export default ObjectItemRow;

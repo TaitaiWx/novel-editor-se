@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { AiOutlineEdit } from 'react-icons/ai';
+import InlineRenameInput, { isRenameShortcut } from '../InlineRenameInput';
 import type { FileNode, FileInfo, FileInfoBatchEntry } from '../../types';
 import { isImeComposing } from '../../utils/ime';
 import { buildFileTooltip, describeFileName, formatFileSize } from './fileDisplay';
@@ -23,7 +23,8 @@ interface FileTreeProps {
   selectedFile?: string | null;
   onContextMenu?: (event: ContextMenuEvent) => void;
   onBackgroundContextMenu?: (pos: { x: number; y: number }) => void;
-  onRenameNode?: (path: string) => void;
+  /** 行内重命名提交（双击名称 / 选中行按 F2）；未提供时不可重命名 */
+  onRenameNode?: (path: string, nextName: string) => void;
   creatingType?: 'file' | 'directory' | null;
   createTargetPath?: string | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
@@ -139,7 +140,7 @@ const FileTreeItem: React.FC<{
   selectedFile?: string | null;
   level?: number;
   onContextMenu?: (event: ContextMenuEvent) => void;
-  onRenameNode?: (path: string) => void;
+  onRenameNode?: (path: string, nextName: string) => void;
   fileInfoMap?: Map<string, FileInfo>;
   showFileSizes: boolean;
   itemMetaMap?: Record<string, string>;
@@ -178,6 +179,16 @@ const FileTreeItem: React.FC<{
     const effectiveExpanded =
       node.type === 'directory' && (expandedDirs.has(node.path) || isCreateTarget);
 
+    // 行内重命名：双击名称或选中行按 F2 进入，Enter 提交、Esc 取消、失焦提交
+    const [renaming, setRenaming] = useState(false);
+    const rowRef = useRef<HTMLDivElement>(null);
+    const startRename = (event: React.SyntheticEvent) => {
+      if (!onRenameNode) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setRenaming(true);
+    };
+
     const handleClick = () => {
       if (node.type === 'directory') {
         onToggleDirectory(node.path);
@@ -206,8 +217,20 @@ const FileTreeItem: React.FC<{
     return (
       <div className={`${styles.fileTreeItem} ${isFile ? styles.leaf : ''}`}>
         <div
+          ref={rowRef}
           className={`${styles.itemHeader} ${styles[node.type]} ${isSelected ? styles.selected : ''}`}
+          tabIndex={0}
+          aria-keyshortcuts={onRenameNode ? 'F2' : undefined}
           onClick={handleClick}
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget || isImeComposing(event)) return;
+            if (isRenameShortcut(event)) {
+              startRename(event);
+            } else if (event.key === 'Enter') {
+              event.preventDefault();
+              handleClick();
+            }
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -227,14 +250,33 @@ const FileTreeItem: React.FC<{
           ) : null}
           <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
           <span className={styles.itemText}>
-            {display?.tail ? (
+            {renaming && onRenameNode ? (
+              <InlineRenameInput
+                initialValue={node.name}
+                ariaLabel={`重命名 ${node.name}`}
+                selectEnd={
+                  isFile && node.name.lastIndexOf('.') > 0 ? node.name.lastIndexOf('.') : undefined
+                }
+                restoreFocusRef={rowRef}
+                onCommit={(nextName) => {
+                  setRenaming(false);
+                  onRenameNode(node.path, nextName);
+                }}
+                onCancel={() => setRenaming(false)}
+              />
+            ) : display?.tail ? (
               // 中间省略：头部可收缩，尾部（主名末尾 + 扩展名）始终可见
-              <span className={`${styles.itemName} ${styles.itemNameSplit}`}>
+              <span
+                className={`${styles.itemName} ${styles.itemNameSplit}`}
+                onDoubleClick={startRename}
+              >
                 <span className={styles.itemNameHead}>{display.head}</span>
                 <span className={styles.itemNameTail}>{display.tail}</span>
               </span>
             ) : (
-              <span className={styles.itemName}>{node.name}</span>
+              <span className={styles.itemName} onDoubleClick={startRename}>
+                {node.name}
+              </span>
             )}
             {(itemMeta || display?.machineGenerated) && (
               <span className={styles.itemMeta}>
@@ -245,20 +287,6 @@ const FileTreeItem: React.FC<{
               </span>
             )}
           </span>
-          {onRenameNode && (
-            <button
-              type="button"
-              className={styles.itemAction}
-              onClick={(event) => {
-                event.stopPropagation();
-                onRenameNode(node.path);
-              }}
-              aria-label={`修改 ${node.name}`}
-              title={`修改 ${node.name}`}
-            >
-              <AiOutlineEdit />
-            </button>
-          )}
           {showFileSizes && isFile && fileInfo && (
             <span className={styles.itemSize}>{formatFileSize(fileInfo.size)}</span>
           )}

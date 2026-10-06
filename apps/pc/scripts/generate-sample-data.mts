@@ -10,6 +10,8 @@
  * 修改故事章节后同步调整这里的事件，然后运行：
  *   pnpm exec tsx apps/pc/scripts/generate-sample-data.mts
  * 单测（apps/pc/test/main/sample-data.test.ts）会重新生成并与仓库中的文件逐字节比对。
+ * 示例内容有任何变化后，再运行 `pnpm exec tsx apps/pc/scripts/sample-content-hash.mts --bump`
+ * 递增 sampleVersion 并刷新 contentHash（否则老用户的本机副本不会升级，单测也会失败）。
  */
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -517,7 +519,11 @@ const invokedDirectly =
 
 if (invokedDirectly) {
   writeSampleData(process.argv[2] ? path.resolve(process.argv[2]) : SAMPLE_DATA_DIR)
-    .then(() => console.log('示例数据已生成'))
+    .then(() =>
+      console.log(
+        '示例数据已生成。如内容有变化，请运行 pnpm exec tsx apps/pc/scripts/sample-content-hash.mts --bump'
+      )
+    )
     .catch((error: unknown) => {
       console.error(error);
       process.exitCode = 1;

@@ -2,7 +2,7 @@
  * 示例作品集（apps/pc/sample-data）完整性：
  * 它既是首次启动展示给用户的示范项目，也是 GUI E2E 的 fixture，任何改动都要保持这里全部通过。
  */
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { appendFile, cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -30,6 +30,11 @@ import {
   buildSampleSeed,
   writeSampleData,
 } from '../../scripts/generate-sample-data.mts';
+import {
+  SAMPLE_HASH_COMMAND,
+  computeSampleContentHash,
+  readSampleMeta,
+} from '../../scripts/sample-content-hash.mts';
 
 const ROOT = SAMPLE_DATA_DIR;
 // 资料与成长档案跟随作品：每部作品有自己的 资料/ 与 资料/记忆/
@@ -87,8 +92,34 @@ describe('示例作品集 sample-data', () => {
   });
 
   it('带版本文件，旧版本机副本会在启动时被升级（改动示例内容时请递增 sampleVersion）', async () => {
-    // v3：资料、成长档案、人物 / 设定改为跟随作品
-    expect(await readSeedVersion(ROOT)).toBeGreaterThanOrEqual(3);
+    // v3：资料、成长档案、人物 / 设定改为跟随作品；v4：修复停留在 v3 中间态（根目录 资料/）的本机副本
+    expect(await readSeedVersion(ROOT)).toBeGreaterThanOrEqual(4);
+  });
+
+  it('内容指纹与 sample.json 记录一致（改了示例内容却忘记递增 sampleVersion 时失败）', async () => {
+    const meta = await readSampleMeta(ROOT);
+    expect(meta.sampleVersion).toBe(await readSeedVersion(ROOT));
+    const actual = await computeSampleContentHash(ROOT);
+    expect(
+      meta.contentHash,
+      `示例内容已变更，请递增 sampleVersion 并更新 contentHash（运行 ${SAMPLE_HASH_COMMAND}）`
+    ).toBe(actual);
+  });
+
+  it('内容指纹：忽略 sample.json 与本机运行产物，任何内容改动都会改变指纹', async () => {
+    const copy = await mkdtemp(path.join(os.tmpdir(), 'ne-sample-hash-'));
+    try {
+      await cp(ROOT, copy, { recursive: true });
+      const base = await computeSampleContentHash(copy);
+      await writeFile(path.join(copy, '.novel-editor', 'sample.json'), '{"sampleVersion":99}\n');
+      await writeFile(path.join(copy, '.novel-editor', 'novel-editor.db'), 'local');
+      await writeFile(path.join(copy, '.DS_Store'), 'x');
+      expect(await computeSampleContentHash(copy)).toBe(base);
+      await appendFile(path.join(copy, '欢迎使用.md'), '\n新增一行\n');
+      expect(await computeSampleContentHash(copy)).not.toBe(base);
+    } finally {
+      await rm(copy, { recursive: true, force: true });
+    }
   });
 
   it('E2E 依赖的开篇文本保持不变', async () => {

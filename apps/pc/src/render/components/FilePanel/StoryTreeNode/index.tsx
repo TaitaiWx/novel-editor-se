@@ -1,6 +1,6 @@
-import React from 'react';
-import { AiOutlineEdit } from 'react-icons/ai';
+import React, { useRef, useState } from 'react';
 import type { ContextMenuEvent } from '../../FileTree';
+import InlineRenameInput, { isRenameShortcut } from '../../InlineRenameInput';
 import { splitNumericPrefix } from '@novel-editor/core/story-layout';
 import { createVolumeWorkspaceTab, stripStoryFileExtension } from '../../../utils/workspace';
 import type { StoryDisplayNode } from '../../../utils/storyStructure';
@@ -21,7 +21,8 @@ export interface StoryTreeContext {
   registerNodeRef: (path: string, element: HTMLDivElement | null) => void;
   onToggleDirectory: (path: string) => void;
   onSelectFile: (path: string) => void;
-  onRenameNode: (path: string) => void;
+  /** 行内重命名提交（双击名称 / F2）；新名称不含扩展名时由调用方补回 */
+  onRenameNode: (path: string, nextName: string) => void;
   onRowKeyDown: (event: React.KeyboardEvent, onActivate: () => void) => void;
   onDragStart: (event: React.DragEvent, sourcePath: string, parentPath: string) => void;
   onDragOver: (
@@ -52,10 +53,14 @@ const groupRowClassName = `${styles.storyNodeButton} ${styles.storyNodeButtonGro
 const itemRowClassName = `${styles.storyNodeButton} ${styles.storyNodeButtonLeaf}`;
 
 /** 标题：数字序号前缀（「001-」）弱化显示，正文部分保持高亮；完整名称在悬停提示中 */
-const StoryTitle: React.FC<{ name: string; fullName: string }> = ({ name, fullName }) => {
+const StoryTitle: React.FC<{
+  name: string;
+  fullName: string;
+  onDoubleClick?: (event: React.MouseEvent) => void;
+}> = ({ name, fullName, onDoubleClick }) => {
   const { prefix, rest } = splitNumericPrefix(name);
   return (
-    <span className={styles.storyNodeTitle} title={fullName}>
+    <span className={styles.storyNodeTitle} title={fullName} onDoubleClick={onDoubleClick}>
       {prefix && <span className={styles.storyNodeIndex}>{prefix}</span>}
       {rest}
     </span>
@@ -119,6 +124,41 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
     onContextMenu,
     onObjectContextMenu,
   } = tree;
+  // 行内重命名：双击名称或选中行按 F2 进入，Enter 提交、Esc 取消、失焦提交
+  const [renaming, setRenaming] = useState(false);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const setRowRef = (element: HTMLDivElement | null) => {
+    rowRef.current = element;
+    registerNodeRef(node.path, element);
+  };
+  const startRename = (event: React.SyntheticEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setRenaming(true);
+  };
+  const handleRowKeyDown = (
+    event: React.KeyboardEvent,
+    canRename: boolean,
+    activate: () => void
+  ) => {
+    if (canRename && isRenameShortcut(event)) {
+      startRename(event);
+      return;
+    }
+    onRowKeyDown(event, activate);
+  };
+  const renderRenameInput = (currentName: string) => (
+    <InlineRenameInput
+      initialValue={currentName}
+      ariaLabel={`重命名 ${currentName}`}
+      restoreFocusRef={rowRef}
+      onCommit={(nextName) => {
+        setRenaming(false);
+        onRenameNode(node.path, nextName);
+      }}
+      onCancel={() => setRenaming(false)}
+    />
+  );
 
   if (node.type === 'directory') {
     const expanded = expandedStoryDirs.has(node.path);
@@ -152,11 +192,12 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
       <div className={styles.storyNode}>
         <div className={styles.storyNodeRow} style={{ paddingLeft: `${14 + level * 16}px` }}>
           <div
-            ref={(element) => registerNodeRef(node.path, element)}
+            ref={setRowRef}
             role="button"
             tabIndex={0}
             aria-expanded={expanded}
-            draggable={isReorderableDirectory}
+            aria-keyshortcuts={isSyntheticVolume ? undefined : 'F2'}
+            draggable={isReorderableDirectory && !renaming}
             className={`${groupRowClassName} ${
               isActiveVolume ? styles.storyNodeButtonActive : ''
             } ${isRevealedNode ? styles.storyNodeButtonReveal : ''} ${
@@ -169,7 +210,9 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
                     : ''
             }`}
             onClick={() => onToggleDirectory(node.path)}
-            onKeyDown={(event) => onRowKeyDown(event, () => onToggleDirectory(node.path))}
+            onKeyDown={(event) =>
+              handleRowKeyDown(event, !isSyntheticVolume, () => onToggleDirectory(node.path))
+            }
             onDragStart={(event) =>
               parentPath ? onDragStart(event, node.path, parentPath) : undefined
             }
@@ -203,23 +246,14 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
               {directoryMeta.label}
             </span>
             <span className={styles.storyNodePrimary}>
-              <StoryTitle
-                name={node.name}
-                fullName={describeDirectory(node.name, directoryMeta.label, storyStats)}
-              />
-              {!isSyntheticVolume && (
-                <button
-                  type="button"
-                  className={styles.storyNodeAction}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onRenameNode(node.path);
-                  }}
-                  aria-label={`修改 ${node.name}`}
-                  title={`修改 ${node.name}`}
-                >
-                  <AiOutlineEdit />
-                </button>
+              {renaming ? (
+                renderRenameInput(node.name)
+              ) : (
+                <StoryTitle
+                  name={node.name}
+                  fullName={describeDirectory(node.name, directoryMeta.label, storyStats)}
+                  onDoubleClick={isSyntheticVolume ? undefined : startRename}
+                />
               )}
             </span>
             {storyStats && (
@@ -269,10 +303,11 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
   return (
     <div className={styles.storyNode}>
       <div
-        ref={(element) => registerNodeRef(node.path, element)}
+        ref={setRowRef}
         role="button"
         tabIndex={0}
-        draggable={Boolean(parentPath && canReorder && !isDocument)}
+        aria-keyshortcuts="F2"
+        draggable={Boolean(parentPath && canReorder && !isDocument) && !renaming}
         className={`${itemRowClassName} ${
           isSelectedChapter ? styles.storyNodeButtonActive : ''
         } ${isRevealedNode ? styles.storyNodeButtonReveal : ''} ${
@@ -284,7 +319,7 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
         }`}
         style={{ marginLeft: `${22 + level * 16}px`, marginRight: '12px' }}
         onClick={() => onSelectFile(node.path)}
-        onKeyDown={(event) => onRowKeyDown(event, () => onSelectFile(node.path))}
+        onKeyDown={(event) => handleRowKeyDown(event, true, () => onSelectFile(node.path))}
         onDragStart={(event) =>
           parentPath ? onDragStart(event, node.path, parentPath) : undefined
         }
@@ -312,19 +347,11 @@ const StoryTreeNode: React.FC<StoryTreeNodeProps> = ({
           <span className={`${styles.storyNodeType} ${fileTypeClass}`}>{fileMeta.label}</span>
         )}
         <span className={styles.storyNodePrimary}>
-          <StoryTitle name={displayName} fullName={node.name} />
-          <button
-            type="button"
-            className={styles.storyNodeAction}
-            onClick={(event) => {
-              event.stopPropagation();
-              onRenameNode(node.path);
-            }}
-            aria-label={`修改 ${displayName}`}
-            title={`修改 ${displayName}`}
-          >
-            <AiOutlineEdit />
-          </button>
+          {renaming ? (
+            renderRenameInput(displayName)
+          ) : (
+            <StoryTitle name={displayName} fullName={node.name} onDoubleClick={startRename} />
+          )}
         </span>
       </div>
     </div>

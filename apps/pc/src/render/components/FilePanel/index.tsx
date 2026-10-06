@@ -43,7 +43,7 @@ import SearchBar from './SearchBar';
 import CharacterGenerationHint from './CharacterGenerationHint';
 import GrowthSection from './GrowthSection';
 import WorkSwitcher from './WorkSwitcher';
-import ProjectNotesSection from './ProjectNotesSection';
+import ProjectDocsButton from './ProjectDocsButton';
 import type { GrowthSheetSummary } from '../../utils/growthIndex';
 import styles from './styles.module.scss';
 
@@ -161,10 +161,8 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       [folderPath, projectLayout, storyNodes, storyOrderMap]
     );
     const storyDisplayNodes = storyStructure.displayNodes;
-    const projectDocNodes = useMemo(
-      () => storyStructure.projectDocs.map((node) => ({ ...node, storyKind: 'document' as const })),
-      [storyStructure]
-    );
+    // 项目根目录的说明文档（欢迎使用.md 等）：收在项目名旁的「项目说明」按钮里
+    const projectDocNodes = storyStructure.projectDocs;
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     // 当前作品：正文 / 资料只显示这部作品（搜索时跨作品显示全部结果）
@@ -338,6 +336,14 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   createMenuOpen={createMenuOpen}
                   onCreateMenuOpenChange={setCreateMenuOpen}
                   onRenameProject={onRenameProject}
+                  identityExtra={
+                    <ProjectDocsButton
+                      docs={projectDocNodes}
+                      selectedFile={selectedFile}
+                      onOpen={handleFileSelectFromSearch}
+                      onContextMenu={onContextMenu}
+                    />
+                  }
                   onOpenFolder={onOpenFolder}
                   onToggleSearch={handleToggleSearch}
                   onCollapse={onCollapse}
@@ -434,7 +440,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                                         activeWorkspaceTab === createCharacterWorkspaceTab(item)
                                       }
                                       onOpen={() => onOpenCharacterNode(item.id)}
-                                      onRename={() => onRenameCharacterNode(item.id)}
+                                      onRename={(name) => onRenameCharacterNode(item.id, name)}
                                       onDelete={() => onDeleteCharacterNode(item.id)}
                                       onContextMenu={(event) =>
                                         emitObjectContextMenu(event, {
@@ -477,7 +483,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                               icon={<AiOutlineFolder />}
                               active={activeWorkspaceTab === createLoreWorkspaceTab(item)}
                               onOpen={() => onOpenLoreNode(item.id)}
-                              onRename={() => onRenameLoreNode(item.id)}
+                              onRename={(name) => onRenameLoreNode(item.id, name)}
                               onDelete={() => onDeleteLoreNode(item.id)}
                               onContextMenu={(event) =>
                                 emitObjectContextMenu(event, {
@@ -544,18 +550,6 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                         </div>
                       ))}
                   </section>
-
-                  {projectDocNodes.length > 0 && (
-                    <ProjectNotesSection
-                      nodes={projectDocNodes}
-                      collapsed={collapsedSections.docs}
-                      tree={storyTree}
-                      onToggle={() => toggleSection('docs')}
-                      onContextMenu={(event) =>
-                        emitObjectContextMenu(event, { kind: 'project-root' })
-                      }
-                    />
-                  )}
                 </div>
               </div>
             </>

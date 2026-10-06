@@ -133,29 +133,6 @@
   flex: 1;
 }
 
-.storyNodeAction {
-  // 只在悬停 / 键盘聚焦 / 选中时出现，不占用标题宽度
-  display: none;
-  width: 18px;
-  height: 18px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--ui-fg-disabled);
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background-color 0.15s,
-    color 0.15s;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--ui-fg-primary);
-  }
-}
-
 .storyNodeStats {
   display: inline-flex;
   align-items: center;
@@ -191,10 +168,4 @@
   color: #d6b978;
   background: rgba(214, 168, 89, 0.08);
   border-color: rgba(214, 168, 89, 0.14);
-}
-
-.storyNodeButton:hover .storyNodeAction,
-.storyNodeButton:focus-within .storyNodeAction,
-.storyNodeButtonActive .storyNodeAction {
-  display: inline-flex;
 }
