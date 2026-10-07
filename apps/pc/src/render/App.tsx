@@ -13,10 +13,14 @@ import KnowledgeExportDialog from './components/KnowledgeExportDialog';
 import AboutDialog from './components/AboutDialog';
 import InspirationDialog from './components/InspirationDialog';
 import InspirationButton from './components/InspirationButton';
+import ContinuationButton from './components/ContinuationButton';
+import EditorGrowthRecord from './components/EditorGrowthRecord';
+import SceneVideoButton from './components/SceneVideoButton';
 import styles from './App.module.scss';
 import { VscLayoutSidebarLeft, VscLayoutSidebarRight } from 'react-icons/vsc';
 import { CENTER_MIN } from '@/render/app/layoutConstants';
 import { useAppController } from '@/render/hooks/useAppController';
+import { formatShortcutLabel } from '@/render/utils/appSettings';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
@@ -59,6 +63,7 @@ const App: React.FC = () => {
     handleAssistantApplyFix,
     handleAssistantPreviewDiff,
     inspiration,
+    editorAssistApi,
   } = useAppController();
 
   // ─── 渲染所需字段 ──────────────────────────────────────────────
@@ -337,8 +342,13 @@ const App: React.FC = () => {
                 replaceLineRequest={replaceLineRequest}
                 inlineDiff={inlineDiff}
                 editorViewRef={editorViewRef}
+                editorAssist={editorAssistApi.editorAssist}
                 editorHeaderActions={
-                  <InspirationButton shortcut={appSettings.shortcuts.openInspiration} />
+                  <>
+                    <InspirationButton shortcut={appSettings.shortcuts.openInspiration} />
+                    <ContinuationButton editorViewRef={editorViewRef} />
+                    <SceneVideoButton shortcutLabel={formatShortcutLabel('Mod+Alt+V')} />
+                  </>
                 }
                 emptyStateActions={
                   <InspirationButton
@@ -504,6 +514,13 @@ const App: React.FC = () => {
             setSettingsCenterTab('ai');
             setShowSettingsCenter(true);
           }}
+        />
+
+        <EditorGrowthRecord
+          request={editorAssistApi.growthRecord}
+          workPath={editorAssistApi.assistWorkPath}
+          chapter={growthEntry.growthChapter}
+          onClose={editorAssistApi.closeGrowthRecord}
         />
 
         <InspirationDialog

@@ -12,6 +12,8 @@ export const WORKSPACE_TAB_VOLUME_PREFIX = '__workspace__:volume:';
 export const WORKSPACE_TAB_GROWTH = '__workspace__:growth';
 /** 单个角色的成长档案：`__workspace__:growth:<角色名>` */
 export const WORKSPACE_TAB_GROWTH_PREFIX = '__workspace__:growth:';
+/** 场景视频：`__workspace__:scene-video:<章路径>#<场景>` */
+export const WORKSPACE_TAB_SCENE_VIDEO_PREFIX = '__workspace__:scene-video:';
 
 export type AssistantScopeKind = 'project' | 'volume' | 'chapter';
 export type AssistantArtifactKind = 'characters' | 'lore' | 'materials';
@@ -297,7 +299,8 @@ export function isWorkspaceTab(path: string | null): boolean {
         path.startsWith(WORKSPACE_TAB_CHARACTER_PREFIX) ||
         path.startsWith(WORKSPACE_TAB_LORE_ENTRY_PREFIX) ||
         path.startsWith(WORKSPACE_TAB_VOLUME_PREFIX) ||
-        path.startsWith(WORKSPACE_TAB_GROWTH_PREFIX))
+        path.startsWith(WORKSPACE_TAB_GROWTH_PREFIX) ||
+        path.startsWith(WORKSPACE_TAB_SCENE_VIDEO_PREFIX))
   );
 }
 
@@ -348,6 +351,33 @@ export function isGrowthWorkspaceTab(path: string | null): boolean {
 export function parseGrowthWorkspaceTab(path: string | null): string | null {
   if (!path?.startsWith(WORKSPACE_TAB_GROWTH_PREFIX)) return null;
   return path.slice(WORKSPACE_TAB_GROWTH_PREFIX.length).trim() || null;
+}
+
+export interface SceneVideoTabTarget {
+  chapterPath: string;
+  scene: string;
+}
+
+/** 场景名里不允许出现「#」（标签路径用最后一个「#」分隔章路径与场景） */
+export function normalizeSceneVideoName(scene: string): string {
+  return scene.replace(/#/g, '＃').replace(/\s+/g, ' ').trim();
+}
+
+/** 场景视频标签：同一章的同一场景只打开一个标签 */
+export function createSceneVideoWorkspaceTab(target: SceneVideoTabTarget): string {
+  return `${WORKSPACE_TAB_SCENE_VIDEO_PREFIX}${target.chapterPath}#${normalizeSceneVideoName(
+    target.scene
+  )}`;
+}
+
+export function parseSceneVideoWorkspaceTab(path: string | null): SceneVideoTabTarget | null {
+  if (!path?.startsWith(WORKSPACE_TAB_SCENE_VIDEO_PREFIX)) return null;
+  const rest = path.slice(WORKSPACE_TAB_SCENE_VIDEO_PREFIX.length);
+  const hash = rest.lastIndexOf('#');
+  if (hash <= 0) return null;
+  const chapterPath = rest.slice(0, hash);
+  const scene = rest.slice(hash + 1).trim();
+  return chapterPath && scene ? { chapterPath, scene } : null;
 }
 
 export function isUntitledWritingTab(path: string | null): boolean {

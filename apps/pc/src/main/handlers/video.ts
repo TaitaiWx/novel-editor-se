@@ -5,6 +5,7 @@
  * - 渲染进程传入的作品目录必须是存在的绝对路径；若该窗口已上报工作区，还必须位于工作区内
  * - 成片落盘到 <作品>/资料/视频/<章>/<场景>/镜头N-vX.mp4（+ .prompt.json），写入前再次校验路径
  * - 任务每次变化通过 video-task-updated 广播给所有窗口
+ * - 场景视频工作区（分镜.json / 分镜.md / 成片预览 / 拼接样片）的读写见 video-scene.ts
  */
 import { BrowserWindow, ipcMain } from 'electron';
 import { readdir, realpath, stat } from 'fs/promises';
@@ -23,6 +24,7 @@ import { downloadToFile, resolveInsideWork, writeJsonFile } from '../video/downl
 import { VideoTaskRunner, type VideoTaskRepo } from '../video/runner';
 import { isPathInWorkspace } from './database/workspace-path';
 import { getWorkspaceRootForSender } from './session';
+import { registerVideoSceneHandlers } from './video-scene';
 
 const MAX_TEXT = 4000;
 
@@ -180,6 +182,7 @@ export function registerVideoHandlers(
   ipcMain.handle('video-task-retry', (_event, id: unknown) =>
     guard(() => runner.retry(String(id)))
   );
+  registerVideoSceneHandlers({ assertWorkPath, workspaceRootFor });
   ipcMain.handle('video-settings-get', () =>
     guard((): VideoSettingsInfo => getProviderConfigStore().getVideoSettings())
   );

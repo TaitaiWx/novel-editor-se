@@ -18,6 +18,7 @@
  * - log-upload:  打包 / 上传日志
  * - ai-providers: AI 服务配置（密钥 safeStorage 加密）、一次性 / 流式补全
  * - video:       场景视频异步任务队列（提交 → 轮询 → 下载落盘）
+ * - character-avatar: 人物头像保存到 <作品>/资料/人物头像/
  */
 export { registerFileSystemHandlers } from './file-system';
 export { registerDatabaseHandlers } from './database';
@@ -32,5 +33,6 @@ export { registerAboutHandlers } from './about';
 export { registerLogUploadHandlers } from './log-upload';
 export { registerAIProviderHandlers } from './ai-providers';
 export { registerVideoHandlers } from './video';
+export { registerCharacterAvatarHandlers } from './character-avatar';
 
 export type { FileNode } from './file-system';

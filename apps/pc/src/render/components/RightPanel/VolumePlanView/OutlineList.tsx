@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { VscGripper, VscInsert } from 'react-icons/vsc';
+import { VscDeviceCameraVideo, VscGripper, VscInsert } from 'react-icons/vsc';
 import type {
   VolumeActPlan,
   VolumeBeat,
@@ -22,6 +22,8 @@ export interface OutlineListHandlers {
   onEditActNote: (actKey: string, text: string) => void;
   onReorderBeat: (chapterPath: string, segmentKeys: string[], from: string, to: string) => void;
   onInsertBeat?: (chapter: VolumeChapterPlan, beat: VolumeBeat) => void;
+  /** 场景条目「生成场景视频」：打开场景视频工作区 */
+  onSceneVideo?: (chapter: VolumeChapterPlan, beat: VolumeBeat) => void;
   onOpenChapter: (path: string, line?: number, anchor?: string) => void;
 }
 
@@ -150,6 +152,17 @@ const BeatRow: React.FC<{
           onClick={() => handlers.onInsertBeat?.(chapter, beat)}
         >
           <VscInsert />
+        </button>
+      )}
+      {handlers.onSceneVideo && beat.source === 'scene' && (
+        <button
+          type="button"
+          className={styles.beatAction}
+          title="生成场景视频"
+          aria-label={`生成场景视频 ${beat.title || beat.text}`}
+          onClick={() => handlers.onSceneVideo?.(chapter, beat)}
+        >
+          <VscDeviceCameraVideo />
         </button>
       )}
     </li>

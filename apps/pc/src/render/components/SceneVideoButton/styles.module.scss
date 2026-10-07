@@ -1,0 +1,47 @@
+// 场景视频入口：柔和的蓝色胶囊，与「灵感」胶囊并排但不抢正文注意力
+$tone: #569cd6;
+
+.slot {
+  order: -1;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid rgba($tone, 0.26);
+  border-radius: 999px;
+  background: rgba($tone, 0.08);
+  color: #a9c8e4;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: rgba($tone, 0.16);
+    border-color: rgba($tone, 0.45);
+    color: #d6e6f5;
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}

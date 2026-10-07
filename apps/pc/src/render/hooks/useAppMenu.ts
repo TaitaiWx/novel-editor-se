@@ -3,6 +3,7 @@ import { APP_MENU_EVENTS, CHANGELOG_TAB_PATH } from '../../shared/app-menu';
 import { describeLogUploadResult } from '../../shared/log-upload';
 import { getActiveEditor } from '@/render/components/TextEditor/active-editor';
 import { requestOpenInspiration } from '@/render/components/InspirationDialog/inspiration';
+import { requestOpenSceneVideo } from '@/render/components/SceneVideoView/events';
 import { isChangelogPath, isUntitledPath } from '@/render/components/TextEditor/editor-paths';
 import {
   buildSaveAsDefaultName,
@@ -33,7 +34,7 @@ export const APP_SAVE_AS_FILE_EVENT = 'app:save-as-file';
 
 /**
  * 应用菜单（主进程 Menu）命令在渲染进程中的落地：
- * - 监听 APP_MENU_EVENTS（设置、检查更新、视图切换、查找、灵感抽签、快捷键说明、更新日志、上传日志）
+ * - 监听 APP_MENU_EVENTS（设置、检查更新、视图切换、查找、灵感抽签、场景视频、快捷键说明、更新日志、上传日志）
  * - 处理「保存」「另存为」窗口事件（作用于最近聚焦的编辑器）
  * - 把设置中心自定义的「切换侧边栏」「专注写作」「灵感抽签」快捷键同步给主进程，保证菜单加速键与实际按键一致
  */
@@ -148,6 +149,8 @@ export function useAppMenu(ctx: UseAppMenuContext) {
         else toast.info('请先打开一个文件');
       },
       [APP_MENU_EVENTS.openInspiration]: () => requestOpenInspiration(),
+      // 场景视频：由 useSceneVideoEntry 解析选区 / 光标所在的场并打开标签
+      [APP_MENU_EVENTS.openSceneVideo]: () => requestOpenSceneVideo(),
       [APP_MENU_EVENTS.showShortcuts]: () => setShowShortcuts(true),
       [APP_MENU_EVENTS.openChangelog]: () => openFileInTab(CHANGELOG_TAB_PATH),
       [APP_MENU_EVENTS.uploadLogs]: () => void handleUploadLogs(),

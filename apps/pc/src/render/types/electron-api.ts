@@ -363,6 +363,16 @@ export interface ElectronAPI {
         fields: { category?: string; title?: string; content?: string; tags?: string }
       ): Promise<unknown>;
       invoke(channel: 'db-world-setting-delete', id: number): Promise<unknown>;
+      /** 人物头像：保存到 <作品>/资料/人物头像/，返回相对作品目录的路径 */
+      invoke(
+        channel: 'character-avatar-save',
+        workPath: string,
+        characterName: string,
+        data: Uint8Array
+      ): Promise<
+        | { ok: true; data: { relativePath: string; absolutePath: string } }
+        | { ok: false; error: string }
+      >;
       invoke(channel: 'import-structured-file'): Promise<{
         previews: Array<{ fileName: string; content: string; sourcePath: string }>;
         errors: Array<{ filePath: string; error: string }>;

@@ -1,0 +1,309 @@
+// 续写入口用柔和的淡紫（与编辑器当前行高亮同一色相），与金色的「灵感」区分又不抢眼
+$ai: rgb(168, 150, 222);
+$muted: var(--ui-fg-muted);
+
+.icon {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+// 文件栏操作区是 flex：排在「灵感」之后（灵感 order: -1）
+.pillSlot {
+  order: -1;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid rgba($ai, 0.28);
+  border-radius: 999px;
+  background: rgba($ai, 0.08);
+  color: #c3b6ec;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background: rgba($ai, 0.16);
+    border-color: rgba($ai, 0.45);
+    color: #e2dbf7;
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.pillLabel {
+  letter-spacing: 0.5px;
+}
+
+.popover {
+  width: 340px;
+  max-height: min(560px, calc(100vh - 80px));
+  overflow-y: auto;
+  padding: 12px 14px 14px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 10px;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+}
+
+.title {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  color: $muted;
+  font-size: 11px;
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+%segment-base {
+  flex: 1;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.segment {
+  @extend %segment-base;
+  background: transparent;
+  color: $muted;
+
+  &:hover {
+    color: var(--ui-fg-primary);
+  }
+}
+
+.segmentActive {
+  @extend %segment-base;
+  background: rgba($ai, 0.2);
+  color: #e2dbf7;
+}
+
+.input,
+.select {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 5px;
+  background: var(--ui-bg-surface);
+  color: var(--ui-fg-primary);
+  font: inherit;
+  font-size: 12px;
+
+  &:focus {
+    outline: none;
+    border-color: rgba($ai, 0.6);
+  }
+}
+
+.select {
+  max-width: 170px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+%button-base {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+
+.primary {
+  @extend %button-base;
+  border: 1px solid rgba($ai, 0.5);
+  background: rgba($ai, 0.22);
+  color: #f0ecfb;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    background: rgba($ai, 0.32);
+  }
+}
+
+.primarySmall {
+  @extend .primary;
+  height: 24px;
+  padding: 0 10px;
+}
+
+.ghost {
+  @extend %button-base;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border-subtle);
+  background: transparent;
+  color: var(--ui-fg-primary);
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.notice {
+  color: #e2c08d;
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ui-fg-primary);
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #e8a29a;
+
+  span {
+    color: var(--ui-fg-primary);
+  }
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  line-height: 1.6;
+
+  span {
+    color: $muted;
+  }
+}
+
+.context {
+  border-top: 1px solid var(--ui-border-subtle);
+  padding-top: 8px;
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #b9acea;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.contextBody {
+  margin-top: 6px;
+}
+
+.contextMeta {
+  margin-bottom: 4px;
+  color: $muted;
+}
+
+.sectionList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 0;
+    cursor: pointer;
+  }
+}
+
+.sectionTokens {
+  color: $muted;
+  font-size: 11px;
+}
+
+.sectionText {
+  max-height: 160px;
+  overflow: auto;
+  margin: 2px 0 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--ui-fg-primary);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

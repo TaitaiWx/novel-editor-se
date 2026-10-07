@@ -15,6 +15,7 @@ export interface EditorRuntimeModules {
 
 let editorRuntimePromise: Promise<EditorRuntimeModules> | null = null;
 let livePreviewPromise: Promise<typeof import('./live-preview')> | null = null;
+let editorAssistPromise: Promise<typeof import('./assist')> | null = null;
 const languageExtensionCache = new Map<string, Promise<Extension>>();
 
 export const loadEditorRuntime = () => {
@@ -80,4 +81,15 @@ export const loadMarkdownLivePreview = () => {
     });
   }
   return livePreviewPromise;
+};
+
+/** 懒加载编辑器辅助（人物悬停卡片、行内续写），不进入首屏包 */
+export const loadEditorAssist = () => {
+  if (!editorAssistPromise) {
+    editorAssistPromise = import('./assist').catch((err: unknown) => {
+      editorAssistPromise = null;
+      throw err;
+    });
+  }
+  return editorAssistPromise;
 };

@@ -11,7 +11,7 @@ import { mathMarkdownSyntax } from '@/render/components/TextEditor/live-preview/
 import {
   clearRenderCaches,
   renderMath,
-  resetRenderBudgetForTests,
+  setRenderBudgetUnlimitedForTests,
 } from '@/render/components/TextEditor/live-preview/render-cache';
 
 /** 示例作品集根目录的复杂公式演示（项目说明文档） */
@@ -51,6 +51,7 @@ afterEach(() => {
   view?.destroy();
   view = null;
   document.body.innerHTML = '';
+  setRenderBudgetUnlimitedForTests(false);
 });
 
 describe('公式示例.md（复杂 LaTeX 演示）', () => {
@@ -92,7 +93,9 @@ describe('公式示例.md（复杂 LaTeX 演示）', () => {
 
   it('在编辑器中就地渲染，只有一个错误标记', () => {
     clearRenderCaches();
-    resetRenderBudgetForTests();
+    // 机器繁忙（全量测试 + 覆盖率）时一条 KaTeX 渲染就会超过 8ms 帧预算，后续公式被推迟到下一帧；
+    // 这里断言的是「同步构建后的结果」，因此关闭预算让结果与耗时无关
+    setRenderBudgetUnlimitedForTests(true);
     const parent = document.createElement('div');
     document.body.appendChild(parent);
     view = new EditorView({

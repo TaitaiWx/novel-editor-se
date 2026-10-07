@@ -31,6 +31,7 @@ import {
   registerLogUploadHandlers,
   registerAIProviderHandlers,
   registerVideoHandlers,
+  registerCharacterAvatarHandlers,
 } from './handlers';
 
 export { type FileNode } from './handlers';
@@ -49,4 +50,5 @@ export function setupIPC() {
   registerLogUploadHandlers();
   registerAIProviderHandlers();
   registerVideoHandlers();
+  registerCharacterAvatarHandlers();
 }

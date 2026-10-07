@@ -89,6 +89,8 @@ export function useCharacterStore({
         highlightColor?: string;
         highlightFirstMentionOnly?: boolean;
         currentState?: CharacterCurrentStateItem[];
+        /** 头像（相对作品目录的路径或 data URL） */
+        avatar?: string;
       }
     ) => {
       const ipc = window.electron?.ipcRenderer;
@@ -100,7 +102,7 @@ export function useCharacterStore({
         description: target.description,
         attributes: stringifyCharacterAttributes(
           {
-            avatar: target.avatar,
+            avatar: patch.avatar ?? target.avatar,
             aliases: target.aliases,
             category: patch.category ?? target.category,
             highlightColor: patch.highlightColor ?? target.highlightColor,

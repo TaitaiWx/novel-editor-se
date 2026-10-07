@@ -16,6 +16,7 @@ export type MenuCommandId =
   | 'undo'
   | 'redo'
   | 'find'
+  | 'openSceneVideo'
   | 'zoomIn'
   | 'zoomOut'
   | 'resetZoom'

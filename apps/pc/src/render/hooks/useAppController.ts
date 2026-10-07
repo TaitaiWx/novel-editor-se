@@ -43,6 +43,8 @@ import { useGuiSessionPublisher } from './useGuiSessionPublisher';
 import { useWorkScope } from './useWorkScope';
 import { useInspirationDialog } from './useInspirationDialog';
 import { useAssistantContext } from './useAssistantContext';
+import { useEditorAssist } from './useEditorAssist';
+import { useSceneVideoEntry } from './useSceneVideoEntry';
 
 /**
  * 应用组合根的全部 hook 调用：声明各领域状态，并按依赖把状态与动作接到各业务 hook。
@@ -241,6 +243,15 @@ export function useAppController() {
   });
   // 灵感抽签弹窗（工具栏按钮 / 快捷键 / 大纲版本来源）；只订阅打开事件，无顺序依赖
   const inspiration = useInspirationDialog(editorState);
+  // 编辑器辅助（人物悬停卡片 / 续写）：读取当前作品的成长档案，只监听成长档案变化与文件保存事件
+  const editorAssistApi = useEditorAssist({
+    ...workspaceState,
+    ...entitiesState,
+    ...derived,
+    ...tabs,
+  });
+  // 场景视频入口（文件栏按钮 / 卷纲条目 / 应用菜单 / 快捷键）；只订阅事件，无顺序依赖
+  useSceneVideoEntry({ ...editorState, ...uiState, ...tabs, ...derived });
 
   return {
     workspaceState,
@@ -273,5 +284,6 @@ export function useAppController() {
     handleAssistantApplyFix,
     handleAssistantPreviewDiff,
     inspiration,
+    editorAssistApi,
   };
 }

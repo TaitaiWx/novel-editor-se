@@ -23,6 +23,7 @@ import { useEditorFileLoader } from './hooks/useEditorFileLoader';
 import { useEditorRequests } from './hooks/useEditorRequests';
 import { useDirtyStateBroadcast } from './hooks/useDirtyStateBroadcast';
 import { useActiveEditorRegistration } from './hooks/useActiveEditorRegistration';
+import { useEditorAssistExtension } from './hooks/useEditorAssistExtension';
 import EditorFileHeader from './EditorFileHeader';
 import styles from './styles.module.scss';
 
@@ -31,6 +32,7 @@ const DEFAULT_SHOW_LINE_NUMBERS = false;
 export type { EditorViewportSnapshot } from './types';
 export type { InlineDiffRange };
 export type { CharacterHighlightPattern };
+export type { EditorAssistConfig } from './assist/types';
 
 interface UnmountFlushRefs {
   autoSaveTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
@@ -96,6 +98,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   onTransientHighlightProcessed,
   settingsComponent,
   emptyStateActions,
+  assist,
 }) => {
   const isUntitled = isUntitledPath(filePath);
   const isChangelog = isChangelogPath(filePath);
@@ -193,6 +196,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
     thousandCharMarkerStep,
     characterHighlights,
   });
+
+  // 人物悬停卡片 / 行内续写（懒加载，配置经 ref 读取最新值）
+  useEditorAssistExtension({ viewRef, editorReady, assist, filePath, readOnly });
 
   // Save on unmount：卸载时读取各 ref 的最新值（而非挂载时快照），交由模块级函数处理
   useEffect(() => {

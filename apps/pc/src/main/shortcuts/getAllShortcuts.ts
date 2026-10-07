@@ -33,6 +33,11 @@ export const getAllShortcuts = (): ShortcutDisplay[] => {
     { accelerator: `${mod}+W`, description: '关闭当前标签', category: '文件' },
     { accelerator: `${mod}+Alt+L`, description: '格式化当前章节', category: '编辑' },
     { accelerator: `${mod}+Shift+Y`, description: '灵感抽签', category: '编辑' },
+    // 编辑器内（CodeMirror keymap，TextEditor/assist）：人物卡片与行内续写
+    { accelerator: `${mod}+K`, description: '查看光标处人物的卡片', category: '编辑' },
+    { accelerator: 'Alt+\\', description: 'AI 行内续写', category: '编辑' },
+    { accelerator: 'Tab', description: '采纳续写（续写显示时）', category: '编辑' },
+    { accelerator: 'Alt+]', description: '换一个续写版本', category: '编辑' },
     { accelerator: `${mod}+B`, description: '切换侧边栏', category: '视图' },
     { accelerator: `${mod}+Shift+F`, description: '切换专注模式', category: '视图' },
     { accelerator: 'F11', description: '切换专注模式', category: '视图' },

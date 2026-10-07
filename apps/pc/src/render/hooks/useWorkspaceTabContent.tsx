@@ -10,6 +10,7 @@ import {
   createVolumeWorkspaceTab,
   isGrowthWorkspaceTab,
   parseGrowthWorkspaceTab,
+  parseSceneVideoWorkspaceTab,
   parseVolumeWorkspaceTab,
 } from '@/render/utils/workspace';
 import { findNodeInTree } from '@/render/app/fileTreeUtils';
@@ -33,6 +34,7 @@ const LoreView = lazy(() =>
   import('@/render/components/RightPanel/LoreView').then((module) => ({ default: module.LoreView }))
 );
 const VolumeWorkspaceView = lazy(() => import('@/render/components/VolumeWorkspaceView'));
+const SceneVideoView = lazy(() => import('@/render/components/SceneVideoView'));
 const GrowthView = lazy(() =>
   import('@/render/components/RightPanel/GrowthView').then((module) => ({
     default: module.GrowthView,
@@ -129,6 +131,11 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
           .filter((name): name is string => Boolean(name))
           .map((name) => [createGrowthWorkspaceTab(name), `成长 · ${name}`])
       ),
+      ...Object.fromEntries(
+        openTabs
+          .filter((tab) => parseSceneVideoWorkspaceTab(tab))
+          .map((tab) => [tab, `视频 · ${parseSceneVideoWorkspaceTab(tab)?.scene ?? ''}`])
+      ),
     }),
     [files, folderPath, openTabs, rootVolumeNode, workspaceCharacters, workspaceLoreEntries]
   );
@@ -141,6 +148,25 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
   // 角色 / 设定 / 成长档案标签跟随当前作品（普通文件夹为文件夹本身）
   const scopePath = ctx.workScopePath ?? folderPath;
   const activeGrowthTab = isGrowthWorkspaceTab(activeWorkspaceTab) ? activeWorkspaceTab : null;
+  const activeSceneVideo = useMemo(
+    () => parseSceneVideoWorkspaceTab(activeWorkspaceTab),
+    [activeWorkspaceTab]
+  );
+  // 场景视频：人物（名字 / 别名 / 头像 / 简介）与设定标题用于预填与提示
+  const sceneVideoCharacters = useMemo(
+    () =>
+      workspaceCharacters.map((item) => ({
+        name: item.name,
+        aliases: item.aliases,
+        avatar: item.avatar,
+        appearance: item.description,
+      })),
+    [workspaceCharacters]
+  );
+  const sceneVideoLoreTitles = useMemo(
+    () => workspaceLoreEntries.map((item) => item.title),
+    [workspaceLoreEntries]
+  );
 
   const editorCharacterHighlights = useMemo(
     () =>
@@ -228,6 +254,22 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
             ),
           }
         : {}),
+      ...(activeSceneVideo && activeWorkspaceTab
+        ? {
+            [activeWorkspaceTab]: (
+              <SceneVideoView
+                key={`${activeWorkspaceTab}-${scopePath ?? ''}`}
+                tabPath={activeWorkspaceTab}
+                chapterPath={activeSceneVideo.chapterPath}
+                scene={activeSceneVideo.scene}
+                workPath={scopePath}
+                dbReady={dbReady}
+                characters={sceneVideoCharacters}
+                loreTitles={sceneVideoLoreTitles}
+              />
+            ),
+          }
+        : {}),
       ...(selectedVolumePath && selectedVolumeNode?.type === 'directory'
         ? {
             [activeWorkspaceTab as string]: (
@@ -247,6 +289,7 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
     }),
     [
       activeGrowthTab,
+      activeSceneVideo,
       activeWorkspaceTab,
       closeTab,
       dbReady,
@@ -263,6 +306,8 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
       selectedLoreEntryTabId,
       selectedVolumeNode,
       selectedVolumePath,
+      sceneVideoCharacters,
+      sceneVideoLoreTitles,
       syncWorkspaceCharacters,
       syncWorkspaceLoreEntries,
       storyOrderMap,

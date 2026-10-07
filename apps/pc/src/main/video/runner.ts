@@ -237,6 +237,8 @@ export class VideoTaskRunner {
       // 同一轮内立即开始下载
       this.tickAgain = true;
     } catch (error) {
+      // 轮询失败会按 5s→10s→20s→30s 退避，必须留下日志，否则任务「卡住」时无从排查
+      this.deps.log?.(`[video] 轮询任务 ${task.id} 失败`, error);
       this.apply(task, { type: 'poll-failed', error: toTaskError(error) });
     }
   }

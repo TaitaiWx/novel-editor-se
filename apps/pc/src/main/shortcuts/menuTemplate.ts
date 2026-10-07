@@ -156,6 +156,10 @@ export function buildApplicationMenuTemplate(
         },
         toMenuAccelerator(options.bindings.openInspiration)
       ),
+      withAccelerator(
+        { label: '场景视频…', click: () => sendToRenderer(APP_MENU_EVENTS.openSceneVideo) },
+        acc('openSceneVideo')
+      ),
     ],
   });
 

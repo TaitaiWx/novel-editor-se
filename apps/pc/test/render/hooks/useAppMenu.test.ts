@@ -15,6 +15,7 @@ import {
 import { DEFAULT_SHORTCUT_SETTINGS } from '@/render/utils/appSettings';
 import { APP_MENU_EVENTS } from '../../../src/shared/app-menu';
 import { OPEN_INSPIRATION_EVENT } from '@/render/components/InspirationDialog/inspiration';
+import { OPEN_SCENE_VIDEO_EVENT } from '@/render/components/SceneVideoView/events';
 import {
   installElectronMock,
   uninstallElectronMock,
@@ -117,6 +118,16 @@ describe('useAppMenu', () => {
     window.addEventListener(OPEN_INSPIRATION_EVENT, onOpen);
     act(() => mock.emit(APP_MENU_EVENTS.openInspiration));
     window.removeEventListener(OPEN_INSPIRATION_EVENT, onOpen);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('场景视频：菜单事件转成打开场景视频的窗口事件', () => {
+    const { ctx } = createCtx();
+    renderHook(() => useAppMenu(ctx));
+    const onOpen = vi.fn();
+    window.addEventListener(OPEN_SCENE_VIDEO_EVENT, onOpen);
+    act(() => mock.emit(APP_MENU_EVENTS.openSceneVideo));
+    window.removeEventListener(OPEN_SCENE_VIDEO_EVENT, onOpen);
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 

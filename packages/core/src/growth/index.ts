@@ -18,3 +18,4 @@ export * from './consistency';
 export * from './simulate-prompt';
 export * from './simulate';
 export * from './markdown';
+export * from './context';

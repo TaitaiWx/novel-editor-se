@@ -51,6 +51,8 @@
 - CodeMirror `hoverTooltip` + 现有人物识别（`writing-decorations`），只在可见区域匹配；人物数据走当前作品范围（work-scope）。
 - 头像：人物卡已有 `avatar` 字段，支持从本地图片设置（存到 `<作品>/资料/人物头像/`）。
 
+**实现状态（第二期）** ✅：`TextEditor/assist/character-hover.ts`（hoverTooltip + ⌘K 固定卡片 + 高亮全部）、`components/CharacterHoverCard`、`components/EditorGrowthRecord`；头像 `character-avatar-save` → `<作品>/资料/人物头像/`。「最近出场章节」实现为「上次出场」：从当前章往前逐章查找（找到即停，最多 200 章），不含当前章。
+
 ## 2. 场景视频：文字转视频（MiniMax / Seedance）
 
 生成视频需要的输入多（背景、人物、剧情、镜头），不能挤在侧边栏的小卡片里。设计为一个**独立的工作区标签「场景视频」**，从正文发起，三栏布局：
@@ -79,6 +81,12 @@
 - 内容安全与失败：厂商拒绝时显示原因，并给出改写建议，不吞掉错误。
 - 离线可用：没有配置视频服务时，「场景视频」仍可用来写分镜脚本（导出为 Markdown 分镜表）。
 
+### 2.1 实现状态（第三期 · 场景视频工作区）
+
+已实现：工作区标签 `__workspace__:scene-video:<章路径>#<场景>`（`apps/pc/src/render/components/SceneVideoView/`），入口为编辑器文件栏「场景视频」、应用菜单「编辑 → 场景视频…」（⌥⌘V / Ctrl+Alt+V）与卷纲场景节拍；三栏 输入 / 分镜 / 预览与任务；没有配置 AI 时按段落拆分分镜，没有配置视频服务时仍可编辑与导出分镜表；工作区状态保存为场景目录里的 `分镜.json`。细节见 AGENTS.md「场景视频（工作区标签）」。
+
+偏差：编辑器暂无自定义右键菜单，「选中文字 → 场景视频」走文件栏按钮 / 菜单 / 快捷键；章纲回链写入章纲条目（标题「场景视频 · <场景>」+ 文件相对路径），没有单独的场景卡片 UI。
+
 ## 3. Grok 续写
 
 **交互**
@@ -89,6 +97,8 @@
 **实现要点**
 - Grok 走 Provider 注册表的 `grok` 文本 Provider（OpenAI 兼容），流式输出；模型、温度在设置中心配置。
 - 生成内容先进入「建议」状态（CodeMirror decoration），接受后才成为正文，便于撤销与写作统计区分。
+
+**实现状态（第二期）** ✅：`TextEditor/assist/continuation*.ts`（状态机 + 幽灵文字 / 建议 widget + 快捷键）、`components/ContinuationButton`（续写面板）、`utils/continuationService.ts`（上下文组装 → `ai-stream-start`）。与设计的差异：「建议」以高亮 widget 显示在光标处、采纳时才写入文档（而不是先插入再撤销），因此放弃不会留下撤销记录，写作统计天然只计采纳的正文；采纳本身是单独一步撤销。
 
 ## 4. 分期建议
 

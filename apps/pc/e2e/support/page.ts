@@ -67,6 +67,10 @@ const SPECIAL_KEYS: Record<string, { code: string; keyCode: number; text?: strin
   Home: { code: 'Home', keyCode: 36 },
   End: { code: 'End', keyCode: 35 },
   F2: { code: 'F2', keyCode: 113 },
+  // 标点键：code / keyCode 与真实键盘一致（'\\'.charCodeAt 是 92，真实 VK_OEM_5 是 220）
+  '\\': { code: 'Backslash', keyCode: 220, text: '\\' },
+  '[': { code: 'BracketLeft', keyCode: 219, text: '[' },
+  ']': { code: 'BracketRight', keyCode: 221, text: ']' },
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -302,12 +306,12 @@ export class Page {
   /** 把鼠标移到元素中心（触发 :hover，例如悬停时才出现的行内按钮） */
   async hover(target: Target): Promise<void> {
     const point = await this.locate(target);
-    await this.cdp.send('Input.dispatchMouseEvent', {
-      type: 'mouseMoved',
-      x: point.x,
-      y: point.y,
-      modifiers: 0,
-    });
+    await this.mouseMove(point.x, point.y);
+  }
+
+  /** 把鼠标移到指定坐标（不按键） */
+  async mouseMove(x: number, y: number): Promise<void> {
+    await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, modifiers: 0 });
   }
 
   /** 以真实鼠标事件点击元素中心 */

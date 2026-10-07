@@ -13,6 +13,7 @@ import { CAMP_LABELS } from '../../constants';
 import { CharacterCurrentStateSection } from '../CharacterCurrentStateSection';
 import { CharacterTimelineSection } from '../CharacterTimelineSection';
 import { CharacterGrowthButton } from '../CharacterGrowthButton';
+import { CharacterAvatarPicker } from '../CharacterAvatarPicker';
 import type { CharacterCurrentStateController } from '../useCharacterCurrentState';
 import type { CharacterTimelineController } from '../useCharacterTimeline';
 
@@ -36,6 +37,7 @@ interface CharacterDetailWorkspaceProps {
       highlightColor?: string;
       highlightFirstMentionOnly?: boolean;
       currentState?: CharacterCurrentStateItem[];
+      avatar?: string;
     }
   ) => Promise<void>;
   graphView: React.ReactNode;
@@ -43,6 +45,8 @@ interface CharacterDetailWorkspaceProps {
   growthLevel?: number | null;
   /** 打开（或新建）该人物的成长档案；未提供时不显示入口 */
   onOpenGrowthSheet?: (characterName: string) => void;
+  /** 作品目录：头像保存到 <作品>/资料/人物头像/ */
+  workPath?: string | null;
 }
 
 /**
@@ -65,6 +69,7 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
   graphView,
   growthLevel = null,
   onOpenGrowthSheet,
+  workPath = null,
 }) => {
   return (
     <div className={styles.objectWorkspace}>
@@ -73,7 +78,18 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
           <section className={styles.workspaceHero}>
             <div className={styles.workspaceEyebrow}>人物资料</div>
             <div className={styles.workspaceTitleRow}>
-              <h2 className={styles.workspaceTitle}>{focusedCharacter.name}</h2>
+              <CharacterAvatarPicker
+                name={focusedCharacter.name}
+                avatar={focusedCharacter.avatar}
+                color={focusedCharacter.highlightColor}
+                workPath={workPath}
+                onChange={(avatar) =>
+                  handleUpdateCharacterAttributes(focusedCharacter.id, { avatar })
+                }
+              />
+              <h2 className={`${styles.workspaceTitle} ${styles.workspaceTitleGrow}`}>
+                {focusedCharacter.name}
+              </h2>
               {onOpenGrowthSheet && (
                 <CharacterGrowthButton
                   characterName={focusedCharacter.name}

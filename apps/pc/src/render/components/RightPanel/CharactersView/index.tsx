@@ -220,6 +220,7 @@ export const CharactersView: React.FC<{
           graphView={graphView}
           growthLevel={resolveGrowthLevel(growthLevels, focusedCharacter)}
           onOpenGrowthSheet={onOpenGrowthSheet}
+          workPath={folderPath}
         />
       );
     }

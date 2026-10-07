@@ -1,0 +1,29 @@
+@use '../RightPanel/GrowthView/growth-ui' as ui;
+
+.popover {
+  @include ui.floating-surface;
+  width: 360px;
+  padding: 14px 16px 16px;
+  box-sizing: border-box;
+}
+
+.title {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: ui.$muted;
+
+  strong {
+    color: ui.$fg;
+    font-weight: 600;
+  }
+}
+
+.loading {
+  color: ui.$muted;
+  font-size: 12px;
+}
+
+.error {
+  color: #e8a29a;
+  font-size: 12px;
+}

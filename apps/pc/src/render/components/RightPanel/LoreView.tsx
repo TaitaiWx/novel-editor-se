@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import styles from './styles.module.scss';
 import type { LoreEntry, LoreCategory } from './types';
 import { LORE_CATEGORY_LABELS } from './constants';
@@ -122,7 +122,9 @@ export const LoreView: React.FC<{
       onEntriesChange?.(entries);
     }, [entries, loading, onEntriesChange]);
 
-    useEffect(() => {
+    // 详情模式的表单必须与标题在同一次提交中就绪：用 layout effect 在绘制前回填，
+    // 否则条目加载后的第一帧标题已显示、编辑框却是空的（被动 effect 延迟时尤其明显）
+    useLayoutEffect(() => {
       if (!initialEntryId) return;
       const target = entries.find((entry) => entry.id === initialEntryId);
       if (!target) return;

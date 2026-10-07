@@ -91,4 +91,47 @@ export interface VideoSettingsInfo {
   perTaskLimit?: number;
 }
 
+/** 场景视频工作区：定位一个场景目录（<作品>/资料/视频/<章>/<场景>/） */
+export interface VideoSceneRef {
+  /** 作品根目录（绝对路径，主进程校验） */
+  workPath: string;
+  chapter: string;
+  scene: string;
+}
+
+/** video-scene-load 的返回：分镜工作区状态（没有保存过时为 null）与目录内的文件 */
+export interface VideoSceneLoadResult {
+  /** 场景目录（绝对路径，可能尚不存在） */
+  dir: string;
+  /** 分镜.json 的内容（由渲染进程校验与迁移） */
+  state: unknown;
+  /** 目录内的文件名（镜头N-vX.mp4、样片-*.mp4 等，不含子目录） */
+  files: string[];
+}
+
+export interface VideoSceneSavePayload extends VideoSceneRef {
+  /** 分镜工作区状态（JSON 可序列化，写入 分镜.json） */
+  state: unknown;
+  /** 可选：同时写入 分镜.md */
+  markdown?: string;
+}
+
+export interface VideoSceneSaveResult {
+  dir: string;
+  /** 分镜.json 的绝对路径 */
+  jsonPath: string;
+  /** 写入了 分镜.md 时为其绝对路径 */
+  markdownPath?: string;
+}
+
+export interface VideoSceneFileRequest extends VideoSceneRef {
+  /** 场景目录内的文件名（只允许 镜头N-vX.mp4 / 样片-*.mp4|webm） */
+  fileName: string;
+}
+
+export interface VideoSceneAnimaticPayload extends VideoSceneRef {
+  ext: 'mp4' | 'webm';
+  data: Uint8Array;
+}
+
 export type { AIErrorKind, SerializedAIError, VideoTask };

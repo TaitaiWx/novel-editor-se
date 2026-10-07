@@ -6,6 +6,7 @@ import TabBar from '../TabBar';
 import { formatShortcutLabel } from '../../utils/appSettings';
 import type {
   CharacterHighlightPattern,
+  EditorAssistConfig,
   EditorViewportSnapshot,
   InlineDiffRange,
 } from '../TextEditor';
@@ -66,6 +67,8 @@ interface ContentPanelProps {
   editorHeaderActions?: React.ReactNode;
   /** 未打开文件时编辑器空状态里的操作（如「灵感抽签」） */
   emptyStateActions?: React.ReactNode;
+  /** 编辑器辅助：人物悬停卡片、行内续写 */
+  editorAssist?: EditorAssistConfig | null;
   viewportSnapshots?: Record<string, EditorViewportSnapshot>;
   onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onTabSelect: (filePath: string) => void;
@@ -151,6 +154,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   editorViewRef,
   editorHeaderActions,
   emptyStateActions,
+  editorAssist,
   viewportSnapshots,
   onViewportSnapshotChange,
   onTabSelect,
@@ -369,6 +373,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
               onScrollProcessed={onScrollProcessed}
               onTransientHighlightProcessed={onTransientHighlightProcessed}
               emptyStateActions={emptyStateActions}
+              assist={editorAssist}
               settingsComponent={
                 editorHeaderActions ? (
                   <>

@@ -20,6 +20,7 @@ import { CURRENT_DOCUMENT_PATH, useVolumeSources } from './useVolumeSources';
 import { useVolumePlanState } from './useVolumePlanState';
 import { useVolumePlanGenerate } from './useVolumePlanGenerate';
 import { insertBeatIntoChapterOutline } from './volumeSources';
+import { requestOpenSceneVideo } from '../../SceneVideoView/events';
 import { EMPTY_VOLUME_PLAN, mergeBeatOrder, resolveVolumeTarget } from './volumePlanState';
 import styles from './styles.module.scss';
 
@@ -161,6 +162,10 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
           ? (chapter, beat) => void handleInsertBeat(chapter, beat)
           : undefined,
         onOpenChapter: handleOpenChapter,
+        onSceneVideo: (chapter, beat) => {
+          const chapterPath = chapter.path === CURRENT_DOCUMENT_PATH ? undefined : chapter.path;
+          requestOpenSceneVideo({ chapterPath, scene: beat.title || undefined, line: beat.line });
+        },
       }),
       [canInsert, handleInsertBeat, handleOpenChapter, update]
     );

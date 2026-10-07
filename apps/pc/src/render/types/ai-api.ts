@@ -11,6 +11,12 @@ import type {
   AIIpcResult,
   AIProviderInfo,
   AIProviderUpdate,
+  VideoSceneAnimaticPayload,
+  VideoSceneFileRequest,
+  VideoSceneLoadResult,
+  VideoSceneRef,
+  VideoSceneSavePayload,
+  VideoSceneSaveResult,
   VideoSettingsInfo,
   VideoTask,
   VideoTaskSubmitPayload,
@@ -24,6 +30,12 @@ export type {
   AIProviderUpdate,
   AIStreamEvent,
   SerializedAIError,
+  VideoSceneAnimaticPayload,
+  VideoSceneFileRequest,
+  VideoSceneLoadResult,
+  VideoSceneRef,
+  VideoSceneSavePayload,
+  VideoSceneSaveResult,
   VideoSettingsInfo,
   VideoTask,
   VideoTaskSubmitPayload,
@@ -69,4 +81,20 @@ export interface AIInvokeOverloads {
     channel: 'video-settings-set',
     update: Partial<VideoSettingsInfo>
   ): Promise<AIIpcResult<VideoSettingsInfo>>;
+  invoke(
+    channel: 'video-scene-load',
+    scene: VideoSceneRef
+  ): Promise<AIIpcResult<VideoSceneLoadResult>>;
+  invoke(
+    channel: 'video-scene-save',
+    payload: VideoSceneSavePayload
+  ): Promise<AIIpcResult<VideoSceneSaveResult>>;
+  invoke(
+    channel: 'video-scene-read-file',
+    request: VideoSceneFileRequest
+  ): Promise<AIIpcResult<Uint8Array>>;
+  invoke(
+    channel: 'video-scene-write-animatic',
+    payload: VideoSceneAnimaticPayload
+  ): Promise<AIIpcResult<{ fileName: string; path: string }>>;
 }

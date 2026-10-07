@@ -1,0 +1,101 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { loadAvatarSource } from '../../../../utils/characterAvatar';
+import styles from './styles.module.scss';
+
+interface CharacterAvatarPickerProps {
+  name: string;
+  avatar?: string;
+  color?: string;
+  /** 作品目录：头像保存到 <作品>/资料/人物头像/ */
+  workPath: string | null;
+  /** 保存成功后写回人物卡（相对作品目录的路径） */
+  onChange: (avatar: string) => Promise<void> | void;
+}
+
+/**
+ * 人物详情标题区的头像：显示头像（或首字圆标），点击从本地选择图片。
+ * 图片交给主进程校验并保存到 <作品>/资料/人物头像/，人物卡只保存相对路径。
+ */
+export const CharacterAvatarPicker: React.FC<CharacterAvatarPickerProps> = ({
+  name,
+  avatar,
+  color = '#9cdcfe',
+  workPath,
+  onChange,
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [src, setSrc] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadAvatarSource(avatar, workPath).then((value) => {
+      if (!cancelled) setSrc(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [avatar, workPath]);
+
+  const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !workPath) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const result = await window.electron.ipcRenderer.invoke(
+        'character-avatar-save',
+        workPath,
+        name,
+        bytes
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      await onChange(result.data.relativePath);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const initial = Array.from(name.trim())[0] ?? '?';
+  return (
+    <div className={styles.picker}>
+      <button
+        type="button"
+        className={styles.avatar}
+        style={{ '--avatar-accent': color } as React.CSSProperties}
+        onClick={() => inputRef.current?.click()}
+        disabled={!workPath || busy}
+        aria-label={src ? `更换 ${name} 的头像` : `为 ${name} 设置头像`}
+        title={src ? '更换头像' : '设置头像（保存到 资料/人物头像/）'}
+      >
+        {src ? <img src={src} alt="" draggable={false} /> : <span>{initial}</span>}
+        <span className={styles.overlay} aria-hidden="true">
+          {busy ? '保存中' : src ? '更换' : '头像'}
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        hidden
+        onChange={(event) => void handleFile(event)}
+        data-testid="character-avatar-input"
+      />
+      {error && (
+        <span className={styles.error} role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+};
+
+export default CharacterAvatarPicker;

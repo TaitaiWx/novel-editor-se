@@ -1,0 +1,207 @@
+// 人物悬停卡片：与编辑器同一深色体系，人物高亮色只用作细节点缀
+.card {
+  --card-accent: #9cdcfe;
+  width: 296px;
+  max-width: calc(100vw - 32px);
+  padding: 12px 14px 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 10px;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+  color: var(--ui-fg-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: default;
+  user-select: none;
+}
+
+.header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.avatar,
+.initial {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.avatar {
+  object-fit: cover;
+  border: 1px solid var(--ui-border-subtle);
+}
+
+.initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--card-accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--card-accent) 40%, transparent);
+  color: var(--card-accent);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.level {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(215, 186, 125, 0.14);
+  color: #d9c18d;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.aliases {
+  color: var(--ui-fg-muted);
+  font-size: 11px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.tag,
+.role {
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.tag {
+  background: var(--ui-interaction-hover-bg);
+  color: var(--ui-fg-primary);
+}
+
+.role {
+  color: var(--ui-fg-muted);
+}
+
+.summary {
+  margin: 8px 0 0;
+  color: var(--ui-fg-primary);
+}
+
+.states {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+}
+
+.stateLabel {
+  flex-shrink: 0;
+  color: var(--ui-fg-muted);
+}
+
+.stateValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.growth {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.expBar {
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: #d9c18d;
+  }
+}
+
+.expText {
+  color: var(--ui-fg-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.appearance {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.appearanceValue {
+  color: var(--ui-fg-primary);
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-border-subtle);
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--ui-fg-primary);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--ui-interaction-hover-bg);
+    }
+
+    &:focus-visible {
+      outline: 1px solid var(--ui-interaction-focus-ring);
+    }
+
+    svg {
+      font-size: 13px;
+      color: var(--ui-fg-muted);
+    }
+  }
+}

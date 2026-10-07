@@ -15,12 +15,7 @@ import {
   type ContextGrowth,
   type ContinuationLength,
 } from '@novel-editor/ai';
-import {
-  loadMemory,
-  resolveWorkScope,
-  type GrowthRuleset,
-  type GrowthSheet,
-} from '@novel-editor/core';
+import { loadMemory, resolveWorkScope, summarizeSheetForContext } from '@novel-editor/core';
 import { CliError } from '../errors';
 import type { CliContext, CommandSpec } from '../types';
 import {
@@ -34,24 +29,6 @@ import {
 import { bool, num, requireStr, resolvePath, str } from './util';
 
 const DEFAULT_BUDGET = 6000;
-
-function summarizeSheet(sheet: GrowthSheet, ruleset: GrowthRuleset): ContextGrowth {
-  const attrName = new Map(ruleset.attributes.map((item) => [item.key, item.name]));
-  const skillName = new Map(ruleset.skills.map((item) => [item.id, item.name]));
-  const attributes = Object.entries(sheet.attributes)
-    .map(([key, value]) => `${attrName.get(key) ?? key} ${value}`)
-    .join('，');
-  const skills = sheet.skills
-    .map((skill) => `${skillName.get(skill.id) ?? skill.id} Lv${skill.level}`)
-    .join('、');
-  const notes = sheet.notes.slice(-2).join('；');
-  const parts = [
-    attributes && `属性：${attributes}`,
-    skills && `技能：${skills}`,
-    notes && `状态：${notes}`,
-  ].filter(Boolean);
-  return { name: sheet.name, level: sheet.level, summary: parts.join('；') || '暂无记录' };
-}
 
 /** 读取文件所属作品的记忆库（规则 + 成长卡），失败时返回空（续写不依赖记忆库） */
 async function loadMemoryContext(
@@ -69,7 +46,7 @@ async function loadMemoryContext(
     ctx.logger.debug(`记忆库: ${memory.dir}`);
     return {
       rules: memory.ruleset.coreRules.map((rule) => rule.text),
-      growth: memory.sheets.map((sheet) => summarizeSheet(sheet, memory.ruleset)),
+      growth: memory.sheets.map((sheet) => summarizeSheetForContext(sheet, memory.ruleset)),
       characters: memory.sheets.map((sheet) => ({ name: sheet.name, aliases: sheet.aliases })),
     };
   } catch (error) {

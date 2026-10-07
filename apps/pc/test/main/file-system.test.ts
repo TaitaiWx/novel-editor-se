@@ -294,6 +294,16 @@ describe('读写', () => {
     const bad = path.join(dir, 'nodir', 'a.md');
     await expect(invoke('write-file', bad, 'x')).rejects.toThrow(`Failed to write file: ${bad}`);
   });
+
+  it('write-file 同一文件并发保存时按调用顺序落盘（最后一次保存的内容生效）', async () => {
+    // 正文文件保存前会先异步读取旧内容（写作日志），并发时旧内容不能晚于新内容落盘
+    const file = await touch('001-并发.md', '原文');
+    const versions = Array.from({ length: 12 }, (_, index) =>
+      index % 2 === 0 ? `版本 ${index}\n${'长段落'.repeat(20_000)}` : `版本 ${index}`
+    );
+    await Promise.all(versions.map((content) => invoke('write-file', file, content)));
+    expect(await readFile(file, 'utf-8')).toBe(versions.at(-1));
+  });
 });
 
 describe('文件信息', () => {

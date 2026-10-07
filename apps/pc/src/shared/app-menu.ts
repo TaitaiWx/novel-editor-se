@@ -19,6 +19,8 @@ export const APP_MENU_EVENTS = {
   find: 'menu-find',
   /** 编辑 → 灵感抽签…（打开灵感抽签弹窗） */
   openInspiration: 'menu-open-inspiration',
+  /** 编辑 → 场景视频…（用选中的正文 / 光标所在的「第X场」打开场景视频工作区） */
+  openSceneVideo: 'menu-open-scene-video',
   /** 帮助 → 快捷键说明 */
   showShortcuts: 'menu-show-shortcuts',
   /** 帮助 → 更新日志 */

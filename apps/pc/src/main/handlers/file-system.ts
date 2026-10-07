@@ -33,6 +33,7 @@ import {
   renamePath,
   saveTextFile,
 } from '@novel-editor/core';
+import { createKeyedSerialQueue } from '../keyed-serial-queue';
 import { addRecentFolder } from '../recent-folders';
 import { getSampleDataPaths, syncSampleData, takeSampleUpgradeNotice } from '../sample-data';
 import { getWorkspaceRootForSender } from './session';
@@ -94,6 +95,9 @@ const fileWatchers = new Map<string, FSWatcher>();
 
 // ─── Register handlers ─────────────────────────────────────────────────────
 
+/** write-file 按文件路径串行 */
+const writeQueue = createKeyedSerialQueue();
+
 export function registerFileSystemHandlers(): void {
   ipcMain.handle('open-local-folder', async () => {
     const result = await dialog.showOpenDialog({
@@ -129,12 +133,16 @@ export function registerFileSystemHandlers(): void {
     async (event: { sender?: { id: number } }, filePath: string, content: string) => {
       // 正文文件保存前读取旧内容，用于计算写作日志的字数增量（只读当前文件，不扫描项目）
       const trackWriting = isStoryFile(filePath);
-      const previousContent = trackWriting ? await readPreviousContent(filePath) : null;
-      try {
-        await saveTextFile(filePath, content);
-      } catch {
-        throw new Error(`Failed to write file: ${filePath}`);
-      }
+      // 同一文件的「读旧内容 → 写入」串行执行：并发保存时后发起的内容必须最后落盘
+      const previousContent = await writeQueue(path.resolve(filePath), async () => {
+        const previous = trackWriting ? await readPreviousContent(filePath) : null;
+        try {
+          await saveTextFile(filePath, content);
+        } catch {
+          throw new Error(`Failed to write file: ${filePath}`);
+        }
+        return previous;
+      });
       if (trackWriting) {
         // 与 CLI 共用 core 写作日志（ne stats today/history）；不阻塞保存，失败只打日志
         void recordStoryFileSave({

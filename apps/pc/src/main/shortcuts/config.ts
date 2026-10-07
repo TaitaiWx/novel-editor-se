@@ -43,6 +43,13 @@ export const getShortcutConfigs = (): ShortcutConfig[] => {
     { id: 'undo', accelerator: `${mod}+Z`, description: '撤销', category: '编辑' },
     { id: 'redo', accelerator: `${mod}+Shift+Z`, description: '重做', category: '编辑' },
     { id: 'find', accelerator: `${mod}+F`, description: '查找', category: '编辑' },
+    // 场景视频：渲染进程（useSceneVideoEntry）同样处理并 preventDefault，焦点不在编辑器时由菜单兜底
+    {
+      id: 'openSceneVideo',
+      accelerator: `${mod}+Alt+V`,
+      description: '场景视频',
+      category: '编辑',
+    },
 
     // 视图
     { id: 'zoomIn', accelerator: `${mod}+=`, description: '放大', category: '视图' },

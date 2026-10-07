@@ -213,6 +213,8 @@ contextBridge.exposeInMainWorld('electron', {
         'ai-complete',
         'ai-stream-start',
         'ai-stream-cancel',
+        // 人物头像（保存到 <作品>/资料/人物头像/）
+        'character-avatar-save',
         // 场景视频任务
         'video-task-submit',
         'video-task-list',
@@ -220,6 +222,11 @@ contextBridge.exposeInMainWorld('electron', {
         'video-task-retry',
         'video-settings-get',
         'video-settings-set',
+        // 场景视频工作区（分镜.json / 分镜.md、成片预览、拼接样片；main/handlers/video-scene.ts）
+        'video-scene-load',
+        'video-scene-save',
+        'video-scene-read-file',
+        'video-scene-write-animatic',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -242,6 +249,7 @@ contextBridge.exposeInMainWorld('electron', {
         'menu-toggle-focus-mode',
         'menu-find',
         'menu-open-inspiration',
+        'menu-open-scene-video',
         'menu-show-shortcuts',
         'menu-open-changelog',
         'menu-upload-logs',
@@ -288,6 +296,7 @@ contextBridge.exposeInMainWorld('electron', {
         'menu-toggle-focus-mode',
         'menu-find',
         'menu-open-inspiration',
+        'menu-open-scene-video',
         'menu-show-shortcuts',
         'menu-open-changelog',
         'menu-upload-logs',

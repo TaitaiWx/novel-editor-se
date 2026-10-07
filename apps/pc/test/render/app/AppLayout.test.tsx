@@ -148,6 +148,12 @@ function buildController() {
       closeInspiration: vi.fn(),
       handleInsertInspiration: vi.fn(),
     },
+    editorAssistApi: {
+      editorAssist: { characters: [] },
+      growthRecord: null,
+      closeGrowthRecord: vi.fn(),
+      assistWorkPath: null,
+    },
   };
 }
 
@@ -179,6 +185,8 @@ vi.mock('@/render/components/AboutDialog', () => placeholder('about'));
 vi.mock('@/render/components/VersionTimeline', () => placeholder('versions'));
 vi.mock('@/render/components/DiffEditor', () => placeholder('diff'));
 vi.mock('@/render/components/InspirationDialog', () => placeholder('inspiration'));
+vi.mock('@/render/components/ContinuationButton', () => placeholder('continuation-button'));
+vi.mock('@/render/components/EditorGrowthRecord', () => placeholder('editor-growth-record'));
 vi.mock('@/render/components/InspirationButton', () => ({
   default: ({ variant = 'pill', shortcut }: { variant?: string; shortcut?: string }) => (
     <div data-testid={`inspiration-button-${variant}`} data-shortcut={shortcut} />

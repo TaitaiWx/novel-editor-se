@@ -2,6 +2,7 @@ import type React from 'react';
 import type { EditorView } from '@codemirror/view';
 import type { CharacterHighlightPattern } from './writing-decorations';
 import type { InlineDiffRange } from './inline-diff';
+import type { EditorAssistConfig } from './assist/types';
 
 export interface CursorPosition {
   line: number;
@@ -61,4 +62,6 @@ export interface TextEditorProps {
   settingsComponent?: React.ReactNode;
   /** 未打开文件时空状态里的额外操作（如「灵感抽签」） */
   emptyStateActions?: React.ReactNode;
+  /** 编辑器辅助：人物悬停卡片、行内续写（未提供时不启用） */
+  assist?: EditorAssistConfig | null;
 }

@@ -216,12 +216,14 @@ function peekCache(cache: LruCache<string, RenderResult>, key: string): boolean 
 const FRAME_BUDGET_MS = 8;
 let budgetSpent = 0;
 let budgetResetScheduled = false;
+/** 测试用：关闭预算限制，所有 widget 同步渲染 */
+let budgetUnlimited = false;
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 /** 当前任务是否还有渲染预算 */
 export function hasRenderBudget(): boolean {
-  return budgetSpent < FRAME_BUDGET_MS;
+  return budgetUnlimited || budgetSpent < FRAME_BUDGET_MS;
 }
 
 /** 执行一次重型渲染并计入预算 */
@@ -249,5 +251,14 @@ export function scheduleFrame(fn: () => void): void {
 
 /** 测试用：清空当前任务已消耗的渲染预算（覆盖率插桩会让 KaTeX 冷启动超过预算） */
 export function resetRenderBudgetForTests(): void {
+  budgetSpent = 0;
+}
+
+/**
+ * 测试用：关闭 / 恢复渲染预算。整份文档同步渲染的断言（多个 widget）在机器繁忙时
+ * 单次 KaTeX 渲染就可能超过预算，只清空预算不足以保证确定性
+ */
+export function setRenderBudgetUnlimitedForTests(unlimited: boolean): void {
+  budgetUnlimited = unlimited;
   budgetSpent = 0;
 }

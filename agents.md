@@ -129,6 +129,15 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - 当前作用域（作品 / 卷 / 章）的 AI 人物 / 设定 / 资料上下文在 AI 助手对话框顶部的「上下文」分区（`RightPanel/AssistantContextSection`，默认折叠只显示计数；数据与动作由 `hooks/useAssistantContext.ts` 组装，复用 `useScopedAssistantGeneration` / `useChapterMaterials`）；资料文件右键菜单也可「关联到当前章 / 从当前章移除」
 - 灵感抽签（`components/InspirationDialog`）：入口：编辑器文件栏最左侧的「💡 灵感」胶囊按钮（`InspirationButton` 图标 + 文字，经 `ContentPanel` 的 `editorHeaderActions` 插槽）、未打开文件时编辑器空状态的主操作「灵感抽签」（`variant="primary"`，经 `emptyStateActions` → `TextEditor` → `EmptyState.actions`）、应用菜单「编辑 → 灵感抽签…」（`APP_MENU_EVENTS.openInspiration`）、`Mod+Shift+Y`（设置中心可改，经 `menu-sync-shortcuts` 同步到菜单加速键）；弹窗按钮层级：未抽时整行主按钮「抽一签」，抽出后左侧文字按钮「全部重抽」、右侧 复制 / 交给 AI 扩写（次要）+「插入到光标处」（主操作），三张签等高、词条均衡换行（`text-wrap: balance`），窄窗口单列；「抽一签」零输入抽出 人物 / 地点 / 冲突，可单张换签、插入到光标处、复制、交给 AI 扩写；词源 / 我的词池 / 历史收在「更多选项」。纯函数在 `inspiration.ts`；存储复用三签卡（词池 `novel-editor:story-idea-term-pool:<作品>`，历史为 story_idea_card 行，题眼签存人物、变形签存地点、冲突签存冲突），大纲版本的「回到灵感」按卡片 id 回填
 
+### 编辑器 AI 辅助（人物悬停卡片 / 续写）
+
+- 代码：CodeMirror 部分在 `TextEditor/assist/`（经 `editor-runtime.ts` 的 `loadEditorAssist()` 懒加载，`useEditorAssistExtension` 以 `appendConfig` 追加，配置经 ref 读取最新值）；上层数据在 `hooks/useEditorAssist.ts`，经 `ContentPanel` 的 `editorAssist` → `TextEditor` 的 `assist` 传入。编辑器内核不直接访问 IPC
+- 人物悬停卡片：人物名 / 别名（识别口径同人物高亮，长名优先、不重叠，按「文档版本 → 行」缓存，只扫可见范围）悬停 300ms 弹出；输入中 / IME 组字不弹；Esc 关闭；`Mod+K` 打开光标处人物。卡片（`components/CharacterHoverCard`，数据纯函数在 `model.ts`）：头像或首字圆标、别名、分类 · 阵营、一句话简介、最近 2 条当前状态、当前作品成长卡的 Lv / 经验条、上次出场章节（从当前章往前逐章读取，找到即停）；操作「打开人物」「记一笔」（`components/EditorGrowthRecord`，复用 `GrowthRecordForm`，章节默认当前章）「高亮全部」（可见区域，8 秒后或 Esc 清除）
+- 人物头像：人物详情标题区点击头像选图，主进程 `character-avatar-save`（`main/handlers/character-avatar.ts`）校验作品目录在工作区内、按文件头只收 PNG / JPEG / GIF / WebP（≤5MB），保存为 `<作品>/资料/人物头像/<人物名>-<哈希>.<扩展名>` 并清理该人物旧头像；`attributes.avatar` 存相对作品目录的路径（旧的 data URL 仍可用），渲染进程经 `read-file-binary` 读取（`utils/characterAvatar.ts`）
+- 行内续写：`Alt+\` 在光标处请求，幽灵文字流式出现（widget，采纳前不进入文档，因此放弃不留痕、自动保存与写作日志只看到采纳后的正文）；`Tab` 采纳（`isolateHistory`，单独一步撤销）、`Esc` 放弃、`Alt+]` 换一个版本（最多 3 个，之后轮换）；从不自动触发；在别处输入或移动光标即取消并中止流。状态机是纯函数（`assist/continuation-state.ts`）
+- 续写面板：编辑器文件栏「续写」胶囊（`components/ContinuationButton`，在「灵感」之后）：长度（一句 / 一段 / 约 500 字）、方向（顺着写 / 制造冲突 / 收束本章，或自由输入）、遵循章纲、服务（默认：Grok 已配置用 Grok，否则设置中心默认 AI）；结果以「建议」高亮插在光标处（采纳 / 放弃 / 换一个），可展开「查看本次上下文」（各分区与 token 数）
+- 续写服务 `utils/continuationService.ts`：资料（`utils/writingSources.ts`：当前章章纲、人物卡、成长档案摘要与核心规则，摘要与 CLI 共用 core `summarizeSheetForContext`）→ `@novel-editor/ai` 的 `assembleWritingContext` + `buildContinuationPrompt` → `ai-stream-start`；片段经 `utils/aiStreamRouter.ts` 按 streamId 分发（streamId 返回前到达的片段会暂存）。错误按类型给出提示（未配置 / Key 无效 → 去设置，额度 / 内容安全 / 网络 → 重试，`assist/ai-error.ts`）
+
 ### 关于 / 日志上传
 
 - 关于窗口（`AboutDialog`，约 380px 小窗、不滚动）与设置中心「关于」分区共用 `components/AboutContent`，只展示：图标 + 名称 + 版本（通道徽标）、「首次运行 · 本次已运行」（主进程启动时间经 `get-about-info` 返回，每分钟刷新）、设备 ID（点击复制，提示「设备 ID 已复制」）、「上传日志」按钮。运行环境、数据目录等诊断信息不在界面展示，统一写进日志包的 `diagnostics.json`
@@ -158,17 +167,28 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - **CLI**：`ne ai continue` / `ne video storyboard` / `ne video validate`（见下方 CLI 命令）。CLI 没有 safeStorage，Key 读取环境变量 `NOVEL_EDITOR_<PROVIDER>_API_KEY`（连字符转下划线，例如 `NOVEL_EDITOR_GROK_API_KEY`），可选 `NOVEL_EDITOR_<PROVIDER>_BASE_URL` / `_MODEL`；没有 Key 时只输出提示词与 JSON Schema 交给 AI agent
 - 测试：Provider 映射与错误用 mock fetch（`packages/ai/test`），CLI 用本地 mock HTTP 服务（`apps/cli/test/ai-video.test.ts`），E2E `apps/pc/e2e/ai-providers.e2e.ts` 用本地 mock 服务验证 设置 → 保存 Key → 测试连接 → 流式通道
 
+### 场景视频（工作区标签）
+
+- 入口：编辑器文件栏「场景视频」胶囊（`components/SceneVideoButton`，经 `editorHeaderActions`，按下不抢焦点以保留选区）、应用菜单「编辑 → 场景视频…」/ `Mod+Alt+V`（固定加速键，`shortcuts/config.ts`；渲染进程按物理键位 `KeyV` 处理并 `preventDefault`）、卷纲列表视图里「场景」节拍的摄像机按钮。发起方只派发窗口事件（`SceneVideoView/events.ts` `requestOpenSceneVideo`，菜单事件经 `useAppMenu` 转发），由 `hooks/useSceneVideoEntry.ts` 统一解析：选区 > 指定场景名 > 光标所在的「第X场」> 整章（`sceneSource.ts` `resolveSceneSource`），打开标签 `__workspace__:scene-video:<章路径>#<场景>`（`utils/workspace.ts`，场景名里的 `#` 换成全角），带入的正文作为「种子」暂存在内存
+- 三栏（`components/SceneVideoView/`，标签区域 < 1080px 时上下排列）：
+  - 输入（`InputColumn`）：场景正文（可改）、地点（设定标题 datalist + 自由输入）、人物 chips（从正文识别，头像经 `utils/characterAvatar` 解析，可作首帧参考）、风格（写实 / 国漫 / 水墨 / 电影感 + 自定义）、比例、每镜时长、视频服务 / 模型（只列已配置并启用的 MiniMax / Seedance；都没有时提示「先在设置中心配置视频服务」，仍可编辑分镜与导出）。缺地点 / 头像只做浅色提示，不阻止
+  - 分镜（`StoryboardColumn`）：「AI 生成分镜」用可用的文本服务（优先默认 AI，其次其他已配置的文本服务）+ `buildStoryboardPrompt` / `parseStoryboardResponse`；没有 AI 或 AI 失败时按段落 / 句子确定性拆分（`splitSceneIntoShots`）；镜头卡片可改景别 / 时长 / 画面 / 运镜 / 台词、勾选、拖动或上下移动、删除、添加；「导出分镜表」写 `分镜.md`
+  - 预览与任务（`PreviewColumn`）：提交前费用预估（只按作者填写的每秒单价）、生成选中镜头 / 全部生成、任务队列（`video-task-updated` 实时更新，失败显示原因，内容安全失败给改写建议，可重试 / 取消）、每镜版本（预览、选用、勾选两个并排对比）、「拼接预览」（`@novel-editor/video/stitch`，选中镜头的选用版本 + 没有成片的占位卡，样片存为场景目录里的 `样片-<时间>.mp4|webm`）、「回链到章纲」（在本章章纲追加「场景视频 · <场景>」条目，内容为分镜表 / 样片 / 各镜成片的相对路径）
+- 落盘：`<作品>/资料/视频/<章>/<场景>/`（`@novel-editor/video` `videoSceneLayout`，与成片同目录）。工作区状态保存为 `分镜.json`（`sceneVideoState.ts`，作者修改后防抖 800ms 写回，只打开不修改不写文件；重新打开时恢复，带入的选段与保存的正文不同时只提示「用选中的文字替换」）。镜头 id 固定为 `shot-<N>` 且 N 只增不减（`nextShotNumber`），成片 `镜头N-vX.mp4` 用的就是 N，排序 / 删除 / 重新生成分镜后已有成片不会串号
+- 主进程 `handlers/video-scene.ts`：`video-scene-load / save / read-file / write-animatic`。作品目录同样经 `assertWorkPath`（存在的绝对路径、位于窗口工作区内）；章 / 场景名清洗为单个路径段；读文件只允许 `镜头N-vX.<ext>` / `样片-*.mp4|webm`，经符号链接逃出作品目录的拒绝；预览用读出的字节生成 blob 地址
+- 测试：`test/render/components/SceneVideoView/`（提取、兜底拆分、状态持久化、费用、路径、三栏 RTL）、`test/render/hooks/useSceneVideoEntry.test.tsx`、`test/main/video/video-scene-handlers.test.ts`；E2E `apps/pc/e2e/scene-video.e2e.ts` 用本地 mock 服务（Grok 形状的文本服务 + MiniMax 形状的视频服务，成片是测试内用 `support/mp4-fixture.ts` 生成的 16×16 H.264 MP4）走完 选中一场 → 场景视频 → AI 分镜 → 生成镜头 1 → 落盘 → 预览
+
 ### 应用菜单 / 快捷键
 
 - 菜单模板在 `src/main/shortcuts/menuTemplate.ts`（纯函数，`registerAllShortcuts.ts` 负责 `Menu.setApplicationMenu` 与重建），参照 VS Code / Typora：
   - macOS：「小说编辑器」（关于、检查更新…、设置… ⌘,、服务、隐藏 / 隐藏其他 / 全部显示、退出）/ 文件 / 编辑 / 视图 / 窗口 / 帮助
   - Windows / Linux：没有应用菜单，设置… 与 退出 在「文件」末尾，检查更新… 与 关于 在「帮助」末尾
   - 文件：新建文件 ⌘N（与按键一致：新建未命名标签）、打开文件夹… ⌘O、打开最近使用 ▸（`recent-folders` 变化时自动重建，点击走 `open-folder-request`）、保存 ⌘S、另存为… ⇧⌘S、导出项目… ⇧⌘E
-  - 编辑：撤销 / 重做 / 剪切 / 复制 / 粘贴 / 全选（原生 role）、查找 ⌘F、灵感抽签… ⇧⌘Y（加速键随设置中心同步）；视图：切换侧边栏、切换右侧面板、专注写作、放大 / 缩小 / 实际大小、切换全屏（macOS ⌃⌘F；Win/Linux 不设加速键，F11 留给专注模式），开发模式另有 重新加载 / 开发者工具；窗口：最小化 ⌘M、缩放、前置全部窗口；帮助：快捷键说明、更新日志、上传日志…、问题反馈（GitHub issues），打包版本另有 切换开发者工具
+  - 编辑：撤销 / 重做 / 剪切 / 复制 / 粘贴 / 全选（原生 role）、查找 ⌘F、灵感抽签… ⇧⌘Y（加速键随设置中心同步）、场景视频… ⌥⌘V；视图：切换侧边栏、切换右侧面板、专注写作、放大 / 缩小 / 实际大小、切换全屏（macOS ⌃⌘F；Win/Linux 不设加速键，F11 留给专注模式），开发模式另有 重新加载 / 开发者工具；窗口：最小化 ⌘M、缩放、前置全部窗口；帮助：快捷键说明、更新日志、上传日志…、问题反馈（GitHub issues），打包版本另有 切换开发者工具
 - 所有名称用 `APP_DISPLAY_NAME`，菜单里不得出现 `app.name`（dev 下是 `@novel-editor/pc`）；不使用英文 role 菜单（`editMenu` / `fileMenu` 等），也不再有隐藏的「快捷键」菜单——每个快捷键都对应一个可见菜单项或渲染进程 keydown
 - 一致性：菜单加速键与快捷键总览共用 `shortcuts/config.ts`（`getShortcutConfigs()`），`getAllShortcuts.ts` 只额外列出纯渲染进程按键；设置中心可自定义的「切换侧边栏 / 专注写作 / 灵感抽签」由渲染进程经 `menu-sync-shortcuts` 同步到菜单（`useAppMenu`，主进程按白名单校验）。新增快捷键时同时改 config / 渲染进程 keydown / 总览，`test/main/app-menu.test.ts` 会校验菜单每个加速键都在总览中
 - 渲染进程也处理的按键（⌘N / ⌘S / ⌘F / ⌘Z / ⌘Q 等）必须 `preventDefault`：Electron 只把渲染进程未处理的按键交给菜单，因此不会重复执行，焦点不在编辑器时由菜单兜底
-- 菜单 → 渲染进程事件：`shortcut-*`、`menu-export-project`、`menu-open-about`，以及 `src/shared/app-menu.ts` 的 `APP_MENU_EVENTS`（设置、检查更新、视图切换、查找、快捷键说明、更新日志、上传日志），渲染进程统一在 `hooks/useAppMenu.ts` 处理；保存 / 另存为 / 查找作用于最近聚焦的编辑器（`TextEditor/active-editor.ts`）
+- 菜单 → 渲染进程事件：`shortcut-*`、`menu-export-project`、`menu-open-about`，以及 `src/shared/app-menu.ts` 的 `APP_MENU_EVENTS`（设置、检查更新、视图切换、查找、灵感抽签、场景视频、快捷键说明、更新日志、上传日志），渲染进程统一在 `hooks/useAppMenu.ts` 处理；保存 / 另存为 / 查找作用于最近聚焦的编辑器（`TextEditor/active-editor.ts`）
 - macOS 菜单栏标题来自 bundle 的 CFBundleName：打包时 `scripts/mac-localized-app-name.mjs`（electron-builder `afterPack`）在每个 `*.lproj` 写入 `InfoPlist.strings`，显示「小说编辑器」。不要改 `productName` 或用 `mac.extendInfo` 覆盖 CFBundleName——前者改变安装路径 / 更新产物，后者会让 Electron 找不到 `<名称> Helper.app` 而启动崩溃；`app.getName()` 与 userData 由 package.json 决定，不受影响。开发模式（`pnpm dev`）菜单栏标题固定为「Electron」（来自 node_modules 中 Electron.app 的 Info.plist），属预期，不要修改 node_modules
 
 ## 代码规范
@@ -243,7 +263,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
   - `workbench.ts`: 本应用的高层操作（作品切换 `selectWork` / `currentWork`、打开项目菜单 `openProjectMenu` / 其中的「项目说明」分组 `openProjectDocs` / 菜单「刷新」`refreshWorkspace`、行内重命名 `renameByDoubleClick` / `commitInlineRename`、顶部按钮顺序 `workspaceHeaderButtons`、展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
   - `fixture.ts`: 每次运行把示例作品集 `apps/pc/sample-data` 完整拷贝到临时目录（跳过本机数据库等运行产物，可用 `exclude` 去掉某些路径）；`FIXTURE_CHAPTERS` / `FIXTURE_CHAPTER_TREE` 指向其中的「星河旅人 / 第一卷-离乡」（先用 `selectWork` 在作品切换器选中 `FIXTURE_WORK`，正文树只有当前作品的 卷 → 章，没有 novels / 作品 / 未分卷 层级）；`FIXTURE_MATERIAL_DIR` / `FIXTURE_MEMORY_DIR` 是星河旅人自己的 `资料/`、`资料/记忆/`
   - `suite.ts`: `setupAppSuite()` 为一个 `*.e2e.ts` 注册启动 / 关闭、失败截图、控制台错误检查；另有 `openChapter`、`captureForReview`、成长档案选择器等通用操作
-- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、示例作品集开箱即用（欢迎使用、预置成长档案、种子人物 / 设定、幕剧、章纲）、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧「大纲」面板与专注模式（渐进淡化、隐藏滚动条、点击 / 方向键后光标行居中）、灵感抽签（文件栏「灵感」胶囊可见且在最左 → 抽一签 → 插入）、卷纲（零输入推导星河旅人第一卷的 幕 / 场，人物线显示林舟）、GUI 与 CLI 共享写作日志和会话状态、关于小窗口、资料长文件名、Markdown 实时渲染（排版示例.md：公式 / 表格渲染、坏公式隔离、光标处显示源码、文件头没有「源码 / 实时预览」切换）、复杂公式（公式示例.md：大量公式渲染、恰好一个错误标记、超宽公式横向滚动）、单实例转发）；`growth.e2e.ts` 用去掉 `novels/星河旅人/资料/记忆/` 的示例验证成长档案首次使用（开始使用、新建成长卡、引导、记一笔、提醒、总览、记忆库同步、人物详情入口）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据并写入种子人物；`sample-upgrade.e2e.ts` 验证本机旧版示例被备份并升级为新版
+- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、示例作品集开箱即用（欢迎使用、预置成长档案、种子人物 / 设定、幕剧、章纲）、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧「大纲」面板与专注模式（渐进淡化、隐藏滚动条、点击 / 方向键后光标行居中）、灵感抽签（文件栏「灵感」胶囊可见且在最左 → 抽一签 → 插入）、卷纲（零输入推导星河旅人第一卷的 幕 / 场，人物线显示林舟）、GUI 与 CLI 共享写作日志和会话状态、关于小窗口、资料长文件名、Markdown 实时渲染（排版示例.md：公式 / 表格渲染、坏公式隔离、光标处显示源码、文件头没有「源码 / 实时预览」切换）、复杂公式（公式示例.md：大量公式渲染、恰好一个错误标记、超宽公式横向滚动）、单实例转发）；`growth.e2e.ts` 用去掉 `novels/星河旅人/资料/记忆/` 的示例验证成长档案首次使用（开始使用、新建成长卡、引导、记一笔、提醒、总览、记忆库同步、人物详情入口）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据并写入种子人物；`sample-upgrade.e2e.ts` 验证本机旧版示例被备份并升级为新版；`editor-ai.e2e.ts` 用本地 mock 的 OpenAI 兼容 SSE 服务（配置为 Grok）验证人物悬停卡片（林舟 Lv.4）、`Alt+\` 行内续写（流式 → Tab 采纳 → 保存并计入写作日志 → 一次撤销回退）、续写面板（生成建议 → 查看上下文 → 放弃后正文不变）；`scene-video.e2e.ts` 用本地 mock 文本 / 视频服务验证场景视频（选中一场 → AI 分镜 → 生成镜头 → 落盘 → 预览）
 - 示例项目的作品名来自 `seed.json`（「示例作品集」），标题栏显示它而不是临时目录名
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
