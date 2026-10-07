@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import VideoPlayer from '../../VideoPlayer';
 import styles from './styles.module.scss';
 
 export type ReadSceneFile = (fileName: string) => Promise<Uint8Array>;
@@ -67,13 +68,11 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
     <figure className={styles.player}>
       <div className={styles.playerFrame}>
         {url ? (
-          <video
-            className={styles.video}
+          <VideoPlayer
             src={url}
-            controls
-            preload="metadata"
-            data-testid={testId}
-            aria-label={caption ?? '视频预览'}
+            title={caption ?? fileName ?? '视频预览'}
+            videoTestId={testId}
+            maxHeight={360}
           />
         ) : (
           <span className={styles.playerEmpty}>

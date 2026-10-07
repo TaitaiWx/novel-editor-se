@@ -9,6 +9,8 @@ export function useEntitiesState() {
   const [workspaceCharacters, setWorkspaceCharacters] = useState<Character[]>([]);
   const [workspaceLoreEntries, setWorkspaceLoreEntries] = useState<LoreEntry[]>([]);
   const [workspaceProjectName, setWorkspaceProjectName] = useState<string | null>(null);
+  // 当前人物 / 设定列表属于哪个作品目录：切换作品时列表异步重载，期间图片路径要按旧作品解析
+  const [workspaceEntitiesPath, setWorkspaceEntitiesPath] = useState<string | null>(null);
   const [workspaceCharactersVersion, bumpWorkspaceCharactersVersion] = useReducer(
     (count: number) => count + 1,
     0
@@ -27,6 +29,8 @@ export function useEntitiesState() {
     setWorkspaceLoreEntries,
     workspaceProjectName,
     setWorkspaceProjectName,
+    workspaceEntitiesPath,
+    setWorkspaceEntitiesPath,
     workspaceCharactersVersion,
     bumpWorkspaceCharactersVersion,
     workspaceLoreVersion,

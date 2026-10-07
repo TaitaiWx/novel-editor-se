@@ -198,13 +198,21 @@ describe('useWorkspaceEntities', () => {
     const setWorkspaceCharacters = vi.fn();
     const setWorkspaceLoreEntries = vi.fn();
     const setWorkspaceProjectName = vi.fn();
+    const setWorkspaceEntitiesPath = vi.fn();
     const ctx = {
       folderPath,
       setWorkspaceCharacters,
       setWorkspaceLoreEntries,
       setWorkspaceProjectName,
+      setWorkspaceEntitiesPath,
     } as unknown as UseWorkspaceEntitiesContext;
-    return { ctx, setWorkspaceCharacters, setWorkspaceLoreEntries, setWorkspaceProjectName };
+    return {
+      ctx,
+      setWorkspaceCharacters,
+      setWorkspaceLoreEntries,
+      setWorkspaceProjectName,
+      setWorkspaceEntitiesPath,
+    };
   }
 
   it('没有项目时清空所有实体', () => {
@@ -214,6 +222,7 @@ describe('useWorkspaceEntities', () => {
     expect(c.setWorkspaceCharacters).toHaveBeenCalledWith([]);
     expect(c.setWorkspaceLoreEntries).toHaveBeenCalledWith([]);
     expect(c.setWorkspaceProjectName).toHaveBeenCalledWith(null);
+    expect(c.setWorkspaceEntitiesPath).toHaveBeenCalledWith(null);
   });
 
   it('加载作品名、人物和设定', async () => {
@@ -244,6 +253,8 @@ describe('useWorkspaceEntities', () => {
     expect(chars[0]).toMatchObject({ id: 1, name: '林', role: '主角' });
     const lore = c.setWorkspaceLoreEntries.mock.calls[0][0] as Array<{ title: string }>;
     expect(lore[0]).toMatchObject({ id: 9, category: 'faction', title: '宗门', tags: ['t'] });
+    // 列表与它所属的作品目录一起更新（图片路径按它解析）
+    expect(c.setWorkspaceEntitiesPath).toHaveBeenCalledWith('/x/book');
   });
 
   it('没有作品记录时用目录名作为作品名，且不查询人物', async () => {

@@ -6,8 +6,11 @@ import ReferencePane, {
   REFERENCE_PANE_MAX_WIDTH,
   REFERENCE_PANE_MIN_WIDTH,
   clampPaneWidth,
+  indexAfterRemove,
   mergeReferenceItems,
 } from '@/render/components/ReferencePane';
+import { describeReference } from '@/render/components/ReferencePane/ReferenceInfo';
+import { REVEAL_IN_FILE_PANEL_EVENT } from '@/render/utils/workspaceFiles';
 import ReferenceButton from '@/render/components/ReferenceButton';
 import {
   referenceItemFor,
@@ -47,6 +50,32 @@ describe('ReferencePane 纯函数', () => {
     expect(merged).toHaveLength(30);
     expect(merged[0].path).toBe('/p/5.png');
     expect(merged[29].path).toBe('/p/34.png');
+  });
+
+  it('indexAfterRemove：移除后选中下一张，移除最后一张时选中前一张', () => {
+    expect(indexAfterRemove(3, 0)).toBe(0);
+    expect(indexAfterRemove(3, 1)).toBe(1);
+    expect(indexAfterRemove(3, 2)).toBe(1);
+    expect(indexAfterRemove(1, 0)).toBe(0);
+  });
+
+  it('describeReference：类型 · 文件名，已知时附尺寸 / 时长（只认同一路径）', () => {
+    expect(describeReference(A, null)).toEqual(['图片', 'a.png']);
+    expect(describeReference(A, { path: A.path, width: 800, height: 600 })).toEqual([
+      '图片',
+      'a.png',
+      '800×600',
+    ]);
+    expect(describeReference(A, { path: B.path, width: 800, height: 600 })).toEqual([
+      '图片',
+      'a.png',
+    ]);
+    expect(describeReference(V, { path: V.path, width: 1280, height: 720, duration: 75 })).toEqual([
+      '视频',
+      '镜头1-v1.mp4',
+      '1280×720',
+      '1:15',
+    ]);
   });
 });
 
@@ -92,10 +121,11 @@ describe('ReferencePane 组件', () => {
     fireEvent.click(button);
     const pane = screen.getByTestId('reference-pane');
     expect(within(pane).getAllByText('地图').length).toBeGreaterThan(0);
-    expect(within(pane).getAllByRole('option').map((option) => option.textContent)).toEqual([
-      '地图',
-      '人物',
-    ]);
+    expect(
+      within(pane)
+        .getAllByRole('option')
+        .map((option) => option.textContent)
+    ).toEqual(['地图', '人物']);
     expect(button.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(button);
     expect(screen.queryByTestId('reference-pane')).toBeNull();
@@ -130,14 +160,72 @@ describe('ReferencePane 组件', () => {
     expect(screen.queryByRole('button', { name: '上一张参考' })).toBeNull();
   });
 
-  it('视频用 video 元素（循环、静音）', async () => {
+  it('视频用自定义播放器（循环、静音、自动播放，可开声音 / 关循环）', async () => {
     render(<ReferencePane />);
     open([V]);
-    const video = await screen.findByTestId('reference-video');
+    const video = (await screen.findByTestId('reference-video')) as HTMLVideoElement;
     expect(video.tagName).toBe('VIDEO');
-    expect(video.getAttribute('aria-label')).toBe('镜头1-v1.mp4');
-    expect((video as HTMLVideoElement).loop).toBe(true);
-    expect((video as HTMLVideoElement).muted).toBe(true);
+    expect(video.controls).toBe(false);
+    expect(video.loop).toBe(true);
+    expect(video.muted).toBe(true);
+    expect(video.autoplay).toBe(true);
+    const player = screen.getByRole('group', { name: '视频 镜头1-v1.mp4' });
+    expect(within(player).getByRole('slider', { name: '播放进度' })).toBeTruthy();
+    fireEvent.click(within(player).getByRole('button', { name: '取消静音' }));
+    expect(video.muted).toBe(false);
+    // 读到元数据后信息行显示尺寸与时长
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 1280 });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 720 });
+    Object.defineProperty(video, 'duration', { configurable: true, value: 8 });
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'));
+    });
+    expect(screen.getByTestId('reference-info').textContent).toContain('1280×720 · 0:08');
+  });
+
+  it('图片单击在适应宽度与原始大小之间切换；信息行显示尺寸', async () => {
+    render(<ReferencePane />);
+    open([A]);
+    const image = (await screen.findByTestId('reference-image')) as HTMLImageElement;
+    expect(image.getAttribute('data-zoomed')).toBe('false');
+    const box = image.parentElement as HTMLElement;
+    fireEvent.pointerDown(box, { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(box, { clientX: 10, clientY: 10 });
+    expect(image.getAttribute('data-zoomed')).toBe('true');
+    // 拖动（平移）不切换
+    fireEvent.pointerDown(box, { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(box, { clientX: 60, clientY: 40 });
+    fireEvent.pointerUp(box, { clientX: 60, clientY: 40 });
+    expect(image.getAttribute('data-zoomed')).toBe('true');
+    fireEvent.pointerDown(box, { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(box, { clientX: 10, clientY: 10 });
+    expect(image.getAttribute('data-zoomed')).toBe('false');
+
+    Object.defineProperty(image, 'naturalWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(image, 'naturalHeight', { configurable: true, value: 768 });
+    fireEvent.load(image);
+    expect(screen.getByTestId('reference-info').textContent).toContain('图片a.png · 1024×768');
+  });
+
+  it('信息行操作：用系统应用打开、在资料中定位、从列表移除', async () => {
+    render(<ReferencePane />);
+    open([A, B], 1);
+    fireEvent.click(screen.getByRole('button', { name: '用系统应用打开' }));
+    expect(mock.invoke).toHaveBeenCalledWith('open-in-system-app', B.path);
+
+    const reveal = vi.fn();
+    window.addEventListener(REVEAL_IN_FILE_PANEL_EVENT, reveal);
+    fireEvent.click(screen.getByRole('button', { name: '在资料中定位' }));
+    expect((reveal.mock.calls[0][0] as CustomEvent<{ path: string }>).detail.path).toBe(B.path);
+    window.removeEventListener(REVEAL_IN_FILE_PANEL_EVENT, reveal);
+
+    // 移除当前（第 2 张）→ 选中第 1 张，只剩一张时不再显示列表
+    fireEvent.click(screen.getByRole('button', { name: '从参考列表移除' }));
+    expect(within(screen.getByTestId('reference-pane')).getByText('地图')).toBeTruthy();
+    expect(screen.queryByRole('listbox')).toBeNull();
+    // 全部移除后显示使用说明
+    fireEvent.click(screen.getByRole('button', { name: '从参考列表移除' }));
+    expect(screen.getByTestId('reference-empty')).toBeTruthy();
   });
 
   it('多张参考：按 index 打开，上一张 / 下一张循环切换，列表点选，方向键切换', async () => {
@@ -148,7 +236,16 @@ describe('ReferencePane 组件', () => {
     const options = () =>
       within(screen.getByRole('listbox', { name: '参考列表' })).getAllByRole('option');
     expect(options()[1].getAttribute('aria-selected')).toBe('true');
-    expect(options()[2].textContent).toBe('▶ 镜头1-v1.mp4');
+    expect(options()[2].textContent).toBe('镜头1-v1.mp4');
+    // 缩略图网格：图片显示缩略图，视频只显示播放图标（不为缩略图读取视频）
+    await vi.waitFor(() =>
+      expect(options()[0].querySelector('img')?.getAttribute('src')).toBe('blob:ref')
+    );
+    expect(options()[2].querySelector('img')).toBeNull();
+    expect(options()[2].querySelector('svg')).not.toBeNull();
+    expect(
+      mock.invoke.mock.calls.filter(([, path]) => path === V.path && true).length
+    ).toBeLessThanOrEqual(1);
 
     fireEvent.click(screen.getByRole('button', { name: '下一张参考' }));
     expect(within(pane).getByText('3 / 3')).toBeTruthy();

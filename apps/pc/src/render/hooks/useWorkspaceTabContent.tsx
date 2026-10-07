@@ -59,6 +59,7 @@ export type UseWorkspaceTabContentContext = Pick<
 > &
   Pick<WorkspaceState, 'dbReady' | 'files' | 'folderPath' | 'storyOrderMap'> &
   Partial<Pick<WorkspaceState, 'workScopePath'>> &
+  Partial<Pick<EntitiesState, 'workspaceEntitiesPath'>> &
   Pick<TabsState, 'openTabs'> &
   Pick<EditorState, 'editorContent'> &
   Pick<
@@ -183,14 +184,14 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
   const referenceFallback = useMemo(
     () =>
       characterReferenceItems(
-        scopePath ?? null,
+        ctx.workspaceEntitiesPath ?? scopePath ?? null,
         sceneVideoCharacters.map((item) => ({
           name: item.name,
           avatar: item.avatar,
           turnaround: item.turnaround,
         }))
       ),
-    [scopePath, sceneVideoCharacters]
+    [ctx.workspaceEntitiesPath, scopePath, sceneVideoCharacters]
   );
   const sceneVideoLoreTitles = useMemo(
     () => workspaceLoreEntries.map((item) => item.title),

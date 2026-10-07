@@ -98,3 +98,8 @@ body {
 button:focus:not(:focus-visible) {
   outline: none;
 }
+
+// 所有多行输入框都不显示右下角的拖拽手柄（需要更高时由组件用 field-sizing / min-height 控制）
+textarea {
+  resize: none;
+}

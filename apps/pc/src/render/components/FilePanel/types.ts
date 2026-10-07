@@ -44,6 +44,8 @@ export type CollapsedSections = Record<FilePanelSection, boolean>;
 
 export interface FilePanelProps {
   files: FileNode[];
+  /** 人物 / 设定列表所属的作品目录（形象图、封面按它解析；切换作品时列表尚未重载期间仍是旧作品） */
+  entitiesWorkPath?: string | null;
   characters: Character[];
   characterGenerationStatus?: AssistantArtifactGenerationStatus | null;
   loreEntries: LoreEntry[];

@@ -46,6 +46,7 @@ const EMPTY_GROWTH_SHEETS: GrowthSheetSummary[] = [];
 const FilePanel: React.FC<FilePanelProps> = React.memo(
   ({
     files,
+    entitiesWorkPath = null,
     characters,
     characterGenerationStatus = null,
     loreEntries,
@@ -401,7 +402,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       groups={groupedCharacters}
                       characters={characters}
                       growthSheets={growthSheets}
-                      workPath={workScope?.path ?? folderPath}
+                      workPath={entitiesWorkPath ?? workScope?.path ?? folderPath}
                       filtering={false}
                       collapsed={collapsedSections.characters}
                       activeWorkspaceTab={activeWorkspaceTab}
@@ -418,7 +419,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
 
                     <LoreSection
                       entries={loreEntries}
-                      workPath={workScope?.path ?? folderPath}
+                      workPath={entitiesWorkPath ?? workScope?.path ?? folderPath}
                       filtering={false}
                       collapsed={collapsedSections.lore}
                       activeWorkspaceTab={activeWorkspaceTab}

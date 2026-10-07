@@ -196,6 +196,14 @@ describe('小说编辑器 GUI', () => {
     );
     await page.waitForTarget({ text: '林舟', within: SECTION_CHARACTERS, exact: true });
     await page.waitForTarget({ text: '星河大陆', within: SECTION_LORE, exact: true });
+    // 人物有形象图：行内显示图片头像（经 read-file-binary 读取的 data URL）
+    await page.waitFor(
+      (selector: string) =>
+        Array.from(document.querySelectorAll<HTMLImageElement>(`${selector} img`)).some((img) =>
+          img.src.startsWith('data:image/webp')
+        ),
+      { args: [SECTION_CHARACTERS], message: '人物行显示形象图头像' }
+    );
     expect(await page.exists({ text: '沈砚', within: SECTION_CHARACTERS, exact: true })).toBe(
       false
     );
@@ -360,6 +368,13 @@ describe('小说编辑器 GUI', () => {
     await page.click({ text: '001-少年', within: SEL.workspaceTree, exact: true });
     await waitForEditorText(page, '少年握紧了手中的木剑');
     await selectWork(page, FIXTURE_WORK);
+    // 标签多时可能在标签栏可见区域之外：先滚到可见再点
+    await page.evaluate((title: string) => {
+      document
+        .querySelector(`[title="${title}"]`)
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      return true;
+    }, fixture.resolve(FIXTURE_CHAPTERS.other.file));
     await page.click({ text: fixture.resolve(FIXTURE_CHAPTERS.other.file), exact: true });
     await page.waitFor(
       (sel: string) => document.querySelector(`${sel} [class*="name"]`)?.textContent === '剑与诗',
@@ -1387,6 +1402,28 @@ describe('小说编辑器 GUI', () => {
       { timeout: 10_000, message: '示例视频已加载' }
     );
     await captureForReview('novel-format-demo');
+    // 自定义播放器：没有原生控制条，容器贴合视频比例；播放按钮切换 paused
+    expect(
+      await page.evaluate<{ controls: boolean; aspect: string | null }>(() => {
+        const video = document.querySelector(
+          '.cm-content video.cm-lp-video-player'
+        ) as HTMLVideoElement;
+        const group = video.closest('[role="group"]');
+        return { controls: video.controls, aspect: group?.getAttribute('data-aspect') ?? null };
+      })
+    ).toMatchObject({ controls: false, aspect: expect.stringMatching(/^\d/) });
+    await page.click('.cm-content .cm-lp-video button[aria-label="播放"]');
+    await page.waitFor(
+      () =>
+        (document.querySelector('.cm-content video.cm-lp-video-player') as HTMLVideoElement | null)
+          ?.paused === false,
+      { message: '点击播放按钮后开始播放' }
+    );
+    // 暂停后控制条与「在旁边看」常显
+    await page.evaluate(() => {
+      (document.querySelector('.cm-content video.cm-lp-video-player') as HTMLVideoElement).pause();
+    });
+    await page.waitForTarget('.cm-content .cm-lp-video button[aria-label="播放"]');
     // 视频「在旁边看」→ 参考窗格播放
     await page.click('.cm-content .cm-lp-video .cm-lp-media-beside');
     await page.waitFor(
@@ -1417,6 +1454,30 @@ describe('小说编辑器 GUI', () => {
         () => document.querySelector('[data-testid="reference-pane"] header')?.textContent ?? ''
       )
     ).toContain('三视图');
+    // 主画面贴在窗格顶部（不再垂直居中留大块空白），下方是信息行与缩略图网格
+    const layout = await page.evaluate<{ gap: number; options: number; info: boolean }>(() => {
+      const pane = document.querySelector('[data-testid="reference-pane"]') as HTMLElement;
+      const header = pane.querySelector('header') as HTMLElement;
+      const stage = pane.querySelector('[data-testid="reference-stage"]') as HTMLElement;
+      return {
+        gap: stage.getBoundingClientRect().top - header.getBoundingClientRect().bottom,
+        options: pane.querySelectorAll('[role="listbox"][aria-label="参考列表"] [role="option"]')
+          .length,
+        info: !!pane.querySelector('[data-testid="reference-info"]'),
+      };
+    });
+    expect(layout.gap).toBeLessThan(24);
+    expect(layout.options).toBeGreaterThan(1);
+    expect(layout.info).toBe(true);
+    await page.waitFor(
+      () =>
+        (
+          document.querySelector(
+            '[data-testid="reference-pane"] [role="option"] img'
+          ) as HTMLImageElement | null
+        )?.src.startsWith('blob:') ?? false,
+      { timeout: 10_000, message: '缩略图网格显示图片' }
+    );
     await captureForReview('reference-pane-characters');
     await page.click('[data-testid="reference-pill"]');
     await page.waitForGone('[data-testid="reference-pane"]');
@@ -1502,6 +1563,21 @@ describe('小说编辑器 GUI', () => {
     await page.press('Escape');
     await page.waitForGone(SEL.searchResults);
     await page.waitForTarget(SEL.workspaceTree);
+  });
+
+  it('10c. 多次切换作品后，主进程没有读图失败（人物 / 设定图片按它们所属的作品解析）', async () => {
+    for (const work of ['剑与诗', FIXTURE_WORK, '剑与诗', FIXTURE_WORK]) {
+      await selectWork(page, work);
+      await page.waitForTarget({
+        text: work === FIXTURE_WORK ? '林舟' : '沈砚',
+        within: SECTION_CHARACTERS,
+        exact: true,
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(
+      suite.app.logs.join('').match(/Failed to read binary file: [^\n]*图集[^\n]*/g) ?? []
+    ).toEqual([]);
   });
 
   it('11. 单实例：第二次启动把文件夹转发给已有窗口', async () => {

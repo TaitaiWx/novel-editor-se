@@ -10,7 +10,10 @@ export type UseWorkspaceEntitiesContext = Pick<
 > &
   Pick<
     EntitiesState,
-    'setWorkspaceCharacters' | 'setWorkspaceLoreEntries' | 'setWorkspaceProjectName'
+    | 'setWorkspaceCharacters'
+    | 'setWorkspaceLoreEntries'
+    | 'setWorkspaceProjectName'
+    | 'setWorkspaceEntitiesPath'
   >;
 
 type CharacterRow = {
@@ -33,6 +36,7 @@ export function useWorkspaceEntities(ctx: UseWorkspaceEntitiesContext) {
     setWorkspaceCharacters,
     setWorkspaceLoreEntries,
     setWorkspaceProjectName,
+    setWorkspaceEntitiesPath,
     workScope,
   } = ctx;
   const workScopePath = ctx.workScopePath ?? folderPath;
@@ -44,6 +48,7 @@ export function useWorkspaceEntities(ctx: UseWorkspaceEntitiesContext) {
     if (!ipc || !folderPath || !workScopePath) {
       setWorkspaceCharacters([]);
       setWorkspaceLoreEntries([]);
+      setWorkspaceEntitiesPath(null);
       setWorkspaceProjectName(null);
       return;
     }
@@ -78,11 +83,13 @@ export function useWorkspaceEntities(ctx: UseWorkspaceEntitiesContext) {
         }
         setWorkspaceCharacters(mapCharacterRows(characterRows));
         setWorkspaceLoreEntries(loreEntries);
+        setWorkspaceEntitiesPath(workScopePath);
       } catch {
         if (cancelled) return;
         setWorkspaceProjectName(projectTitle || fallbackName);
         setWorkspaceCharacters([]);
         setWorkspaceLoreEntries([]);
+        setWorkspaceEntitiesPath(workScopePath);
       }
     };
     void loadWorkspaceEntities();
@@ -96,6 +103,7 @@ export function useWorkspaceEntities(ctx: UseWorkspaceEntitiesContext) {
     setWorkspaceCharacters,
     setWorkspaceLoreEntries,
     setWorkspaceProjectName,
+    setWorkspaceEntitiesPath,
     workScopePath,
   ]);
 }

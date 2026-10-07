@@ -43,7 +43,9 @@
   font: inherit;
   font-size: 13px;
   line-height: 1.7;
-  resize: vertical;
+  resize: none;
+  // 不显示右下角拖拽手柄：高度随内容增长
+  field-sizing: content;
   outline: none;
 
   &:focus {

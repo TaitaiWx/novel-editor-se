@@ -108,6 +108,11 @@ $soft: rgba(255, 255, 255, 0.78);
   cursor: grabbing;
 }
 
+.canvasHost {
+  position: absolute;
+  inset: 0;
+}
+
 .canvas {
   display: block;
   width: 100%;

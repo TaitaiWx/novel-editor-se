@@ -3,17 +3,12 @@
  *
  * - 任何地方经 utils/referencePane 的 requestOpenReference 打开（右键「在编辑器旁边打开」）
  * - 停靠在编辑器右侧，可拖动左边缘调整宽度；可缩成右下角的小卡片，写作时不占地方
- * - 多张参考之间用缩略条 / ← → 切换；视频默认循环播放、静音，可逐段对照着写
+ * - 主画面贴在顶部、按比例适应宽度；下方是信息行与操作，再下面是缩略图网格（← → 切换）
+ * - 视频用自定义播放器，默认静音循环播放，可逐段对照着写
  * 窗格状态只在当前窗口内存中，关闭后不保留。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  VscChevronLeft,
-  VscChevronRight,
-  VscClose,
-  VscScreenFull,
-  VscScreenNormal,
-} from 'react-icons/vsc';
+import { VscClose, VscScreenFull, VscScreenNormal } from 'react-icons/vsc';
 import Tooltip from '../Tooltip';
 import {
   REFERENCE_OPEN_EVENT,
@@ -23,7 +18,9 @@ import {
   type ReferenceItem,
   type ToggleReferenceDetail,
 } from '../../utils/referencePane';
-import { useReferenceMedia } from './useReferenceMedia';
+import ReferenceStage, { ReferenceMedia, type MediaInfo } from './ReferenceStage';
+import ReferenceInfo from './ReferenceInfo';
+import ReferenceGrid from './ReferenceGrid';
 import styles from './styles.module.scss';
 
 export type ReferencePaneMode = 'closed' | 'docked' | 'mini';
@@ -46,33 +43,17 @@ export function mergeReferenceItems(
   return [...current.filter((item) => !paths.has(item.path)), ...added].slice(-30);
 }
 
-const Viewer: React.FC<{ item: ReferenceItem; compact: boolean }> = ({ item, compact }) => {
-  const { url, error } = useReferenceMedia(item);
-  if (!url) {
-    return <div className={styles.placeholder}>{error ? `无法读取：${error}` : '读取中…'}</div>;
-  }
-  return item.kind === 'video' ? (
-    <video
-      className={styles.media}
-      src={url}
-      controls={!compact}
-      autoPlay
-      loop
-      muted
-      playsInline
-      data-testid="reference-video"
-      aria-label={item.title}
-    />
-  ) : (
-    <img className={styles.media} src={url} alt={item.title} data-testid="reference-image" />
-  );
-};
+/** 从列表移除第 index 个后，选中项应在的位置 */
+export function indexAfterRemove(length: number, index: number): number {
+  return Math.max(0, Math.min(index, length - 2));
+}
 
 const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
   const [items, setItems] = useState<ReferenceItem[]>([]);
   const [index, setIndex] = useState(0);
   const [mode, setMode] = useState<ReferencePaneMode>('closed');
   const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [info, setInfo] = useState<MediaInfo | null>(null);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
@@ -127,6 +108,10 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
   }, []);
   const step = (offset: number) =>
     setIndex((current) => (items.length ? (current + offset + items.length) % items.length : 0));
+  const removeAt = (target: number) => {
+    setItems((prev) => prev.filter((_, itemIndex) => itemIndex !== target));
+    setIndex(indexAfterRemove(items.length, target));
+  };
 
   if (mode === 'closed' || hidden) return null;
   if (items.length === 0) {
@@ -167,7 +152,7 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
   if (mode === 'mini') {
     return (
       <aside className={styles.mini} aria-label="参考（小卡片）" data-testid="reference-mini">
-        <Viewer item={current} compact />
+        <ReferenceMedia item={current} compact />
         <div className={styles.miniBar}>
           <span className={styles.miniTitle} title={current.title}>
             {current.title}
@@ -252,52 +237,15 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
           </button>
         </Tooltip>
       </header>
-      <div className={styles.stage}>
-        {items.length > 1 && (
-          <Tooltip content="上一张（←）" className={`${styles.navSlot} ${styles.navPrev}`}>
-            <button
-              type="button"
-              className={styles.nav}
-              aria-label="上一张参考"
-              onClick={() => step(-1)}
-            >
-              <VscChevronLeft />
-            </button>
-          </Tooltip>
-        )}
-        <Viewer item={current} compact={false} />
-        {items.length > 1 && (
-          <Tooltip content="下一张（→）" className={`${styles.navSlot} ${styles.navNext}`}>
-            <button
-              type="button"
-              className={styles.nav}
-              aria-label="下一张参考"
-              onClick={() => step(1)}
-            >
-              <VscChevronRight />
-            </button>
-          </Tooltip>
-        )}
+      <div className={styles.body}>
+        <ReferenceStage item={current} multiple={items.length > 1} onStep={step} onInfo={setInfo} />
+        <ReferenceInfo
+          item={current}
+          info={info}
+          onRemove={() => removeAt(Math.min(index, items.length - 1))}
+        />
+        {items.length > 1 && <ReferenceGrid items={items} index={index} onSelect={setIndex} />}
       </div>
-      {items.length > 1 && (
-        <ul className={styles.strip} role="listbox" aria-label="参考列表">
-          {items.map((item, itemIndex) => (
-            <li key={item.path}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={itemIndex === index}
-                className={itemIndex === index ? styles.thumbActive : styles.thumb}
-                title={item.title}
-                onClick={() => setIndex(itemIndex)}
-              >
-                {item.kind === 'video' ? '▶ ' : ''}
-                {item.title}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </aside>
   );
 };

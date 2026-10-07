@@ -124,7 +124,9 @@
   width: 100%;
   min-height: 48px;
   margin-top: 8px;
-  resize: vertical;
+  resize: none;
+  // 不显示右下角拖拽手柄：高度随内容增长
+  field-sizing: content;
   box-sizing: border-box;
   font-family: inherit;
 }

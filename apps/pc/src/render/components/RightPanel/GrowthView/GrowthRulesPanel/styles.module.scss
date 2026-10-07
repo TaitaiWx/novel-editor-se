@@ -143,7 +143,9 @@
   font-family: 'SF Mono', Menlo, Consolas, monospace;
   font-size: 11px;
   line-height: 16px;
-  resize: vertical;
+  resize: none;
+  // 不显示右下角拖拽手柄：高度随内容增长
+  field-sizing: content;
   box-sizing: border-box;
 }
 

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { clearDirectiveMediaCache } from '@/render/components/TextEditor/live-preview/media-loader';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act } from '@testing-library/react';
 import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { parseDirectiveLine } from '@novel-editor/core/novel-format';
@@ -102,7 +103,9 @@ describe('novelDirectivePreview（编辑器）', () => {
     expect(scene?.textContent).toBe('场景 · 港口 · 视角 林舟');
     const video = v.dom.querySelector('.cm-lp-media.cm-lp-video');
     expect(video?.getAttribute('aria-label')).toBe('视频 启航');
-    expect(video?.querySelector('.cm-lp-media-caption')?.textContent).toContain('视频 · 启航');
+    // 加载前是一条细的占位提示，没有单独的说明行
+    expect(video?.querySelector('.cm-lp-media-frame')?.textContent).toContain('视频 · 启航');
+    expect(video?.querySelector('.cm-lp-media-caption')).toBeNull();
     expect(v.dom.querySelector('.cm-lp-scene-end')?.textContent).toBe('场景结束');
     expect(v.dom.textContent).toContain('::note[不认识的指令]');
     expect(v.dom.textContent).not.toContain(':::scene');
@@ -152,10 +155,22 @@ describe('novelDirectivePreview（编辑器）', () => {
       expect(element).not.toBeNull();
       return element as HTMLVideoElement;
     });
-    expect(player.controls).toBe(true);
+    // 自定义播放器：不用原生控制条，分组带名称，有播放按钮与进度条
+    expect(player.controls).toBe(false);
+    const group = v.dom.querySelector('.cm-lp-video [role="group"]') as HTMLElement;
+    expect(group.getAttribute('aria-label')).toBe('视频 启航');
+    expect(group.querySelector('[role="slider"]')).not.toBeNull();
+    const play = group.querySelector('button[aria-label="播放"]') as HTMLButtonElement;
+    await act(async () => {
+      play.click();
+    });
+    expect(player.paused).toBe(false);
+    expect(v.dom.querySelector('.cm-lp-pending')).toBeNull();
     expect(mock.invoke).toHaveBeenCalledWith('read-file-binary', found);
-    const beside = v.dom.querySelector('.cm-lp-media-beside') as HTMLElement;
+    const beside = v.dom.querySelector('.cm-lp-video .cm-lp-media-beside') as HTMLElement;
     expect(beside.getAttribute('aria-label')).toBe('在旁边看 启航');
+    // 编辑器里的选区不受播放器内部点击影响
+    expect(v.state.selection.main.head).toBe(0);
     beside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     expect(listener).toHaveBeenCalledTimes(1);
     const detail = (listener.mock.calls[0][0] as CustomEvent<OpenReferenceDetail>).detail;
@@ -207,6 +222,34 @@ describe('novelDirectivePreview（编辑器）', () => {
       return element;
     });
     expect(img.alt).toBe('码头');
+    // 图片边框贴合图片，「在旁边看」是悬停浮现的图标按钮
+    expect(img.parentElement?.classList.contains('cm-lp-image-frame')).toBe(true);
+    const beside = view?.dom.querySelector('.cm-lp-image .cm-lp-media-beside') as HTMLElement;
+    expect(beside.getAttribute('aria-label')).toBe('在旁边看 码头');
+    const listener = vi.fn();
+    window.addEventListener(REFERENCE_OPEN_EVENT, listener);
+    beside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    expect(listener).toHaveBeenCalledTimes(1);
+    window.removeEventListener(REFERENCE_OPEN_EVENT, listener);
+  });
+
+  it('视图销毁时卸载播放器；加载完成前被销毁则不再挂载', async () => {
+    let resolveRead: (value: unknown) => void = () => undefined;
+    installElectronMock((channel) => {
+      if (channel === 'get-file-info') return { size: 1 };
+      if (channel === 'read-file-binary') return new Promise((resolve) => (resolveRead = resolve));
+      return null;
+    });
+    const v = mount(0);
+    const figure = v.dom.querySelector('.cm-lp-video') as HTMLElement;
+    await vi.waitFor(() => expect(resolveRead).not.toBe(undefined));
+    v.destroy();
+    view = null;
+    await act(async () => {
+      resolveRead({ base64Content: 'AAAA', mimeType: 'video/mp4' });
+      await Promise.resolve();
+    });
+    expect(figure.querySelector('video')).toBeNull();
   });
 
   it('不用 Markdown 语法的章 / 幕 / 场标题行带标题样式；正文里的「第三章说过……。」不算', () => {

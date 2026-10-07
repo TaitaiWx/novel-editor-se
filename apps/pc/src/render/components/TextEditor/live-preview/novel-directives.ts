@@ -23,8 +23,8 @@ import {
   videoDirectiveSource,
   type DirectiveLine,
 } from '@novel-editor/core/novel-format';
-import { referenceItemFor, requestOpenReference } from '../../../utils/referencePane';
 import { loadDirectiveMedia, mediaPathCandidates } from './media-loader';
+import { mountMediaFigure } from './media-figure';
 
 /** 视频地址候选（兼容旧名，实现见 media-loader） */
 export const videoPathCandidates = mediaPathCandidates;
@@ -61,7 +61,10 @@ class SceneWidget extends WidgetType {
 
 type MediaKind = 'video' | 'image';
 
-/** 媒体指令：就地显示播放器 / 图片 + 说明行（「在旁边看」打开参考窗格）；找不到文件时显示原因 */
+/** widget DOM → 挂载状态（destroy 时卸载 React root；加载完成前被销毁则不再挂载） */
+const mountedMedia = new WeakMap<HTMLElement, { disposed: boolean; unmount?: () => void }>();
+
+/** 媒体指令：就地显示播放器 / 图片（悬停右上角「在旁边看」打开参考窗格）；找不到文件时显示原因 */
 class MediaWidget extends WidgetType {
   constructor(
     readonly kind: MediaKind,
@@ -84,63 +87,51 @@ class MediaWidget extends WidgetType {
   }
   toDOM(view: EditorView) {
     const label = this.caption || this.src.split(/[\\/]/).pop() || this.src;
+    const kindName = this.kind === 'video' ? '视频' : '图片';
     const figure = document.createElement('span');
     figure.className = `cm-lp-media cm-lp-${this.kind} cm-lp-pending`;
     figure.setAttribute('role', 'figure');
-    figure.setAttribute('aria-label', `${this.kind === 'video' ? '视频' : '图片'} ${label}`);
-    const frame = document.createElement('span');
-    frame.className = 'cm-lp-media-frame';
-    frame.textContent = '正在加载…';
-    const bar = document.createElement('span');
-    bar.className = 'cm-lp-media-caption';
-    const title = document.createElement('span');
-    title.textContent = `${this.kind === 'video' ? '视频' : '图片'} · ${label}`;
-    bar.append(title);
-    figure.append(frame, bar);
+    figure.setAttribute('aria-label', `${kindName} ${label}`);
+    const placeholder = document.createElement('span');
+    placeholder.className = 'cm-lp-media-frame';
+    placeholder.textContent = `${kindName} · ${label} · 正在加载…`;
+    figure.append(placeholder);
+    const handle: { disposed: boolean; unmount?: () => void } = { disposed: false };
+    mountedMedia.set(figure, handle);
 
     loadDirectiveMedia(this.filePath, this.src)
       .then(({ path, url }) => {
-        frame.textContent = '';
-        if (this.kind === 'video') {
-          const video = document.createElement('video');
-          video.className = 'cm-lp-video-player';
-          video.src = url;
-          video.controls = true;
-          video.preload = 'metadata';
-          video.playsInline = true;
-          video.addEventListener('loadedmetadata', () => view.requestMeasure(), { once: true });
-          frame.append(video);
-        } else {
-          const img = document.createElement('img');
-          img.className = 'cm-lp-image-directive';
-          img.src = url;
-          img.alt = label;
-          img.addEventListener('load', () => view.requestMeasure(), { once: true });
-          frame.append(img);
-        }
-        const beside = document.createElement('button');
-        beside.type = 'button';
-        beside.className = 'cm-lp-media-beside';
-        beside.textContent = '在旁边看';
-        beside.setAttribute('aria-label', `在旁边看 ${label}`);
-        beside.addEventListener('mousedown', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const item = referenceItemFor(path, label);
-          if (item) requestOpenReference({ items: [item] });
-        });
-        bar.append(beside);
+        if (handle.disposed) return;
+        placeholder.remove();
+        const host = document.createElement('span');
+        host.className = 'cm-lp-media-host';
+        figure.append(host);
         figure.classList.remove('cm-lp-pending');
+        handle.unmount = mountMediaFigure(host, {
+          kind: this.kind,
+          path,
+          url,
+          label,
+          onLayoutChange: () => view.requestMeasure(),
+        });
         view.requestMeasure();
       })
       .catch(() => {
+        if (handle.disposed) return;
         figure.classList.remove('cm-lp-pending');
         figure.classList.add('cm-lp-media-missing');
-        frame.textContent = `找不到${this.kind === 'video' ? '视频' : '图片'}：${this.src}`;
+        placeholder.textContent = `找不到${kindName}：${this.src}`;
         figure.title = '路径相对作品目录，例如 资料/视频/…';
         view.requestMeasure();
       });
     return figure;
+  }
+  destroy(dom: HTMLElement) {
+    const handle = mountedMedia.get(dom);
+    if (!handle) return;
+    handle.disposed = true;
+    handle.unmount?.();
+    mountedMedia.delete(dom);
   }
   ignoreEvent() {
     return true;
@@ -246,54 +237,92 @@ const theme = EditorView.baseTheme({
     verticalAlign: 'middle',
   },
   '.cm-lp-media': {
-    display: 'inline-flex',
-    flexDirection: 'column',
-    gap: '6px',
-    width: 'min(100%, 640px)',
+    display: 'inline-block',
+    width: '100%',
     margin: '6px 0',
     verticalAlign: 'top',
+    lineHeight: 'normal',
   },
+  '.cm-lp-media-host': {
+    display: 'block',
+  },
+  // 加载中 / 找不到：一条细的提示条，不占大块空白
   '.cm-lp-media-frame': {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '120px',
-    overflow: 'hidden',
+    width: 'min(100%, 640px)',
+    minHeight: '40px',
+    padding: '0 12px',
+    boxSizing: 'border-box',
     borderRadius: '10px',
     border: '1px solid rgba(255, 255, 255, 0.08)',
     background: 'rgba(255, 255, 255, 0.03)',
     color: '#8b8b8b',
     fontSize: '0.85em',
   },
-  '.cm-lp-media-frame video, .cm-lp-media-frame img': {
-    display: 'block',
-    width: '100%',
-    maxHeight: '420px',
-    objectFit: 'contain',
-    background: '#0f0f10',
-  },
-  '.cm-lp-media-caption': {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '8px',
-    fontSize: '0.82em',
-    color: '#9a9a9a',
-  },
-  '.cm-lp-media-beside': {
-    padding: '1px 8px',
-    border: '1px solid rgba(86, 156, 214, 0.35)',
-    borderRadius: '6px',
-    background: 'rgba(86, 156, 214, 0.1)',
-    color: '#cfe1f3',
-    font: 'inherit',
-    cursor: 'pointer',
+  '.cm-lp-video .cm-lp-media-frame': {
+    aspectRatio: '16 / 9',
+    justifyContent: 'center',
   },
   '.cm-lp-media-missing .cm-lp-media-frame': {
-    minHeight: '48px',
+    aspectRatio: 'auto',
+    justifyContent: 'flex-start',
     borderStyle: 'dashed',
     borderColor: 'rgba(224, 138, 128, 0.45)',
     color: '#e8a29a',
+  },
+  // 图片：边框贴合图片比例，没有大块空框
+  '.cm-lp-image-frame': {
+    position: 'relative',
+    display: 'inline-block',
+    maxWidth: 'min(100%, 640px)',
+    overflow: 'hidden',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    background: 'rgba(255, 255, 255, 0.03)',
+    verticalAlign: 'top',
+  },
+  '.cm-lp-image-directive': {
+    display: 'block',
+    maxWidth: '100%',
+    maxHeight: '420px',
+    width: 'auto',
+    height: 'auto',
+  },
+  '.cm-lp-media-actions': {
+    position: 'absolute',
+    top: '8px',
+    right: '8px',
+    display: 'flex',
+    gap: '4px',
+    opacity: '0',
+    transition: 'opacity 0.18s ease',
+  },
+  '.cm-lp-image-frame:hover .cm-lp-media-actions, .cm-lp-image-frame:focus-within .cm-lp-media-actions':
+    {
+      opacity: '1',
+    },
+  '.cm-lp-media-beside': {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    padding: '0',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    borderRadius: '7px',
+    background: 'rgba(20, 20, 22, 0.55)',
+    backdropFilter: 'blur(6px)',
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: '15px',
+    cursor: 'pointer',
+  },
+  '.cm-lp-media-beside:hover': {
+    background: 'rgba(20, 20, 22, 0.75)',
+    color: '#fff',
+  },
+  '@media (prefers-reduced-motion: reduce)': {
+    '.cm-lp-media-actions': { transition: 'none' },
   },
   '.cm-lp-char': {
     color: '#9cdcfe',

@@ -81,7 +81,7 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
   createStage = defaultCreateStage,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasHostRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<PrevizStageApi | null>(null);
   const [ready, setReady] = useState(false);
@@ -101,9 +101,15 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
     stageRef.current?.resize(next.width, next.height);
   }, []);
 
+  // 每个舞台用自己新建的 canvas：开发模式 StrictMode 会卸载后立即重建，
+  // 两个 three.js 渲染器共用同一个 WebGL 上下文会互相改写视口等状态（画面缩到左下角）
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const host = canvasHostRef.current;
+    if (!host) return;
+    const canvas = document.createElement('canvas');
+    canvas.className = styles.canvas;
+    canvas.dataset.testid = 'previz-canvas';
+    host.appendChild(canvas);
     let disposed = false;
     createStage(canvas)
       .then((stage) => {
@@ -121,6 +127,8 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
       disposed = true;
       stageRef.current?.dispose();
       stageRef.current = null;
+      setReady(false);
+      canvas.remove();
     };
   }, [createStage, measure]);
 
@@ -235,7 +243,7 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
               onPointerUp={pointer.onPointerUp}
               onPointerCancel={pointer.onPointerCancel}
             >
-              <canvas ref={canvasRef} className={styles.canvas} data-testid="previz-canvas" />
+              <div ref={canvasHostRef} className={styles.canvasHost} />
               {ready && (
                 <FrameOverlay
                   width={size.width}

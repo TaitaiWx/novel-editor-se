@@ -69,7 +69,9 @@ const last = <T extends unknown[]>(mock: { mock: { calls: T[] } }): T => {
 const lastFigures = (stage: Stage) => last(stage.setFigures);
 const lastView = (stage: Stage) => last(stage.setCamera)[0];
 const figureById = (stage: Stage, id: string) => lastFigures(stage)[0].find((f) => f.id === id);
-const frameOf = () => screen.getByTestId('previz-canvas').parentElement as HTMLElement;
+// canvas 由弹窗按舞台新建，挂在取景视口内的容器里
+const frameOf = () =>
+  screen.getByTestId('previz-canvas').parentElement?.parentElement as HTMLElement;
 
 async function ready(stage: Stage) {
   await waitFor(() => expect(stage.setFigures).toHaveBeenCalled());
@@ -383,5 +385,35 @@ describe('PrevizDialog', () => {
     resolve(stage);
     await waitFor(() => expect(stage.dispose).toHaveBeenCalledTimes(1));
     expect(stage.setCamera).not.toHaveBeenCalled();
+  });
+
+  it('StrictMode 下卸载后重建：每次都用新的 canvas，旧舞台被释放、旧 canvas 被移除', async () => {
+    const canvases: HTMLCanvasElement[] = [];
+    const stages: Stage[] = [];
+    const createStage = vi.fn<CreatePrevizStage>(async (canvas) => {
+      canvases.push(canvas);
+      const { stage } = fakeStage();
+      stages.push(stage);
+      return stage;
+    });
+    render(
+      <React.StrictMode>
+        <PrevizDialog
+          shotLabel="镜头2"
+          shotSize="近景"
+          characters={['林舟']}
+          aspectRatio="16:9"
+          onSave={async () => undefined}
+          onClose={() => undefined}
+          createStage={createStage}
+        />
+      </React.StrictMode>
+    );
+    await waitFor(() => expect(createStage).toHaveBeenCalledTimes(2));
+    expect(canvases[0]).not.toBe(canvases[1]);
+    await waitFor(() => expect(stages[0].dispose).toHaveBeenCalled());
+    expect(canvases[0].isConnected).toBe(false);
+    expect(canvases[1].isConnected).toBe(true);
+    expect(screen.getAllByTestId('previz-canvas')).toHaveLength(1);
   });
 });

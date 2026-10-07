@@ -84,7 +84,9 @@ $gap: 20px;
   height: auto;
   padding: 10px 12px;
   line-height: 1.75;
-  resize: vertical;
+  resize: none;
+  // 不显示右下角拖拽手柄：高度随内容增长
+  field-sizing: content;
 }
 
 @mixin button {

@@ -1,0 +1,258 @@
+// 播放器：容器贴合视频宽高比，没有黑边；控制条浮在画面底部的渐变上
+.player {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  outline: none;
+  user-select: none;
+  isolation: isolate;
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+  }
+
+  &:fullscreen {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    background: #000;
+
+    .video {
+      object-fit: contain;
+    }
+  }
+}
+
+.video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: transparent;
+}
+
+// 读到元数据之前：柔和的占位底色
+.pending .video {
+  opacity: 0;
+}
+
+.surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.bigPlay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  padding-left: 3px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(20, 20, 22, 0.55);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 22px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+
+  .surface:hover & {
+    transform: scale(1.06);
+    background: rgba(20, 20, 22, 0.7);
+  }
+}
+
+// 顶部：标题 + 额外操作；底部：进度条 + 按钮。默认隐藏，暂停 / 悬停 / 键盘聚焦时浮现
+.top,
+.controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.controlsVisible .top,
+.controlsVisible .controls,
+.player:focus-visible .top,
+.player:focus-visible .controls,
+.player:has(:focus-visible) .top,
+.player:has(:focus-visible) .controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.top {
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 18px 12px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent);
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-top: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.controls {
+  bottom: 0;
+  padding: 18px 8px 4px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+}
+
+.progress {
+  position: relative;
+  height: 14px;
+  margin: 0 4px;
+  cursor: pointer;
+  outline: none;
+  touch-action: none;
+
+  &:focus-visible .progressTrack {
+    box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+  }
+}
+
+.progressTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  transition:
+    height 0.12s ease,
+    margin-top 0.12s ease;
+
+  .progress:hover &,
+  .progress:active &,
+  .progress:focus-visible & {
+    height: 5px;
+    margin-top: -2.5px;
+  }
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(156, 196, 232, 0.95);
+}
+
+.progressThumb {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 50%;
+  background: #eef4fa;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+
+  .progress:hover &,
+  .progress:active &,
+  .progress:focus-visible & {
+    opacity: 1;
+  }
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 15px;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+  }
+}
+
+.controlOn {
+  color: rgba(156, 196, 232, 1);
+  background: rgba(156, 196, 232, 0.16);
+}
+
+.time {
+  margin-left: 4px;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.82);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+// 小卡片：没有控制条，没有边框
+.compact {
+  border: none;
+  border-radius: 0;
+
+  .surface {
+    cursor: default;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top,
+  .controls,
+  .bigPlay,
+  .progressTrack,
+  .progressThumb {
+    transition: none;
+  }
+}

@@ -96,8 +96,13 @@ const App: React.FC = () => {
     editorViewRef,
   } = editorState;
   const { inlineDiff, diffState, pendingApplyQueue, assistantCharacterGenerationStatus } = aiState;
-  const { workspaceCharacters, workspaceLoreEntries, workspaceProjectName, materialUsageMap } =
-    entitiesState;
+  const {
+    workspaceCharacters,
+    workspaceLoreEntries,
+    workspaceProjectName,
+    workspaceEntitiesPath,
+    materialUsageMap,
+  } = entitiesState;
   const { appSettings } = settingsState;
   const {
     contextMenu,
@@ -250,6 +255,7 @@ const App: React.FC = () => {
               <FilePanel
                 files={files}
                 characters={workspaceCharacters}
+                entitiesWorkPath={workspaceEntitiesPath}
                 characterGenerationStatus={assistantCharacterGenerationStatus}
                 loreEntries={workspaceLoreEntries}
                 materialUsageMap={materialUsageMap}
