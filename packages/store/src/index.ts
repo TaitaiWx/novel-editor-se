@@ -12,6 +12,7 @@ export {
   statsOps,
   settingsOps,
   aiCacheOps,
+  videoTaskOps,
   exportAllData,
   importData,
   PROJECT_SEED_FILE,
@@ -27,6 +28,7 @@ export { versionOps } from './versioning';
 
 export type {
   ExportData,
+  VideoTaskRecordLike,
   NovelContentCounts,
   ProjectSeedData,
   SeedCounts,

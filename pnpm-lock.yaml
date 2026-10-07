@@ -63,12 +63,18 @@ importers:
 
   apps/cli:
     dependencies:
+      '@novel-editor/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@novel-editor/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@novel-editor/helpers':
         specifier: workspace:*
         version: link:../../packages/helpers
+      '@novel-editor/video':
+        specifier: workspace:*
+        version: link:../../packages/video
     devDependencies:
       '@types/node':
         specifier: ^24.0.10
@@ -118,6 +124,9 @@ importers:
       '@lezer/markdown':
         specifier: ^1.6.3
         version: 1.6.3
+      '@novel-editor/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@novel-editor/basic-algorithm':
         specifier: workspace:*
         version: link:../../packages/basic-algorithm
@@ -130,6 +139,9 @@ importers:
       '@novel-editor/store':
         specifier: workspace:*
         version: link:../../packages/store
+      '@novel-editor/video':
+        specifier: workspace:*
+        version: link:../../packages/video
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0(patch_hash=d2ceeaac17578c12940cc9b918b8c65968b8fbae1093eb9deaaf2f11e23eb2ac)
@@ -237,6 +249,16 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
 
+  packages/ai:
+    dependencies:
+      '@novel-editor/video':
+        specifier: workspace:*
+        version: link:../video
+    devDependencies:
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+
   packages/basic-algorithm:
     devDependencies:
       rimraf:
@@ -283,6 +305,19 @@ importers:
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0(patch_hash=d2ceeaac17578c12940cc9b918b8c65968b8fbae1093eb9deaaf2f11e23eb2ac)
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+
+  packages/video:
+    dependencies:
+      mp4-muxer:
+        specifier: ^5.0.0
+        version: 5.2.2
+      webm-muxer:
+        specifier: ^5.0.0
+        version: 5.1.4
+    devDependencies:
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1
@@ -1255,6 +1290,9 @@ packages:
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
 
+  '@types/dom-webcodecs@0.1.19':
+    resolution: {integrity: sha512-+yFUIDUaASFz0vQpWBErPxun/Lb+F0TdrlTsj50gm7K797YzEx2TmV6fEiwciHyFNghlZYPgQXH5qRcwMHcJFQ==}
+
   '@types/estree@1.0.6':
     resolution: {integrity: sha512-AYnb1nQyY49te+VRAVgmzfcgjYS91mY5P0TKUDCLEM+gNnA+3T6rWITXRLYCpahpqSQbN5cE+gHpnPyXjHWxcw==}
 
@@ -1317,6 +1355,9 @@ packages:
 
   '@types/whatwg-mimetype@3.0.2':
     resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
+
+  '@types/wicg-file-system-access@2020.9.8':
+    resolution: {integrity: sha512-ggMz8nOygG7d/stpH40WVaNvBwuyYLnrg5Mbyf6bmsj/8+gb6Ei4ZZ9/4PNpcPNTT8th9Q8sM8wYmWGjMWLX/A==}
 
   '@types/ws@8.18.2':
     resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
@@ -2744,6 +2785,10 @@ packages:
     resolution: {integrity: sha512-FP+p8RB8OWpF3YZBCrP5gtADmtXApB5AMLn+vdyA+PyxCjrCs00mjyUozssO33cwDeT3wNGdLxJ5M//YqtHAJw==}
     hasBin: true
 
+  mp4-muxer@5.2.2:
+    resolution: {integrity: sha512-dhozjTywI0h2qFzeShagt8YYw811fh1XlwiDCE2f6Aeqf6xG2CyuShoSa5E0AZDO8pPF0JOZ3wOmWBNWIGdSpQ==}
+    deprecated: This library is superseded by Mediabunny. Please migrate to it.
+
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
@@ -3521,6 +3566,10 @@ packages:
     resolution: {integrity: sha512-wCQcHkRazgjG5XoAq9jbTMLpNIjoSlZslrJ2+N9MxDsGEv1HnFoVjOCexL0ESva7Y9cu350j+DWADdk54s4AFQ==}
     engines: {node: '>=12.0.0'}
     hasBin: true
+
+  webm-muxer@5.1.4:
+    resolution: {integrity: sha512-ditzgFVFbfqPaugkIr4mGhAdob5K9HY6Rzlh7TRsA368yA1sp/m5O7nQCcMLdgFDeNGtFPg8B+MeXLtpzKWX6Q==}
+    deprecated: This library is superseded by Mediabunny. Please migrate to it.
 
   whatwg-mimetype@3.0.0:
     resolution: {integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==}
@@ -4527,6 +4576,8 @@ snapshots:
 
   '@types/deep-eql@4.0.2': {}
 
+  '@types/dom-webcodecs@0.1.19': {}
+
   '@types/estree@1.0.6': {}
 
   '@types/fs-extra@11.0.4':
@@ -4599,6 +4650,8 @@ snapshots:
     optional: true
 
   '@types/whatwg-mimetype@3.0.2': {}
+
+  '@types/wicg-file-system-access@2020.9.8': {}
 
   '@types/ws@8.18.2':
     dependencies:
@@ -6266,6 +6319,11 @@ snapshots:
     dependencies:
       minimist: 1.2.8
 
+  mp4-muxer@5.2.2:
+    dependencies:
+      '@types/dom-webcodecs': 0.1.19
+      '@types/wicg-file-system-access': 2020.9.8
+
   ms@2.1.3: {}
 
   nanoid@3.3.8: {}
@@ -7028,6 +7086,11 @@ snapshots:
       rxjs: 7.8.2
     transitivePeerDependencies:
       - debug
+
+  webm-muxer@5.1.4:
+    dependencies:
+      '@types/dom-webcodecs': 0.1.19
+      '@types/wicg-file-system-access': 2020.9.8
 
   whatwg-mimetype@3.0.0: {}
 

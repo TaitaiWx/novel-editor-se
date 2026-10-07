@@ -1,0 +1,74 @@
+/**
+ * 主进程 AI 运行时：按需创建 CredentialStore / ProviderConfigStore / AIService 单例
+ *
+ * 密钥与 Provider 配置是应用全局的（userData），设置中心 JSON 跟随当前打开的数据库。
+ * 数据库打开后（db-init / db-init-default）调用 onDatabaseOpened：迁移明文 Key、恢复视频任务轮询。
+ */
+import { app, safeStorage } from 'electron';
+import path from 'path';
+import { isDatabaseReady, settingsOps } from '@novel-editor/store';
+import { CREDENTIALS_FILE_NAME, CredentialStore } from './credential-store';
+import { PROVIDER_CONFIG_FILE_NAME, ProviderConfigStore } from './provider-config';
+import { AIService } from './service';
+import { migratePlaintextApiKey, SETTINGS_CENTER_KEY } from './settings-secrets';
+
+let credentials: CredentialStore | null = null;
+let configs: ProviderConfigStore | null = null;
+let service: AIService | null = null;
+const databaseOpenedListeners = new Set<() => void>();
+
+function userDataPath(fileName: string): string {
+  return path.join(app.getPath('userData'), fileName);
+}
+
+export function getCredentialStore(): CredentialStore {
+  credentials ??= new CredentialStore(userDataPath(CREDENTIALS_FILE_NAME), safeStorage);
+  return credentials;
+}
+
+export function getProviderConfigStore(): ProviderConfigStore {
+  configs ??= new ProviderConfigStore(userDataPath(PROVIDER_CONFIG_FILE_NAME));
+  return configs;
+}
+
+export function getAIService(): AIService {
+  service ??= new AIService({
+    credentials: getCredentialStore(),
+    configs: getProviderConfigStore(),
+    readSettings: () => (isDatabaseReady() ? settingsOps.get(SETTINGS_CENTER_KEY) : undefined),
+  });
+  return service;
+}
+
+/** 数据库打开后的回调（视频任务队列注册，用于重启后恢复轮询） */
+export function onDatabaseOpened(listener: () => void): () => void {
+  databaseOpenedListeners.add(listener);
+  return () => databaseOpenedListeners.delete(listener);
+}
+
+/** 数据库打开后调用：把设置 JSON 中的明文 Key 移入安全存储，并通知视频队列恢复 */
+export function handleDatabaseOpened(): void {
+  try {
+    const outcome = migratePlaintextApiKey(settingsOps, getCredentialStore());
+    if (outcome.conflict) {
+      console.warn('[ai] 数据库中的明文 API Key 与已保存的 Key 不同，已保留安全存储中的 Key');
+    }
+  } catch (error) {
+    console.warn('[ai] 迁移明文 API Key 失败:', error);
+  }
+  for (const listener of databaseOpenedListeners) {
+    try {
+      listener();
+    } catch (error) {
+      console.warn('[ai] 数据库打开回调失败:', error);
+    }
+  }
+}
+
+/** 测试用：重置单例 */
+export function resetAIRuntimeForTests(): void {
+  credentials = null;
+  configs = null;
+  service = null;
+  databaseOpenedListeners.clear();
+}

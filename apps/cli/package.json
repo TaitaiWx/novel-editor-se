@@ -24,8 +24,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@novel-editor/ai": "workspace:*",
     "@novel-editor/core": "workspace:*",
-    "@novel-editor/helpers": "workspace:*"
+    "@novel-editor/helpers": "workspace:*",
+    "@novel-editor/video": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.10",

@@ -15,3 +15,157 @@
   font-size: 12px;
   color: #9fd8ba;
 }
+
+.subHeading {
+  margin-top: 28px;
+}
+
+.keyField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.keyInputRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  button {
+    flex-shrink: 0;
+  }
+}
+
+.keyActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.badgeOk,
+.badgeMuted {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.badgeOk {
+  color: #9fd8ba;
+  background: rgba(159, 216, 186, 0.12);
+}
+
+.badgeMuted {
+  color: var(--ui-fg-muted);
+  background: var(--ui-interaction-hover-bg);
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ui-interaction-accent);
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    color: var(--ui-fg-disabled);
+    cursor: default;
+  }
+}
+
+.statusOk,
+.statusError,
+.statusMuted {
+  font-size: 12px;
+}
+
+.statusOk {
+  color: #9fd8ba;
+}
+
+.statusError {
+  color: #e5a29d;
+}
+
+.statusMuted {
+  color: var(--ui-fg-muted);
+}
+
+.keyWarning {
+  font-size: 12px;
+  color: #d8c38f;
+}
+
+.providerList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.providerCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-card-border);
+  border-radius: var(--ui-card-radius);
+  background: var(--ui-bg-elevated);
+}
+
+.providerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.providerTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-fg-primary);
+}
+
+.kindTag {
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ui-fg-muted);
+  background: var(--ui-interaction-hover-bg);
+}
+
+.providerGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+
+.fieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ui-fg-muted);
+
+  &:first-child {
+    grid-column: 1 / -1;
+  }
+}

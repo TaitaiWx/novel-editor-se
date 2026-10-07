@@ -82,6 +82,13 @@ export interface CliContext {
   recordWrites(events: WriteEvent[]): Promise<void>;
   /** 在当前进程内执行另一条 CLI 命令（daemon 使用），输出强制为 JSON 结构 */
   invoke(request: RpcRequest): Promise<RpcResponse>;
+  /**
+   * 流式输出到 stdout（例如 AI 续写边生成边打印）。只在人类可读模式下提供；
+   * --json / --quiet 以外的 daemon 调用为 undefined，此时命令应把完整结果放进 CommandResult
+   */
+  stream?: (chunk: string) => void;
+  /** 读取环境变量（测试与 daemon 可注入），默认 process.env */
+  env: Readonly<Record<string, string | undefined>>;
 }
 
 export interface CommandResult {

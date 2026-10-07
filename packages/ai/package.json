@@ -1,0 +1,24 @@
+{
+  "name": "@novel-editor/ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI provider abstraction (text streaming / async video tasks), context assembler and prompt builders shared by Novel Editor GUI and CLI. Pure TS, no Electron / Node built-ins.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@novel-editor/video": "workspace:*"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./context": "./src/context/index.ts",
+    "./prompts": "./src/prompts/index.ts"
+  }
+}

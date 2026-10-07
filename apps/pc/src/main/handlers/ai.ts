@@ -2,12 +2,14 @@
  * AI IPC Handlers
  *
  * Handles: AI API requests, analysis report saving, AI assistant window
+ * Provider 配置、流式输出见 ./ai-providers.ts；视频任务见 ./video.ts
  */
 import { ipcMain, BrowserWindow } from 'electron';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { settingsOps } from '@novel-editor/store';
+import { getAIService } from '../ai/runtime';
+import type { AIRequestPayload } from '../ai/service';
 import { establishPortChannel } from '../message-port-bridge';
 import { PortChannel } from '../../shared/portChannels';
 import { isRendererDevServerEnabled, loadRendererPage } from '../renderer-entry';
@@ -18,136 +20,15 @@ const __handler_dirname = path.dirname(__handler_filename);
 // so __handler_dirname already points to dist/. No need to go up a level.
 const __dist_dir = __handler_dirname;
 
-export interface AIRequestPayload {
-  prompt: string;
-  systemPrompt?: string;
-  context?: string;
-  maxTokens?: number;
-  temperature?: number;
-}
+export type { AIRequestPayload } from '../ai/service';
 
-interface PersistedAISettings {
-  enabled?: boolean;
-  enabledExplicitlySet?: boolean;
-  baseUrl?: string;
-  model?: string;
-  apiKey?: string;
-  temperature?: number;
-  maxTokens?: number;
-}
-
-interface ParsedPersistedAISettings {
-  ai?: PersistedAISettings;
-  enabled?: boolean;
-  enabledExplicitlySet?: boolean;
-  baseUrl?: string;
-  model?: string;
-  apiKey?: string;
-  temperature?: number;
-  maxTokens?: number;
-}
-
-function normalizePersistedAISettings(rawSettings: string | null | undefined): PersistedAISettings {
-  const parsed = rawSettings ? (JSON.parse(rawSettings) as ParsedPersistedAISettings) : {};
-  const nestedAi =
-    parsed.ai && typeof parsed.ai === 'object' ? parsed.ai : ({} as PersistedAISettings);
-  const mergedAi: PersistedAISettings = {
-    enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : nestedAi.enabled,
-    enabledExplicitlySet:
-      typeof parsed.enabledExplicitlySet === 'boolean'
-        ? parsed.enabledExplicitlySet
-        : nestedAi.enabledExplicitlySet,
-    baseUrl: parsed.baseUrl ?? nestedAi.baseUrl,
-    model: parsed.model ?? nestedAi.model,
-    apiKey: parsed.apiKey ?? nestedAi.apiKey,
-    temperature: parsed.temperature ?? nestedAi.temperature,
-    maxTokens: parsed.maxTokens ?? nestedAi.maxTokens,
-  };
-  const enabledExplicitlySet = mergedAi.enabledExplicitlySet === true;
-  const hasStoredCredential = Boolean(mergedAi.apiKey?.trim());
-  return {
-    ...mergedAi,
-    enabled: enabledExplicitlySet
-      ? Boolean(mergedAi.enabled)
-      : Boolean(mergedAi.enabled) || hasStoredCredential,
-    enabledExplicitlySet,
-  };
-}
-
-export async function invokeConfiguredAI(payload: AIRequestPayload) {
-  const rawSettings = settingsOps.get('novel-editor:settings-center');
-  const ai = normalizePersistedAISettings(rawSettings);
-
-  if (!ai.enabled) {
-    return { ok: false, error: 'AI 功能未启用，请先在设置中心开启' };
-  }
-  if (!ai.apiKey?.trim()) {
-    return { ok: false, error: '未配置 AI Key，请先在设置中心填写 API Key' };
-  }
-  if (!ai.baseUrl?.trim() || !ai.model?.trim()) {
-    return { ok: false, error: 'AI Base URL 或模型未配置完整' };
-  }
-
-  const endpoint = `${ai.baseUrl.replace(/\/$/, '')}/chat/completions`;
-
-  let response: Response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${ai.apiKey.trim()}`,
-      },
-      body: JSON.stringify({
-        model: ai.model.trim(),
-        temperature:
-          typeof payload.temperature === 'number'
-            ? payload.temperature
-            : typeof ai.temperature === 'number'
-              ? ai.temperature
-              : 1.3,
-        max_tokens:
-          typeof payload.maxTokens === 'number'
-            ? payload.maxTokens
-            : typeof ai.maxTokens === 'number'
-              ? ai.maxTokens
-              : 8192,
-        messages: [
-          ...(payload.systemPrompt ? [{ role: 'system', content: payload.systemPrompt }] : []),
-          {
-            role: 'user',
-            content: payload.context
-              ? `项目上下文:\n${payload.context}\n\n用户请求:\n${payload.prompt}`
-              : payload.prompt,
-          },
-        ],
-      }),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: `无法连接 AI 服务 (${endpoint}): ${msg}` };
-  }
-
-  let json: {
-    error?: { message?: string };
-    choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
-  };
-  try {
-    json = (await response.json()) as typeof json;
-  } catch {
-    return { ok: false, error: `AI 服务返回了无效的响应 (HTTP ${response.status})` };
-  }
-
-  if (!response.ok) {
-    return { ok: false, error: json.error?.message || `AI 请求失败 (HTTP ${response.status})` };
-  }
-
-  const content = json.choices?.[0]?.message?.content;
-  const text = Array.isArray(content)
-    ? content.map((item) => item.text || '').join('')
-    : content || '';
-
-  return { ok: true, text };
+/**
+ * 调用设置中心配置的默认 AI（openai-compatible，一次性补全）。
+ * 实现已移到 @novel-editor/ai + main/ai/service.ts（密钥来自 safeStorage）；
+ * 签名、默认值与错误文案保持不变，供成长推演、ai-request 等调用方使用。
+ */
+export function invokeConfiguredAI(payload: AIRequestPayload) {
+  return getAIService().invokeConfiguredAI(payload);
 }
 
 export function registerAIHandlers(): void {

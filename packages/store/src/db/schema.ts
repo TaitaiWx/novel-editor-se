@@ -233,7 +233,28 @@ export function hasColumn(
   return rows.some((row) => row.name === columnName);
 }
 
+/**
+ * 视频生成任务（场景视频）：任务状态机在 @novel-editor/video，这里只做持久化。
+ * data_json 保存完整任务对象，其余列用于查询；用 IF NOT EXISTS 兼容旧数据库（增量迁移）
+ */
+function createVideoTaskTable(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS video_tasks (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL,
+      work_path TEXT NOT NULL,
+      status TEXT NOT NULL,
+      data_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_video_tasks_status ON video_tasks (status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_video_tasks_work_path ON video_tasks (work_path, created_at DESC);
+  `);
+}
+
 function migrateTables(database: Database.Database): void {
+  createVideoTaskTable(database);
   if (!hasColumn(database, 'outlines', 'scope_kind')) {
     database.exec(`ALTER TABLE outlines ADD COLUMN scope_kind TEXT DEFAULT 'project';`);
   }

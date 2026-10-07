@@ -15,6 +15,8 @@ export { storyIdeaOps } from './db/story-ideas';
 export { statsOps } from './db/stats';
 export { settingsOps } from './db/settings';
 export { aiCacheOps } from './db/ai-cache';
+export { videoTaskOps } from './db/video-tasks';
+export type { VideoTaskRecordLike } from './db/video-tasks';
 export { exportAllData, importData } from './db/export-import';
 export type { ExportData } from './db/export-import';
 export { PROJECT_SEED_FILE, seedProjectData, validateProjectSeed } from './db/seed';

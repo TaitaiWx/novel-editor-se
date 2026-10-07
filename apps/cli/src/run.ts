@@ -39,6 +39,8 @@ export interface RunCliOptions {
   /** 强制 JSON 输出（daemon 使用） */
   forceJson?: boolean;
   commands?: readonly CommandSpec[];
+  /** 环境变量（默认 process.env），例如 AI 命令读取 NOVEL_EDITOR_<PROVIDER>_API_KEY */
+  env?: Readonly<Record<string, string | undefined>>;
 }
 
 function createLogger(io: CliIO, globals: GlobalOptions, silent: boolean): Logger {
@@ -172,6 +174,8 @@ export async function runCli(
         return project;
       },
       recordWrites: (events) => recordCliWrites(events, logger),
+      env: options.env ?? process.env,
+      stream: silent || globals.json ? undefined : (chunk: string) => io.stdout(chunk),
       invoke: (request: RpcRequest) =>
         runCli(request.argv, {
           io: {
@@ -188,6 +192,7 @@ export async function runCli(
           inDaemon: true,
           forceJson: true,
           commands: commandList,
+          env: options.env,
         }),
     };
 

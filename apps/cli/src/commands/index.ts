@@ -3,6 +3,7 @@
  */
 import { describeCommands } from '../help';
 import type { CommandSpec } from '../types';
+import { aiCommands } from './ai';
 import { createAppCommands } from './app';
 import { batchCommands } from './batch';
 import { fileCommands } from './file';
@@ -12,6 +13,7 @@ import { growthWorldCommands } from './growth-world';
 import { chapterCommands, novelCommands } from './novel';
 import { projectCommands } from './project';
 import { statsCommands } from './stats';
+import { videoCommands } from './video';
 
 export const commands: CommandSpec[] = [];
 
@@ -28,5 +30,7 @@ commands.push(
   ...chapterCommands,
   ...statsCommands,
   ...[...growthCommands, ...growthWorldCommands].map(withNovelOption),
+  ...aiCommands,
+  ...videoCommands,
   ...createAppCommands(() => describeCommands(commands))
 );

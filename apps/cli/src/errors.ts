@@ -10,6 +10,7 @@
  *   5 不在项目中（NOT_A_PROJECT）
  *   6 不支持的操作（UNSUPPORTED / APP_NOT_FOUND）
  *   7 daemon 未运行（DAEMON_NOT_RUNNING）
+ * AI 服务错误（AI_ERROR，鉴权 / 额度 / 内容安全 / 网络等，详情见 hint）归入 1
  */
 import { isCoreError, toCoreError, type CoreErrorCode } from '@novel-editor/core';
 
@@ -20,6 +21,7 @@ export type CliErrorCode =
   | 'UNKNOWN_OPTION'
   | 'APP_NOT_FOUND'
   | 'DAEMON_NOT_RUNNING'
+  | 'AI_ERROR'
   | 'INTERNAL';
 
 export class CliError extends Error {
@@ -38,6 +40,7 @@ export class CliError extends Error {
 const EXIT_CODES: Record<CliErrorCode, number> = {
   IO_ERROR: 1,
   INTERNAL: 1,
+  AI_ERROR: 1,
   USAGE: 2,
   UNKNOWN_COMMAND: 2,
   UNKNOWN_OPTION: 2,

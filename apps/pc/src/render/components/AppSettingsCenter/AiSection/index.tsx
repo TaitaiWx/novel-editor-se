@@ -3,6 +3,8 @@ import { AiOutlineApi } from 'react-icons/ai';
 import type { AIPresetKey, AIProvider, SettingsDraft } from '../../../utils/appSettings';
 import { AI_PRESET_OPTIONS, type AIPresetOption } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
+import ApiKeyField from './ApiKeyField';
+import ProviderList from './ProviderList';
 import sharedStyles from '../styles.module.scss';
 import styles from './styles.module.scss';
 
@@ -162,15 +164,13 @@ const AiSection: React.FC<AiSectionProps> = ({
         <div className={sharedStyles.formMeta}>
           <div className={sharedStyles.formLabel}>API Key</div>
           <div className={sharedStyles.formDesc}>
-            仅保存在当前设备上，用于连接你选择的 AI 服务。
+            由系统钥匙串加密保存在当前设备上，保存后不会再显示明文。
           </div>
         </div>
-        <input
-          className={sharedStyles.input}
-          type="password"
-          value={aiSettings.apiKey}
-          onChange={(e) => setAI('apiKey', e.target.value)}
-          placeholder="sk-..."
+        <ApiKeyField
+          providerId="openai-compatible"
+          configured={Boolean(aiSettings.hasApiKey || aiSettings.apiKey?.trim())}
+          onConfiguredChange={(configured) => setAI('hasApiKey', configured)}
         />
       </div>
 
@@ -237,6 +237,12 @@ const AiSection: React.FC<AiSectionProps> = ({
       </button>
       {aiSaveStatus && <span className={styles.aiSaveStatus}>{aiSaveStatus}</span>}
     </div>
+
+    <h4 className={styles.subHeading}>
+      <span>更多 AI 服务</span>
+    </h4>
+    <p>续写（xAI Grok）与场景视频（MiniMax、Seedance）使用的服务，Key 同样只保存在本机钥匙串中。</p>
+    <ProviderList />
   </div>
 );
 

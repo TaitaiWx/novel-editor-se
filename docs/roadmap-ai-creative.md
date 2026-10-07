@@ -1,6 +1,7 @@
 # AI 创作能力规划：人物悬停卡片 · 场景视频 · Grok 续写
 
-> 状态：设计稿，待确认后分期实现。本文只描述交互、数据流与架构，不含实现代码。
+> 状态：设计已确认。**第一期基础设施已完成**（见下方「0.1 实现状态」）；人物悬停卡片、Grok 续写界面、场景视频工作区在后续分期实现。
+
 
 ## 0. 先做的基础设施（三个功能共用）
 
@@ -13,6 +14,30 @@
 | **流式输出** | 新增 `ai-stream` 通道（MessagePort 推送 token），支持中途取消（AbortController） |
 | **异步任务队列**（视频） | main 进程持久化任务表（SQLite）：提交 → 轮询 → 下载 → 落盘；应用重启后恢复轮询；失败可重试；并发与费用上限可配置 |
 | **上下文组装器**（core） | 统一从 章正文 / 章纲 / 卷纲 / 人物卡 / 设定 / 成长档案 组装提示词上下文，按 token 预算裁剪；GUI 与 CLI 共用，CLI 增加 `ne ai continue` / `ne video …` |
+
+### 0.1 实现状态（第一期 · 基础设施）
+
+| 模块 | 位置 | 状态 |
+|---|---|---|
+| Provider 抽象 + 注册表 | `packages/ai`（`TextProvider` complete / stream、`VideoProvider` submit / poll / fetchResult，AbortSignal） | ✅ |
+| openai-compatible / grok | `packages/ai/src/providers/`（原 `handlers/ai.ts` 逻辑迁入，行为不变；Grok 走 `https://api.x.ai/v1`） | ✅ |
+| minimax-video / seedance-video | 同上；接口与假设写在文件头和 `*_ENDPOINTS` 常量 | ✅（按公开文档映射，未用真实 Key 联调） |
+| SSE 解析 / 重试退避 / 错误规范化 | `packages/ai/src/{sse,http,errors}.ts` | ✅ |
+| 上下文组装器 + 续写 / 分镜提示词 | `@novel-editor/ai/context`、`@novel-editor/ai/prompts` | ✅ |
+| 分镜模型、任务状态机、队列、落盘布局、费用钩子 | `packages/video` | ✅ |
+| 样片拼接（渲染进程，WebCodecs） | `@novel-editor/video/stitch`（改编自 video-maker 的 video-core） | ✅（界面待第三期） |
+| safeStorage 密钥 + 明文 Key 迁移 | `apps/pc/src/main/ai/` | ✅ |
+| 流式通道 | `ai-stream-start / cancel` + `ai-stream-event`（webContents.send，只推给发起窗口） | ✅ |
+| 视频任务队列（SQLite + 后台轮询 + 重启恢复 + 落盘） | store `video_tasks` + `apps/pc/src/main/video/` | ✅ |
+| 设置中心按 Provider 配置 | `AppSettingsCenter/AiSection`（只写 Key、测试连接） | ✅ |
+| CLI | `ne ai continue`、`ne video storyboard`、`ne video validate` | ✅ |
+
+实现说明与偏差：
+- 流式通道使用 `webContents.send` 推送（每个流有 streamId），没有用 MessagePort：片段量小、只需单向推送，且便于按窗口清理
+- 视频任务表在当前项目的数据库里（与作品同在），打开项目时恢复轮询；成片地址是签名地址，下载前重新获取
+- 落盘为 `镜头N-vX.mp4` + 同名 `镜头N-vX.prompt.json`（每个版本一份，可复现），而不是每个场景一个 prompt.json
+- 费用：不内置任何厂商价格，作者在设置中心填写「每秒单价」后才做预估与每日 / 单次上限检查
+- 厂商接口假设（待真实 Key 联调确认）：MiniMax 默认国内站 `https://api.minimax.cn`、duration 只取 6 / 10 秒、没有取消接口；Seedance 默认北京区 `https://ark.cn-beijing.volces.com/api/v3`，参数放在请求体顶层（旧版 1.0 模型可切换为文本命令 `--ratio …`），取消用 `DELETE /contents/generations/tasks/{id}`
 
 ## 1. 人物悬停卡片（体量最小，建议第一期）
 

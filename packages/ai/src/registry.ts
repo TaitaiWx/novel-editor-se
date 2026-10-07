@@ -1,0 +1,154 @@
+/**
+ * Provider 注册表：静态描述 + 工厂
+ *
+ * GUI 主进程与 CLI 各自创建注册表（createDefaultRegistry），按 id 取得 Provider 实例；
+ * 密钥由调用方从安全存储（主进程 safeStorage）或环境变量（CLI）读取后传入。
+ */
+import { AIError } from './errors';
+import { createGrokProvider, GROK_DEFAULTS } from './providers/grok';
+import { createMinimaxVideoProvider, MINIMAX_VIDEO_DEFAULTS } from './providers/minimax-video';
+import {
+  createOpenAICompatibleProvider,
+  OPENAI_COMPATIBLE_DEFAULTS,
+} from './providers/openai-compatible';
+import { createSeedanceVideoProvider, SEEDANCE_VIDEO_DEFAULTS } from './providers/seedance-video';
+import type { ProviderConfig, ProviderDescriptor, TextProvider, VideoProvider } from './types';
+
+export type TextProviderFactory = (config: ProviderConfig) => TextProvider;
+export type VideoProviderFactory = (config: ProviderConfig) => VideoProvider;
+
+type Entry =
+  | { descriptor: ProviderDescriptor & { kind: 'text' }; factory: TextProviderFactory }
+  | { descriptor: ProviderDescriptor & { kind: 'video' }; factory: VideoProviderFactory };
+
+/** CLI 环境变量名：NOVEL_EDITOR_<PROVIDER>_API_KEY（连字符转下划线、大写） */
+export function providerEnvKey(providerId: string): string {
+  return `NOVEL_EDITOR_${providerId.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase()}_API_KEY`;
+}
+
+export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
+  {
+    id: 'openai-compatible',
+    kind: 'text',
+    label: 'OpenAI 兼容',
+    description:
+      'OpenAI、DeepSeek、OpenRouter 等兼容 /chat/completions 的服务（设置中心的默认 AI）',
+    defaultBaseUrl: OPENAI_COMPATIBLE_DEFAULTS.baseUrl,
+    defaultModel: OPENAI_COMPATIBLE_DEFAULTS.model,
+    models: [OPENAI_COMPATIBLE_DEFAULTS.model],
+    envKey: providerEnvKey('openai-compatible'),
+  },
+  {
+    id: 'grok',
+    kind: 'text',
+    label: 'xAI Grok',
+    description: '续写与创作，OpenAI 兼容接口（https://api.x.ai/v1）',
+    defaultBaseUrl: GROK_DEFAULTS.baseUrl,
+    defaultModel: GROK_DEFAULTS.model,
+    models: GROK_DEFAULTS.models,
+    envKey: providerEnvKey('grok'),
+    docsUrl: 'https://docs.x.ai/docs/api-reference',
+  },
+  {
+    id: 'minimax-video',
+    kind: 'video',
+    label: 'MiniMax 海螺视频',
+    description: '文生视频 / 图生视频（异步任务）',
+    defaultBaseUrl: MINIMAX_VIDEO_DEFAULTS.baseUrl,
+    defaultModel: MINIMAX_VIDEO_DEFAULTS.model,
+    models: MINIMAX_VIDEO_DEFAULTS.models,
+    envKey: providerEnvKey('minimax-video'),
+    docsUrl: 'https://platform.minimax.cn/docs/api-reference/video-generation-t2v',
+  },
+  {
+    id: 'seedance-video',
+    kind: 'video',
+    label: 'Seedance（火山方舟）',
+    description: '字节跳动 Seedance 文生视频 / 图生视频（异步任务）',
+    defaultBaseUrl: SEEDANCE_VIDEO_DEFAULTS.baseUrl,
+    defaultModel: SEEDANCE_VIDEO_DEFAULTS.model,
+    models: SEEDANCE_VIDEO_DEFAULTS.models,
+    envKey: providerEnvKey('seedance-video'),
+    docsUrl: 'https://www.volcengine.com/docs/82379/1520757',
+  },
+];
+
+export class ProviderRegistry {
+  private readonly entries = new Map<string, Entry>();
+
+  registerText(descriptor: ProviderDescriptor, factory: TextProviderFactory): this {
+    if (descriptor.kind !== 'text') throw new Error(`${descriptor.id} 不是文本 Provider`);
+    this.entries.set(descriptor.id, {
+      descriptor: descriptor as ProviderDescriptor & { kind: 'text' },
+      factory,
+    });
+    return this;
+  }
+
+  registerVideo(descriptor: ProviderDescriptor, factory: VideoProviderFactory): this {
+    if (descriptor.kind !== 'video') throw new Error(`${descriptor.id} 不是视频 Provider`);
+    this.entries.set(descriptor.id, {
+      descriptor: descriptor as ProviderDescriptor & { kind: 'video' },
+      factory,
+    });
+    return this;
+  }
+
+  has(id: string): boolean {
+    return this.entries.has(id);
+  }
+
+  get(id: string): ProviderDescriptor | undefined {
+    return this.entries.get(id)?.descriptor;
+  }
+
+  list(kind?: ProviderDescriptor['kind']): ProviderDescriptor[] {
+    return Array.from(this.entries.values())
+      .map((entry) => entry.descriptor)
+      .filter((descriptor) => !kind || descriptor.kind === kind);
+  }
+
+  createText(id: string, config: ProviderConfig): TextProvider {
+    const entry = this.entries.get(id);
+    if (!entry) throw unknownProvider(id);
+    if (entry.descriptor.kind !== 'text') {
+      throw new AIError({
+        kind: 'bad-request',
+        message: `${entry.descriptor.label} 不是文本服务`,
+        providerId: id,
+      });
+    }
+    return (entry.factory as TextProviderFactory)(config);
+  }
+
+  createVideo(id: string, config: ProviderConfig): VideoProvider {
+    const entry = this.entries.get(id);
+    if (!entry) throw unknownProvider(id);
+    if (entry.descriptor.kind !== 'video') {
+      throw new AIError({
+        kind: 'bad-request',
+        message: `${entry.descriptor.label} 不是视频服务`,
+        providerId: id,
+      });
+    }
+    return (entry.factory as VideoProviderFactory)(config);
+  }
+}
+
+function unknownProvider(id: string): AIError {
+  return new AIError({ kind: 'bad-request', message: `未知的 AI 服务: ${id}`, providerId: id });
+}
+
+/** 内置四个 Provider 的注册表 */
+export function createDefaultRegistry(): ProviderRegistry {
+  const registry = new ProviderRegistry();
+  const byId = (id: string) =>
+    BUILTIN_PROVIDERS.find((item) => item.id === id) as ProviderDescriptor;
+  registry.registerText(byId('openai-compatible'), (config) =>
+    createOpenAICompatibleProvider(config)
+  );
+  registry.registerText(byId('grok'), createGrokProvider);
+  registry.registerVideo(byId('minimax-video'), createMinimaxVideoProvider);
+  registry.registerVideo(byId('seedance-video'), createSeedanceVideoProvider);
+  return registry;
+}

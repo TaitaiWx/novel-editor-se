@@ -1,0 +1,24 @@
+{
+  "name": "@novel-editor/video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Storyboard / shot model, video task state machine & queue logic, output layout and cost hooks (pure); renderer-side animatic stitching via WebCodecs in ./stitch",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mp4-muxer": "^5.0.0",
+    "webm-muxer": "^5.0.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./stitch": "./src/stitch/index.ts"
+  }
+}
