@@ -1,14 +1,10 @@
 /**
- * 预演脚本第 2 版字段的校验：缓动、动作片段、视线、手部目标、道具尺寸 / 颜色 / 关键帧、机位跟随 / 绝对机位。
- * 第 1 版脚本没有这些字段，读取结果与原来一致（向下兼容）。
+ * 预演脚本第 2 版字段的校验：缓动、视线、手部目标、道具尺寸 / 颜色 / 关键帧、机位跟随 / 绝对机位。
+ * 动作（关节轨迹）在 previz-motion-validate.ts。第 1 版脚本没有这些字段，读取结果与原来一致（向下兼容）。
  */
 import {
-  PREVIZ_CLIP_ID_MAX,
   PREVIZ_EASINGS,
   PREVIZ_MAX_PROP_KEYS,
-  PREVIZ_MOTION_PROMPT_MAX,
-  PREVIZ_MOTION_SPEED_MAX,
-  PREVIZ_MOTION_SPEED_MIN,
   PREVIZ_POINT_Y_MAX,
   PREVIZ_POINT_Y_MIN,
   PREVIZ_PROP_SIZE_MAX,
@@ -20,14 +16,12 @@ import {
   type PrevizFigureTrack,
   type PrevizHandTargets,
   type PrevizLookAt,
-  type PrevizMotionRef,
   type PrevizPoint3,
   type PrevizPropKey,
 } from './previz';
 import {
   FACING_KEYS,
   TIME_KEYS,
-  asBoolean,
   asNumber,
   asText,
   isRecord,
@@ -77,58 +71,6 @@ export function readPoint3(raw: unknown, defaultY: number): PrevizPoint3 | undef
     y: roundTo(clampNumber(y ?? defaultY, PREVIZ_POINT_Y_MIN, PREVIZ_POINT_Y_MAX), 3),
     z: clampToPrevizStage(z),
   };
-}
-
-export interface MotionValidateContext {
-  /** 可用的片段 id（内置 + 动作库）；省略时不检查是否存在（例如读取已保存的脚本） */
-  availableClips?: readonly string[];
-  warnings: string[];
-  label: string;
-}
-
-/** 片段 id：允许省略 builtin: / lib: 前缀（在可用列表里查找） */
-function resolveClipId(raw: string, available: readonly string[] | undefined): string | null {
-  const id = raw.trim().slice(0, PREVIZ_CLIP_ID_MAX);
-  if (!id) return null;
-  if (!available) return id;
-  if (available.includes(id)) return id;
-  for (const candidate of [`builtin:${id}`, `builtin:${slug(id)}`, `lib:${id}`]) {
-    if (available.includes(candidate)) return candidate;
-  }
-  return null;
-}
-
-/** 动作片段引用：字符串（clip id）或对象 { clip, start, speed, loop, generate } */
-export function readMotion(
-  raw: unknown,
-  context: MotionValidateContext
-): PrevizMotionRef | undefined {
-  if (raw === undefined || raw === null) return undefined;
-  const record: Record<string, unknown> | null =
-    typeof raw === 'string' ? { clip: raw } : isRecord(raw) ? raw : null;
-  if (!record) return undefined;
-  const motion: PrevizMotionRef = {};
-  const rawClip = asText(pick(record, ['clip', 'id', 'clipId', 'name', 'motion']));
-  if (rawClip) {
-    const clip = resolveClipId(rawClip, context.availableClips);
-    if (clip) motion.clip = clip;
-    else context.warnings.push(`${context.label} 的动作 ${rawClip} 不在动作库里，已改用姿势`);
-  }
-  const generate = asText(pick(record, ['generate', 'prompt', 'describe', 'description']));
-  if (generate) motion.generate = generate.slice(0, PREVIZ_MOTION_PROMPT_MAX);
-  if (!motion.clip && !motion.generate) return undefined;
-  const start = asNumber(pick(record, ['start', 'offset', 'from']));
-  if (start !== undefined && start > 0) motion.start = roundTo(clampNumber(start, 0, 600), 3);
-  const speed = asNumber(pick(record, ['speed', 'rate', 'timeScale']));
-  if (speed !== undefined && speed !== 1) {
-    motion.speed = roundTo(
-      clampNumber(Math.abs(speed), PREVIZ_MOTION_SPEED_MIN, PREVIZ_MOTION_SPEED_MAX),
-      3
-    );
-  }
-  const loop = asBoolean(pick(record, ['loop', 'repeat', 'cycle']));
-  if (loop !== undefined) motion.loop = loop;
-  return motion;
 }
 
 /** 视线：{ figure: 名字 } / 名字字符串 / 点；人物名在所有人物读完后再换成 id（resolveFigureRefs） */

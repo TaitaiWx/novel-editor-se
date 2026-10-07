@@ -20,7 +20,10 @@ import {
   findSheet,
   initMemory,
   loadMemory,
+  normalizeRuleset,
   normalizeSimulatedEvent,
+  rulesetErrors,
+  validateRuleset,
   parseGrowthSimulationResult,
   saveAtlas,
   saveParty,
@@ -161,6 +164,20 @@ export async function growthSimulate(
   };
 }
 
+/**
+ * 渲染进程传入的规则：先规范化（schemaVersion 高于当前版本时抛错，避免旧程序覆盖新数据），
+ * 再做字段级校验，有错误时拒绝写入
+ */
+function assertValidRuleset(raw: unknown): GrowthRuleset {
+  const normalized = normalizeRuleset(raw);
+  const errors = rulesetErrors(validateRuleset(normalized));
+  if (errors.length > 0) {
+    const more = errors.length > 1 ? `（另有 ${errors.length - 1} 处问题）` : '';
+    throw new Error(`规则未保存：${errors[0].message}${more}`);
+  }
+  return normalized;
+}
+
 export function registerGrowthHandlers(): void {
   ipcMain.handle('growth-load', (_event, folderPath: unknown) =>
     guard(async () => snapshot(await assertFolder(folderPath)))
@@ -223,7 +240,7 @@ export function registerGrowthHandlers(): void {
   ipcMain.handle('growth-save-ruleset', (_event, folderPath: unknown, ruleset: unknown) =>
     guard(async () => {
       const root = await assertFolder(folderPath);
-      await saveRuleset(root, ruleset as GrowthRuleset);
+      await saveRuleset(root, assertValidRuleset(ruleset));
       return snapshot(root);
     })
   );

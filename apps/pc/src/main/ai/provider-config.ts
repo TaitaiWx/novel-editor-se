@@ -6,6 +6,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import path from 'path';
+import { normalizeLanguage } from '@novel-editor/video';
 import type { AIProviderUpdate, VideoSettingsInfo } from '../../shared/ai';
 
 export interface StoredProviderConfig {
@@ -135,6 +136,11 @@ export class ProviderConfigStore {
       if (value === undefined) continue;
       if (typeof value === 'number' && Number.isFinite(value) && value > 0) next[key] = value;
       else delete next[key];
+    }
+    if (update.voiceLanguage !== undefined) {
+      const language = normalizeLanguage(update.voiceLanguage);
+      if (language) next.voiceLanguage = language;
+      else delete next.voiceLanguage;
     }
     file.video = next;
     this.write(file);

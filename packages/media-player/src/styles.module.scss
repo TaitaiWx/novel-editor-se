@@ -381,6 +381,28 @@ $focus-ring: var(
   }
 }
 
+// 纯音频：没有画面，紧凑卡片（封面 + 波形在上，控制条常显在下）；<video> 只负责发声
+.audioMode {
+  .video {
+    display: none;
+  }
+
+  .controls {
+    position: relative;
+    opacity: 1;
+    pointer-events: auto;
+    padding: 2px 8px 4px;
+    background: none;
+  }
+
+  // 「开启声音」在波形右侧（行内），不覆盖波形与控制条
+  .unmute {
+    position: static;
+    flex-shrink: 0;
+    opacity: 1;
+  }
+}
+
 // 进度条悬停：指针上方显示该位置的时间
 .progressHover {
   position: absolute;

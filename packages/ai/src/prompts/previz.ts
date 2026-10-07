@@ -3,9 +3,9 @@
  *
  * 期望结构与校验来自 @novel-editor/video（PREVIZ_JSON_SCHEMA / validatePrevizScript），
  * 这里只负责拼提示词与从回复中提取、校验 JSON。AI 描述「有哪些人物 / 物体、谁在什么时候站在哪、朝哪、
- * 做什么姿势或动作片段、看向哪里、物体怎么动、机位怎么动」，渲染完全由渲染进程的确定性引擎完成。
- * 可用的动作片段（内置 + 作品动作库的 BVH）按 id 列在提示词里；没有合适的片段时 AI 可以写 motion.generate，
- * 配置了动作生成服务（MotionProvider，见 ../motion.ts）时会生成对应的 BVH。
+ * 做什么姿势或动作、看向哪里、物体怎么动、机位怎么动」，渲染完全由渲染进程的确定性引擎完成。
+ * 姿势覆盖不了的动作由 AI 直接写关节轨迹（motion.tracks，关节表与约定列在系统提示词里，附一个紧凑示例）；
+ * 复杂动作可以只写 motion.generate（描述），由 ../motion.ts 交给 MotionProvider 或追加一次请求生成轨迹。
  */
 import {
   PREVIZ_ANGLES,
@@ -25,6 +25,7 @@ import {
 import { truncateToTokens } from '../context/tokens';
 import type { ChatMessage } from '../types';
 import { extractJson } from './json';
+import { PREVIZ_JOINT_CONVENTIONS, PREVIZ_MOTION_EXAMPLE, previzJointLines } from './previz-motion';
 
 /** 系统提示词里的标记（mock 服务 / 日志据此识别预演请求） */
 export const PREVIZ_PROMPT_TAG = 'previz-script/v1';
@@ -48,19 +49,6 @@ export interface PrevizPromptInput {
   location?: string;
   /** 动作描述的 token 上限，默认 1200 */
   actionTokenBudget?: number;
-  /** 可用的动作片段（内置 + 作品动作库），AI 按 id 引用 */
-  motionClips?: readonly PrevizMotionClipInfo[];
-  /** 是否配置了动作生成服务（允许 motion.generate） */
-  canGenerateMotion?: boolean;
-}
-
-export interface PrevizMotionClipInfo {
-  id: string;
-  label?: string;
-  /** 英文一句话说明（内置动作有） */
-  description?: string;
-  durationSec?: number;
-  loop?: boolean;
 }
 
 export interface PrevizPrompt {
@@ -102,16 +90,21 @@ export const PREVIZ_SYSTEM_PROMPT = [
   `1. pose 只能取：${PREVIZ_POSES.join(', ')}；`,
   `2. camera.shotSize 只能取：${PREVIZ_SHOT_SIZES.join(', ')}；angle 只能取：${PREVIZ_ANGLES.join(', ')}；`,
   `3. mood 只能取：${PREVIZ_MOODS.join(', ')}；props.kind 只能取：${PREVIZ_PROP_KINDS.join(', ')}；`,
-  `4. 可选的 joints 是关节微调（度，[x, y, z]），关节名：${PREVIZ_JOINTS.join(', ')}；不确定时不要写；`,
+  `4. 可选的 joints 是静态关节微调（度，[x, y, z]），关节名：${PREVIZ_JOINTS.join(', ')}；不确定时不要写；`,
   '5. 每个人物 2–6 个关键帧，机位 1–4 个关键帧；动作要能在时长内完成，人物不要互相穿过；',
-  '6. 动作：关键帧的 motion.clip 引用【可用动作片段】里的 id，从这一帧开始播放（覆盖 pose，到下一关键帧前自动过渡），',
-  '   可设 start（片段内起点秒）、speed（0.1–4）、loop；没有合适片段时保留 pose，不要编造 id；',
+  '6. 动作：pose 表达不了的动作（挥手、点头、捂胸、挥剑、跺脚…）在那个关键帧写 motion.tracks（关节轨迹，见下方约定），',
+  '   从这一帧开始播放、叠加在 pose 上，到下一关键帧前自动过渡；可选 weight（0–1）与 loop；行走 / 奔跑交给 walk / run，',
+  '   不要用轨迹写迈步；很复杂的全身动作可以只写 motion: { "generate": "一句话描述" }，会另外生成轨迹；',
   '7. 视线 lookAt：{ "figure": 人物名 } 或一个点 { x, y, z }；手部目标 hands.left / hands.right 是手要够到的点（米，y 为离地高度）；',
   `8. 缓动 ease（${PREVIZ_EASINGS.join(', ')}）作用于这一帧到下一帧的移动；`,
   '9. 道具 props：kind 之外可写 name、size [宽, 高, 深]（米）、color、y（离地高度）；会移动的物体写 keys（t, x, z, y, facing）。',
   '   不在 kind 列表里的物体用 box / cylinder / sphere 加 size 与 name 表示；',
   '10. 机位 follow 写人物名可让镜头一直对准该人物；需要精确机位时写 position { x, y, z } 与 target { x, y, z }；',
   '11. 只输出一个 JSON 对象，不要任何解释或 Markdown 代码块。',
+  PREVIZ_JOINT_CONVENTIONS,
+  '关节与范围（度）：',
+  ...previzJointLines(),
+  `示例（关键帧上的 motion：举起右手挥手）：${JSON.stringify({ motion: PREVIZ_MOTION_EXAMPLE })}`,
 ].join('\n');
 
 export function buildPrevizPrompt(input: PrevizPromptInput): PrevizPrompt {
@@ -124,16 +117,6 @@ export function buildPrevizPrompt(input: PrevizPromptInput): PrevizPrompt {
         `- ${item.name.trim()}${item.appearance?.trim() ? `：${item.appearance.trim()}` : ''}`
     );
   const poseLines = PREVIZ_POSES.map((pose) => `- ${pose}：${POSE_HINTS[pose]}`);
-  const clipLines = (input.motionClips ?? []).slice(0, 60).map((clip) => {
-    const parts = [clip.label, clip.description].filter(Boolean).join('，');
-    const meta = [
-      clip.durationSec ? `${Math.round(clip.durationSec * 10) / 10}s` : '',
-      clip.loop ? 'loop' : '',
-    ]
-      .filter(Boolean)
-      .join(', ');
-    return `- ${clip.id}${parts ? `：${parts}` : ''}${meta ? `（${meta}）` : ''}`;
-  });
   const prompt = [
     `【镜头${input.shotTitle ? `：${input.shotTitle}` : ''}】`,
     action.text || '（作者没有写动作，按人物站位给一个自然的走位）',
@@ -150,12 +133,6 @@ export function buildPrevizPrompt(input: PrevizPromptInput): PrevizPrompt {
     '【可用姿势】',
     ...poseLines,
     '',
-    '【可用动作片段（motion.clip）】',
-    ...(clipLines.length ? clipLines : ['- （没有可用片段，只用 pose）']),
-    ...(input.canGenerateMotion
-      ? ['没有合适片段时可以写 motion: { "generate": "一句话描述动作" }，会由动作生成服务生成；']
-      : []),
-    '',
     '【输出 JSON 结构（JSON Schema）】',
     JSON.stringify(PREVIZ_JSON_SCHEMA),
   ].join('\n');
@@ -168,7 +145,7 @@ export function buildPrevizPrompt(input: PrevizPromptInput): PrevizPrompt {
     ],
     schema: PREVIZ_JSON_SCHEMA,
     temperature: 0.5,
-    maxTokens: 3200,
+    maxTokens: 4800,
   };
 }
 
@@ -186,8 +163,6 @@ export function parsePrevizResponse(
     characters?: readonly string[];
     durationSec?: number;
     shotSize?: PrevizShotSize;
-    /** 可用的动作片段 id：引用不存在的片段会被去掉 */
-    availableClips?: readonly string[];
   } = {}
 ): PrevizParseResult {
   const extracted = extractJson(text);

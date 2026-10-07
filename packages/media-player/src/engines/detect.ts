@@ -1,44 +1,18 @@
 /**
  * 播放源格式推断与清晰度选择（纯函数，便于测试）。
- * 顺序：显式 type → MIME → 地址扩展名（忽略查询串 / 片段）→ 地址里的常见提示（例如 `format=m3u8`）→ 原生。
+ * 顺序：显式 type → MIME → 地址扩展名（忽略查询串 / 片段，不区分大小写）→ 地址里的常见提示
+ * （例如 `format=m3u8`）→ 原生。格式表见 formats.ts。
  */
 import { AUTO_QUALITY, type MediaQuality, type MediaSourceType, type PlayerSource } from './types';
+import {
+  EXTENSION_FORMATS,
+  extensionOfUrl,
+  formatOfMime,
+  isWebSocketUrl,
+  type ResolvedSourceType,
+} from './formats';
 
-export type ResolvedSourceType = Exclude<MediaSourceType, 'auto'>;
-
-const MIME_TYPES: Array<[RegExp, ResolvedSourceType]> = [
-  [/^application\/(x-)?mpegurl$/i, 'hls'],
-  [/^audio\/(x-)?mpegurl$/i, 'hls'],
-  [/^application\/vnd\.apple\.mpegurl$/i, 'hls'],
-  [/^application\/dash\+xml$/i, 'dash'],
-  [/^video\/(x-)?flv$/i, 'flv'],
-  [/^video\/mp2t$/i, 'mpegts'],
-  [/^video\/webm$/i, 'webm'],
-  [/^video\/quicktime$/i, 'mov'],
-  [/^video\/mp4$/i, 'mp4'],
-];
-
-const EXTENSIONS: Record<string, ResolvedSourceType> = {
-  m3u8: 'hls',
-  m3u: 'hls',
-  mpd: 'dash',
-  flv: 'flv',
-  ts: 'mpegts',
-  m2ts: 'mpegts',
-  mts: 'mpegts',
-  webm: 'webm',
-  mov: 'mov',
-  mp4: 'mp4',
-  m4v: 'mp4',
-};
-
-/** 只取路径部分的扩展名（去掉查询串、片段），小写 */
-export function extensionOfUrl(url: string): string {
-  const path = url.split(/[?#]/)[0] ?? '';
-  const name = path.split('/').pop() ?? '';
-  const dot = name.lastIndexOf('.');
-  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
-}
+export { extensionOfUrl, type ResolvedSourceType };
 
 /** 推断格式；推断不出来时为 mp4（交给原生 `<video>`） */
 export function detectSourceType(
@@ -47,19 +21,19 @@ export function detectSourceType(
   mimeType?: string
 ): ResolvedSourceType {
   if (type !== 'auto') return type;
-  const mime = mimeType?.split(';')[0]?.trim();
-  if (mime) {
-    for (const [pattern, resolved] of MIME_TYPES) {
-      if (pattern.test(mime)) return resolved;
-    }
-  }
-  // blob: / data: 地址没有扩展名可看，一律交给原生
-  if (/^(blob|data):/i.test(url)) return 'mp4';
+  const fromMime = formatOfMime(mimeType);
+  if (fromMime) return fromMime;
+  // blob: / data: 地址没有扩展名可看：data: 读自身的 MIME，其余交给原生（读到元数据后再判断有无画面）
+  if (/^data:/i.test(url)) return formatOfMime(/^data:([^;,]*)/i.exec(url)?.[1]) ?? 'mp4';
+  if (/^blob:/i.test(url)) return 'mp4';
   const ext = extensionOfUrl(url);
-  if (ext && EXTENSIONS[ext]) return EXTENSIONS[ext];
+  const entry = EXTENSION_FORMATS[ext];
+  if (entry) return entry.type;
   if (/[?&](format|type|ext)=m3u8\b/i.test(url) || /\.m3u8\b/i.test(url)) return 'hls';
+  if (/[?&](format|type|ext)=(mpd|dash)\b/i.test(url) || /\.mpd\b/i.test(url)) return 'dash';
   if (/[?&](format|type|ext)=flv\b/i.test(url) || /\.flv\b/i.test(url)) return 'flv';
-  if (/\.mpd\b/i.test(url)) return 'dash';
+  // WebSocket 推流一般是 FLV（mpegts.js 的 WebSocket-FLV）
+  if (isWebSocketUrl(url)) return 'flv';
   return 'mp4';
 }
 

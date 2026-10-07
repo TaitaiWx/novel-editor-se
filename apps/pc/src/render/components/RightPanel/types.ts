@@ -1,4 +1,5 @@
 import type { CharacterDesign, MediaItem } from '@novel-editor/core/entity-media';
+import type { CharacterVoice } from '@novel-editor/video';
 import type { PersistedOutlineScopeInput } from '../../types/electron-api';
 
 export type TabType = 'storyline' | 'characters' | 'lore';
@@ -125,6 +126,8 @@ export interface Character {
   design?: CharacterDesign;
   /** 图集 */
   media?: MediaItem[];
+  /** 声音（场景视频对白配音：厂商音色、性别、年龄、音色描述；可选） */
+  voice?: CharacterVoice;
   aliases?: string[];
   highlightColor?: string;
   highlightFirstMentionOnly?: boolean;

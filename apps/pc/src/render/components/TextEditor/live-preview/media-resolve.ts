@@ -104,15 +104,26 @@ function ipcRenderer() {
   return typeof window !== 'undefined' ? window.electron?.ipcRenderer : undefined;
 }
 
-async function existsSingle(path: string): Promise<boolean> {
+/**
+ * 主进程没回答的候选（工作区外 / 工作区还没登记）：用 get-file-info-batch 查询。
+ * 它对不存在的文件静默跳过，不会像 get-file-info 那样在主进程日志里记一条错误。
+ */
+async function existingFilesQuietly(paths: readonly string[]): Promise<Set<string>> {
   const ipc = ipcRenderer();
-  if (!ipc) return false;
+  const result = new Set<string>();
+  if (!ipc || paths.length === 0) return result;
   try {
-    const info = (await ipc.invoke('get-file-info', path)) as { isFile?: boolean } | null;
-    return Boolean(info) && info?.isFile !== false;
+    const entries = (await ipc.invoke('get-file-info-batch', [...paths])) as Array<{
+      path: string;
+      info: { isFile?: boolean } | null;
+    }>;
+    for (const entry of entries ?? []) {
+      if (entry?.info && entry.info.isFile !== false) result.add(entry.path);
+    }
   } catch {
-    return false;
+    // 查询失败当作不存在
   }
+  return result;
 }
 
 /** 批量探测：返回存在的路径集合 */
@@ -136,11 +147,8 @@ export async function probeExistingPaths(paths: readonly string[]): Promise<Set<
       else if (answer !== false) unchecked.push(path);
     });
   }
-  // 主进程没有回答的（工作区外 / 旧版主进程）：逐个查询
-  const fallback = await Promise.all(unchecked.map((path) => existsSingle(path)));
-  unchecked.forEach((path, index) => {
-    if (fallback[index]) found.add(path);
-  });
+  // 主进程没有回答的（工作区外 / 工作区还没登记）：一次静默批量查询
+  for (const path of await existingFilesQuietly(unchecked)) found.add(path);
   return found;
 }
 

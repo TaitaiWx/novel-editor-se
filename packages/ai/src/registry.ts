@@ -20,10 +20,17 @@ import {
   MINIMAX_IMAGE_DEFAULTS,
   SEEDREAM_IMAGE_DEFAULTS,
 } from './providers/image';
+import {
+  createMinimaxSpeechProvider,
+  createOpenAISpeechProvider,
+  MINIMAX_SPEECH_DEFAULTS,
+  OPENAI_SPEECH_DEFAULTS,
+} from './providers/speech';
 import type {
   ImageProvider,
   ProviderConfig,
   ProviderDescriptor,
+  SpeechProvider,
   TextProvider,
   VideoProvider,
 } from './types';
@@ -31,11 +38,13 @@ import type {
 export type TextProviderFactory = (config: ProviderConfig) => TextProvider;
 export type VideoProviderFactory = (config: ProviderConfig) => VideoProvider;
 export type ImageProviderFactory = (config: ProviderConfig) => ImageProvider;
+export type SpeechProviderFactory = (config: ProviderConfig) => SpeechProvider;
 
 type Entry =
   | { descriptor: ProviderDescriptor & { kind: 'text' }; factory: TextProviderFactory }
   | { descriptor: ProviderDescriptor & { kind: 'video' }; factory: VideoProviderFactory }
-  | { descriptor: ProviderDescriptor & { kind: 'image' }; factory: ImageProviderFactory };
+  | { descriptor: ProviderDescriptor & { kind: 'image' }; factory: ImageProviderFactory }
+  | { descriptor: ProviderDescriptor & { kind: 'speech' }; factory: SpeechProviderFactory };
 
 /** CLI 环境变量名：NOVEL_EDITOR_<PROVIDER>_API_KEY（连字符转下划线、大写） */
 export function providerEnvKey(providerId: string): string {
@@ -121,6 +130,28 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     envKey: providerEnvKey('grok-image'),
     docsUrl: 'https://docs.x.ai/docs/guides/image-generations',
   },
+  {
+    id: 'openai-speech',
+    kind: 'speech',
+    label: 'OpenAI 兼容配音',
+    description: '场景视频的对白配音（/audio/speech，OpenAI 及兼容服务）',
+    defaultBaseUrl: OPENAI_SPEECH_DEFAULTS.baseUrl,
+    defaultModel: OPENAI_SPEECH_DEFAULTS.model,
+    models: OPENAI_SPEECH_DEFAULTS.models,
+    envKey: providerEnvKey('openai-speech'),
+    docsUrl: 'https://platform.openai.com/docs/api-reference/audio/createSpeech',
+  },
+  {
+    id: 'minimax-speech',
+    kind: 'speech',
+    label: 'MiniMax 语音合成',
+    description: '场景视频的对白配音（T2A v2，多语种、多情绪）',
+    defaultBaseUrl: MINIMAX_SPEECH_DEFAULTS.baseUrl,
+    defaultModel: MINIMAX_SPEECH_DEFAULTS.model,
+    models: MINIMAX_SPEECH_DEFAULTS.models,
+    envKey: providerEnvKey('minimax-speech'),
+    docsUrl: 'https://platform.minimaxi.com/document/T2A%20V2',
+  },
 ];
 
 export class ProviderRegistry {
@@ -148,6 +179,15 @@ export class ProviderRegistry {
     if (descriptor.kind !== 'image') throw new Error(`${descriptor.id} 不是图片 Provider`);
     this.entries.set(descriptor.id, {
       descriptor: descriptor as ProviderDescriptor & { kind: 'image' },
+      factory,
+    });
+    return this;
+  }
+
+  registerSpeech(descriptor: ProviderDescriptor, factory: SpeechProviderFactory): this {
+    if (descriptor.kind !== 'speech') throw new Error(`${descriptor.id} 不是配音 Provider`);
+    this.entries.set(descriptor.id, {
+      descriptor: descriptor as ProviderDescriptor & { kind: 'speech' },
       factory,
     });
     return this;
@@ -205,13 +245,26 @@ export class ProviderRegistry {
     }
     return (entry.factory as ImageProviderFactory)(config);
   }
+
+  createSpeech(id: string, config: ProviderConfig): SpeechProvider {
+    const entry = this.entries.get(id);
+    if (!entry) throw unknownProvider(id);
+    if (entry.descriptor.kind !== 'speech') {
+      throw new AIError({
+        kind: 'bad-request',
+        message: `${entry.descriptor.label} 不是配音服务`,
+        providerId: id,
+      });
+    }
+    return (entry.factory as SpeechProviderFactory)(config);
+  }
 }
 
 function unknownProvider(id: string): AIError {
   return new AIError({ kind: 'bad-request', message: `未知的 AI 服务: ${id}`, providerId: id });
 }
 
-/** 内置 Provider（文本 / 视频 / 图片）的注册表 */
+/** 内置 Provider（文本 / 视频 / 图片 / 配音）的注册表 */
 export function createDefaultRegistry(): ProviderRegistry {
   const registry = new ProviderRegistry();
   const byId = (id: string) =>
@@ -225,5 +278,7 @@ export function createDefaultRegistry(): ProviderRegistry {
   registry.registerImage(byId('seedream-image'), createSeedreamImageProvider);
   registry.registerImage(byId('minimax-image'), createMinimaxImageProvider);
   registry.registerImage(byId('grok-image'), createGrokImageProvider);
+  registry.registerSpeech(byId('openai-speech'), createOpenAISpeechProvider);
+  registry.registerSpeech(byId('minimax-speech'), createMinimaxSpeechProvider);
   return registry;
 }

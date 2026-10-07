@@ -173,6 +173,8 @@ describe('Provider 配置', () => {
       'seedream-image',
       'minimax-image',
       'grok-image',
+      'openai-speech',
+      'minimax-speech',
     ]);
     expect(JSON.stringify(list)).not.toContain('xai-secret');
     // 只有公开文档支持生成声音的视频服务带 supportsAudio

@@ -6,6 +6,7 @@
  * - 控制条只在暂停、悬停、键盘聚焦、菜单打开时浮现；提示与菜单渲染在播放器内部，全屏时同样可见
  * - 声音：用户发起的播放默认有声；只有自动播放的预览（compact / autoPlay）静音起播，并显示「开启声音」；
  *   确定没有音轨时静音按钮显示「无音轨」
+ * - 纯音频（mp3 / m4a / wav / flac 等，或读到元数据后没有画面）：紧凑的音频界面（封面 + 波形进度），控制条常显
  * - compact：静音自动循环播放，没有控制条（小卡片）
  */
 import React, {
@@ -17,28 +18,42 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { VscPlay, VscUnmute } from 'react-icons/vsc';
+import { VscPlay } from 'react-icons/vsc';
 import { clampVolume, nextAudioTrackState, playedSeconds, type AudioTrackState } from './audio';
 
 export type { VideoMetadata, VideoPlayerHandle, VideoPlayerProps } from './playerTypes';
 import ControlBar, { resolveControls } from './ControlBar';
 import type { VideoPlayerHandle, VideoPlayerProps } from './playerTypes';
 import { PlayerTooltipContext, type TooltipContext } from './ControlButton';
-import { ErrorOverlay, LoadingOverlay, NoticeOverlay, RecordingBadge } from './Overlays';
-import { SEEK_STEP_SECONDS, timeRangesToArray } from './ProgressBar';
-import { useFullscreen, useNotice, usePictureInPicture, useRecording } from './hooks';
+import {
+  ErrorOverlay,
+  LoadingOverlay,
+  NoticeOverlay,
+  RecordingBadge,
+  TopBar,
+  UnmuteButton,
+} from './Overlays';
+import AudioVisual from './AudioVisual';
+import { timeRangesToArray } from './ProgressBar';
+import {
+  useFullscreen,
+  useIdleActive,
+  useMediaElementSync,
+  useNotice,
+  usePictureInPicture,
+  useRecording,
+} from './hooks';
 import { PlayerError, safePlay, toPlayerError } from './engines/types';
-import { keyAction, stepPlaybackRate, type PlayerKeyAction } from './keyboard';
+import { keyAction, runKeyAction, stepPlaybackRate } from './keyboard';
 import { clampTime, frameWidth } from './format';
 import { captureFrame, downloadBlob } from './screenshot';
 import { supportsScreenshot } from './features';
 import { useMediaEngine } from './useMediaEngine';
 import { mediaErrorMessage, useCaptions } from './captions';
+import { playerRootClass } from './layout';
 import styles from './styles.module.scss';
 
 const DEFAULT_RATIO = 16 / 9;
-const IDLE_HIDE_MS = 2200;
-const VOLUME_STEP = 0.1;
 /** 不自动播放时停在这里作为封面（0 秒有时不绘制画面） */
 const POSTER_TIME = 0.1;
 
@@ -85,7 +100,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
   const shouldAutoPlay = compact || autoPlay;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startedRef = useRef(false);
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
   const [paused, setPaused] = useState(true);
@@ -100,13 +114,15 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
   const [audio, setAudio] = useState<AudioTrackState>('unknown');
   const [loop, setLoop] = useState(compact || defaultLoop);
   const [ratio, setRatio] = useState<number | null>(null);
-  const [active, setActive] = useState(false);
+  const { active, setActive, wake } = useIdleActive();
   const [dragging, setDragging] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<PlayerError | null>(null);
   const { notice, showNotice } = useNotice();
   const [canScreenshot, setCanScreenshot] = useState(false);
+  // 读到元数据后是否有画面（null：还不知道，先按地址 / MIME 判断）
+  const [hasPicture, setHasPicture] = useState<boolean | null>(null);
 
   // 回调总是读最新的属性，不进依赖数组
   const latest = { onLayoutChange, onMetadata, onAudioTrack, onScreenshot, onRecording, onError };
@@ -135,6 +151,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
     },
   });
   const { sourceKey, setQuality: setEngineQuality, reload, takeResume } = engine;
+  const audioOnly = hasPicture === null ? engine.audioHint : !hasPicture;
 
   const fullscreenState = useFullscreen(rootRef, videoRef, () =>
     callbacks.current.onLayoutChange?.()
@@ -161,21 +178,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
 
   const { start: startRecording, stop: stopRecording } = recording;
 
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.muted = muted;
-  }, [muted]);
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.volume = volume;
-  }, [volume]);
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.loop = loop;
-  }, [loop]);
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.playbackRate = rate;
-    video.defaultPlaybackRate = rate;
-  }, [rate]);
+  useMediaElementSync(videoRef, { muted, volume, loop, rate });
   useEffect(() => {
     setCanScreenshot(supportsScreenshot());
   }, []);
@@ -185,6 +188,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
     setDuration(0);
     setBuffered([]);
     setRatio(null);
+    setHasPicture(null);
     setAudio('unknown');
     setError(null);
     setLoading(false);
@@ -193,13 +197,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
   useEffect(() => {
     if (audio !== 'unknown') callbacks.current.onAudioTrack?.(audio);
   }, [audio]);
-
-  useEffect(
-    () => () => {
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-    },
-    []
-  );
 
   const probeAudio = (video: HTMLVideoElement) => {
     setAudio((previous) => nextAudioTrackState(previous, video, playedSeconds(video.played)));
@@ -321,19 +318,15 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
     [seek, changeQuality, captureCurrent, startRecording, stopRecording, fullscreenState.toggle]
   );
 
-  const wake = () => {
-    setActive(true);
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => setActive(false), IDLE_HIDE_MS);
-  };
-
   const hasSound = audio !== 'absent';
+  // 纯音频没有画面：不提供截图 / 录制 / 画中画 / 全屏 / 字幕
   const show = resolveControls(controls, showLoopToggle, {
-    screenshot: canScreenshot,
-    record: recording.supported,
-    pip: pip.supported,
-    fullscreen: fullscreenState.supported,
+    screenshot: canScreenshot && !audioOnly,
+    record: recording.supported && !audioOnly,
+    pip: pip.supported && !audioOnly,
+    fullscreen: fullscreenState.supported && !audioOnly,
   });
+  if (audioOnly) show.captions = false;
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (compact) return;
@@ -345,29 +338,27 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
       onButton: (event.target as HTMLElement).tagName === 'BUTTON',
     });
     if (!action) return;
-    const step = (direction: 1 | -1) => {
-      if (!show.speed) return false;
-      const next = stepPlaybackRate(rate, direction);
-      setRate(next);
-      showNotice(`播放速度 ${next}x`);
-    };
-    const handlers: Record<PlayerKeyAction, () => boolean | void> = {
-      'toggle-play': togglePlay,
-      'seek-back': () => seek(current - SEEK_STEP_SECONDS),
-      'seek-forward': () => seek(current + SEEK_STEP_SECONDS),
-      'volume-up': () => hasSound && changeVolume((muted ? 0 : volume) + VOLUME_STEP),
-      'volume-down': () => hasSound && changeVolume((muted ? 0 : volume) - VOLUME_STEP),
-      'toggle-mute': () => hasSound && toggleMute(),
-      'toggle-fullscreen': () => show.fullscreen && fullscreenState.toggle(),
-      screenshot: () => show.screenshot && screenshotWithNotice(),
-      'toggle-record': () => show.record && toggleRecord(),
-      'speed-down': () => step(-1),
-      'speed-up': () => step(1),
-      'toggle-captions': () => show.captions && captions.options.length > 0 && captions.toggle(),
-      'toggle-pip': () => show.pip && togglePip(),
-    };
-    // 返回 false 表示当前不可用：不拦截按键
-    if (handlers[action]() === false) return;
+    const handled = runKeyAction(action, {
+      show,
+      hasSound,
+      hasCaptions: captions.options.length > 0,
+      togglePlay,
+      seekBy: (delta) => seek(current + delta),
+      changeVolume: (delta) => changeVolume((muted ? 0 : volume) + delta),
+      toggleMute,
+      toggleFullscreen: fullscreenState.toggle,
+      screenshot: screenshotWithNotice,
+      toggleRecord,
+      stepSpeed: (direction) => {
+        const next = stepPlaybackRate(rate, direction);
+        setRate(next);
+        showNotice(`播放速度 ${next}x`);
+      },
+      toggleCaptions: captions.toggle,
+      togglePip,
+    });
+    // 当前不可用的操作不拦截按键
+    if (!handled) return;
     event.preventDefault();
     event.stopPropagation();
     wake();
@@ -383,17 +374,15 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
 
   const effectiveRatio = ratio ?? DEFAULT_RATIO;
   const isRecording = recording.status === 'recording' || recording.status === 'stopping';
-  const showControls = !compact && (paused || active || dragging || menuOpen);
+  const showControls = !compact && (audioOnly || paused || active || dragging || menuOpen);
   const showUnmute = autoMuted && muted && hasSound;
-  const rootClass = [
-    styles.player,
-    compact ? styles.compact : '',
-    showControls ? styles.controlsVisible : '',
-    ratio || poster ? '' : styles.pending,
-    className ?? '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const rootClass = playerRootClass(styles, {
+    compact,
+    showControls,
+    audioOnly,
+    pending: !(ratio || poster || audioOnly),
+    className,
+  });
 
   return (
     <PlayerTooltipContext.Provider value={tooltipContext}>
@@ -401,22 +390,25 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
         ref={setRoot}
         className={rootClass}
         role="group"
-        aria-label={`视频 ${title}`}
+        aria-label={`${audioOnly ? '音频' : '视频'} ${title}`}
         tabIndex={compact ? -1 : 0}
         data-paused={paused ? 'true' : 'false'}
         data-muted={muted ? 'true' : 'false'}
         data-audio={audio}
         data-aspect={ratio ? Number(ratio.toFixed(4)) : undefined}
         data-engine={engine.engineKind ?? undefined}
+        data-media={audioOnly ? 'audio' : 'video'}
         data-fullscreen={fullscreenState.fullscreen ? 'true' : undefined}
         data-recording={isRecording ? 'true' : undefined}
         style={
           fullscreenState.fullscreen
             ? undefined
-            : {
-                aspectRatio: String(effectiveRatio),
-                width: frameWidth(effectiveRatio, maxWidth, maxHeight),
-              }
+            : audioOnly
+              ? { width: maxWidth ? `min(100%, ${maxWidth}px)` : '100%' }
+              : {
+                  aspectRatio: String(effectiveRatio),
+                  width: frameWidth(effectiveRatio, maxWidth, maxHeight),
+                }
         }
         onKeyDown={onKeyDown}
         onPointerMove={compact ? undefined : wake}
@@ -449,7 +441,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
           onError={(event) => {
             const mediaError = event.currentTarget.error;
             if (!mediaError) return;
-            reportError(mediaErrorMessage(mediaError.code));
+            reportError(
+              mediaErrorMessage(mediaError.code, audioOnly ? 'audio' : engine.playbackType)
+            );
           }}
           onEnded={(event) => {
             setPaused(true);
@@ -472,7 +466,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
             const { videoWidth, videoHeight } = video;
             setDuration(video.duration);
             setError(null);
-            if (videoWidth > 0 && videoHeight > 0) setRatio(videoWidth / videoHeight);
+            const picture = videoWidth > 0 && videoHeight > 0;
+            setHasPicture(picture);
+            if (picture) setRatio(videoWidth / videoHeight);
             probeAudio(video);
             video.playbackRate = rate;
             const resume = takeResume();
@@ -483,7 +479,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
             } else if (!startedRef.current && startTime && startTime > 0) {
               video.currentTime = clampTime(startTime, video.duration);
             } else if (
-              // 不自动播放时停在第一帧附近，当作封面
+              // 不自动播放时停在第一帧附近，当作封面（纯音频不需要）
+              picture &&
               !poster &&
               !shouldAutoPlay &&
               video.currentTime === 0 &&
@@ -511,48 +508,43 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
             />
           ))}
         </video>
-        <div
-          className={styles.surface}
-          onClick={togglePlay}
-          onDoubleClick={compact || !show.fullscreen ? undefined : fullscreenState.toggle}
-          aria-hidden="true"
-        >
-          {!compact && paused && !error && (
-            <span className={styles.bigPlay}>
-              <VscPlay />
-            </span>
-          )}
-        </div>
+        {audioOnly ? (
+          <AudioVisual
+            title={title}
+            poster={poster}
+            showTitle={showTitle}
+            current={current}
+            duration={duration}
+            paused={paused}
+            compact={compact}
+            actions={compact ? undefined : actions}
+            trailing={
+              showUnmute ? <UnmuteButton compact={compact} onClick={enableSound} /> : undefined
+            }
+            onSeek={seek}
+            onTogglePlay={togglePlay}
+          />
+        ) : (
+          <div
+            className={styles.surface}
+            onClick={togglePlay}
+            onDoubleClick={compact || !show.fullscreen ? undefined : fullscreenState.toggle}
+            aria-hidden="true"
+          >
+            {!compact && paused && !error && (
+              <span className={styles.bigPlay}>
+                <VscPlay />
+              </span>
+            )}
+          </div>
+        )}
         {loading && !error && !paused && <LoadingOverlay />}
         {error && <ErrorOverlay message={error.message} onRetry={retry} />}
         {notice && <NoticeOverlay message={notice.message} tone={notice.tone} />}
         {isRecording && <RecordingBadge elapsed={recording.elapsed} />}
-        {showUnmute && (
-          <button
-            type="button"
-            className={compact ? `${styles.unmute} ${styles.unmuteCompact}` : styles.unmute}
-            aria-label="开启声音"
-            title={compact ? '开启声音' : undefined}
-            onClick={(event) => {
-              event.stopPropagation();
-              enableSound();
-            }}
-          >
-            <VscUnmute />
-            {!compact && <span>开启声音</span>}
-          </button>
-        )}
-        {!compact && (showTitle || actions) && (
-          <div className={styles.top}>
-            {showTitle ? (
-              <span className={styles.title} title={title}>
-                {title}
-              </span>
-            ) : (
-              <span />
-            )}
-            {actions && <div className={styles.actions}>{actions}</div>}
-          </div>
+        {showUnmute && !audioOnly && <UnmuteButton compact={compact} onClick={enableSound} />}
+        {!compact && !audioOnly && (showTitle || actions) && (
+          <TopBar title={title} showTitle={showTitle} actions={actions} />
         )}
         {!compact && (
           <ControlBar

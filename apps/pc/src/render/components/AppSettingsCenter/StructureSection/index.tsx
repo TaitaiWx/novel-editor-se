@@ -54,12 +54,6 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
     [api.previewRules, testText]
   );
 
-  const fileName = api.info
-    ? api.info.location === 'project'
-      ? '.novel-editor/config.json'
-      : '.novel-editor/structure.json'
-    : '';
-
   return (
     <div className={sharedStyles.panel}>
       <h4>
@@ -67,8 +61,8 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
         <span>正文结构</span>
       </h4>
       <p>
-        不用 # 标题时，编辑器、目录、卷纲与场景视频按这些规则识别 章 / 幕 / 场。规则跟随项目保存
-        {fileName ? `（${fileName}）` : ''}，命令行 <code>ne structure</code> 读写同一份。
+        不用 # 标题时，编辑器、目录、卷纲与场景视频按这些规则识别 章 / 幕 / 场。规则跟随项目自动保存
+        （软件内部数据，不需要手动处理），命令行 <code>ne structure</code> 读写同一份。
       </p>
 
       {!folderPath && (

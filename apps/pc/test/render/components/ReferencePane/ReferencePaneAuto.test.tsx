@@ -73,6 +73,15 @@ const existing = new Set([VIDEO, PORT, LINZHOU]);
 beforeEach(() => {
   modified = {};
   mock = installElectronMock((channel, filePath) => {
+    if (channel === 'get-file-info-batch') {
+      // 与主进程一致：不存在的文件静默跳过
+      return (filePath as unknown as string[])
+        .filter((item) => existing.has(item))
+        .map((item) => ({
+          path: item,
+          info: { size: 10, modified: new Date(modified[item] ?? 1000), isFile: true },
+        }));
+    }
     const path = String(filePath);
     if (channel === 'get-file-info') {
       if (!existing.has(path)) throw new Error('不存在');

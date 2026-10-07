@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { LoreView } from '@/render/components/RightPanel/LoreView';
 import {
   installElectronMock,
@@ -9,6 +9,9 @@ import {
   type ElectronMock,
 } from '../../hooks/electronMock';
 import { chooseOption } from '../../helpers/select';
+
+// 全量单测并发时保存链路（IPC mock → 状态刷新）偶尔超过默认 1 秒，放宽本文件的异步等待上限
+configure({ asyncUtilTimeout: 5000 });
 
 interface Row {
   id: number;

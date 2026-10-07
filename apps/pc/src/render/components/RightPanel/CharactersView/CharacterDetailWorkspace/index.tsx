@@ -28,6 +28,8 @@ import { CharacterTimelineSection } from '../CharacterTimelineSection';
 import { CharacterGrowthButton } from '../CharacterGrowthButton';
 import { CharacterPortrait } from '../CharacterPortrait';
 import { CharacterDesignForm } from '../CharacterDesignForm';
+import { CharacterVoiceForm } from '../CharacterVoiceForm';
+import type { CharacterVoice } from '@novel-editor/video';
 import CharacterAvatar from '../../../CharacterAvatar';
 import type { CharacterCurrentStateController } from '../useCharacterCurrentState';
 import type { CharacterTimelineController } from '../useCharacterTimeline';
@@ -55,6 +57,7 @@ interface CharacterDetailWorkspaceProps {
       avatar?: string;
       design?: CharacterDesign;
       media?: MediaItem[];
+      voice?: CharacterVoice;
     }
   ) => Promise<void>;
   graphView: React.ReactNode;
@@ -184,6 +187,10 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
                 onSave={(design) =>
                   handleUpdateCharacterAttributes(focusedCharacter.id, { design })
                 }
+              />
+              <CharacterVoiceForm
+                voice={focusedCharacter.voice}
+                onSave={(voice) => handleUpdateCharacterAttributes(focusedCharacter.id, { voice })}
               />
               {focusedCharacter.description && (
                 <section className={styles.workspaceCardShell}>

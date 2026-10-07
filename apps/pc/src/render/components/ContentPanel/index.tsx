@@ -70,6 +70,8 @@ interface ContentPanelProps {
   emptyStateActions?: React.ReactNode;
   /** 编辑器辅助：人物悬停卡片、行内续写 */
   editorAssist?: EditorAssistConfig | null;
+  /** 当前文件只读（由内部数据派生的摘要，例如记忆库 README、分镜.md：每次保存都会重新生成） */
+  readOnlyFile?: boolean;
   viewportSnapshots?: Record<string, EditorViewportSnapshot>;
   onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onTabSelect: (filePath: string) => void;
@@ -156,6 +158,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   editorHeaderActions,
   emptyStateActions,
   editorAssist,
+  readOnlyFile = false,
   viewportSnapshots,
   onViewportSnapshotChange,
   onTabSelect,
@@ -353,6 +356,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
             ) : (
               <TextEditor
                 filePath={activeTab}
+                readOnly={readOnlyFile}
                 virtualContent={virtualContent}
                 reloadToken={reloadToken}
                 focusMode={focusMode}

@@ -25,8 +25,8 @@ import { downloadToFile, resolveInsideWork, writeJsonFile } from '../video/downl
 import { VideoTaskRunner, type VideoTaskRepo } from '../video/runner';
 import { isPathInWorkspace } from './database/workspace-path';
 import { getWorkspaceRootForSender } from './session';
-import { registerMotionLibraryHandlers } from './motion-library';
 import { registerVideoSceneHandlers } from './video-scene';
+import { registerSceneAudioHandlers } from './scene-audio';
 
 const MAX_TEXT = 4000;
 
@@ -208,7 +208,7 @@ export function registerVideoHandlers(
     guard(() => runner.retry(String(id)))
   );
   registerVideoSceneHandlers({ assertWorkPath, workspaceRootFor });
-  registerMotionLibraryHandlers({ assertWorkPath, workspaceRootFor });
+  registerSceneAudioHandlers({ assertWorkPath, workspaceRootFor });
   ipcMain.handle('video-settings-get', () =>
     guard((): VideoSettingsInfo => getProviderConfigStore().getVideoSettings())
   );

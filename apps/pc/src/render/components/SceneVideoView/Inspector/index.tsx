@@ -64,6 +64,8 @@ export interface SceneInspectorProps {
   pendingSeed: string | null;
   onApplySeed: () => void;
   onDismissSeed: () => void;
+  /** 「声音」分区（语言 / 配乐 / 环境音 / 压低，AudioSection/SceneAudioSection） */
+  audioSection?: React.ReactNode;
   onClose: () => void;
 }
 
@@ -75,6 +77,7 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
   pendingSeed,
   onApplySeed,
   onDismissSeed,
+  audioSection,
   onClose,
 }) => {
   const idPrefix = `scene-inspector-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -195,6 +198,7 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
           }}
         />
       </div>
+      {audioSection}
     </Panel>
   );
 };
@@ -252,6 +256,8 @@ export interface ShotInspectorProps {
   onExportVersion?: (fileName: string) => void;
   /** 首帧 / 预演（可选步骤） */
   keyframe?: Omit<KeyframeSectionProps, 'label'>;
+  /** 「对白 / 音效」分区（AudioSection/ShotAudioSection） */
+  audioSection?: React.ReactNode;
   onClose: () => void;
 }
 
@@ -271,6 +277,7 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
   onOpenBeside,
   onExportVersion,
   keyframe,
+  audioSection,
   onClose,
 }) => {
   const label = `镜头 ${index + 1}`;
@@ -374,16 +381,7 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
           onChange={(event) => onUpdateShot({ camera: event.target.value })}
         />
       </label>
-      <label className={styles.field}>
-        <span className={styles.label}>台词 / 旁白</span>
-        <input
-          className={styles.input}
-          aria-label={`${label} 台词`}
-          value={shot.dialogue ?? ''}
-          placeholder="可选，仅供剪辑参考"
-          onChange={(event) => onUpdateShot({ dialogue: event.target.value || undefined })}
-        />
-      </label>
+      {audioSection}
 
       {keyframe && <KeyframeSection label={label} {...keyframe} />}
 

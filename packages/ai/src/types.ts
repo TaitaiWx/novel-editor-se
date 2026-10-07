@@ -4,13 +4,15 @@
  * - TextProvider：对话补全（一次性 complete + 流式 stream，均支持 AbortSignal）
  * - VideoProvider：异步视频任务（submitTask → pollTask → fetchResult），任务排队与持久化
  *   由调用方（主进程 + @novel-editor/video 的状态机）负责，Provider 只做协议映射
+ * - SpeechProvider：文字转语音（场景视频的对白配音），一次请求返回整段音频字节
+ * - MusicProvider：配乐生成的预留接口（尚无内置实现，场景声音的 bgm.source = 'generate' 将来接入）
  *
  * 密钥只出现在 ProviderConfig 中，由主进程 / CLI 在创建 Provider 时注入，绝不回传给渲染进程。
  */
 import type { SerializedAIError } from './errors';
 import type { FetchLike, RetryPolicy } from './http';
 
-export type ProviderKind = 'text' | 'video' | 'image';
+export type ProviderKind = 'text' | 'video' | 'image' | 'speech';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 
@@ -149,7 +151,67 @@ export interface ImageProvider {
   testConnection(options?: CallOptions): Promise<void>;
 }
 
-export type AnyProvider = TextProvider | VideoProvider | ImageProvider;
+/** 人物声音（与 @novel-editor/video 的 CharacterVoice 一致） */
+export interface SpeechVoice {
+  /** 厂商音色 id；不填时按性别取默认音色 */
+  providerVoiceId?: string;
+  gender?: 'male' | 'female' | 'neutral';
+  age?: string;
+  timbre?: string;
+}
+
+export type SpeechFormat = 'mp3' | 'wav';
+
+export interface SpeechRequest {
+  text: string;
+  /** BCP-47，例如 zh-CN / en-US */
+  language: string;
+  voice?: SpeechVoice;
+  /** 情绪（映射到厂商支持的情绪 / 朗读指令） */
+  emotion?: string;
+  format?: SpeechFormat;
+  model?: string;
+}
+
+export interface SpeechResult {
+  data: Uint8Array;
+  mimeType: string;
+  format: SpeechFormat;
+  /** 厂商返回或可从文件头推算时给出 */
+  durationSec?: number;
+}
+
+export interface SpeechProvider {
+  readonly id: string;
+  readonly kind: 'speech';
+  /** 合成一句台词。默认不重试，避免重复扣费 */
+  synthesize(request: SpeechRequest, options?: CallOptions): Promise<SpeechResult>;
+  testConnection(options?: CallOptions): Promise<void>;
+}
+
+/**
+ * 配乐生成（预留，尚无内置实现）：给一段描述与时长，返回整段音乐。
+ * 接入时在注册表里新增 kind 'music'，主进程把结果写入 <作品>/资料/音乐/，场景声音的 bgm.path 指向它。
+ */
+export interface MusicRequest {
+  prompt: string;
+  durationSec: number;
+  /** 例如 calm / tense / epic */
+  mood?: string;
+  model?: string;
+}
+
+export interface MusicProvider {
+  readonly id: string;
+  readonly kind: 'music';
+  generate(
+    request: MusicRequest,
+    options?: CallOptions
+  ): Promise<{ data: Uint8Array; mimeType: string }>;
+  testConnection(options?: CallOptions): Promise<void>;
+}
+
+export type AnyProvider = TextProvider | VideoProvider | ImageProvider | SpeechProvider;
 
 /** 创建 Provider 所需的配置（密钥由主进程 / CLI 注入） */
 export interface ProviderConfig {

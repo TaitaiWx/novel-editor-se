@@ -10,6 +10,7 @@ import type { Character, LoreEntry } from '../RightPanel/types';
 import type { GrowthSheetSummary } from '../../utils/growthIndex';
 import type { StoryDisplayNode } from '../../utils/storyStructure';
 import { stripStoryFileExtension } from '../../utils/workspace';
+import { isInternalDataFile } from '../../utils/internalData';
 import type { WorkspaceContentFileResult } from '../../../shared/workspace-search';
 
 /** 每个名称分组最多显示的条数 */
@@ -190,8 +191,9 @@ export function buildSearchGroups(input: BuildSearchGroupsInput): FileSearchGrou
       detail: [item.folder, ...(item.tags ?? []).map((tag) => `#${tag}`)].filter(Boolean).join(' '),
     }));
 
+  // 内部数据（分镜状态、成长档案 JSON…）不出现在搜索结果里（文件树已过滤，这里再兜底一次）
   const materials: FileSearchItem[] = collectFiles(input.materialNodes)
-    .filter((node) => includes(node.name, needle))
+    .filter((node) => includes(node.name, needle) && !isInternalDataFile(node.path, rootPath))
     .map((node) => ({
       kind: 'file',
       key: `material:${node.path}`,
@@ -200,21 +202,23 @@ export function buildSearchGroups(input: BuildSearchGroupsInput): FileSearchGrou
       detail: relativeDirectory(node.path, rootPath) || undefined,
     }));
 
-  const content: FileSearchItem[] = (input.contentFiles ?? []).flatMap((file) =>
-    file.matches.map(
-      (match): FileSearchItem => ({
-        kind: 'content',
-        key: `content:${file.file}:${match.line}`,
-        path: file.file,
-        title: stripStoryFileExtension(file.file.split(/[\\/]/).pop() ?? file.file),
-        detail: relativeDirectory(file.file, rootPath) || undefined,
-        line: match.line,
-        preview: match.preview,
-        matchStart: match.matchStart,
-        matchLength: match.matchLength,
-      })
-    )
-  );
+  const content: FileSearchItem[] = (input.contentFiles ?? [])
+    .filter((file) => !isInternalDataFile(file.file, rootPath))
+    .flatMap((file) =>
+      file.matches.map(
+        (match): FileSearchItem => ({
+          kind: 'content',
+          key: `content:${file.file}:${match.line}`,
+          path: file.file,
+          title: stripStoryFileExtension(file.file.split(/[\\/]/).pop() ?? file.file),
+          detail: relativeDirectory(file.file, rootPath) || undefined,
+          line: match.line,
+          preview: match.preview,
+          matchStart: match.matchStart,
+          matchLength: match.matchLength,
+        })
+      )
+    );
 
   return [
     limitGroup('docs', '项目说明', docs),

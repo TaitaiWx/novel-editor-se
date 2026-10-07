@@ -7,6 +7,7 @@ import {
   isAnimaticFileName,
   parseShotFileName,
   perSecondEstimator,
+  shotAudioPromptHints,
   storyboardDurationSec,
   videoSceneLayout,
   type CostCurrency,
@@ -156,13 +157,26 @@ export function estimateSceneCost(
 
 const VIDEO_PROMPT_MAX = 1800;
 
-/** 交给视频模型的提示词：风格 + 比例 + 地点 + 景别运镜 + 画面描述 */
-export function buildShotVideoPrompt(shot: Shot, state: SceneVideoState): string {
+export interface ShotPromptOptions {
+  /**
+   * 视频服务支持生成声音、且这一场开启了「生成声音」：在画面描述之后附上配音语言、对白（说话人：台词）、
+   * 音效与环境声，让模型用正确的语言说出台词；否则提示词只描述画面
+   */
+  withAudio?: boolean;
+}
+
+/** 交给视频模型的提示词：风格 + 比例 + 地点 + 景别运镜 + 画面描述（+ 声音提示） */
+export function buildShotVideoPrompt(
+  shot: Shot,
+  state: SceneVideoState,
+  options: ShotPromptOptions = {}
+): string {
   const parts = [
     state.style ? `${state.style}风格` : '',
     state.location || shot.location ? `地点：${shot.location || state.location}` : '',
     [shot.shotSize, shot.camera].filter(Boolean).join('，'),
     shot.description.trim(),
+    ...(options.withAudio && state.audio ? shotAudioPromptHints(shot, state.audio) : []),
   ].filter(Boolean);
   const text = parts.join('。').replace(/\u3002\u3002+/g, '。');
   return Array.from(text).slice(0, VIDEO_PROMPT_MAX).join('');
@@ -264,7 +278,33 @@ export function animaticSignatureFor(
     if (!file) return null;
     parts.push(file);
   }
-  return parts.join('|');
+  const audio = audioSignatureFor(state);
+  return audio ? `${parts.join('|')}#${audio}` : parts.join('|');
+}
+
+/**
+ * 样片声音的签名：配乐 / 环境音文件、对白配音与音效文件（以及音量、压低等混音参数）。
+ * 没有任何声音素材时为空串，签名与旧版一致（不会让旧场景重新合成）。
+ */
+export function audioSignatureFor(state: SceneVideoState): string {
+  const audio = state.audio;
+  const files: string[] = [];
+  if (audio?.bgm?.source === 'file' && audio.bgm.path) {
+    files.push(
+      `bgm:${audio.bgm.path}:${audio.bgm.volume}:${audio.bgm.fadeInSec}:${audio.bgm.fadeOutSec}`
+    );
+  }
+  if (audio?.ambience?.path) files.push(`amb:${audio.ambience.path}:${audio.ambience.volume}`);
+  for (const shot of state.storyboard.shots) {
+    for (const line of shot.dialogue ?? []) {
+      if (line.audioFile) files.push(`d:${line.audioFile}:${line.startSec ?? ''}`);
+    }
+    for (const cue of shot.sfx ?? []) {
+      if (cue.path) files.push(`s:${cue.path}:${cue.atSec}:${cue.volume}`);
+    }
+  }
+  if (files.length === 0) return '';
+  return `${files.join(',')}${audio?.ducking === false ? ':noduck' : ''}`;
 }
 
 /** 是否自动合成样片：全部镜头都有成片、没有进行中的任务、选用的版本与上次合成时不同 */

@@ -19,6 +19,7 @@ export * from './growth';
 export * from './growth/storage';
 export * from './work-scope';
 export * from './entity-media';
+export * from './internal-data';
 export * from './novel-format';
 export * from './structure-rules';
 export * from './structure-config';

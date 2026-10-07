@@ -77,18 +77,25 @@ export function useCaptions(
   return { options, index, select, toggle };
 }
 
-/** MediaError.code → 错误 */
-export function mediaErrorMessage(code: number): PlayerError {
+/** MediaError.code → 错误；传入格式时对 MKV / MOV / 音频给出更具体的说明 */
+export function mediaErrorMessage(code: number, type?: string): PlayerError {
+  const noun = type === 'audio' ? '音频' : '视频';
   switch (code) {
     case 1:
-      return new PlayerError('unknown', '视频加载被中止');
+      return new PlayerError('unknown', `${noun}加载被中止`);
     case 2:
-      return new PlayerError('network', '网络错误，视频加载失败');
+      return new PlayerError('network', `网络错误，${noun}加载失败`);
     case 3:
-      return new PlayerError('decode', '视频解码失败，文件可能已损坏');
+      return new PlayerError('decode', `${noun}解码失败，文件可能已损坏`);
     case 4:
-      return new PlayerError('unsupported', '不支持这个视频格式或地址无法访问');
+      if (type === 'mkv' || type === 'mov') {
+        return new PlayerError(
+          'unsupported',
+          `浏览器无法解码这个 ${type.toUpperCase()} 文件（编码不受支持，例如 HEVC / AC-3 / DTS），建议转封装为 MP4（H.264 + AAC）或 WebM`
+        );
+      }
+      return new PlayerError('unsupported', `不支持这个${noun}格式或地址无法访问`);
     default:
-      return new PlayerError('unknown', '视频播放出错');
+      return new PlayerError('unknown', `${noun}播放出错`);
   }
 }

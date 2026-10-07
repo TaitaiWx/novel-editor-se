@@ -1,12 +1,61 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { AIIpcResult, AIProviderInfo, AIProviderUpdate } from '../../../types/ai-api';
+import { DEFAULT_VOICE_LANGUAGE, VOICE_LANGUAGES } from '@novel-editor/video';
+import type {
+  AIIpcResult,
+  AIProviderInfo,
+  AIProviderUpdate,
+  VideoSettingsInfo,
+} from '../../../types/ai-api';
 import NumberInput from '../../NumberInput';
+import Select from '../../Select';
 import sharedStyles from '../styles.module.scss';
 import ApiKeyField from './ApiKeyField';
 import styles from './styles.module.scss';
 
 /** 默认文本服务在上方「AI 设置」表单中配置，这里只列出其他服务 */
 const DEFAULT_PROVIDER_ID = 'openai-compatible';
+
+const KIND_LABELS: Record<AIProviderInfo['kind'], string> = {
+  text: '文本',
+  video: '视频',
+  image: '图片',
+  speech: '配音',
+};
+
+/** 场景视频新场景的默认配音语言（保存在 ai-providers.json 的视频设置里） */
+const VoiceLanguageSetting: React.FC = () => {
+  const [language, setLanguage] = useState<string>(DEFAULT_VOICE_LANGUAGE);
+  useEffect(() => {
+    void window.electron?.ipcRenderer
+      .invoke('video-settings-get')
+      .then((result: AIIpcResult<VideoSettingsInfo>) => {
+        if (result.ok && result.data.voiceLanguage) setLanguage(result.data.voiceLanguage);
+      })
+      .catch(() => undefined);
+  }, []);
+  return (
+    <div className={styles.fieldLabel}>
+      配音默认语言（新的场景视频使用；每一场可在「场景 → 声音」里改）
+      <Select
+        block
+        size="lg"
+        aria-label="配音默认语言"
+        value={language}
+        options={VOICE_LANGUAGES.map((item) => ({
+          value: item.code,
+          label: `${item.label}（${item.code}）`,
+          textValue: item.label,
+        }))}
+        onChange={(next) => {
+          setLanguage(next);
+          void window.electron?.ipcRenderer
+            .invoke('video-settings-set', { voiceLanguage: next })
+            .catch(() => undefined);
+        }}
+      />
+    </div>
+  );
+};
 
 interface RowDraft {
   enabled: boolean;
@@ -81,7 +130,7 @@ const ProviderRow: React.FC<{
         <div>
           <div className={styles.providerTitle}>
             {info.label}
-            <span className={styles.kindTag}>{isVideo ? '视频' : '文本'}</span>
+            <span className={styles.kindTag}>{KIND_LABELS[info.kind] ?? info.kind}</span>
           </div>
           <div className={sharedStyles.formDesc}>{info.description}</div>
         </div>
@@ -188,6 +237,7 @@ const ProviderList: React.FC = () => {
 
   return (
     <div className={styles.providerList}>
+      <VoiceLanguageSetting />
       {providers.map((info) => (
         <ProviderRow
           key={info.id}

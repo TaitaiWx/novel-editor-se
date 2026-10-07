@@ -1,15 +1,18 @@
 /**
- * 原生引擎：直接把地址交给 `<video>`（mp4 / webm / mov，以及 Safari 的原生 HLS）。
+ * 原生引擎：直接把地址交给 `<video>`（mp4 / webm / mov / ogg / mkv / 纯音频，以及 Safari 的原生 HLS）。
  */
 import type { MediaEngine, MediaEngineFactory } from './types';
 import { PlayerError } from './types';
-import type { ResolvedSourceType } from './detect';
+import type { ResolvedSourceType } from './formats';
 
 /** 各格式对应的 MIME（用于 canPlayType） */
 export const NATIVE_MIME: Partial<Record<ResolvedSourceType, string>> = {
   mp4: 'video/mp4',
   webm: 'video/webm',
   mov: 'video/quicktime',
+  ogg: 'video/ogg',
+  mkv: 'video/x-matroska',
+  audio: 'audio/mpeg',
   hls: 'application/vnd.apple.mpegurl',
   dash: 'application/dash+xml',
   mpegts: 'video/mp2t',
@@ -51,10 +54,20 @@ export function attachNative(video: HTMLVideoElement, url: string): MediaEngine 
   };
 }
 
-/** 原生引擎工厂：mp4 / webm / mov 总是交给它；其他格式只在浏览器声明支持时由选择逻辑转交 */
+/** 渐进式格式：总是交给原生（能否解码由浏览器决定，失败时给出明确提示） */
+export const PROGRESSIVE_TYPES: readonly ResolvedSourceType[] = [
+  'mp4',
+  'webm',
+  'mov',
+  'ogg',
+  'mkv',
+  'audio',
+];
+
+/** 原生引擎工厂：渐进式格式总是交给它；其他格式只在浏览器声明支持时由选择逻辑转交 */
 export const nativeEngine: MediaEngineFactory = {
   kind: 'native',
-  handles: (type) => type === 'mp4' || type === 'webm' || type === 'mov',
+  handles: (type) => PROGRESSIVE_TYPES.includes(type),
   attach: (video, { url }) => attachNative(video, url),
 };
 

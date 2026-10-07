@@ -132,7 +132,8 @@ describe('没有 AI 时的分镜拆分', () => {
     expect(shots[0]).toMatchObject({ shotSize: '全景', camera: '缓慢推近', durationSec: 6 });
     expect(shots[1]).toMatchObject({
       shotSize: '近景',
-      dialogue: '舟哥！',
+      // 只有一个人物出场：引号里的话算作他说的
+      dialogue: [{ id: 'l1', speaker: '小石头', text: '舟哥！' }],
       characters: ['小石头'],
     });
     expect(shots.every((shot) => shot.location === '青石镇')).toBe(true);

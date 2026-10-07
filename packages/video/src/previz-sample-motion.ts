@@ -1,5 +1,5 @@
 /**
- * 预演采样的第 2 版部分（纯函数）：缓动、动作片段交叉淡化、视线、手部目标、道具关键帧、机位绝对位置。
+ * 预演采样的第 2 版部分（纯函数）：缓动、动作（关节轨迹）交叉淡化、视线、手部目标、道具关键帧、机位绝对位置。
  * previz-sample.ts 的 samplePrevizScript 调用这里的函数，播放与导出共用，结果确定。
  */
 import {
@@ -17,12 +17,10 @@ import {
 } from './previz';
 import {
   blendMotionPoses,
-  sampleMotionClip,
+  sampleMotionTracks,
   type MotionBlend,
-  type MotionLibrary,
-  type MotionPose,
-} from './motion/clip';
-import type { MotionJoint } from './motion/retarget';
+  type MotionJoint,
+} from './motion/tracks';
 
 const lerp = (a: number, b: number, s: number) => a + (b - a) * s;
 const smoothstep = (s: number) => s * s * (3 - 2 * s);
@@ -42,46 +40,28 @@ export function applyEase(ease: PrevizEase | undefined, s: number, fallback: Pre
   }
 }
 
-/** 动作片段之间的交叉淡化时长上限（秒） */
+/** 两段动作之间的交叉淡化时长上限（秒） */
 export const MOTION_CROSSFADE_SEC = 0.35;
 
-function clipPose(
-  key: PrevizFigureKey,
-  elapsed: number,
-  clips: MotionLibrary | undefined
-): MotionPose | null {
-  const id = key.motion?.clip;
-  if (!id || !clips) return null;
-  const clip = clips.get(id);
-  if (!clip) return null;
-  return sampleMotionClip(clip, elapsed, {
-    start: key.motion?.start,
-    speed: key.motion?.speed,
-    loop: key.motion?.loop,
-  });
-}
-
 /**
- * 人物在 t 时刻的动作片段：关键帧 a 的片段从 a.t 开始播放，到下一关键帧前的最后 0.35 秒（不超过区间一半）
- * 交叉淡化到关键帧 b 的片段（从头开始）或 b 的姿势。
+ * 人物在 t 时刻的动作：关键帧 a 的轨迹从 a.t 开始播放（时间相对 a.t），到下一关键帧前的最后 0.35 秒（不超过区间一半）
+ * 交叉淡化到关键帧 b 的轨迹（从头开始）或 b 的姿势。各段的 weight 决定叠加在姿势上的程度。
  */
 export function sampleFigureMotion(
   a: PrevizFigureKey,
   b: PrevizFigureKey,
-  t: number,
-  clips: MotionLibrary | undefined
+  t: number
 ): MotionBlend | null {
-  if (!clips || (!a.motion?.clip && !b.motion?.clip)) return null;
-  const from = clipPose(a, t - a.t, clips);
-  let to: MotionPose | null = null;
-  let mix = 0;
-  if (b !== a) {
-    const span = b.t - a.t;
-    const fade = Math.min(MOTION_CROSSFADE_SEC, span / 2);
-    if (fade > 0) mix = smoothstep(clampNumber((t - (b.t - fade)) / fade, 0, 1));
-    if (mix > 0) to = clipPose(b, 0, clips);
-  }
-  return blendMotionPoses(from, to, mix);
+  if (!a.motion?.tracks && !b.motion?.tracks) return null;
+  const from = a.motion ? sampleMotionTracks(a.motion, t - a.t) : null;
+  const fade = b === a ? 0 : Math.min(MOTION_CROSSFADE_SEC, (b.t - a.t) / 2);
+  const mix = fade > 0 ? smoothstep(clampNumber((t - (b.t - fade)) / fade, 0, 1)) : 0;
+  // b 没有动作时 to 为 null：a 的动作在区间末尾淡出到 b 的姿势
+  const to = mix > 0 && b.motion ? sampleMotionTracks(b.motion, 0) : null;
+  return blendMotionPoses(from, to, mix, {
+    from: a.motion?.weight ?? 1,
+    to: b.motion?.weight ?? 1,
+  });
 }
 
 const LEG_JOINTS: readonly MotionJoint[] = [

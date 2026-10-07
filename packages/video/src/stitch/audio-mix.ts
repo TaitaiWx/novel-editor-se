@@ -4,6 +4,7 @@
  */
 import { AUDIO_SAMPLE_RATE, DEFAULT_AUDIO_FORMAT, type AudioFormat } from './audio-codecs';
 import type { AudioTimelinePlan } from './audio-plan';
+import type { SceneMixPlan } from './audio-scene-plan';
 import type { PcmAudio } from './types';
 
 export function isWebAudioSupported(): boolean {
@@ -58,6 +59,47 @@ export async function mixAudioPlan(
     source.connect(gain);
     gain.connect(context.destination);
     source.start(start, segment.offsetMs / 1000, duration);
+  }
+  const rendered = await context.startRendering();
+  const channels: Float32Array[] = [];
+  for (let index = 0; index < numberOfChannels; index += 1) {
+    channels.push(rendered.getChannelData(Math.min(index, rendered.numberOfChannels - 1)).slice());
+  }
+  return { sampleRate, channels };
+}
+
+/**
+ * 按完整混音规划（planSceneAudioMix）混音：成片原声 / 对白 / 音效 / 配乐（循环 + 淡入淡出 + 压低）/ 环境音。
+ * 增益折线逐点写成 setValueAtTime + linearRampToValueAtTime；缺少素材的声音直接跳过（不会让导出失败）。
+ */
+export async function mixScenePlan(
+  plan: SceneMixPlan,
+  buffers: ReadonlyMap<string, AudioBuffer>,
+  format: Pick<AudioFormat, 'sampleRate' | 'numberOfChannels'> = DEFAULT_AUDIO_FORMAT
+): Promise<PcmAudio> {
+  const { sampleRate, numberOfChannels } = format;
+  const frames = Math.max(1, Math.ceil((plan.durationMs / 1000) * sampleRate));
+  const context = new OfflineAudioContext(numberOfChannels, frames, sampleRate);
+  for (const voice of plan.voices) {
+    const buffer = buffers.get(voice.sourceId);
+    if (!buffer || voice.durationMs <= 0) continue;
+    const start = voice.startMs / 1000;
+    const end = start + voice.durationMs / 1000;
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const gain = context.createGain();
+    const [first, ...rest] = voice.gain;
+    gain.gain.setValueAtTime(first?.value ?? 1, (first?.timeMs ?? voice.startMs) / 1000);
+    for (const point of rest) gain.gain.linearRampToValueAtTime(point.value, point.timeMs / 1000);
+    source.connect(gain);
+    gain.connect(context.destination);
+    if (voice.loop) {
+      source.loop = true;
+      source.start(start, voice.offsetMs / 1000);
+      source.stop(end);
+    } else {
+      source.start(start, voice.offsetMs / 1000, voice.durationMs / 1000);
+    }
   }
   const rendered = await context.startRendering();
   const channels: Float32Array[] = [];

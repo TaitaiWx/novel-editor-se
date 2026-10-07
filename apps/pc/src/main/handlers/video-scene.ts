@@ -5,7 +5,7 @@
  * 渲染进程只能传入 作品目录 + 章 / 场景名称 + 文件名，主进程负责：
  * - 作品目录必须是存在的绝对路径，且位于该窗口打开的项目内（assertWorkPath）
  * - 章 / 场景名称清洗为单个路径段，路径解析后（含符号链接）不得逃出作品目录
- * - 读写的文件名只允许 分镜.json / 分镜.md / 镜头N-vX.<ext> / 样片-*.mp4|webm /
+ * - 读写的文件名只允许 分镜.json / 分镜.md / 镜头N-vX.<ext> / 样片-*.mp4|webm / 镜头N-台词-<id>.<音频>（对白配音，scene-audio.ts 写入）/
  *   镜头N-首帧-<时间>.<图片> / 镜头N-预演.png|mp4|webm（首帧候选采用后保存；
  *   预演第一帧与预演视频每个镜头一份，覆盖写入：先删除旧文件再独占写入，不会经符号链接写穿）
  */
@@ -16,6 +16,7 @@ import { AIError, toAIError } from '@novel-editor/ai';
 import {
   animaticFileName,
   isAnimaticFileName,
+  parseDialogueAudioFileName,
   parsePrevizFileName,
   parseShotFileName,
   previzFileName,
@@ -110,6 +111,7 @@ export function isAllowedSceneMediaName(name: unknown): name is string {
   if (typeof name !== 'string' || !name || name.length > 120) return false;
   if (/[/\\\0]/.test(name)) return false;
   if (parseShotFileName(name) || isAnimaticFileName(name)) return true;
+  if (parseDialogueAudioFileName(name)) return true;
   const previz = parsePrevizFileName(name);
   return previz !== null && previz.ext !== 'png';
 }
@@ -122,19 +124,19 @@ function shotIndexOf(value: unknown): number {
 }
 
 /** 同名覆盖：先删除旧文件（若是符号链接只删链接本身），再独占创建，避免写穿到作品目录之外 */
-async function overwriteFile(target: string, data: Uint8Array): Promise<void> {
+export async function overwriteFile(target: string, data: Uint8Array): Promise<void> {
   await rm(target, { force: true });
   await writeFile(target, data, { flag: 'wx' });
 }
 
-interface ResolvedScene {
+export interface ResolvedScene {
   workPath: string;
   layout: ReturnType<typeof videoSceneLayout>;
   /** 场景目录绝对路径（未解析符号链接，可能不存在） */
   dir: string;
 }
 
-async function resolveScene(
+export async function resolveScene(
   raw: unknown,
   deps: VideoSceneHandlerDeps,
   senderId: number | undefined

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import styles from './styles.module.scss';
 import { tryParseJSON, SEVERITY_LABELS, TYPE_LABELS } from './useAiWorkflow';
+import { hideRawData } from '../../utils/debugMode';
 import type { AIResultItem, FixResult } from './useAiWorkflow';
 import { InlineDiffView } from '../InlineDiffView';
 
@@ -180,7 +181,12 @@ const AIResultDisplay: React.FC<{
 
     // Fallback: raw text
     if (!parsed) {
-      return <div className={styles.aiResultContent}>{result}</div>;
+      // AI 返回了无法解析的结构化数据：不把原始 JSON 摆给作者（调试模式除外）
+      return (
+        <div className={styles.aiResultContent}>
+          {hideRawData(result, 'AI 返回的结果格式不完整，没能整理成检查项，请重新运行一次。')}
+        </div>
+      );
     }
 
     return (

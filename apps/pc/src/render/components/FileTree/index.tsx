@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { BsCameraReelsFill } from 'react-icons/bs';
 import InlineRenameInput, { isRenameShortcut } from '../InlineRenameInput';
 import type { FileNode, FileInfo, FileInfoBatchEntry } from '../../types';
 import { isImeComposing } from '../../utils/ime';
@@ -120,8 +121,10 @@ const FileTreeItem: React.FC<{
       setRenaming(true);
     };
 
+    // 场景视频目录：分镜状态是内部数据（已隐藏），单击 / Enter 直接打开这一场的画布，箭头仍可展开看成片
+    const isSceneVideo = node.type === 'directory' && node.sceneVideo === true;
     const handleClick = () => {
-      if (node.type === 'directory') {
+      if (node.type === 'directory' && !isSceneVideo) {
         onToggleDirectory(node.path);
       } else {
         onFileSelect(node.path);
@@ -179,13 +182,23 @@ const FileTreeItem: React.FC<{
             onContextMenu?.({ x: e.clientX, y: e.clientY, node });
           }}
           style={{ paddingLeft: `${baseIndent + level * 16}px` }}
-          title={tooltip}
+          title={isSceneVideo ? `${node.name}\n场景视频 · 单击打开画布` : tooltip}
+          data-scene-video={isSceneVideo ? 'true' : undefined}
         >
           {showExpandIcon ? (
             <span
               className={`${styles.expandIcon} ${effectiveExpanded ? styles.expanded : ''} ${
                 node.type === 'file' ? styles.hidden : ''
               }`}
+              onClick={
+                isSceneVideo
+                  ? (event) => {
+                      // 场景目录的行点击打开画布，箭头单独负责展开 / 收起
+                      event.stopPropagation();
+                      onToggleDirectory(node.path);
+                    }
+                  : undefined
+              }
             >
               &#9654;
             </span>
@@ -229,6 +242,12 @@ const FileTreeItem: React.FC<{
               </span>
             )}
           </span>
+          {isSceneVideo && !renaming && (
+            <span className={styles.sceneBadge}>
+              <BsCameraReelsFill aria-hidden="true" />
+              场景视频
+            </span>
+          )}
           {showFileSizes && isFile && fileInfo && (
             <span className={styles.itemSize}>{formatFileSize(fileInfo.size)}</span>
           )}

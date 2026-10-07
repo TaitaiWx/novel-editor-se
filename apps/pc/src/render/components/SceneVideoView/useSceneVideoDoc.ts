@@ -76,6 +76,9 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
     setPendingSeed(null);
     const load = async () => {
       const seed = getSceneVideoSeed(tabPath);
+      // 配音语言默认值来自设置中心（AI → 更多 AI 服务 → 配音默认语言）
+      const settings = ipc ? await ipc.invoke('video-settings-get').catch(() => null) : null;
+      const language = (settings?.ok && settings.data.voiceLanguage) || undefined;
       let loaded: SceneVideoState | null = null;
       if (ipc && workPath) {
         const result = await ipc
@@ -86,7 +89,7 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
             setFiles(result.data.files);
             setDir(result.data.dir);
           }
-          loaded = parseSceneVideoState(result.data.state);
+          loaded = parseSceneVideoState(result.data.state, language);
         }
       }
       if (loaded) {
@@ -113,6 +116,7 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
           sourceText,
           characters: detectCharacters(sourceText, characters),
           location: suggestLocation(sourceText, loreTitles),
+          language,
         },
         new Date()
       );

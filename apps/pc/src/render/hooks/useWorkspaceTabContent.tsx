@@ -21,6 +21,8 @@ import {
   parseVolumeWorkspaceTab,
 } from '@/render/utils/workspace';
 import { findNodeInTree } from '@/render/app/fileTreeUtils';
+import InternalDataNotice from '@/render/components/InternalDataNotice';
+import { classifyPath } from '@/render/utils/internalData';
 import type { WorkspaceDerivedState } from './useWorkspaceDerivedState';
 import type { WorkspaceState } from './state/useWorkspaceState';
 import type { TabsState } from './state/useTabsState';
@@ -75,6 +77,7 @@ export type UseWorkspaceTabContentContext = Pick<
   Pick<TabActions, 'openFileInTab'> &
   Partial<Pick<TabActions, 'closeTab'>> &
   Pick<WorkspaceEntityActions, 'syncWorkspaceCharacters' | 'syncWorkspaceLoreEntries'> &
+  Partial<Pick<WorkspaceEntityActions, 'handleFileSelect'>> &
   Pick<GrowthEntryApi, 'growthIndex' | 'handleOpenGrowth'> &
   Partial<Pick<GrowthEntryApi, 'growthChapter' | 'handleCreateGrowthSheet'>>;
 
@@ -175,6 +178,7 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
           avatar: resolveCover(item.media, item.avatar),
           appearance: look || item.description,
           ...(turnaround ? { turnaround } : {}),
+          ...(item.voice ? { voice: item.voice } : {}),
           // 视频参考图只能是作品内的图片文件（旧版 data URL 头像不作参考）
           referencePaths: characterReferencePaths(item.media, item.avatar).filter(isSafeMediaPath),
         };
@@ -225,8 +229,38 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
     [workspaceCharacters]
   );
 
+  // 内部数据（不论从哪里被打开）：不显示原始 JSON，显示「请在 XX 中查看」并一键跳转
+  const handleFileSelect = ctx.handleFileSelect;
+  const internalDataTab = useMemo(() => {
+    const classification = classifyPath(activeDocumentPath, folderPath);
+    return classification.kind === 'internal' && activeDocumentPath
+      ? { path: activeDocumentPath, owner: classification.owner }
+      : null;
+  }, [activeDocumentPath, folderPath]);
+  const internalDataContent = useMemo<Record<string, React.ReactNode>>(() => {
+    if (!internalDataTab) return {};
+    const { path, owner } = internalDataTab;
+    const canOpen = owner === 'growth' || owner === 'scene-video';
+    return {
+      [path]: (
+        <InternalDataNotice
+          owner={owner}
+          onOpen={
+            canOpen && handleFileSelect
+              ? () => {
+                  closeTab?.(path);
+                  handleFileSelect(path);
+                }
+              : undefined
+          }
+        />
+      ),
+    };
+  }, [closeTab, handleFileSelect, internalDataTab]);
+
   const specialTabContent = useMemo<Record<string, React.ReactNode>>(
     () => ({
+      ...internalDataContent,
       [WORKSPACE_TAB_CHARACTERS]: (
         <CharactersView
           key={`characters-root-${scopePath ?? ''}-${workspaceCharactersVersion}`}
@@ -364,6 +398,7 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
         : {}),
     }),
     [
+      internalDataContent,
       activeGrowthTab,
       activeSceneVideo,
       activeWorkspaceTab,

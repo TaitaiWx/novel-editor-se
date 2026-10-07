@@ -49,9 +49,11 @@ export const SceneNode: React.FC<{
   scene: string;
   sourceText: string;
   location: string;
+  /** 这一场有背景音乐 */
+  hasBgm?: boolean;
   splitting: boolean;
   onResplit: () => void;
-}> = ({ chapter, scene, sourceText, location, splitting, onResplit }) => (
+}> = ({ chapter, scene, sourceText, location, hasBgm = false, splitting, onResplit }) => (
   <div className={styles.body}>
     <header className={styles.header}>
       <span className={styles.kind}>场景</span>
@@ -71,6 +73,7 @@ export const SceneNode: React.FC<{
     <p className={styles.meta}>
       {chapter}
       {location ? ` · ${location}` : ''}
+      {hasBgm && <span className={styles.audioBadge}>配乐</span>}
     </p>
     <p className={`${styles.excerpt} ${sourceText.trim() ? '' : styles.placeholder}`}>
       {sourceText.trim() || '还没有场景正文：单击这里，在右侧粘贴或改写这一场'}
@@ -118,7 +121,33 @@ export interface ShotNodeProps {
   /** 采用的首帧（相对作品目录）：还没有成片时显示在缩略图位置 */
   keyframe?: string;
   workPath?: string | null;
+  /** 这一场有背景音乐（节点上显示「配乐」标记） */
+  hasBgm?: boolean;
   onGenerate: () => void;
+}
+
+/** 镜头节点上的声音标记：台词数（已配音数）、音效数、配乐 */
+export function shotAudioBadges(
+  shot: Shot,
+  hasBgm: boolean
+): { key: string; text: string; tip: string }[] {
+  const lines = shot.dialogue ?? [];
+  const voiced = lines.filter((line) => line.audioFile).length;
+  const badges: { key: string; text: string; tip: string }[] = [];
+  if (lines.length) {
+    badges.push({
+      key: 'dialogue',
+      text: `台词 ${lines.length}`,
+      tip: voiced
+        ? `${lines.length} 句对白，已配音 ${voiced} 句`
+        : `${lines.length} 句对白，还没有配音`,
+    });
+  }
+  if (shot.sfx?.length) {
+    badges.push({ key: 'sfx', text: `音效 ${shot.sfx.length}`, tip: `${shot.sfx.length} 个音效` });
+  }
+  if (hasBgm) badges.push({ key: 'bgm', text: '配乐', tip: '样片会混入这一场的背景音乐' });
+  return badges;
 }
 
 export const ShotNode: React.FC<ShotNodeProps> = ({
@@ -131,8 +160,10 @@ export const ShotNode: React.FC<ShotNodeProps> = ({
   readFile,
   keyframe,
   workPath = null,
+  hasBgm = false,
   onGenerate,
 }) => {
+  const badges = shotAudioBadges(shot, hasBgm);
   const label = `镜头 ${index + 1}`;
   const regenerate = progress.kind === 'done' || progress.kind === 'failed';
   const busy = progress.kind === 'active';
@@ -198,6 +229,15 @@ export const ShotNode: React.FC<ShotNodeProps> = ({
       <p className={`${styles.description} ${shot.description.trim() ? '' : styles.placeholder}`}>
         {shot.description.trim() || '写一句画面描述后才能生成'}
       </p>
+      {badges.length > 0 && (
+        <div className={styles.audioBadges} data-testid="shot-audio-badges">
+          {badges.map((badge) => (
+            <Tooltip key={badge.key} content={badge.tip}>
+              <span className={styles.audioBadge}>{badge.text}</span>
+            </Tooltip>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

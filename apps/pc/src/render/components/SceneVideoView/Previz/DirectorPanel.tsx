@@ -1,6 +1,6 @@
 /**
  * 预演侧栏：描述这个镜头的动作 / 走位 → 选模型 →「生成预演」；下面是可折叠的「微调」。
- * 主要靠描述 + AI 生成，手动只保留最少的微调（拖人物、环绕机位、重置、时段、动作库）。
+ * 主要靠描述 + AI 生成，手动只保留最少的微调（拖人物、环绕机位、重置、时段）。
  */
 import React, { useId, useState } from 'react';
 import { VscChevronDown, VscChevronRight, VscLoading } from 'react-icons/vsc';
@@ -26,8 +26,6 @@ interface DirectorPanelProps {
   onResetCamera: () => void;
   onResetBlocking: () => void;
   disabled: boolean;
-  /** 动作库（列出 / 导入 BVH），放在「微调」里 */
-  motionLibrary?: React.ReactNode;
 }
 
 const MOOD_OPTIONS = PREVIZ_MOODS.map((id) => ({
@@ -49,7 +47,6 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
   onResetCamera,
   onResetBlocking,
   disabled,
-  motionLibrary,
 }) => {
   const id = useId();
   const [tuneOpen, setTuneOpen] = useState(false);
@@ -146,7 +143,6 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
                 </button>
               </Tooltip>
             </div>
-            {motionLibrary}
           </div>
         )}
       </section>

@@ -31,6 +31,8 @@ document.addEventListener(
 );
 
 contextBridge.exposeInMainWorld('electron', {
+  // 开发者调试模式：只有 NOVEL_EDITOR_DEBUG=1 时界面才显示原始提示词 / JSON
+  debug: process.env.NOVEL_EDITOR_DEBUG === '1',
   getLastDroppedPaths: (): string[] => {
     const paths = lastDroppedPaths;
     lastDroppedPaths = [];
@@ -241,10 +243,10 @@ contextBridge.exposeInMainWorld('electron', {
         'video-scene-write-image',
         // 预演视频（镜头N-预演.mp4，3D 预演逐帧导出）
         'video-scene-write-media',
-        // 作品动作库（资料/动作库/*.bvh，3D 预演的动作片段；main/handlers/motion-library.ts）
-        'motion-library-list',
-        'motion-library-read',
-        'motion-library-import',
+        // 场景声音：对白配音（写入场景目录）、导入本地配乐 / 音效（main/handlers/scene-audio.ts）
+        'ai-speech-synthesize',
+        'scene-audio-import',
+        'scene-audio-read',
         // 正文结构规则（设置 → 正文结构，main/handlers/project-structure.ts）
         'project-structure-get',
         'project-structure-set',

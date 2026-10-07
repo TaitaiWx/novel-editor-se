@@ -19,6 +19,8 @@ export interface UseSceneAnimaticInput {
   chapter: string;
   scene: string;
   readFile: (fileName: string) => Promise<Uint8Array>;
+  /** 读取作品内的配乐 / 音效（资料/音乐/、资料/音效/） */
+  readWorkAudio?: (relativePath: string) => Promise<Uint8Array>;
   refreshFiles: () => Promise<unknown>;
   updateState: (updater: (prev: SceneVideoState) => SceneVideoState) => void;
   onMessage: (message: SceneMessage) => void;
@@ -32,6 +34,7 @@ export function useSceneAnimatic({
   chapter,
   scene,
   readFile,
+  readWorkAudio,
   refreshFiles,
   updateState,
   onMessage,
@@ -57,6 +60,8 @@ export function useSceneAnimatic({
           storyboard,
           files: chosen,
           readFile,
+          sceneAudio: state.audio,
+          readWorkAudio,
           onProgress: setStitchProgress,
         });
         const ipc = window.electron?.ipcRenderer;
@@ -89,7 +94,18 @@ export function useSceneAnimatic({
         setStitchProgress(null);
       }
     },
-    [chapter, files, onMessage, readFile, refreshFiles, scene, state, updateState, workPath]
+    [
+      chapter,
+      files,
+      onMessage,
+      readFile,
+      readWorkAudio,
+      refreshFiles,
+      scene,
+      state,
+      updateState,
+      workPath,
+    ]
   );
 
   const stitchSupported = canStitchAnimatic();

@@ -11,7 +11,7 @@ import {
 } from '@/render/hooks/useEditorInteractions';
 import { requestRevealInFilePanel } from '@/render/utils/workspaceFiles';
 import { installElectronMock, uninstallElectronMock } from './electronMock';
-import { ref } from './hookCtx';
+import { makeToast, ref } from './hookCtx';
 
 afterEach(() => {
   uninstallElectronMock();
@@ -19,20 +19,24 @@ afterEach(() => {
 
 const STORYBOARD = '/w/novels/星河旅人/资料/视频/001-启程/第一场 清晨的青石镇/分镜.json';
 
-describe('从资料打开场景视频的 分镜.json', () => {
+describe('从资料打开场景视频的 分镜.json（内部数据，不显示 JSON）', () => {
   function setup(fileContent: unknown) {
     const electron = installElectronMock((channel) =>
       channel === 'read-file' ? fileContent : undefined
     );
     const openFileInTab = vi.fn();
+    const toast = makeToast();
     const { result } = renderHook(() =>
       useWorkspaceEntityActions({
+        filesRef: ref([]),
+        folderPathRef: ref('/w'),
         openFileInTab,
+        toast,
         workspaceCharacters: [],
         workspaceLoreEntries: [],
       } as unknown as UseWorkspaceEntityActionsContext)
     );
-    return { electron, openFileInTab, select: result.current.handleFileSelect };
+    return { electron, openFileInTab, toast, select: result.current.handleFileSelect };
   }
 
   it('分镜.json → 打开这一场的画布标签（而不是显示 JSON）', async () => {
@@ -51,10 +55,11 @@ describe('从资料打开场景视频的 分镜.json', () => {
     expect(electron.invoke).toHaveBeenCalledWith('read-file', STORYBOARD);
   });
 
-  it('内容损坏时按普通文件打开；其他文件直接打开', async () => {
-    const { openFileInTab, select } = setup('{broken');
+  it('内容损坏时只提示（不打开原始 JSON）；其他文件直接打开', async () => {
+    const { openFileInTab, toast, select } = setup('{broken');
     act(() => select(STORYBOARD));
-    await waitFor(() => expect(openFileInTab).toHaveBeenCalledWith(STORYBOARD));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(openFileInTab).not.toHaveBeenCalled();
     act(() => select('/w/资料/视频/001-启程/第一场/分镜.md'));
     expect(openFileInTab).toHaveBeenLastCalledWith('/w/资料/视频/001-启程/第一场/分镜.md');
   });

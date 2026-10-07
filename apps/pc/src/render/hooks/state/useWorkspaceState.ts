@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { filterInternalDataTree } from '@novel-editor/core/internal-data';
 import type { FileNode, OpenLocalResult, WorkspaceProjectLayout } from '@/render/types';
 import { type StoryOrderMap, createStoryOrderStorageKey } from '@/render/utils/workspace';
 import { listWorkScopeOptions, resolveWorkScope } from '@/render/utils/workScope';
@@ -43,9 +44,12 @@ export function useWorkspaceState() {
   // 通过 ref 间接引用 refreshCurrentFolder，避免跨声明顺序依赖（TDZ）
   const refreshCurrentFolderRef = useRef<(() => Promise<void>) | null>(null);
 
-  /** 写入 open-local-folder / refresh-folder 的结果：文件树与项目结构一起更新；null 表示清空 */
+  /**
+   * 写入 open-local-folder / refresh-folder 的结果：文件树与项目结构一起更新；null 表示清空。
+   * 主进程已去掉内部数据，这里再过滤一次（纵深防御，同时标记场景视频目录）
+   */
   const applyFolderTree = useCallback((result: OpenLocalResult | null) => {
-    setFiles(result?.files ?? []);
+    setFiles(result ? filterInternalDataTree(result.files ?? [], result.path) : []);
     setProjectLayout(result?.project ?? null);
   }, []);
 

@@ -15,6 +15,7 @@ import {
   type StreamChunk,
   type TextProvider,
   type ImageProvider,
+  type SpeechProvider,
   type VideoProvider,
 } from '@novel-editor/ai';
 import type { AICompletePayload, AIProviderInfo, AIProviderUpdate } from '../../shared/ai';
@@ -370,6 +371,54 @@ export class AIService {
     });
   }
 
+  /** 已配置且启用的配音服务（设置中心「更多 AI 服务」里的 OpenAI 兼容配音 / MiniMax 语音合成） */
+  listReadySpeechProviders(): AIProviderInfo[] {
+    return this.registry
+      .list('speech')
+      .map((descriptor) => this.getProviderInfo(descriptor.id))
+      .filter((info) => info.configured && info.enabled);
+  }
+
+  getSpeechProvider(providerId?: string): SpeechProvider {
+    const id = providerId ?? this.listReadySpeechProviders()[0]?.id;
+    if (!id) {
+      throw new AIError({
+        kind: 'not-configured',
+        message:
+          '还没有配置配音服务，请先在设置中心「AI → 更多 AI 服务」里填写 OpenAI 兼容配音 / MiniMax 语音合成的 Key',
+      });
+    }
+    const descriptor = this.descriptor(id);
+    if (descriptor.kind !== 'speech') {
+      throw new AIError({
+        kind: 'bad-request',
+        message: `${descriptor.label} 不是配音服务`,
+        providerId: id,
+      });
+    }
+    const stored = this.deps.configs.get(descriptor.id);
+    const apiKey = this.deps.credentials.get(descriptor.id);
+    if (stored.enabled === false) {
+      throw new AIError({
+        kind: 'not-configured',
+        message: `${descriptor.label} 未启用`,
+        providerId: id,
+      });
+    }
+    if (!apiKey) {
+      throw new AIError({
+        kind: 'not-configured',
+        message: `未配置 ${descriptor.label} 的 API Key，请先在设置中心填写`,
+        providerId: id,
+      });
+    }
+    return this.registry.createSpeech(descriptor.id, {
+      apiKey,
+      baseUrl: stored.baseUrl,
+      model: stored.model,
+    });
+  }
+
   /** 测试连接：使用已保存的 Key；未启用的服务也允许测试 */
   async testProvider(providerId: string, signal?: AbortSignal): Promise<void> {
     const descriptor = this.descriptor(providerId);
@@ -392,6 +441,10 @@ export class AIService {
     const config = { apiKey, baseUrl: stored.baseUrl, model: stored.model };
     if (descriptor.kind === 'image') {
       await this.registry.createImage(descriptor.id, config).testConnection({ signal });
+      return;
+    }
+    if (descriptor.kind === 'speech') {
+      await this.registry.createSpeech(descriptor.id, config).testConnection({ signal });
       return;
     }
     await this.registry.createVideo(descriptor.id, config).testConnection({ signal });

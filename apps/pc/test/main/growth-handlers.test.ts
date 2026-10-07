@@ -172,6 +172,83 @@ describe('growth IPC handlers', () => {
     expect((await call<SnapshotLike>('growth-load', dir)).data.initialized).toBe(false);
   });
 
+  it('保存规则：字段级校验不通过时拒绝写入，合法的新属性 / 技能写入 规则.json', async () => {
+    await call('growth-init', dir, 'dnd');
+    const file = path.join(dir, '资料', '记忆', '规则.json');
+    const loaded = await call<{ ruleset: Record<string, unknown> & { attributes: unknown[] } }>(
+      'growth-load',
+      dir
+    );
+    const base = loaded.data.ruleset;
+    const before = await readFile(file, 'utf-8');
+
+    const invalid = await call('growth-save-ruleset', dir, {
+      ...base,
+      attributes: [
+        ...base.attributes,
+        {
+          key: 'luck',
+          name: '气运',
+          initial: 5,
+          min: 0,
+          max: 10,
+          growthPerLevel: 0,
+          perLevelCap: 1,
+        },
+        {
+          key: 'luck2',
+          name: '气运',
+          initial: 5,
+          min: 0,
+          max: 10,
+          growthPerLevel: 0,
+          perLevelCap: 1,
+        },
+      ],
+    });
+    expect(invalid).toMatchObject({ ok: false, error: expect.stringContaining('规则未保存') });
+    expect(await readFile(file, 'utf-8')).toBe(before);
+
+    const dangling = await call('growth-save-ruleset', dir, {
+      ...base,
+      coreRules: [
+        { id: 'rule-1', text: '不学', check: { kind: 'forbid-skill', skillId: 'ghost' } },
+      ],
+    });
+    expect(dangling).toMatchObject({ ok: false, error: expect.stringContaining('禁用的技能') });
+
+    const higher = await call('growth-save-ruleset', dir, { ...base, schemaVersion: 99 });
+    expect(higher).toMatchObject({ ok: false, error: expect.stringContaining('schemaVersion') });
+
+    const saved = await call<{ ruleset: { attributes: Array<{ key: string }> } }>(
+      'growth-save-ruleset',
+      dir,
+      {
+        ...base,
+        attributes: [
+          ...base.attributes,
+          {
+            key: 'attr-1',
+            name: '气运',
+            initial: 5,
+            min: 0,
+            max: 10,
+            growthPerLevel: 0,
+            perLevelCap: 1,
+          },
+        ],
+        skills: [
+          ...(base.skills as unknown[]),
+          { id: 'skill-1', name: '望气术', maxLevel: 3, costPerLevel: [0, 100, 200] },
+        ],
+      }
+    );
+    expect(saved.ok).toBe(true);
+    const disk = JSON.parse(await readFile(file, 'utf-8'));
+    expect(disk.attributes.at(-1)).toMatchObject({ key: 'attr-1', name: '气运' });
+    expect(disk.skills.at(-1)).toMatchObject({ id: 'skill-1', name: '望气术' });
+  });
+
   it('保存规则 / 队伍 / 地图时校验并规范化', async () => {
     await call('growth-init', dir, 'blank');
     const ruleset = await call<{ ruleset: { name: string; coreRules: unknown[] } }>(

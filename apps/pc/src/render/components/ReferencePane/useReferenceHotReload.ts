@@ -49,7 +49,13 @@ async function readSignature(path: string): Promise<string | null> {
   const ipc = window.electron?.ipcRenderer;
   if (!ipc) return null;
   try {
-    return fileSignature((await ipc.invoke('get-file-info', path)) as FileInfoLike);
+    // 用批量接口：文件被删除时静默返回空，不在主进程日志里留错误
+    const entries = (await ipc.invoke('get-file-info-batch', [path])) as Array<{
+      path: string;
+      info: FileInfoLike;
+    }>;
+    const entry = entries?.[0];
+    return entry ? fileSignature(entry.info) : null;
   } catch {
     return null;
   }

@@ -1,10 +1,13 @@
 /**
  * 分镜（storyboard）数据模型与校验
  *
- * 一个场景拆成 N 个镜头（shot）：景别、时长、画面描述、运镜、出场人物、地点、台词。
+ * 一个场景拆成 N 个镜头（shot）：景别、时长、画面描述、运镜、出场人物、地点、对白（说话人 + 台词）、音效。
+ * 对白 / 音效的模型与解析在 audio.ts；旧版的自由文本「台词」读入时迁移为一句对白（「名字：台词」拆出说话人，否则为旁白）。
  * AI 生成的分镜是「不可信输入」：validateStoryboard 宽松解析（容忍字段别名、字符串数字），
  * 但对结构性错误（没有镜头、时长非法）直接报错，交给调用方提示作者或重试。
  */
+
+import { dialogueToText, parseDialogue, parseSfx, type DialogueLine, type SfxCue } from './audio';
 
 export const SHOT_SIZES = ['大远景', '远景', '全景', '中景', '近景', '特写', '大特写'] as const;
 export type ShotSize = (typeof SHOT_SIZES)[number];
@@ -32,8 +35,10 @@ export interface Shot {
   characters?: string[];
   /** 地点 */
   location?: string;
-  /** 台词 / 旁白（视频模型通常不生成声音，仅供剪辑参考） */
-  dialogue?: string;
+  /** 对白（说话人 + 台词，可选情绪与相对镜头起点的时间、已生成的配音） */
+  dialogue?: DialogueLine[];
+  /** 音效（文字描述或本地文件、时间点、音量） */
+  sfx?: SfxCue[];
 }
 
 export interface Storyboard {
@@ -78,7 +83,32 @@ export const STORYBOARD_JSON_SCHEMA = {
           camera: { type: 'string', description: '运镜' },
           characters: { type: 'array', items: { type: 'string' } },
           location: { type: 'string' },
-          dialogue: { type: 'string' },
+          dialogue: {
+            type: 'array',
+            description: '本镜头里说出口的对白，按时间顺序；没有对白时省略',
+            items: {
+              type: 'object',
+              required: ['speaker', 'text'],
+              properties: {
+                speaker: { type: 'string', description: '说话人：人物名；旁白写 narrator' },
+                text: { type: 'string', description: '台词原文（保持正文语言）' },
+                emotion: { type: 'string', description: '情绪，例如 平静 / 激动 / 低声' },
+                startSec: { type: 'number', description: '相对镜头开始的秒数（可选）' },
+              },
+            },
+          },
+          sfx: {
+            type: 'array',
+            description: '建议的音效（可选）',
+            items: {
+              type: 'object',
+              required: ['prompt'],
+              properties: {
+                prompt: { type: 'string', description: '音效描述，例如 木门吱呀声' },
+                atSec: { type: 'number', description: '相对镜头开始的秒数' },
+              },
+            },
+          },
         },
       },
     },
@@ -224,11 +254,16 @@ export function validateStoryboard(raw: unknown): StoryboardValidation {
     const camera = asText(pick(item, 'camera', 'cameraMovement', '运镜'));
     const characters = asStringList(pick(item, 'characters', '人物'));
     const location = asText(pick(item, 'location', '地点'));
-    const dialogue = asText(pick(item, 'dialogue', 'line', '台词'));
+    // 对白：结构化数组，或旧版自由文本（迁移为一句对白）
+    const dialogue = parseDialogue(
+      pick(item, 'dialogue', 'dialogues', 'lines', 'line', '台词', '对白')
+    );
+    const sfx = parseSfx(pick(item, 'sfx', 'soundEffects', 'sounds', '音效'));
     if (camera) shot.camera = camera;
     if (characters) shot.characters = characters;
     if (location) shot.location = location;
-    if (dialogue) shot.dialogue = dialogue;
+    if (dialogue.length) shot.dialogue = dialogue;
+    if (sfx.length) shot.sfx = sfx;
     shots.push(shot);
   });
 
@@ -256,6 +291,10 @@ export function storyboardDurationSec(storyboard: Storyboard): number {
   return storyboard.shots.reduce((sum, shot) => sum + shot.durationSec, 0);
 }
 
+function sfxText(cues: readonly SfxCue[] | undefined): string {
+  return (cues ?? []).map((cue) => `${cue.prompt ?? cue.path ?? ''}@${cue.atSec}s`).join('、');
+}
+
 /** 导出为 Markdown 分镜表（离线可用：没有配置视频服务时也能交付分镜脚本） */
 export function storyboardToMarkdown(storyboard: Storyboard): string {
   const escape = (text: string | undefined) =>
@@ -265,12 +304,12 @@ export function storyboardToMarkdown(storyboard: Storyboard): string {
     '',
     `比例：${storyboard.aspectRatio}${storyboard.style ? ` · 风格：${storyboard.style}` : ''} · 总时长：${storyboardDurationSec(storyboard)} 秒`,
     '',
-    '| # | 景别 | 时长 | 画面 | 运镜 | 人物 | 台词 |',
-    '|---|---|---|---|---|---|---|',
+    '| # | 景别 | 时长 | 画面 | 运镜 | 人物 | 对白 | 音效 |',
+    '|---|---|---|---|---|---|---|---|',
   ];
   storyboard.shots.forEach((shot, index) => {
     lines.push(
-      `| ${index + 1} | ${shot.shotSize} | ${shot.durationSec}s | ${escape(shot.description)} | ${escape(shot.camera)} | ${escape(shot.characters?.join('、'))} | ${escape(shot.dialogue)} |`
+      `| ${index + 1} | ${shot.shotSize} | ${shot.durationSec}s | ${escape(shot.description)} | ${escape(shot.camera)} | ${escape(shot.characters?.join('、'))} | ${escape(dialogueToText(shot.dialogue, '<br>'))} | ${escape(sfxText(shot.sfx))} |`
     );
   });
   return `${lines.join('\n')}\n`;

@@ -1,8 +1,6 @@
 import { useCallback } from 'react';
-import {
-  isSceneStoryboardFile,
-  sceneVideoTargetFromStoryboard,
-} from '@/render/components/SceneVideoView/events';
+import { sceneVideoTargetFromStoryboard } from '@/render/components/SceneVideoView/events';
+import { internalDataMessage, resolveInternalOpenTarget } from '@/render/utils/internalData';
 import type { AssistantScopeTarget } from '@/render/app/types';
 import type { Character, LoreEntry } from '@/render/components/RightPanel/types';
 import type { FileNode } from '@/render/types';
@@ -10,6 +8,7 @@ import {
   WORKSPACE_TAB_CHARACTERS,
   WORKSPACE_TAB_LORE,
   createCharacterWorkspaceTab,
+  createGrowthWorkspaceTab,
   createLoreWorkspaceTab,
   createSceneVideoWorkspaceTab,
   createVolumeWorkspaceTab,
@@ -75,22 +74,40 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     workspaceProjectName,
   } = ctx;
 
+  /**
+   * 打开资料 / 搜索结果里的路径。内部数据（core internal-data）不在编辑器里显示原文：
+   * 场景视频目录或分镜状态 → 打开这一场的画布；成长档案 JSON → 成长档案；其他内部数据只提示去哪里看
+   */
   const handleFileSelect = useCallback(
     (filePath: string) => {
-      // 资料里的「分镜.json」是场景视频的画布：直接打开画布，而不是显示 JSON
-      if (isSceneStoryboardFile(filePath)) {
-        const ipc = window.electron?.ipcRenderer;
-        void (ipc ? ipc.invoke('read-file', filePath) : Promise.resolve(''))
-          .catch(() => '')
-          .then((raw) => {
-            const target = sceneVideoTargetFromStoryboard(String(raw ?? ''));
-            openFileInTab(target ? createSceneVideoWorkspaceTab(target) : filePath);
-          });
+      const node = findNodeInTree(filesRef.current, filePath);
+      const target = resolveInternalOpenTarget(
+        filePath,
+        folderPathRef.current,
+        node?.type === 'directory' && node.sceneVideo === true
+      );
+      if (!target) {
+        openFileInTab(filePath);
         return;
       }
-      openFileInTab(filePath);
+      if (target.kind === 'growth') {
+        openFileInTab(createGrowthWorkspaceTab(target.character));
+        return;
+      }
+      if (target.kind === 'blocked') {
+        toast.info(internalDataMessage(target.owner));
+        return;
+      }
+      const ipc = window.electron?.ipcRenderer;
+      void (ipc ? ipc.invoke('read-file', target.stateFile) : Promise.resolve(''))
+        .catch(() => '')
+        .then((raw) => {
+          const scene = sceneVideoTargetFromStoryboard(String(raw ?? ''));
+          if (scene) openFileInTab(createSceneVideoWorkspaceTab(scene));
+          else toast.error('这一场的场景视频记录不完整，无法打开画布');
+        });
     },
-    [openFileInTab]
+    [filesRef, folderPathRef, openFileInTab, toast]
   );
   const handleOpenCharacters = useCallback(() => {
     openFileInTab(WORKSPACE_TAB_CHARACTERS);
@@ -269,6 +286,7 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
                 avatar: target.avatar,
                 design: target.design,
                 media: target.media,
+                voice: target.voice,
                 aliases: target.aliases,
                 category: target.category,
                 highlightColor: target.highlightColor,

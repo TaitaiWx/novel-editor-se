@@ -198,7 +198,7 @@ export function buildMannequin(color: string): Mannequin {
   };
 }
 
-/** 姿势采样：两个姿势按 mix 混合 + 关节微调（度）+ 步态 + 可选的动作片段（关节四元数 + 权重） */
+/** 姿势采样：两个姿势按 mix 混合 + 关节微调（度）+ 步态 + 可选的动作（AI 关节轨迹采样出的四元数 + 权重） */
 export type PoseSample = Pick<
   PrevizFigureSample,
   'poseFrom' | 'poseTo' | 'mix' | 'joints' | 'gait'
@@ -219,8 +219,8 @@ const mixRotation = (a: JointRotation, b: JointRotation, s: number): JointRotati
 
 /**
  * 按采样摆姿势：先清零，再按 mix 混合两个预设姿势，移动中的 walk / run 叠加步态周期；
- * 有动作片段时按权重球面插值到片段的关节旋转（BVH 重定向结果），最后加上关节微调（视线、AI 微调）。
- * 髋部下移与整体前倾同样按 mix 混合（坐下、倒地是渐变过去的），动作片段的髋部旋转 / 起伏叠加在上面。
+ * 有动作时按权重球面插值到轨迹给出的关节旋转（相对自然站立的绝对局部旋转），最后加上关节微调（视线、AI 微调）。
+ * 髋部下移与整体前倾同样按 mix 混合（坐下、倒地是渐变过去的），动作的整体前倾（lean）/ 髋部起伏（rootBob）叠加在上面。
  */
 export function applyPoseSample(mannequin: Mannequin, sample: PoseSample): void {
   const from = poseById(sample.poseFrom);

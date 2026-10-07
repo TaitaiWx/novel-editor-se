@@ -1,5 +1,5 @@
 /**
- * 播放器的浏览器能力 hooks：全屏（含 webkit 前缀 / iOS 视频全屏）、画中画、录屏。
+ * 播放器的浏览器能力 hooks：全屏（含 webkit 前缀 / iOS 视频全屏）、画中画、录屏，以及控制条的自动隐藏、短暂提示。
  * 能力在挂载后检测（SSR 安全），不支持时对应按钮隐藏。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -29,6 +29,26 @@ import { PlayerError } from './engines/types';
 type ElementRef<T> = React.RefObject<T | null>;
 
 const NOTICE_MS = 2400;
+
+const IDLE_HIDE_MS = 2200;
+
+/** 指针活动后显示控制条，静止一段时间后隐藏 */
+export function useIdleActive() {
+  const [active, setActive] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    []
+  );
+  const wake = useCallback(() => {
+    setActive(true);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setActive(false), IDLE_HIDE_MS);
+  }, []);
+  return { active, setActive, wake };
+}
 
 /** 画面上方的短暂提示（截图 / 录制结果、速度变化、错误） */
 export function useNotice() {
@@ -213,4 +233,27 @@ export function useRecording(videoRef: ElementRef<HTMLVideoElement>, options: Us
   }, [dispatch]);
 
   return { status, elapsed, supported, start, stop };
+}
+
+/** 把静音 / 音量 / 循环 / 倍速同步到 video 元素（各自变化时才写） */
+export function useMediaElementSync(
+  videoRef: React.RefObject<HTMLVideoElement | null>,
+  state: { muted: boolean; volume: number; loop: boolean; rate: number }
+): void {
+  const { muted, volume, loop, rate } = state;
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = muted;
+  }, [muted, videoRef]);
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.volume = volume;
+  }, [volume, videoRef]);
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.loop = loop;
+  }, [loop, videoRef]);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.playbackRate = rate;
+    video.defaultPlaybackRate = rate;
+  }, [rate, videoRef]);
 }

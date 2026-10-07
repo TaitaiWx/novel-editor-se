@@ -307,6 +307,58 @@ describe('读写', () => {
   });
 });
 
+describe('内部数据：refresh-folder 隐藏、write-file 拒绝', () => {
+  it('refresh-folder 去掉成长档案 JSON / 分镜状态 / 提示词记录，保留派生摘要与作者的 JSON，场景目录带 sceneVideo', async () => {
+    await touch('资料/记忆/规则.json', '{}');
+    await touch('资料/记忆/README.md', '# 记忆库');
+    await touch('资料/记忆/角色/林舟.json', '{}');
+    await touch('资料/记忆/角色/林舟.md', '# 林舟');
+    await touch('资料/视频/001-启程/第一场/分镜.json', '{}');
+    await touch('资料/视频/001-启程/第一场/分镜.md', '# 分镜');
+    await touch('资料/视频/001-启程/第一场/镜头1-v1.prompt.json', '{}');
+    await touch('资料/人物表.json', '[]');
+    const result = await invoke<{ files: LegacyNode[] }>('refresh-folder', dir);
+    const all: Array<LegacyNode & { sceneVideo?: boolean }> = [];
+    const walk = (nodes: LegacyNode[]) =>
+      nodes.forEach((node) => {
+        all.push(node);
+        if (node.children) walk(node.children);
+      });
+    walk(result.files);
+    const names = all.map((node) => path.relative(dir, node.path).split(path.sep).join('/'));
+    expect(names).not.toContain('资料/记忆/规则.json');
+    expect(names).not.toContain('资料/记忆/角色/林舟.json');
+    expect(names).not.toContain('资料/视频/001-启程/第一场/分镜.json');
+    expect(names).not.toContain('资料/视频/001-启程/第一场/镜头1-v1.prompt.json');
+    expect(names).toEqual(
+      expect.arrayContaining([
+        '资料/记忆/README.md',
+        '资料/记忆/角色/林舟.md',
+        '资料/视频/001-启程/第一场/分镜.md',
+        '资料/人物表.json',
+      ])
+    );
+    const scene = all.find((node) => node.name === '第一场');
+    expect(scene?.sceneVideo).toBe(true);
+  });
+
+  it('write-file 拒绝写入内部数据与派生摘要（专用 IPC 直接写文件，不受影响），作者的 JSON 照常保存', async () => {
+    const rules = await touch('资料/记忆/规则.json', '{"a":1}');
+    await expect(invoke('write-file', rules, '{}')).rejects.toThrow('软件内部数据');
+    expect(await readFile(rules, 'utf-8')).toBe('{"a":1}');
+    const state = await touch('资料/视频/001-启程/第一场/分镜.json', '{}');
+    await expect(invoke('write-file', state, 'x')).rejects.toThrow('软件内部数据');
+    const readme = await touch('资料/记忆/README.md', '# 记忆库');
+    await expect(invoke('write-file', readme, 'x')).rejects.toThrow('软件内部数据');
+    await expect(
+      invoke('write-file', path.join(dir, '.novel-editor', 'config.json'), 'x')
+    ).rejects.toThrow('软件内部数据');
+    const own = await touch('资料/人物表.json', '[]');
+    expect(await invoke('write-file', own, '[1]')).toEqual({ success: true });
+    expect(await readFile(own, 'utf-8')).toBe('[1]');
+  });
+});
+
 describe('文件信息', () => {
   it('get-file-info 返回五个字段', async () => {
     const file = await touch('a.md', 'abc');

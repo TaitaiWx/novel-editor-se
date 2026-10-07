@@ -2,25 +2,19 @@
  * 「生成预演」：有可用的文本服务时用预演提示词（@novel-editor/ai/prompts buildPrevizPrompt）请求 AI，
  * 校验后得到 PrevizScript；没有配置 AI、AI 失败或返回无法识别时用确定性的默认脚本（人物站成一排 + 缓慢推近）。
  *
- * 提示词列出可用的动作片段（内置 + 作品动作库），AI 按 id 引用；AI 写了 motion.generate 时，
- * 配置了动作生成服务（MotionProvider）就生成 BVH 存进动作库并改为引用，否则提示暂用姿势代替。
+ * 动作由 AI 实时生成：姿势覆盖不了的动作，AI 直接在脚本里写关节轨迹（motion.tracks）；只写了 motion.generate（描述）时，
+ * 配置了动作生成服务（MotionProvider）就交给它，否则用同一个模型对每个不同的描述追加一次 ai-complete 请求，
+ * 生成的轨迹写回脚本（随 分镜.json 保存，之后不再生成）。
  */
-import { resolvePrevizMotionRequests, type MotionProvider } from '@novel-editor/ai/motion';
+import {
+  resolvePrevizMotionRequests,
+  type MotionCompletion,
+  type MotionProvider,
+} from '@novel-editor/ai/motion';
 import { buildPrevizPrompt, parsePrevizResponse } from '@novel-editor/ai/prompts';
 import { defaultPrevizScript, type PrevizScript, type PrevizShotSize } from '@novel-editor/video';
-import type { MotionClipEntry } from './useMotionLibrary';
 
 type Ipc = NonNullable<Window['electron']>['ipcRenderer'];
-
-/** 生成动作的文件名：generated-<描述的哈希>.bvh（只用 ASCII） */
-export function generatedMotionFileName(description: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < description.length; i += 1) {
-    hash ^= description.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return `generated-${hash.toString(16).padStart(8, '0')}.bvh`;
-}
 
 export interface PrevizCharacterBrief {
   name: string;
@@ -43,12 +37,8 @@ export interface GeneratePrevizInput {
   location?: string;
   /** null = 没有可用的 AI */
   model: PrevizModelChoice | null;
-  /** 可用的动作片段（无法解析的不要传） */
-  motionClips?: readonly MotionClipEntry[];
-  /** 动作生成服务（目前没有内置实现，测试 / 将来的服务注入） */
+  /** 动作生成服务（文字 → 关节轨迹；目前没有内置实现，测试 / 将来的服务注入） */
   motionProvider?: MotionProvider | null;
-  /** 把生成的 BVH 存进动作库，返回片段 id */
-  saveMotion?: (fileName: string, data: string) => Promise<string>;
 }
 
 export interface GeneratePrevizResult {
@@ -71,6 +61,21 @@ function fallback(input: GeneratePrevizInput, notes: string[]): GeneratePrevizRe
   return { script: defaultScriptFor(input), source: 'default', notes };
 }
 
+/** 追加请求：用同一个模型把动作描述写成关节轨迹 */
+function motionCompletion(ipc: Ipc, model: PrevizModelChoice): MotionCompletion {
+  return async (request) => {
+    const result = await ipc.invoke('ai-complete', {
+      providerId: model.providerId,
+      model: model.model || undefined,
+      messages: request.messages,
+      temperature: request.temperature,
+      maxTokens: request.maxTokens,
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    return result.data.text;
+  };
+}
+
 export async function generatePrevizScript(
   ipc: Ipc | undefined,
   input: GeneratePrevizInput
@@ -87,8 +92,6 @@ export async function generatePrevizScript(
     aspectRatio: input.aspectRatio,
     cameraNote: input.cameraNote,
     location: input.location,
-    motionClips: input.motionClips,
-    canGenerateMotion: Boolean(input.motionProvider),
   });
   try {
     const result = await ipc.invoke('ai-complete', {
@@ -105,16 +108,13 @@ export async function generatePrevizScript(
       characters: input.characters.map((item) => item.name),
       durationSec: input.durationSec,
       shotSize: input.shotSize,
-      availableClips: (input.motionClips ?? []).map((clip) => clip.id),
     });
     if (!parsed.ok) {
       return fallback(input, [`AI 返回的预演无法识别（${parsed.errors[0]}），已使用默认走位`]);
     }
-    const saveMotion = input.saveMotion;
-    const motions = await resolvePrevizMotionRequests(parsed.script, input.motionProvider, {
-      save: saveMotion
-        ? ({ description, bvh }) => saveMotion(generatedMotionFileName(description), bvh)
-        : undefined,
+    const motions = await resolvePrevizMotionRequests(parsed.script, {
+      provider: input.motionProvider,
+      complete: motionCompletion(ipc, input.model),
     });
     return { script: motions.script, source: 'ai', notes: [...parsed.warnings, ...motions.notes] };
   } catch (error) {

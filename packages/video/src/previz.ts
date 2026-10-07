@@ -7,8 +7,8 @@
  * - 插值 / 默认脚本 / 微调在 previz-sample.ts（纯函数）
  *
  * 第 2 版（向下兼容第 1 版，validatePrevizScript 自动迁移）由 AI 控制更多内容：
- * - 人物：关键帧之间的缓动（ease）、动作片段（motion：引用内置 / 动作库 BVH 的 clip id，起点 / 速度 / 循环；
- *   或 generate 文字描述，交给 MotionProvider 生成）、视线（lookAt：看向某个人物或某个点）、手部目标（hands，简易 IK）
+ * - 人物：关键帧之间的缓动（ease）、动作（motion：AI 直接写的关节轨迹 tracks / rootBob / lean，或 generate 文字描述，
+ *   由 MotionProvider / 追加的 AI 请求生成轨迹；契约见 previz-motion.ts）、视线（lookAt）、手部目标（hands，简易 IK）
  * - 道具：类型 / 名字 / 尺寸 / 颜色 / 离地高度，以及位置 / 朝向关键帧（道具也能动）
  * - 机位：跟随某个人物（follow）、绝对机位（position + target），关键帧缓动
  *
@@ -17,6 +17,8 @@
  *
  * 所有枚举都是英文 id，界面文字由渲染进程映射；不按中文关键词做任何判断。
  */
+
+import { previzMotionTracksSchema, type PrevizMotion } from './previz-motion';
 
 export const PREVIZ_SCRIPT_VERSION = 2;
 export const PREVIZ_MIN_DURATION = 1;
@@ -40,12 +42,6 @@ export const PREVIZ_PROP_SIZE_MAX = 20;
 /** 手部目标 / 视线目标 / 绝对机位的高度范围（米） */
 export const PREVIZ_POINT_Y_MIN = 0;
 export const PREVIZ_POINT_Y_MAX = 12;
-/** 动作片段播放速度范围 */
-export const PREVIZ_MOTION_SPEED_MIN = 0.1;
-export const PREVIZ_MOTION_SPEED_MAX = 4;
-/** 动作片段 id / 生成描述的长度上限 */
-export const PREVIZ_CLIP_ID_MAX = 120;
-export const PREVIZ_MOTION_PROMPT_MAX = 200;
 
 /** 关键帧到下一个关键帧之间的缓动 */
 export const PREVIZ_EASINGS = ['linear', 'ease-in', 'ease-out', 'ease-in-out'] as const;
@@ -173,20 +169,6 @@ export interface PrevizPoint3 {
 /** 视线目标：看向某个人物（人物 id）或舞台上的某个点 */
 export type PrevizLookAt = { figure: string } | PrevizPoint3;
 
-/**
- * 动作片段引用：clip 为内置（builtin:wave）或动作库（lib:<文件名>）的 id；
- * generate 是交给动作生成服务（MotionProvider）的描述，生成后写回 clip。两者都没有时只用 pose。
- */
-export interface PrevizMotionRef {
-  clip?: string;
-  /** 片段内起点（秒） */
-  start?: number;
-  /** 播放速度（1 = 原速） */
-  speed?: number;
-  loop?: boolean;
-  generate?: string;
-}
-
 /** 手部目标（世界坐标，米）：手尽量够到这个点（两段臂解析 IK） */
 export interface PrevizHandTargets {
   left?: PrevizPoint3;
@@ -204,8 +186,8 @@ export interface PrevizFigureKey {
   joints?: PrevizJointAngles;
   /** 从这一帧到下一帧的位置 / 朝向缓动（默认 linear：匀速，像走路一样不顿挫） */
   ease?: PrevizEase;
-  /** 从这一帧开始播放的动作片段（覆盖 pose，片段没驱动的关节仍用 pose） */
-  motion?: PrevizMotionRef;
+  /** 从这一帧开始播放的动作（关节轨迹，按权重叠加在 pose 上；没写的关节仍用 pose） */
+  motion?: PrevizMotion;
   lookAt?: PrevizLookAt;
   hands?: PrevizHandTargets;
 }
@@ -346,16 +328,10 @@ export const PREVIZ_JSON_SCHEMA = {
                 motion: {
                   type: 'object',
                   description:
-                    'motion clip played from this key (overrides pose): clip id from the list, or generate = text description',
+                    'AI-authored joint animation from this key (blended over pose); or generate = text description',
                   properties: {
-                    clip: { type: 'string' },
-                    start: { type: 'number', description: 'seconds into the clip' },
-                    speed: {
-                      type: 'number',
-                      minimum: PREVIZ_MOTION_SPEED_MIN,
-                      maximum: PREVIZ_MOTION_SPEED_MAX,
-                    },
-                    loop: { type: 'boolean' },
+                    ...previzMotionTracksSchema(PREVIZ_JOINTS),
+                    weight: { type: 'number', minimum: 0, maximum: 1 },
                     generate: { type: 'string' },
                   },
                 },

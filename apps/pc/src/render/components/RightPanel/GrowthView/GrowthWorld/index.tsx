@@ -75,7 +75,13 @@ export const GrowthWorld: React.FC<GrowthWorldProps> = ({
       />
     )}
     {tab === 'rules' && (
-      <GrowthRulesPanel ruleset={snapshot.ruleset} busy={growth.busy} onSave={growth.saveRuleset} />
+      <GrowthRulesPanel
+        ruleset={snapshot.ruleset}
+        sheets={snapshot.sheets}
+        characterNames={characterNames}
+        busy={growth.busy}
+        onSave={growth.saveRuleset}
+      />
     )}
   </div>
 );

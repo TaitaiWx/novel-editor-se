@@ -3,10 +3,11 @@
  *
  * 复用 core `searchContent`（与 CLI `ne file search` 同一实现），只搜索正文 / 文档类文本文件
  * （.md / .markdown / .txt，跳过隐藏目录如 .novel-editor/），按文件分组并截取预览。
+ * 软件内部数据（core internal-data）不出现在结果里；派生的只读摘要（记忆库 README 等）照常可搜。
  * 搜索根目录必须是存在的绝对目录，且位于该窗口已上报的工作区内。
  */
 import { ipcMain } from 'electron';
-import { searchContent, type SearchMatch } from '@novel-editor/core';
+import { classifyWorkspacePath, searchContent, type SearchMatch } from '@novel-editor/core';
 import {
   WORKSPACE_SEARCH_MAX_FILES,
   WORKSPACE_SEARCH_MAX_MATCHES_PER_FILE,
@@ -96,7 +97,10 @@ export async function searchWorkspaceContent(
     ignoreCase: true,
     maxResults: MAX_RAW_MATCHES,
   });
-  const grouped = groupSearchMatches(result.matches);
+  const visible = result.matches.filter(
+    (match) => classifyWorkspacePath(match.file, root).kind !== 'internal'
+  );
+  const grouped = groupSearchMatches(visible);
   return {
     query: keyword,
     files: grouped.files,

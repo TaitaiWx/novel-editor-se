@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { STORYBOARD_MAX_SHOTS, type Shot } from '@novel-editor/video';
 import {
-  notifyWorkspaceFilesChanged,
-  requestRevealInFilePanel,
-} from '@/render/utils/workspaceFiles';
-import { referenceItemFor, requestOpenReference } from '@/render/utils/referencePane';
-import { exportMediaFile } from '@/render/utils/mediaExport';
+  STORYBOARD_MAX_SHOTS,
+  activeBgmPath,
+  type CharacterVoice,
+  type Shot,
+} from '@novel-editor/video';
+import { notifyWorkspaceFilesChanged } from '@/render/utils/workspaceFiles';
 import SceneCanvas from './SceneCanvas';
 import { CharacterNode, OutputNode, SceneNode, ShotNode } from './nodes';
 import { CharacterInspector, OutputInspector, SceneInspector, ShotInspector } from './Inspector';
@@ -31,6 +31,8 @@ import { useVideoServices } from './useVideoServices';
 import { useResolvedAvatars } from './useResolvedAvatars';
 import { useSceneKeyframes } from './useSceneKeyframes';
 import { useOutlineAutoLink } from './useOutlineAutoLink';
+import { useSceneFileActions } from './useSceneFileActions';
+import { useSceneAudioPanels } from './useSceneAudioPanels';
 import ScenePreviz from './ScenePreviz';
 import { useImageServices } from '../EntityGallery/useImageServices';
 import { dataUrlToBytes } from '../EntityGallery/mediaActions';
@@ -43,6 +45,8 @@ export interface SceneVideoCharacter extends CharacterBrief {
   turnaround?: string;
   /** 生成视频的人物参考图：三视图优先，其次主要形象图（相对作品目录） */
   referencePaths?: string[];
+  /** 人物声音（对白配音的音色 / 性别 / 年龄 / 音色描述） */
+  voice?: CharacterVoice;
 }
 
 export interface SceneVideoViewProps {
@@ -66,11 +70,6 @@ const SAVE_LABELS: Record<SaveStatus, string> = {
   saved: '已保存到资料',
   error: '保存失败',
 };
-
-function joinPath(dir: string, name: string): string {
-  const separator = dir.includes('\\') && !dir.includes('/') ? '\\' : '/';
-  return `${dir.replace(/[\\/]+$/, '')}${separator}${name}`;
-}
 
 /**
  * 场景视频画布：人物 → 场景 → 镜头 1…N → 样片，单击节点在右侧检查器编辑。
@@ -243,6 +242,20 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     [provider, references, state, submitShots]
   );
 
+  // ─── 声音（语言 / 配乐 / 环境音 / 对白配音 / 音效） ─────────────────────
+  const audioPanels = useSceneAudioPanels({
+    state,
+    workPath,
+    chapter: doc.chapter,
+    scene,
+    characters,
+    updateState,
+    refreshFiles,
+    onMessage: setMessage,
+    readFile,
+    videoSupportsAudio: Boolean(provider?.supportsAudio && state?.withAudio),
+  });
+
   // ─── 样片（全部镜头有成片时自动合成，useSceneAnimatic） ───────────────
   const { stitch, stitchProgress, stitchSupported } = useSceneAnimatic({
     state,
@@ -252,6 +265,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     chapter: doc.chapter,
     scene,
     readFile,
+    readWorkAudio: audioPanels.audio.readWorkAudio,
     refreshFiles,
     updateState,
     onMessage: setMessage,
@@ -289,46 +303,11 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     [files, state]
   );
 
-  const revealInMaterials = useCallback(
-    (fileName?: string) => {
-      if (!doc.dir) {
-        setMessage({ tone: 'info', text: '这一场还没有保存任何文件，修改分镜或生成镜头后再查看' });
-        return;
-      }
-      notifyWorkspaceFilesChanged();
-      requestRevealInFilePanel(fileName ? joinPath(doc.dir, fileName) : doc.dir);
-    },
-    [doc.dir]
-  );
-
-  /** 在编辑器旁边的参考窗格里看成片 / 样片 */
-  const openBeside = useCallback(
-    (fileName: string) => {
-      if (!doc.dir) return;
-      const reference = referenceItemFor(
-        joinPath(doc.dir, fileName),
-        `${state?.scene ?? ''} · ${fileName}`
-      );
-      if (reference) requestOpenReference({ items: [reference] });
-    },
-    [doc.dir, state?.scene]
-  );
-
-  // 版本列表「导出」：成片按原格式另存（不转码）
-  const exportVersion = useCallback(
-    (fileName: string) => {
-      if (!doc.dir) return;
-      void exportMediaFile({
-        sourcePath: joinPath(doc.dir, fileName),
-        title: `${state?.scene ?? ''}-${fileName}`,
-      }).then((result) => {
-        if (result.saved)
-          setMessage({ tone: 'success', text: `已导出到 ${result.filePath ?? ''}` });
-        else if (result.error) setMessage({ tone: 'error', text: `导出失败：${result.error}` });
-      });
-    },
-    [doc.dir, state?.scene]
-  );
+  const { revealInMaterials, openBeside, exportVersion } = useSceneFileActions({
+    dir: doc.dir,
+    sceneName: state?.scene ?? '',
+    onMessage: setMessage,
+  });
 
   const labelFor = useCallback((node: CanvasNode) => {
     switch (node.kind) {
@@ -363,6 +342,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           scene={state.scene}
           sourceText={state.sourceText}
           location={state.location}
+          hasBgm={Boolean(activeBgmPath(state.audio))}
           splitting={splitting}
           onResplit={() => void splitStoryboard('manual')}
         />
@@ -398,6 +378,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         readFile={readFile}
         keyframe={state.keyframes[entry.shot.id]}
         workPath={workPath}
+        hasBgm={Boolean(activeBgmPath(state.audio))}
         onGenerate={() => void submit([entry.shot])}
       />
     );
@@ -421,6 +402,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         pendingSeed={doc.pendingSeed}
         onApplySeed={doc.applyPendingSeed}
         onDismissSeed={doc.dismissPendingSeed}
+        audioSection={audioPanels.sceneSection}
         onClose={closeInspector}
       />
     );
@@ -498,6 +480,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           }}
           onOpenBeside={openBeside}
           onExportVersion={exportVersion}
+          audioSection={audioPanels.renderShotSection(entry.shot, entry.index)}
           onCancelTask={(id) =>
             void cancelTask(id).then((error) => error && setMessage({ tone: 'error', text: error }))
           }
@@ -585,7 +568,6 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           index={previzShot.index}
           state={state}
           characters={characters}
-          workPath={workPath}
           updateState={updateState}
           writeSceneImage={writeSceneImage}
           writePrevizVideo={writePrevizVideo}

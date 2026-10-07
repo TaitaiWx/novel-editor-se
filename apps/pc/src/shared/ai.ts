@@ -97,32 +97,61 @@ export interface VideoSettingsInfo {
   maxConcurrent: number;
   dailyLimit?: number;
   perTaskLimit?: number;
+  /** 场景视频新场景的默认配音语言（BCP-47，例如 zh-CN） */
+  voiceLanguage?: string;
+}
+
+/** ai-speech-synthesize：为一句对白生成配音，写入场景目录（镜头N-台词-<id>.mp3|wav） */
+export interface SpeechSynthesizePayload {
+  /** 作品根目录（绝对路径，主进程校验） */
+  workPath: string;
+  chapter: string;
+  scene: string;
+  shotIndex: number;
+  /** 对白 id（只允许 [A-Za-z0-9_-]） */
+  lineId: string;
+  text: string;
+  /** BCP-47 */
+  language: string;
+  /** 配音服务；省略时用第一个已配置的配音服务 */
+  providerId?: string;
+  model?: string;
+  emotion?: string;
+  voice?: {
+    providerVoiceId?: string;
+    gender?: 'male' | 'female' | 'neutral';
+    age?: string;
+    timbre?: string;
+  };
+  format?: 'mp3' | 'wav';
+}
+
+export interface SpeechSynthesizeResult {
+  /** 场景目录内的文件名 */
+  fileName: string;
+  /** 相对作品目录的路径 */
+  relativePath: string;
+  mimeType: string;
+  durationSec?: number;
+  providerId: string;
+}
+
+/** scene-audio-import：选择本地音频文件，复制到 <作品>/资料/音乐/（配乐 / 环境音）或 资料/音效/ */
+export interface SceneAudioImportPayload {
+  workPath: string;
+  kind: 'bgm' | 'ambience' | 'sfx';
+}
+
+export interface SceneAudioImportResult {
+  /** 作者取消选择时为 true（其余字段为空） */
+  canceled: boolean;
+  fileName?: string;
+  /** 相对作品目录的路径 */
+  relativePath?: string;
+  size?: number;
 }
 
 /** 场景视频工作区：定位一个场景目录（<作品>/资料/视频/<章>/<场景>/） */
-/** 作品动作库（<作品>/资料/动作库/*.bvh，main/handlers/motion-library.ts） */
-export interface MotionLibraryRef {
-  /** 作品根目录（绝对路径，主进程校验） */
-  workPath: string;
-}
-
-export interface MotionLibraryEntry {
-  fileName: string;
-  /** 预演脚本里引用的片段 id（lib:<文件名去掉 .bvh>） */
-  clipId: string;
-  size: number;
-  mtimeMs: number;
-}
-
-export interface MotionLibraryListResult {
-  files: MotionLibraryEntry[];
-}
-
-export interface MotionLibraryImportResult {
-  fileName: string;
-  clipId: string;
-}
-
 export interface VideoSceneRef {
   /** 作品根目录（绝对路径，主进程校验） */
   workPath: string;

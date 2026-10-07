@@ -7,6 +7,8 @@ export interface FileNode {
   path: string;
   type: 'file' | 'directory';
   children?: FileNode[];
+  /** 资料树：该目录是一场场景视频（分镜状态是内部数据，已隐藏），单击打开画布 */
+  sceneVideo?: boolean;
 }
 
 /** `ne init` 项目结构（core `readProjectLayout`），文件夹没有 .novel-editor/config.json 时为 null */

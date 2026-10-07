@@ -23,6 +23,7 @@ import { CENTER_MIN } from '@/render/app/layoutConstants';
 import { useAppController } from '@/render/hooks/useAppController';
 import { useProjectStructureRules } from '@/render/hooks/useProjectStructureRules';
 import { formatShortcutLabel } from '@/render/utils/appSettings';
+import { isReadOnlyDataFile } from '@/render/utils/internalData';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
@@ -359,6 +360,7 @@ const App: React.FC = () => {
                 inlineDiff={inlineDiff}
                 editorViewRef={editorViewRef}
                 editorAssist={editorAssistApi.editorAssist}
+                readOnlyFile={isReadOnlyDataFile(activeTab, folderPath)}
                 editorHeaderActions={
                   <>
                     <InspirationButton shortcut={appSettings.shortcuts.openInspiration} />

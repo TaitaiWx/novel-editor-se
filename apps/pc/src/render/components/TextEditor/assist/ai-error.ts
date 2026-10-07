@@ -2,6 +2,7 @@
  * AI 错误 → 写作界面上的友好提示（行内续写 widget 与续写面板共用）
  */
 import type { SerializedAIError } from '@/shared/ai';
+import { hideRawData } from '@/render/utils/debugMode';
 
 export interface AIErrorDisplay {
   title: string;
@@ -59,7 +60,8 @@ export function describeAIError(error: SerializedAIError): AIErrorDisplay {
     default:
       return {
         title: '续写失败',
-        hint: error.message || '未知错误',
+        // 厂商返回的原始 JSON 不直接展示（调试模式除外）
+        hint: hideRawData(error.message, '未知错误，请稍后重试'),
         canRetry: true,
         needsSettings: false,
       };

@@ -228,7 +228,7 @@ describe('分镜提示词与解析', () => {
     expect(prompt.prompt).toContain('画面比例 9:16，画面风格：水墨');
     expect(prompt.prompt).toContain('"shotSize"');
     expect(prompt.schema).toHaveProperty('required', ['shots']);
-    expect(prompt.maxTokens).toBe(2400);
+    expect(prompt.maxTokens).toBe(3600);
   });
 
   it('解析代码块中的 JSON 并补全默认值', () => {

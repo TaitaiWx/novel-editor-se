@@ -20,7 +20,6 @@ import {
 import Tooltip from '../../Tooltip';
 import DirectorPanel from './DirectorPanel';
 import FrameOverlay, { type PrevizOverlays } from './FrameOverlay';
-import MotionLibrarySection from './MotionLibrarySection';
 import PlayerBar from './PlayerBar';
 import {
   defaultScriptFor,
@@ -35,7 +34,6 @@ import {
 } from './previzVideo';
 import { ratioOf } from './presets';
 import type { CreatePrevizStage, PrevizLabel, PrevizStageApi } from './types';
-import { useMotionLibrary } from './useMotionLibrary';
 import { usePrevizModels } from './usePrevizModels';
 import { usePrevizPlayback } from './usePrevizPlayback';
 import { usePrevizPointer } from './usePrevizPointer';
@@ -87,9 +85,10 @@ export interface PrevizDialogProps {
   onClose: () => void;
   createStage?: CreatePrevizStage;
   encodeVideo?: PrevizVideoEncoder;
-  /** 作品目录：读取 / 导入作品动作库（资料/动作库/*.bvh） */
-  workPath?: string | null;
-  /** 动作生成服务（文字 → BVH）；目前没有内置实现，配置后 AI 可以请求生成动作 */
+  /**
+   * 动作生成服务（文字 → 关节轨迹）；目前没有内置实现。没有时 AI 写的 motion.generate
+   * 由同一个模型追加一次请求生成轨迹
+   */
   motionProvider?: MotionProvider | null;
 }
 
@@ -130,7 +129,6 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
   onClose,
   createStage = defaultCreateStage,
   encodeVideo = defaultPrevizEncoder,
-  workPath = null,
   motionProvider = null,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -153,7 +151,6 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const models = usePrevizModels();
-  const motions = useMotionLibrary(workPath);
   const playback = usePrevizPlayback(script.durationSec);
   const aspect = ratioOf(aspectRatio);
   const busy = generating || progress !== null;
@@ -226,20 +223,15 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
   // 导出期间舞台由导出流程逐帧驱动，不跟随播放进度
   useEffect(() => {
     if (ready && progress === null) {
-      stageRef.current?.setSample(
-        samplePrevizScript(script, playback.time, { clips: motions.clips })
-      );
+      stageRef.current?.setSample(samplePrevizScript(script, playback.time));
     }
-  }, [motions.clips, playback.time, progress, ready, script]);
+  }, [playback.time, progress, ready, script]);
 
   const generate = async () => {
     playback.pause();
     setGenerating(true);
     setError('');
     try {
-      // 等动作库加载完，AI 才能看到完整的动作列表
-      await motions.whenReady();
-      const library = motions.snapshot();
       const result = await generatePrevizScript(window.electron?.ipcRenderer, {
         action,
         shotTitle: shotLabel,
@@ -250,9 +242,7 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
         cameraNote: shot.camera,
         location: shot.location,
         model: models.selected,
-        motionClips: library.entries.filter((entry) => !entry.error),
         motionProvider,
-        saveMotion: workPath ? motions.saveBvh : undefined,
       });
       setGenerated(result.script);
       setScript(result.script);
@@ -273,7 +263,6 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
     try {
       const output = await renderPrevizVideo(stage, script, aspect, encodeVideo, {
         onProgress: setProgress,
-        clips: motions.clips,
       });
       await onSave({ ...output, script });
       onClose();
@@ -380,9 +369,6 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
               onResetCamera={resetCamera}
               onResetBlocking={resetBlocking}
               disabled={!ready || progress !== null}
-              motionLibrary={
-                <MotionLibrarySection library={motions} canImport={Boolean(workPath)} />
-              }
             />
             <footer className={styles.sideFoot}>
               {error && ready && (

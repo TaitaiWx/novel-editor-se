@@ -2,6 +2,7 @@
  * 由分镜构建样片（animatic）时间轴：每个镜头一个片段，时长取镜头时长；
  * 已生成视频 / 首帧图的镜头用对应素材，没有素材的镜头用占位卡（镜头号 + 景别 + 画面描述）。
  */
+import { NARRATOR } from '../audio';
 import type { Shot, Storyboard } from '../storyboard';
 import { wrapText } from './render';
 import { createCanvasSurface } from './renderer';
@@ -119,7 +120,11 @@ export function buildAnimaticTimeline(
       source: sources.get(shot.id) ?? createPlaceholder(shot, index, width, height),
       durationMs: Math.round(shot.durationSec * 1000),
     };
-    const caption = captions ? (shot.dialogue ?? shot.description) : undefined;
+    // 字幕：对白优先（人物台词带「名字：」，旁白只显示文字），没有对白时显示画面描述
+    const dialogue = (shot.dialogue ?? [])
+      .map((line) => (line.speaker === NARRATOR ? line.text : `${line.speaker}：${line.text}`))
+      .join(' / ');
+    const caption = captions ? dialogue || shot.description : undefined;
     if (caption) clip.caption = caption;
     return clip;
   });

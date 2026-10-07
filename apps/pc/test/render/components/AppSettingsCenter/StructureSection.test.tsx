@@ -48,7 +48,8 @@ describe('设置中心「正文结构」', () => {
     const { mock, state } = mockMain();
     render(<StructureSection folderPath={FOLDER} />);
     await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(3));
-    expect(screen.getByText('.novel-editor/config.json', { exact: false })).toBeTruthy();
+    // 规则文件是内部数据：界面不展示 .novel-editor/ 下的文件名
+    expect(screen.queryByText('.novel-editor/config.json', { exact: false })).toBeNull();
 
     const english = screen.getByRole('switch', { name: 'English 规则' }) as HTMLInputElement;
     const numbered = screen.getByRole('switch', { name: '数字序号 规则' }) as HTMLInputElement;

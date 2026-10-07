@@ -5,6 +5,7 @@ import {
   type CharacterDesign,
   type MediaItem,
 } from '@novel-editor/core/entity-media';
+import { parseCharacterVoice, type CharacterVoice } from '@novel-editor/video';
 import type { Character, CharacterCategory, CharacterCurrentStateItem } from '../types';
 import { fnv1a32 } from './hash';
 
@@ -15,6 +16,8 @@ export interface CharacterAttributesPayload {
   design?: CharacterDesign;
   /** 图集：形象图、三视图、服装、表情、背景 */
   media?: MediaItem[];
+  /** 声音（对白配音）：厂商音色 id、性别、年龄、音色描述，可选 */
+  voice?: CharacterVoice;
   aliases?: string[];
   category?: CharacterCategory;
   highlightColor?: string;
@@ -107,6 +110,7 @@ export function parseCharacterAttributes(
   avatar?: string;
   design: CharacterDesign;
   media: MediaItem[];
+  voice?: CharacterVoice;
   aliases: string[];
   category: CharacterCategory;
   highlightColor: string;
@@ -119,6 +123,7 @@ export function parseCharacterAttributes(
       avatar: typeof parsed?.avatar === 'string' ? parsed.avatar : undefined,
       design: parseCharacterDesign(parsed?.design),
       media: parseMediaItems(parsed?.media),
+      voice: parseCharacterVoice(parsed?.voice),
       aliases: normalizeCharacterAliases(parsed?.aliases),
       category: normalizeCharacterCategory(parsed?.category, role),
       highlightColor: normalizeCharacterHighlightColor(parsed?.highlightColor),
@@ -147,10 +152,12 @@ export function stringifyCharacterAttributes(
 ): string {
   const design = parseCharacterDesign(attributes.design);
   const media = parseMediaItems(attributes.media);
+  const voice = parseCharacterVoice(attributes.voice);
   return JSON.stringify({
     ...(attributes.avatar ? { avatar: attributes.avatar } : {}),
     ...(isDesignEmpty(design) ? {} : { design }),
     ...(media.length ? { media } : {}),
+    ...(voice ? { voice } : {}),
     aliases: normalizeCharacterAliases(attributes.aliases),
     category: normalizeCharacterCategory(attributes.category, role),
     highlightColor: normalizeCharacterHighlightColor(attributes.highlightColor),
@@ -183,6 +190,7 @@ export function mapCharacterRows(
       avatar: attrs.avatar || undefined,
       design: attrs.design,
       media: attrs.media,
+      ...(attrs.voice ? { voice: attrs.voice } : {}),
       aliases: attrs.aliases,
       highlightColor: attrs.highlightColor,
       highlightFirstMentionOnly: attrs.highlightFirstMentionOnly,

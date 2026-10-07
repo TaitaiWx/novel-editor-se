@@ -26,6 +26,8 @@ export interface FileNode {
   type: 'file' | 'directory';
   size?: number;
   children?: FileNode[];
+  /** GUI 资料树：该目录是一场场景视频（内部分镜状态已隐藏，点击打开画布），见 internal-data.ts */
+  sceneVideo?: boolean;
 }
 
 /** 文件树默认排除的条目名称 */

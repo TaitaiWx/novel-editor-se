@@ -11,9 +11,10 @@ import type {
   AIIpcResult,
   AIProviderInfo,
   AIProviderUpdate,
-  MotionLibraryImportResult,
-  MotionLibraryListResult,
-  MotionLibraryRef,
+  SceneAudioImportPayload,
+  SceneAudioImportResult,
+  SpeechSynthesizePayload,
+  SpeechSynthesizeResult,
   VideoSceneAnimaticPayload,
   VideoSceneFileRequest,
   VideoSceneLoadResult,
@@ -26,16 +27,16 @@ import type {
 } from '../../shared/ai';
 
 export type {
+  SceneAudioImportPayload,
+  SceneAudioImportResult,
+  SpeechSynthesizePayload,
+  SpeechSynthesizeResult,
   AICompletePayload,
   AICompleteResult,
   AIIpcResult,
   AIProviderInfo,
   AIProviderUpdate,
   AIStreamEvent,
-  MotionLibraryEntry,
-  MotionLibraryImportResult,
-  MotionLibraryListResult,
-  MotionLibraryRef,
   SerializedAIError,
   VideoSceneAnimaticPayload,
   VideoSceneFileRequest,
@@ -88,21 +89,6 @@ export interface AIInvokeOverloads {
     channel: 'video-settings-set',
     update: Partial<VideoSettingsInfo>
   ): Promise<AIIpcResult<VideoSettingsInfo>>;
-  /** 作品动作库：列出 <作品>/资料/动作库/*.bvh */
-  invoke(
-    channel: 'motion-library-list',
-    ref: MotionLibraryRef
-  ): Promise<AIIpcResult<MotionLibraryListResult>>;
-  /** 读取动作库里的一个 .bvh（≤ 5MB） */
-  invoke(
-    channel: 'motion-library-read',
-    request: MotionLibraryRef & { fileName: string }
-  ): Promise<AIIpcResult<string>>;
-  /** 导入 / 保存 .bvh 到动作库（同名自动加序号，不覆盖） */
-  invoke(
-    channel: 'motion-library-import',
-    request: MotionLibraryRef & { fileName: string; data: string }
-  ): Promise<AIIpcResult<MotionLibraryImportResult>>;
   invoke(
     channel: 'video-scene-load',
     scene: VideoSceneRef
@@ -134,4 +120,19 @@ export interface AIInvokeOverloads {
       data: Uint8Array;
     }
   ): Promise<AIIpcResult<{ fileName: string; relativePath: string }>>;
+  /** 对白配音：写入场景目录 镜头N-台词-<id>.mp3|wav（密钥只在主进程） */
+  invoke(
+    channel: 'ai-speech-synthesize',
+    payload: SpeechSynthesizePayload
+  ): Promise<AIIpcResult<SpeechSynthesizeResult>>;
+  /** 选择本地音频复制进作品（资料/音乐/ 或 资料/音效/），渲染进程不能指定源路径 */
+  invoke(
+    channel: 'scene-audio-import',
+    payload: SceneAudioImportPayload
+  ): Promise<AIIpcResult<SceneAudioImportResult>>;
+  /** 读取作品内 资料/音乐/ 或 资料/音效/ 下的音频（试听 / 样片混音） */
+  invoke(
+    channel: 'scene-audio-read',
+    payload: { workPath: string; relativePath: string }
+  ): Promise<AIIpcResult<Uint8Array>>;
 }

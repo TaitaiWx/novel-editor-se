@@ -221,3 +221,28 @@
     object-fit: contain;
   }
 }
+
+// 声音标记（台词数 / 音效数 / 配乐）
+.audioBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.audioBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1;
+  color: #c9d8e6;
+  background: rgba(86, 156, 214, 0.14);
+  border: 1px solid rgba(86, 156, 214, 0.28);
+
+  .audioBadges & {
+    margin-left: 0;
+  }
+}

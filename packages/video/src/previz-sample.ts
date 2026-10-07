@@ -1,7 +1,7 @@
 /**
  * 3D 预演脚本的插值、默认脚本与微调（纯函数）。
  *
- * - samplePrevizScript(script, t, { clips })：任意时刻的人物站位 / 朝向 / 姿势混合 / 步态相位 / 动作片段 / 视线 /
+ * - samplePrevizScript(script, t)：任意时刻的人物站位 / 朝向 / 姿势混合 / 步态相位 / 动作（AI 关节轨迹）/ 视线 /
  *   手部目标、机位（含跟随与绝对机位）、道具（含关键帧）与时段。
  *   引擎（渲染进程 three.js）逐帧调用它，播放与导出视频都走同一个函数，因此结果确定、可测试
  * - defaultPrevizScript：没有 AI 时的默认脚本（人物站成一排 + 缓慢推近）
@@ -29,7 +29,7 @@ import {
   type PrevizScript,
   type PrevizShotSize,
 } from './previz';
-import type { MotionBlend, MotionLibrary } from './motion/clip';
+import type { MotionBlend } from './motion/tracks';
 import {
   addJointAngles,
   applyEase,
@@ -68,7 +68,7 @@ export interface PrevizFigureSample {
   /** 关节微调（度，已插值） */
   joints: PrevizJointAngles;
   gait: PrevizGait;
-  /** 动作片段（关节局部旋转 + 权重；没有引用片段或片段未加载时省略） */
+  /** 动作（关节局部旋转 + 权重；这一段没有关节轨迹时省略） */
   motion?: MotionBlend;
   /** 手部目标（世界坐标 + 权重） */
   hands?: FigureHandsSample;
@@ -97,11 +97,6 @@ export interface PrevizSample {
   figures: PrevizFigureSample[];
   camera: PrevizCameraSample;
   props: PrevizPropSample[];
-}
-
-export interface PrevizSampleOptions {
-  /** 动作库（内置 + 作品动作库）：关键帧引用的片段从这里取，取不到时只用姿势 */
-  clips?: MotionLibrary;
 }
 
 /** 一个完整步态周期（左右各一步）走过的距离（米） */
@@ -161,13 +156,9 @@ const gaitWeight = (pose: PrevizPoseId, kind: 'walk' | 'run') => (pose === kind 
 
 /**
  * 人物在 t 时刻的状态：位置默认匀速（像走路一样不顿挫，关键帧 ease 可改），朝向 / 姿势 / 关节平滑过渡；
- * 关键帧引用的动作片段按 clips 采样并在关键帧之间交叉淡化。视线需要其他人物位置，由 samplePrevizScript 补上。
+ * 关键帧上的动作（关节轨迹）平滑采样并在关键帧之间交叉淡化。视线需要其他人物位置，由 samplePrevizScript 补上。
  */
-export function sampleFigure(
-  track: PrevizFigureTrack,
-  t: number,
-  options: PrevizSampleOptions = {}
-): PrevizFigureSample {
+export function sampleFigure(track: PrevizFigureTrack, t: number): PrevizFigureSample {
   const [a, b, s, index] = segment(track.keys, t);
   const eased = easeInOut(s);
   const moved = applyEase(a.ease, s, 'linear');
@@ -196,7 +187,7 @@ export function sampleFigure(
     joints: blendJoints(a.joints, b.joints, eased),
     gait: { phase: (travelled / stride) * Math.PI * 2, walk, run },
   };
-  const motion = yieldLegsToGait(sampleFigureMotion(a, b, t, options.clips), walk + run);
+  const motion = yieldLegsToGait(sampleFigureMotion(a, b, t), walk + run);
   if (motion) sample.motion = motion;
   const hands = sampleHands(a, b, eased);
   if (hands) sample.hands = hands;
@@ -285,13 +276,9 @@ export function sampleCamera(
 }
 
 /** 脚本在 t 秒时的完整状态（t 夹在 [0, durationSec]） */
-export function samplePrevizScript(
-  script: PrevizScript,
-  t: number,
-  options: PrevizSampleOptions = {}
-): PrevizSample {
+export function samplePrevizScript(script: PrevizScript, t: number): PrevizSample {
   const time = clampNumber(Number.isFinite(t) ? t : 0, 0, script.durationSec);
-  const figures = script.figures.map((track) => sampleFigure(track, time, options));
+  const figures = script.figures.map((track) => sampleFigure(track, time));
   script.figures.forEach((track, index) => applyGaze(track, time, figures[index], figures));
   return {
     t: time,

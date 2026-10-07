@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import type { EditorViewportSnapshot } from '@/render/components/TextEditor';
 import type { FileNode } from '@/render/types';
 import type { PersistedEditorSession } from '@/render/app/types';
@@ -10,11 +10,13 @@ import {
   replacePathPrefix,
 } from '@/render/app/fileTreeUtils';
 import { parseEditorSessionSnapshot, sameViewportSnapshot } from '@/render/app/editorSession';
+import { isInternalDataFile } from '@/render/utils/internalData';
 import type { WorkspaceState } from './state/useWorkspaceState';
 import type { TabsState } from './state/useTabsState';
 import type { EditorState } from './state/useEditorState';
 
 export type UseEditorSessionContext = Pick<WorkspaceState, 'files' | 'filesRef'> &
+  Partial<Pick<WorkspaceState, 'folderPath'>> &
   Pick<
     TabsState,
     'activeTab' | 'activeTabRef' | 'openTabs' | 'openTabsRef' | 'setActiveTab' | 'setOpenTabs'
@@ -58,8 +60,12 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
     [editorViewportSnapshotsRef, setInitialViewportSnapshots]
   );
 
+  // 内部数据（分镜状态、成长档案 JSON…）的标签不保存、不恢复（旧会话里可能还留着）
+  const folderPathRef = useRef(ctx.folderPath ?? null);
+  folderPathRef.current = ctx.folderPath ?? null;
   const isPersistableTabPath = useCallback((path: string | null, nodes: FileNode[]): boolean => {
     if (!path || isUntitledTabPath(path)) return false;
+    if (isInternalDataFile(path, folderPathRef.current)) return false;
     if (isChangelogTabPath(path)) return true;
     const node = findNodeInTree(nodes, path);
     return node?.type === 'file';

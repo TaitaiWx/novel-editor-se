@@ -74,3 +74,74 @@ export function stepPlaybackRate(current: number, direction: 1 | -1): number {
 export function formatRate(rate: number): string {
   return rate === 1 ? '正常' : `${rate}x`;
 }
+
+/** 键盘：音量每次调整的幅度 */
+export const VOLUME_STEP = 0.1;
+/** 键盘：前进 / 后退的秒数（与进度条键盘操作一致） */
+export const KEY_SEEK_SECONDS = 5;
+
+/** 执行按键动作需要的播放器能力（由播放器组件提供，便于单独测试） */
+export interface KeyActionContext {
+  show: {
+    fullscreen?: boolean;
+    screenshot?: boolean;
+    record?: boolean;
+    speed?: boolean;
+    captions?: boolean;
+    pip?: boolean;
+  };
+  hasSound: boolean;
+  hasCaptions: boolean;
+  togglePlay: () => void;
+  seekBy: (deltaSeconds: number) => void;
+  changeVolume: (delta: number) => void;
+  toggleMute: () => void;
+  toggleFullscreen: () => void;
+  screenshot: () => void;
+  toggleRecord: () => void;
+  stepSpeed: (direction: 1 | -1) => void;
+  toggleCaptions: () => void;
+  togglePip: () => void;
+}
+
+/**
+ * 执行一个按键动作；对应能力不可用（没有声音、按钮被隐藏、没有字幕等）时返回 false，
+ * 调用方据此不拦截按键
+ */
+export function runKeyAction(action: PlayerKeyAction, ctx: KeyActionContext): boolean {
+  const when = (enabled: boolean | undefined, run: () => void): boolean => {
+    if (!enabled) return false;
+    run();
+    return true;
+  };
+  switch (action) {
+    case 'toggle-play':
+      return when(true, ctx.togglePlay);
+    case 'seek-back':
+      return when(true, () => ctx.seekBy(-KEY_SEEK_SECONDS));
+    case 'seek-forward':
+      return when(true, () => ctx.seekBy(KEY_SEEK_SECONDS));
+    case 'volume-up':
+      return when(ctx.hasSound, () => ctx.changeVolume(VOLUME_STEP));
+    case 'volume-down':
+      return when(ctx.hasSound, () => ctx.changeVolume(-VOLUME_STEP));
+    case 'toggle-mute':
+      return when(ctx.hasSound, ctx.toggleMute);
+    case 'toggle-fullscreen':
+      return when(ctx.show.fullscreen, ctx.toggleFullscreen);
+    case 'screenshot':
+      return when(ctx.show.screenshot, ctx.screenshot);
+    case 'toggle-record':
+      return when(ctx.show.record, ctx.toggleRecord);
+    case 'speed-down':
+      return when(ctx.show.speed, () => ctx.stepSpeed(-1));
+    case 'speed-up':
+      return when(ctx.show.speed, () => ctx.stepSpeed(1));
+    case 'toggle-captions':
+      return when(ctx.show.captions && ctx.hasCaptions, ctx.toggleCaptions);
+    case 'toggle-pip':
+      return when(ctx.show.pip, ctx.togglePip);
+    default:
+      return false;
+  }
+}

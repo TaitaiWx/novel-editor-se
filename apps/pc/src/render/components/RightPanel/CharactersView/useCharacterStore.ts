@@ -1,4 +1,5 @@
 import type { CharacterDesign, MediaItem } from '@novel-editor/core/entity-media';
+import type { CharacterVoice } from '@novel-editor/video';
 import { useCallback, useEffect, useState } from 'react';
 import type { Character, CharacterCategory, CharacterCurrentStateItem } from '../types';
 import { mapCharacterRows, stringifyCharacterAttributes } from '../utils';
@@ -94,6 +95,7 @@ export function useCharacterStore({
         avatar?: string;
         design?: CharacterDesign;
         media?: MediaItem[];
+        voice?: CharacterVoice;
       }
     ) => {
       const ipc = window.electron?.ipcRenderer;
@@ -108,6 +110,7 @@ export function useCharacterStore({
             avatar: patch.avatar ?? target.avatar,
             design: patch.design ?? target.design,
             media: patch.media ?? target.media,
+            voice: patch.voice ?? target.voice,
             aliases: target.aliases,
             category: patch.category ?? target.category,
             highlightColor: patch.highlightColor ?? target.highlightColor,

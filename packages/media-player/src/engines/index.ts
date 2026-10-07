@@ -1,18 +1,22 @@
 /**
  * 引擎选择：按顺序找第一个声明处理该格式的引擎；都不处理时，浏览器能原生播放就交给原生，否则报不支持。
- * 默认顺序：hls.js → mpegts.js → 原生。使用方可通过 `engines` 属性替换或追加（例如接入 dash.js）。
+ * 默认顺序：hls.js → dash.js → mpegts.js → 原生。使用方可通过 `engines` 属性替换或追加
+ * （例如 WebRTC / WHEP 等自定义引擎）。
  */
+import { createDashEngine } from './dash';
 import { createFlvEngine } from './flv';
 import { createHlsEngine } from './hls';
 import { canPlayNatively, nativeEngine, unsupportedError } from './native';
-import type { ResolvedSourceType } from './detect';
+import type { ResolvedSourceType } from './formats';
 import type { MediaEngineFactory } from './types';
 
 let cachedDefaults: MediaEngineFactory[] | null = null;
 
-/** 默认引擎（hls.js、mpegts.js 只在用到时才加载） */
+/** 默认引擎（hls.js、dash.js、mpegts.js 只在用到时才加载） */
 export function defaultEngines(): MediaEngineFactory[] {
-  if (!cachedDefaults) cachedDefaults = [createHlsEngine(), createFlvEngine(), nativeEngine];
+  if (!cachedDefaults) {
+    cachedDefaults = [createHlsEngine(), createDashEngine(), createFlvEngine(), nativeEngine];
+  }
   return cachedDefaults;
 }
 

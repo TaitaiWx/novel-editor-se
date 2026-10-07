@@ -10,13 +10,67 @@
   @include ui.card;
 }
 
-.title {
-  @include ui.section-title;
+// ─── 分区 ───
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sectionToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  cursor: pointer;
+
+  svg {
+    color: ui.$muted;
+  }
+
+  &:focus-visible {
+    outline: 1px solid rgba(ui.$info-rgb, 0.5);
+    outline-offset: 2px;
+  }
+}
+
+.sectionTitle {
+  font-weight: 600;
+}
+
+.sectionActions {
+  display: flex;
+  gap: 6px;
+}
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .meta {
+  font-size: 11px;
   font-weight: 400;
-  cursor: help;
+  color: ui.$muted;
+}
+
+.errorBadge {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  color: ui.$danger-fg;
+  background: rgba(ui.$danger, 0.14);
 }
 
 .empty {
@@ -24,76 +78,271 @@
   text-align: left;
 }
 
-.rule {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+.emptyTitle {
+  @include ui.section-title;
+  margin-bottom: 4px;
 }
 
-.ruleText {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: ui.$fg;
-}
-
-.ruleMeta {
-  font-size: 10px;
+.hint {
+  font-size: 11px;
+  line-height: 16px;
   color: ui.$muted;
 }
 
-.remove {
-  border: none;
-  background: transparent;
-  color: ui.$disabled;
-  cursor: pointer;
+// ─── 条目 ───
 
-  &:hover:not(:disabled) {
-    color: ui.$danger-fg;
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid ui.$line;
+}
+
+.itemRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.itemActions {
+  display: flex;
+  gap: 2px;
+  padding-top: 16px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.narrow {
+  flex: 0 0 96px;
+  width: 96px;
+}
+
+.keyField {
+  flex: 0 0 110px;
+  width: 110px;
+
+  input[readonly] {
+    color: ui.$muted;
+    cursor: default;
   }
 }
 
-.row {
+.groupField {
+  flex: 0 0 150px;
+  width: 150px;
+}
+
+.field {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 10px;
+  line-height: 13px;
+  color: ui.$muted;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fieldError,
+.fieldWarning {
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.fieldError {
+  color: ui.$danger-fg;
+}
+
+.fieldWarning {
+  color: ui.$warn;
+}
+
+.numberGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px 8px;
+}
+
+.description {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 11px;
 }
 
 .input {
   @include ui.input;
-  flex: 1;
 }
+
+.invalid {
+  border-color: rgba(ui.$danger, 0.55);
+}
+
+.subBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subTitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.pairRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pairText {
+  font-size: 11px;
+  color: ui.$muted;
+  white-space: nowrap;
+}
+
+.pairNumber {
+  width: 92px;
+}
+
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px dashed ui.$line-strong;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip {
+  @include ui.chip;
+  padding-right: 2px;
+
+  button {
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+  }
+}
+
+.addRow {
+  display: flex;
+  gap: 6px;
+}
+
+// ─── 按钮 ───
 
 .button {
   @include ui.button;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
 }
 
 .primary {
   @include ui.button-primary;
 }
 
-.limits {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 6px;
+.danger {
+  @include ui.button;
+  color: ui.$danger-fg;
+  border-color: rgba(ui.$danger, 0.35);
+
+  &:hover:not(:disabled) {
+    color: ui.$danger-fg;
+    background: rgba(ui.$danger, 0.12);
+  }
 }
 
-.limit {
-  display: flex;
+.linkButton {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: ui.$info;
   font-size: 11px;
-  color: ui.$muted;
-  cursor: help;
+  cursor: pointer;
 
-  input {
-    flex: 0 0 52px;
-    width: 52px;
-    text-align: right;
+  &:hover:not(:disabled) {
+    color: ui.$info-fg;
+  }
+
+  &:disabled {
+    color: ui.$disabled;
+    cursor: not-allowed;
+  }
+}
+
+.icon,
+.iconDanger {
+  @include ui.icon-button;
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+}
+
+.iconDanger:hover:not(:disabled) {
+  color: ui.$danger-fg;
+}
+
+.segmented {
+  @include ui.segmented;
+  align-self: flex-end;
+  margin-top: 16px;
+}
+
+.segment {
+  @include ui.segment;
+
+  &[aria-checked='true'] {
+    background: rgba(255, 255, 255, 0.08);
+    color: ui.$fg;
   }
 }
 
@@ -102,6 +351,20 @@
   justify-content: flex-end;
   gap: 6px;
   margin-top: 8px;
+}
+
+// ─── 经验曲线 ───
+
+.curveTable {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 6px 8px;
+}
+
+.curveCell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .curve {
@@ -120,6 +383,45 @@
 
 .curveTotal {
   color: ui.$muted;
+}
+
+// ─── 未保存 / 确认 / 错误 ───
+
+.unsavedBar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--ui-bg-elevated, #252526);
+  border: 1px solid rgba(ui.$info-rgb, 0.3);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.unsavedText {
+  flex: 1;
+  font-size: 12px;
+  color: ui.$info-fg;
+}
+
+.unsavedErrors {
+  color: ui.$danger-fg;
+}
+
+.confirm {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(ui.$danger, 0.08);
+  border: 1px solid rgba(ui.$danger, 0.25);
+}
+
+.confirmText {
+  font-size: 12px;
+  line-height: 18px;
+  color: ui.$fg;
 }
 
 .toggle {
@@ -156,4 +458,9 @@
   color: ui.$danger-fg;
   background: rgba(ui.$danger, 0.08);
   border: 1px solid rgba(ui.$danger, 0.2);
+}
+
+// 前置条件 / 奖励 / 校验参数行里的下拉不撑满整行
+.pairRow > .grow {
+  flex: 0 1 240px;
 }

@@ -8,12 +8,16 @@
 import { isSafeMediaPath } from '@novel-editor/core/entity-media';
 import {
   ASPECT_RATIOS,
+  DEFAULT_VOICE_LANGUAGE,
   STORYBOARD_MAX_SHOTS,
+  createSceneAudio,
+  parseSceneAudio,
   parseShotFileName,
   validatePrevizScript,
   validateStoryboard,
   type AspectRatio,
   type PrevizScript,
+  type SceneAudio,
   type Shot,
   type Storyboard,
 } from '@novel-editor/video';
@@ -43,6 +47,8 @@ export interface SceneVideoState {
   useAvatarReference: boolean;
   /** 生成与画面同步的声音（只对支持的视频服务生效，例如 Seedance；默认开启，成片保留声音） */
   withAudio: boolean;
+  /** 场景声音：配音语言、背景音乐、环境音、对白时压低配乐（镜头的对白 / 音效在 storyboard.shots 里） */
+  audio: SceneAudio;
   storyboard: Storyboard;
   nextShotNumber: number;
   selectedShotIds: string[];
@@ -81,6 +87,8 @@ export interface CreateSceneStateInput {
   sourceText: string;
   location?: string;
   characters?: string[];
+  /** 配音语言（设置中心的默认值），缺省 zh-CN */
+  language?: string;
 }
 
 export function createSceneVideoState(input: CreateSceneStateInput, now: Date): SceneVideoState {
@@ -98,6 +106,7 @@ export function createSceneVideoState(input: CreateSceneStateInput, now: Date): 
     providerId: null,
     useAvatarReference: false,
     withAudio: true,
+    audio: createSceneAudio(input.language ?? DEFAULT_VOICE_LANGUAGE),
     storyboard: { version: 1, aspectRatio: '16:9', shots: [] },
     nextShotNumber: 1,
     selectedShotIds: [],
@@ -179,9 +188,12 @@ export function renumberShots(
 
 /**
  * 读取 分镜.json：结构不对时返回 null（当作没有保存过），字段缺失时补默认值；
- * 分镜部分复用 validateStoryboard，id 不是 shot-<N> 的镜头重新编号
+ * 分镜部分复用 validateStoryboard（同时把旧版自由文本台词迁移为一句对白），id 不是 shot-<N> 的镜头重新编号
  */
-export function parseSceneVideoState(raw: unknown): SceneVideoState | null {
+export function parseSceneVideoState(
+  raw: unknown,
+  defaultLanguage: string = DEFAULT_VOICE_LANGUAGE
+): SceneVideoState | null {
   if (!isRecord(raw) || raw.schemaVersion !== SCENE_VIDEO_STATE_SCHEMA) return null;
   const chapter = str(raw.chapter).trim();
   const scene = str(raw.scene).trim();
@@ -246,6 +258,8 @@ export function parseSceneVideoState(raw: unknown): SceneVideoState | null {
     providerId: typeof raw.providerId === 'string' && raw.providerId ? raw.providerId : null,
     useAvatarReference: raw.useAvatarReference === true,
     withAudio: raw.withAudio !== false,
+    // 旧的 分镜.json 没有 audio：用默认语言、无配乐；旧的自由文本台词已由 validateStoryboard 迁移为对白
+    audio: parseSceneAudio(raw.audio, defaultLanguage),
     storyboard: { version: 1, aspectRatio: ratio, shots },
     nextShotNumber,
     selectedShotIds: Array.isArray(raw.selectedShotIds)

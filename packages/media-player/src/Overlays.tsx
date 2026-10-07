@@ -1,8 +1,8 @@
 /**
- * 画面上的浮层：加载中、错误（可重试）、短暂提示（截图 / 录制结果）、录制中标记。
+ * 画面上的浮层：加载中、错误（可重试）、短暂提示（截图 / 录制结果）、录制中标记、开启声音、顶部标题栏。
  */
 import React from 'react';
-import { VscLoading, VscRefresh, VscWarning } from 'react-icons/vsc';
+import { VscLoading, VscRefresh, VscUnmute, VscWarning } from 'react-icons/vsc';
 import { formatTime } from './format';
 import styles from './styles.module.scss';
 
@@ -50,5 +50,43 @@ export const RecordingBadge: React.FC<{ elapsed: number }> = ({ elapsed }) => (
   <div className={styles.recBadge} aria-hidden="true">
     <span className={styles.recDot} />
     REC {formatTime(elapsed)}
+  </div>
+);
+
+/** 自动播放静音起播时的「开启声音」（小卡片只有图标） */
+export const UnmuteButton: React.FC<{ compact: boolean; onClick: () => void }> = ({
+  compact,
+  onClick,
+}) => (
+  <button
+    type="button"
+    className={compact ? `${styles.unmute} ${styles.unmuteCompact}` : styles.unmute}
+    aria-label="开启声音"
+    title={compact ? '开启声音' : undefined}
+    onClick={(event) => {
+      event.stopPropagation();
+      onClick();
+    }}
+  >
+    <VscUnmute />
+    {!compact && <span>开启声音</span>}
+  </button>
+);
+
+/** 顶部：标题 + 额外操作（与控制条一起浮现） */
+export const TopBar: React.FC<{ title: string; showTitle: boolean; actions?: React.ReactNode }> = ({
+  title,
+  showTitle,
+  actions,
+}) => (
+  <div className={styles.top}>
+    {showTitle ? (
+      <span className={styles.title} title={title}>
+        {title}
+      </span>
+    ) : (
+      <span />
+    )}
+    {actions && <div className={styles.actions}>{actions}</div>}
   </div>
 );

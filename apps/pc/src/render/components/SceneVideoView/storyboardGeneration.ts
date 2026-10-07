@@ -56,6 +56,8 @@ export async function generateStoryboard(
     location: state.location || undefined,
     style: state.style || undefined,
     aspectRatio: state.aspectRatio as AspectRatio,
+    // 对白按这一场的配音语言提取（AI 同时给出说话人与可选音效）
+    language: state.audio?.language,
   });
   try {
     const result = await ipc.invoke('ai-complete', {

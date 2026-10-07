@@ -308,7 +308,7 @@ describe('grok', () => {
 });
 
 describe('注册表', () => {
-  it('内置 Provider（文本 / 视频 / 图片），按类型列出', () => {
+  it('内置 Provider（文本 / 视频 / 图片 / 配音），按类型列出', () => {
     const registry = createDefaultRegistry();
     expect(registry.list().map((item) => item.id)).toEqual([
       'openai-compatible',
@@ -318,6 +318,8 @@ describe('注册表', () => {
       'seedream-image',
       'minimax-image',
       'grok-image',
+      'openai-speech',
+      'minimax-speech',
     ]);
     expect(registry.list('image').map((item) => item.id)).toEqual([
       'seedream-image',
@@ -327,6 +329,10 @@ describe('注册表', () => {
     expect(registry.list('video').map((item) => item.id)).toEqual([
       'minimax-video',
       'seedance-video',
+    ]);
+    expect(registry.list('speech').map((item) => item.id)).toEqual([
+      'openai-speech',
+      'minimax-speech',
     ]);
     expect(registry.get('grok')?.envKey).toBe('NOVEL_EDITOR_GROK_API_KEY');
     expect(providerEnvKey('minimax-video')).toBe('NOVEL_EDITOR_MINIMAX_VIDEO_API_KEY');

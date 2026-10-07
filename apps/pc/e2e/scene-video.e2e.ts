@@ -13,11 +13,10 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { captureForReview, ensureSidebarOpen, openChapter, setupAppSuite } from './support/suite';
 import { createTinyMp4 } from './support/mp4-fixture';
-import { createWaveBvh } from './support/bvh-fixture';
 import { PREVIZ_PROMPT_TAG } from '@novel-editor/ai/prompts';
 import { comboboxSelector, selectedOptionText } from './support/select';
 
@@ -27,9 +26,6 @@ const API_KEY = 'e2e-scene-video-key';
 const SCENE = '第一场 清晨的青石镇';
 const CHAPTER_FILE = ['novels', '星河旅人', '第一卷-离乡', '001-启程.md'];
 const SCENE_DIR = ['novels', '星河旅人', '资料', '视频', '001-启程', SCENE];
-/** 作品动作库：预演前放进一个外部 BVH，mock 文本服务的预演脚本引用它 */
-const MOTION_DIR = ['novels', '星河旅人', '资料', '动作库'];
-const MOTION_CLIP = 'lib:wave-test';
 const STORYBOARD = {
   shots: [
     {
@@ -44,7 +40,21 @@ const STORYBOARD = {
   ],
 };
 
-/** 3D 预演脚本：林舟从左走到中间回头，镜头从全景推到中景 */
+/** AI 实时写的关节轨迹：林舟举起右手挥手（循环） */
+const WAVE_TRACKS = {
+  rightUpperArm: [
+    [0, 0, 0, -150],
+    [0.25, 0, 0, -160],
+    [0.5, 0, 0, -150],
+  ],
+  rightForearm: [
+    [0, -20, 0, 25],
+    [0.25, -20, 0, -25],
+    [0.5, -20, 0, 25],
+  ],
+};
+
+/** 3D 预演脚本：林舟从左走到中间回头挥手，镜头从全景推到中景 */
 const PREVIZ_SCRIPT = {
   durationSec: 2,
   mood: 'dusk',
@@ -54,8 +64,15 @@ const PREVIZ_SCRIPT = {
       name: '林舟',
       keys: [
         { t: 0, x: -1.5, z: 0, facing: 90, pose: 'walk' },
-        { t: 1.5, x: 0, z: 0, facing: 90, pose: 'walk' },
-        { t: 2, x: 0, z: 0, facing: 0, pose: 'look-back', motion: { clip: MOTION_CLIP } },
+        {
+          t: 1.5,
+          x: 0,
+          z: 0,
+          facing: 90,
+          pose: 'walk',
+          motion: { tracks: WAVE_TRACKS, loop: true },
+        },
+        { t: 2, x: 0, z: 0, facing: 0, pose: 'look-back' },
       ],
     },
   ],
@@ -420,9 +437,7 @@ describe('场景视频', () => {
     await page.waitForGone('[data-testid="reference-mini"]');
 
     // 首帧：3D 预演 → 用 mock 文本服务生成预演脚本 → 播放 → 保存预演视频（镜头1-预演.mp4 + 第一帧 镜头1-预演.png）
-    // 预演脚本引用作品动作库里的外部 BVH（资料/动作库/wave-test.bvh）
-    await mkdir(fixture.resolve(...MOTION_DIR), { recursive: true });
-    await writeFile(fixture.resolve(...MOTION_DIR, 'wave-test.bvh'), createWaveBvh());
+    // 动作由 AI 实时写成关节轨迹（mock 文本服务的脚本里林舟挥手），不需要任何动作文件
     await page.waitForTarget('[data-testid="keyframe-section"]');
     await page.click({ text: '3D 预演', within: '[data-testid="keyframe-section"]', exact: true });
     await page.waitForTarget('[data-testid="previz-dialog"]');
@@ -467,8 +482,11 @@ describe('场景视频', () => {
     );
     const previzRequests = requests.filter((item) => isPrevizRequest(item.body));
     expect(previzRequests.length).toBe(before + 1);
-    // 提示词列出了动作库里的片段 id
-    expect(JSON.stringify(previzRequests[previzRequests.length - 1].body)).toContain(MOTION_CLIP);
+    // 提示词列出了木偶关节与轨迹格式，不再有动作库 / BVH
+    const previzBody = JSON.stringify(previzRequests[previzRequests.length - 1].body);
+    expect(previzBody).toContain('rightUpperArm');
+    expect(previzBody).toContain('motion.tracks');
+    expect(previzBody).not.toMatch(/bvh|lib:|builtin:/i);
     // 生成后自动播放：进度在走
     await page.waitFor(
       () => {
@@ -527,13 +545,18 @@ describe('场景视频', () => {
         };
         const scripts = JSON.stringify(state.previzScripts ?? {});
         return (
-          scripts.includes(`"clip":"${MOTION_CLIP}"`) &&
+          scripts.includes(
+            `"tracks":{"rightUpperArm":${JSON.stringify(WAVE_TRACKS.rightUpperArm)}`
+          ) &&
           Object.values(state.previz ?? {}).some((value) => value.endsWith('镜头1-预演.png')) &&
           Object.values(state.previzVideo ?? {}).some((value) => /-\S*\.(mp4|webm)$/.test(value)) &&
           Object.values(state.previzScripts ?? {}).some((value) => value.durationSec === 2)
         );
       },
-      { timeout: 10_000, message: '分镜.json 记录了预演第一帧、预演视频与脚本（含动作库片段引用）' }
+      {
+        timeout: 10_000,
+        message: '分镜.json 记录了预演第一帧、预演视频与脚本（含 AI 写的关节轨迹）',
+      }
     );
   }, 120_000);
 });

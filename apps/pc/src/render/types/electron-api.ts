@@ -139,6 +139,8 @@ export interface StoryIdeaOutputRow {
 
 export interface ElectronAPI {
   getLastDroppedPaths(): string[];
+  /** 开发者调试模式（环境变量 NOVEL_EDITOR_DEBUG=1）：才显示原始提示词 / JSON 等内部数据 */
+  debug?: boolean;
   // 成长记录器通道的类型见 ./growth-api.ts
   ipcRenderer: GrowthInvokeOverloads &
     AIInvokeOverloads & {

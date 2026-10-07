@@ -1,9 +1,11 @@
 /**
  * FLV / MPEG-TS 引擎：mpegts.js（bilibili flv.js 的维护版，可选依赖，用到时才动态加载）。
- * 通过 MSE 把 FLV / TS 转封装为浏览器能播的 fMP4，支持点播与直播（`isLive`）。
+ * 通过 MSE 把 FLV / TS 转封装为浏览器能播的 fMP4，支持点播与直播（`isLive`：HTTP-FLV / WebSocket-FLV，
+ * ws / wss 地址默认按直播处理）。
  */
 import { loadOptionalModule, type ModuleLoader } from './optional-module';
 import { unsupportedError } from './native';
+import { isWebSocketUrl } from './formats';
 import { PlayerError, type MediaEngine, type MediaEngineFactory } from './types';
 
 /** 本包用到的 mpegts.js 最小接口 */
@@ -105,7 +107,11 @@ export function createFlvEngine(options: FlvEngineOptions = {}): MediaEngineFact
       return attachMpegts(
         mpegts,
         video,
-        { url, type: type === 'flv' ? 'flv' : 'mpegts', isLive: source.isLive },
+        {
+          url,
+          type: type === 'flv' ? 'flv' : 'mpegts',
+          isLive: source.isLive ?? (isWebSocketUrl(url) || undefined),
+        },
         onError,
         options.config
       );

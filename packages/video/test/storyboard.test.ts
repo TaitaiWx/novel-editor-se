@@ -31,7 +31,7 @@ describe('validateStoryboard', () => {
           camera: '缓慢推近',
           characters: ['林舟', '苏晴'],
           location: '舰桥',
-          dialogue: '出发吧',
+          dialogue: '林舟：出发吧',
         },
       ],
     });
@@ -50,7 +50,8 @@ describe('validateStoryboard', () => {
           camera: '缓慢推近',
           characters: ['林舟', '苏晴'],
           location: '舰桥',
-          dialogue: '出发吧',
+          // 旧版自由文本台词迁移为一句对白：「名字：台词」拆出说话人
+          dialogue: [{ id: 'l1', speaker: '林舟', text: '出发吧' }],
         },
       ],
     });
@@ -77,7 +78,7 @@ describe('validateStoryboard', () => {
       camera: '横移',
       characters: ['林舟', '苏晴'],
       location: '港口',
-      dialogue: '走',
+      dialogue: [{ id: 'l1', speaker: 'narrator', text: '走' }],
     });
     expect(storyboard.shots[2]?.durationSec).toBe(6.3);
     expect(storyboard.shots.map((s) => s.id)).toEqual(['shot-1', 'shot-2', 'shot-3']);
@@ -198,7 +199,11 @@ describe('storyboard helpers', () => {
         shotSize: '远景',
         durationSec: 3,
         description: '星港|远处',
-        dialogue: '第一行\n第二行',
+        dialogue: [
+          { id: 'l1', speaker: '林舟', text: '第一行' },
+          { id: 'l2', speaker: 'narrator', text: '第二行' },
+        ],
+        sfx: [{ id: 's1', prompt: '汽笛', atSec: 1, volume: 0.8 }],
       },
       {
         id: 'b',
@@ -227,8 +232,8 @@ describe('storyboard helpers', () => {
     const md = storyboardToMarkdown(board);
     expect(md).toContain('# 离港');
     expect(md).toContain('比例：16:9 · 风格：国漫 · 总时长：5.5 秒');
-    expect(md).toContain('| 1 | 远景 | 3s | 星港\\|远处 |  |  | 第一行 第二行 |');
-    expect(md).toContain('| 2 | 特写 | 2.5s | 眼睛 |  | 林舟、苏晴 |  |');
+    expect(md).toContain('| 1 | 远景 | 3s | 星港\\|远处 |  |  | 林舟：第一行<br>旁白：第二行 | 汽笛@1s |');
+    expect(md).toContain('| 2 | 特写 | 2.5s | 眼睛 |  | 林舟、苏晴 |  |  |');
     expect(md.endsWith('\n')).toBe(true);
     expect(storyboardToMarkdown({ ...board, title: undefined, style: undefined })).toContain(
       '# 分镜表'

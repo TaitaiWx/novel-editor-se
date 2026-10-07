@@ -4,7 +4,7 @@
  * - 出场人物识别、地点推荐
  * - 没有配置 AI 时的确定性分镜拆分（按段落 / 句子分组）
  */
-import { STORYBOARD_MAX_SHOTS, type Shot, type ShotSize } from '@novel-editor/video';
+import { NARRATOR, STORYBOARD_MAX_SHOTS, type Shot, type ShotSize } from '@novel-editor/video';
 
 const RE_SCENE =
   /^(\u7b2c[\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u573a)\s*(.*)$/;
@@ -316,7 +316,12 @@ export function splitSceneIntoShots(
     const people = detectCharacters(text, options.characters ?? []);
     if (people.length) shot.characters = people;
     if (options.location) shot.location = options.location;
-    if (dialogue) shot.dialogue = dialogue;
+    // 引号里的话：只有一个人物出场时算作他说的，否则先记为旁白（作者可在检查器里改说话人）
+    if (dialogue) {
+      shot.dialogue = [
+        { id: 'l1', speaker: people.length === 1 ? people[0] : NARRATOR, text: dialogue },
+      ];
+    }
     return shot;
   });
 }

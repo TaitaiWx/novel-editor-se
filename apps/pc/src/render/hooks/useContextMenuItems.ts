@@ -24,6 +24,7 @@ export type UseContextMenuItemsContext = Pick<
   | 'handleClearLoreEntries'
   | 'handleDeleteCharacterNode'
   | 'handleDeleteLoreNode'
+  | 'handleFileSelect'
   | 'handleOpenCharacterNode'
   | 'handleOpenCharacters'
   | 'handleOpenLore'
@@ -91,6 +92,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleDeleteFile,
     handleDeleteLoreNode,
     handleDeleteVolumeNode,
+    handleFileSelect,
     handleGenerateScopedCharacters,
     handleGenerateScopedLore,
     handleGenerateScopedMaterials,
@@ -269,6 +271,13 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
       node.type === 'directory' ? node.path : node.path.substring(0, node.path.lastIndexOf('/'));
     const reference = node.type === 'file' ? referenceItemFor(node.path) : null;
     const items = [
+      // 场景视频目录：分镜状态是内部数据，只能在画布里处理
+      ...(node.type === 'directory' && node.sceneVideo
+        ? [
+            menuItem('打开场景视频', () => handleFileSelect(node.path)),
+            menuItem('', () => {}, { separator: true }),
+          ]
+        : []),
       // 图片 / 视频：在编辑器旁边的参考窗格里看，边看边写
       ...(reference
         ? [
@@ -358,6 +367,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     handleDeleteFile,
     handleDeleteLoreNode,
     handleDeleteVolumeNode,
+    handleFileSelect,
     handleOpenKnowledgeExportDialog,
     handleGenerateScopedCharacters,
     handleGenerateScopedLore,

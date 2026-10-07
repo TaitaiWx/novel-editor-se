@@ -52,6 +52,12 @@ beforeEach(() => {
       if (!existing.has(String(arg))) throw new Error('不存在');
       return { isFile: true };
     }
+    if (channel === 'get-file-info-batch') {
+      // 与主进程一致：不存在的文件静默跳过
+      return (arg as string[])
+        .filter((path) => existing.has(path))
+        .map((path) => ({ path, info: { isFile: true } }));
+    }
     return null;
   });
 });
@@ -124,10 +130,12 @@ describe('media-resolve', () => {
     expect(peekResolvedMedia(DOC, imageRef)).toBeNull();
   });
 
-  it('主进程不回答（null / 通道不存在）时逐个回退到 get-file-info', async () => {
+  it('主进程不回答（工作区外 / 还没登记）时用静默的批量查询，不调用会记错误日志的 get-file-info', async () => {
     outside.add(IMAGE);
+    outside.add('/p/x.png');
     expect(await probeExistingPaths([IMAGE, '/p/x.png'])).toEqual(new Set([IMAGE]));
-    expect(calls('get-file-info').map(([, path]) => path)).toEqual([IMAGE]);
+    expect(calls('get-file-info')).toHaveLength(0);
+    expect(calls('get-file-info-batch').map(([, list]) => list)).toEqual([[IMAGE, '/p/x.png']]);
   });
 
   it('超过单批上限时分批', async () => {

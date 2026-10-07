@@ -280,7 +280,7 @@ describe('ne video storyboard / validate', () => {
       mode: 'completion',
       storyboard: { shots: [{ id: 'shot-1' }, { id: 'shot-2' }] },
     });
-    expect(state.requests[0].body).toMatchObject({ temperature: 0.7, max_tokens: 2400 });
+    expect(state.requests[0].body).toMatchObject({ temperature: 0.7, max_tokens: 3600 });
   });
 
   it('AI 返回无效分镜：退出码 2', async () => {

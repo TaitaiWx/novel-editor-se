@@ -21,6 +21,8 @@ import {
   ensureSeededDirectory,
   getFileInfo,
   getFileInfoBatch,
+  classifyWorkspacePath,
+  filterInternalDataTree,
   isCoreError,
   isStoryFile,
   pastePaths,
@@ -59,6 +61,18 @@ export function isSafeExternalUrl(url: string): boolean {
   }
 }
 
+/**
+ * 通用 write-file 不允许写入软件内部数据（core internal-data：成长档案 JSON、分镜状态、提示词记录、
+ * .novel-editor/）与由它们派生的只读摘要；这些文件只能经专用 IPC（growth-* / video-scene-* 等）写入
+ */
+export function assertWritableByRenderer(filePath: unknown, workspaceRoot: string | null): void {
+  if (typeof filePath !== 'string' || !filePath) throw new Error('无效的文件路径');
+  const classification = classifyWorkspacePath(path.resolve(filePath), workspaceRoot);
+  if (classification.kind !== 'user') {
+    throw new Error('这是软件内部数据，不能直接修改，请在对应的界面中处理');
+  }
+}
+
 /** 示例数据：用户文档目录下的副本，以及随应用分发的种子目录 */
 /** 读取保存前的文件内容；文件不存在（新建）时返回 null */
 async function readPreviousContent(filePath: string): Promise<string | null> {
@@ -83,6 +97,8 @@ async function readWorkspaceTree(folderPath: string) {
       console.warn('[project] 迁移项目资料失败，保留在原处:', errorMessage(error));
     });
   const tree = await readFolderTree(folderPath);
+  // 内部数据（成长档案 JSON、分镜状态、提示词记录…）不进入 GUI 的任何浏览入口，只通过可视化界面处理
+  tree.files = filterInternalDataTree(tree.files, folderPath);
   const project = await readProjectLayout(folderPath).catch((error: unknown) => {
     console.warn('[project] 读取项目配置失败，按普通文件夹展示:', errorMessage(error));
     return null;
@@ -132,6 +148,8 @@ export function registerFileSystemHandlers(): void {
   ipcMain.handle(
     'write-file',
     async (event: { sender?: { id: number } }, filePath: string, content: string) => {
+      // 纵深防御：内部数据与派生摘要只由各自的专用 IPC 写入（直接用 fs），通用 write-file 一律拒绝
+      assertWritableByRenderer(filePath, getWorkspaceRootForSender(event?.sender?.id));
       // 正文文件保存前读取旧内容，用于计算写作日志的字数增量（只读当前文件，不扫描项目）
       const trackWriting = isStoryFile(filePath);
       // 同一文件的「读旧内容 → 写入」串行执行：并发保存时后发起的内容必须最后落盘

@@ -2,7 +2,8 @@
  * 播放源 → 引擎的生命周期：换片 / 换清晰度 / 重试时销毁旧引擎再接新引擎，卸载时销毁。
  * 清晰度两种来源：
  * - 播放源的 `qualities`（多个地址）：切换时换地址，并在新地址读到元数据后回到原来的位置与播放状态
- * - 引擎自带的档位（HLS）：交给引擎切换（hls.js 自己保持位置），额外提供「自动」
+ * - 引擎自带的档位（HLS / DASH）：交给引擎切换（引擎自己保持位置），额外提供「自动」
+ * 浏览器不能直接播放的协议（RTMP / RTSP 等）不选引擎，直接报错并说明需要服务端网关。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -13,6 +14,7 @@ import {
   sortedQualities,
 } from './engines/detect';
 import { defaultEngines, selectEngine, unsupportedError } from './engines';
+import { isAudioSource, protocolHint, unsupportedProtocol } from './engines/formats';
 import {
   AUTO_QUALITY,
   PlayerError,
@@ -109,10 +111,21 @@ export function useMediaEngine({
     if (!video) return;
     if (!playback.url) return;
     let cancelled = false;
-    const factory = selectEngine(playback.type, enginesRef.current ?? defaultEngines(), video);
+    const protocol = unsupportedProtocol(playback.url);
+    const factory = protocol
+      ? null
+      : selectEngine(playback.type, enginesRef.current ?? defaultEngines(), video);
     if (!factory) {
-      errorRef.current(unsupportedError(playback.type));
-      return;
+      const error = protocol
+        ? new PlayerError('unsupported', protocolHint(protocol))
+        : unsupportedError(playback.type);
+      // 推迟到本轮副作用之后报告：播放器换片时的重置（清空错误）不会把它冲掉
+      void Promise.resolve().then(() => {
+        if (!cancelled) errorRef.current(error);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     const adopt = (engine: MediaEngine) => {
       if (cancelled) {
@@ -159,6 +172,13 @@ export function useMediaEngine({
   }, [videoRef, source, playback.url, playback.type, nonce]);
 
   const options = useMemo(() => qualityOptionsFor(source, levels), [source, levels]);
+  // 只有声音的提示（读到元数据前用；之后以有没有画面为准）
+  const audioHint = isAudioSource({
+    url: playback.url,
+    type: source.qualities?.find((item) => item.id === quality)?.type ?? source.type,
+    mimeType: source.mimeType,
+    audioOnly: source.audioOnly,
+  });
 
   /** 切换清晰度；保持当前位置与播放状态 */
   const setQuality = useCallback(
@@ -200,5 +220,7 @@ export function useMediaEngine({
     reload,
     takeResume,
     engineKind,
+    playbackType: playback.type,
+    audioHint,
   };
 }

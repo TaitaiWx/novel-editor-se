@@ -301,4 +301,34 @@ describe('FileTree', () => {
     rerender(<FileTree files={[]} onFileSelect={vi.fn()} />);
     expect(screen.queryByText('a.js')).toBeNull();
   });
+
+  it('场景视频目录：显示标记，单击 / Enter 打开画布（onFileSelect 传目录），箭头展开看成片', () => {
+    installElectronMock(() => []);
+    const onFileSelect = vi.fn();
+    const sceneDir = '/w/资料/视频/001-启程/第一场';
+    const tree: FileNode[] = [
+      {
+        name: '第一场',
+        path: sceneDir,
+        type: 'directory',
+        sceneVideo: true,
+        children: [{ name: '镜头1-v1.mp4', path: `${sceneDir}/镜头1-v1.mp4`, type: 'file' }],
+      },
+    ];
+    const { container } = render(<FileTree files={tree} onFileSelect={onFileSelect} />);
+    const row = container.querySelector('[data-scene-video="true"]') as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(row.textContent).toContain('场景视频');
+
+    fireEvent.click(screen.getByText('第一场'));
+    expect(onFileSelect).toHaveBeenCalledWith(sceneDir);
+    expect(screen.queryByText('镜头1-v1.mp4')).toBeNull();
+
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(onFileSelect).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(container.querySelector('.expandIcon') as HTMLElement);
+    expect(screen.getByText('镜头1-v1.mp4')).toBeTruthy();
+    expect(onFileSelect).toHaveBeenCalledTimes(2);
+  });
 });

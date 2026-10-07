@@ -13,8 +13,6 @@ export interface ScenePrevizProps {
   index: number;
   state: SceneVideoState;
   characters: readonly CharacterBrief[];
-  /** 作品目录：预演读取 / 导入作品动作库（资料/动作库/*.bvh） */
-  workPath?: string | null;
   updateState: (updater: (prev: SceneVideoState) => SceneVideoState) => void;
   writeSceneImage: (kind: 'keyframe' | 'previz', shot: Shot, data: Uint8Array) => Promise<string>;
   writePrevizVideo: (shot: Shot, data: Uint8Array, ext: 'mp4' | 'webm') => Promise<string>;
@@ -27,7 +25,6 @@ const ScenePreviz: React.FC<ScenePrevizProps> = ({
   index,
   state,
   characters,
-  workPath,
   updateState,
   writeSceneImage,
   writePrevizVideo,
@@ -53,7 +50,6 @@ const ScenePreviz: React.FC<ScenePrevizProps> = ({
       characters={briefs}
       aspectRatio={state.aspectRatio}
       initialScript={state.previzScripts[shot.id] ?? null}
-      workPath={workPath}
       onSave={async (output) => {
         const videoPath = await writePrevizVideo(shot, output.video, output.ext);
         const framePath = await writeSceneImage('previz', shot, output.firstFrame);

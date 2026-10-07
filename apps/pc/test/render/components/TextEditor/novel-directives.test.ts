@@ -140,9 +140,10 @@ describe('novelDirectivePreview（编辑器）', () => {
   it('视频就地加载为播放器；「在旁边看」在参考窗格打开实际找到的文件', async () => {
     const found = '/p/novels/星河/资料/视频/镜头1-v1.mp4';
     const mock = installElectronMock((channel, candidate) => {
-      if (channel === 'get-file-info') {
-        if (candidate === found) return { size: 1 };
-        throw new Error('不存在');
+      if (channel === 'get-file-info-batch') {
+        return (candidate as unknown as string[])
+          .filter((path) => path === found)
+          .map((path) => ({ path, info: { size: 1, isFile: true } }));
       }
       if (channel === 'read-file-binary') return { base64Content: 'AAAA', mimeType: 'video/mp4' };
       return null;
@@ -179,7 +180,8 @@ describe('novelDirectivePreview（编辑器）', () => {
   });
 
   it('所有候选都不存在时显示「找不到视频」', async () => {
-    const mock = installElectronMock(() => {
+    const mock = installElectronMock((channel) => {
+      if (channel === 'get-file-info-batch') return [];
       throw new Error('不存在');
     });
     const v = mount(0);
@@ -188,9 +190,11 @@ describe('novelDirectivePreview（编辑器）', () => {
         '找不到视频：资料/视频/镜头1-v1.mp4'
       )
     );
-    // /p/novels/星河 向上逐级：4 个候选都试过，不读取文件
+    // /p/novels/星河 向上逐级：4 个候选一次静默批量查询，不调用会记错误日志的 get-file-info，也不读取文件
+    const batch = mock.invoke.mock.calls.filter(([channel]) => channel === 'get-file-info-batch');
+    expect(batch.flatMap(([, list]) => list as string[])).toHaveLength(4);
     expect(mock.invoke.mock.calls.filter(([channel]) => channel === 'get-file-info')).toHaveLength(
-      4
+      0
     );
     expect(v.dom.querySelector('.cm-lp-media-beside')).toBeNull();
   });
@@ -202,8 +206,13 @@ describe('novelDirectivePreview（编辑器）', () => {
   });
 
   it('::image 就地显示图片', async () => {
-    installElectronMock((channel) => {
-      if (channel === 'get-file-info') return { size: 1 };
+    installElectronMock((channel, arg) => {
+      if (channel === 'get-file-info-batch') {
+        return (arg as unknown as string[]).map((path) => ({
+          path,
+          info: { size: 1, isFile: true },
+        }));
+      }
       if (channel === 'read-file-binary') return { base64Content: 'AAAA', mimeType: 'image/webp' };
       return null;
     });
@@ -235,8 +244,13 @@ describe('novelDirectivePreview（编辑器）', () => {
 
   it('视图销毁时卸载播放器；加载完成前被销毁则不再挂载', async () => {
     let resolveRead: (value: unknown) => void = () => undefined;
-    installElectronMock((channel) => {
-      if (channel === 'get-file-info') return { size: 1 };
+    installElectronMock((channel, arg) => {
+      if (channel === 'get-file-info-batch') {
+        return (arg as unknown as string[]).map((path) => ({
+          path,
+          info: { size: 1, isFile: true },
+        }));
+      }
       if (channel === 'read-file-binary') return new Promise((resolve) => (resolveRead = resolve));
       return null;
     });

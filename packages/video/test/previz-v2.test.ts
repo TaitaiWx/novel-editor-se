@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BUILTIN_MOTIONS,
   PREVIZ_JSON_SCHEMA,
   PREVIZ_SCRIPT_VERSION,
   applyEase,
-  createMotionLibrary,
   pinCameraFocus,
   samplePrevizScript,
   validatePrevizScript,
@@ -17,7 +15,21 @@ function expectOk(raw: unknown, options?: Parameters<typeof validatePrevizScript
   return result;
 }
 
-const CLIPS = [...BUILTIN_MOTIONS.map((item) => item.id), 'lib:wave-test'];
+/** AI 写的关节轨迹：举起右手挥手（循环），顺带抬一下左腿（走路时让给步态） */
+const WAVE = {
+  tracks: {
+    rightUpperArm: [
+      [0, 0, 0, -150],
+      [0.4, 0, 0, -160],
+      [0.8, 0, 0, -150],
+    ],
+    leftThigh: [
+      [0, -10, 0, 0],
+      [0.8, -10, 0, 0],
+    ],
+  },
+  loop: true,
+};
 
 const RAW = {
   durationSec: 4,
@@ -32,7 +44,7 @@ const RAW = {
           facing: 90,
           pose: 'walk',
           ease: 'easeOut',
-          motion: { clip: 'wave', loop: true, speed: 9 },
+          motion: WAVE,
           lookAt: { figure: '苏晴' },
         },
         { t: 2, x: 0, z: 0, facing: 90, pose: 'stand', motion: 'lib:wave-test' },
@@ -81,7 +93,7 @@ const RAW = {
 };
 
 describe('预演脚本第 2 版：校验', () => {
-  const { script, warnings } = expectOk(RAW, { availableClips: CLIPS });
+  const { script, warnings } = expectOk(RAW);
 
   it('版本号升级；schema 列出新字段', () => {
     expect(script.version).toBe(PREVIZ_SCRIPT_VERSION);
@@ -94,20 +106,18 @@ describe('预演脚本第 2 版：校验', () => {
     );
   });
 
-  it('动作片段：省略前缀时在可用列表里查找，速度夹值，不存在的去掉并回退到姿势', () => {
+  it('动作：关节轨迹原样保留；旧版的动作片段引用（字符串 / clip）静默丢弃，回退到姿势', () => {
     const [k0, k1, k2] = script.figures[0].keys;
     expect(k0.ease).toBe('ease-out');
-    expect(k0.motion).toEqual({ clip: 'builtin:wave', loop: true, speed: 4 });
-    expect(k1.motion).toEqual({ clip: 'lib:wave-test' });
+    expect(k0.motion).toEqual(WAVE);
+    expect(k1.motion).toBeUndefined();
     expect(k2.motion).toBeUndefined();
-    expect(warnings.some((item) => item.includes('dance-404'))).toBe(true);
-    // 生成描述保留，等 MotionProvider 生成
+    expect(k2.pose).toBe('stand');
+    expect(warnings.some((item) => item.includes('dance-404') || item.includes('wave-test'))).toBe(
+      false
+    );
+    // 生成描述保留，等 MotionProvider / 追加请求生成轨迹
     expect(script.figures[1].keys[0].motion).toEqual({ generate: '紧张地搓手' });
-  });
-
-  it('不给可用列表时保留所有引用（读取已保存的脚本）', () => {
-    const saved = expectOk(RAW).script;
-    expect(saved.figures[0].keys[2].motion).toEqual({ clip: 'dance-404' });
   });
 
   it('视线与跟随里的人物名换成人物 id；手部目标夹值', () => {
@@ -136,33 +146,32 @@ describe('预演脚本第 2 版：校验', () => {
 });
 
 describe('预演脚本第 2 版：采样', () => {
-  const { script } = expectOk(RAW, { availableClips: CLIPS });
-  const clips = createMotionLibrary();
+  const { script } = expectOk(RAW);
 
   it('缓动：ease-out 前半段走得更远', () => {
     expect(applyEase('ease-out', 0.5, 'linear')).toBe(0.75);
     expect(applyEase(undefined, 0.5, 'linear')).toBe(0.5);
-    const sample = samplePrevizScript(script, 1, { clips });
+    const sample = samplePrevizScript(script, 1);
     expect(sample.figures[0].x).toBeCloseTo(-2 + 2 * 0.75, 5);
   });
 
-  it('动作片段：区间内权重为 1，接近下一关键帧时交叉淡化；动作库没有的片段只用姿势', () => {
-    const early = samplePrevizScript(script, 0.5, { clips }).figures[0];
+  it('动作：区间内权重为 1，接近下一关键帧时淡出到姿势；没有轨迹的关键帧只用姿势', () => {
+    const early = samplePrevizScript(script, 0.5).figures[0];
     expect(early.motion?.joints.rightUpperArm?.weight).toBe(1);
     // 走路时腿交给步态（权重减弱），手臂仍然挥手
     expect(early.motion?.joints.leftThigh?.weight ?? 0).toBeLessThan(1);
-    // lib:wave-test 不在动作库里：到 2 秒前挥手淡出
-    const fading = samplePrevizScript(script, 1.9, { clips }).figures[0];
+    // 下一关键帧没有动作：到 2 秒前挥手淡出
+    const fading = samplePrevizScript(script, 1.9).figures[0];
     const weight = fading.motion?.joints.rightUpperArm?.weight ?? 0;
     expect(weight).toBeGreaterThan(0);
     expect(weight).toBeLessThan(1);
-    expect(samplePrevizScript(script, 3, { clips }).figures[0].motion).toBeUndefined();
-    // 没有传动作库：完全按姿势
-    expect(samplePrevizScript(script, 0.5).figures[0].motion).toBeUndefined();
+    expect(samplePrevizScript(script, 3).figures[0].motion).toBeUndefined();
+    // 苏晴只有待生成的描述：完全按姿势
+    expect(samplePrevizScript(script, 0.5).figures[1].motion).toBeUndefined();
   });
 
   it('视线：林舟面向右侧（+x），苏晴在正前方，头不需要转；朝向变化后头转向苏晴', () => {
-    const atStart = samplePrevizScript(script, 0, { clips }).figures[0];
+    const atStart = samplePrevizScript(script, 0).figures[0];
     expect(Math.abs(atStart.joints.head?.[1] ?? 0)).toBeLessThan(1);
     const turned: PrevizScript = {
       ...script,
@@ -181,12 +190,12 @@ describe('预演脚本第 2 版：采样', () => {
   });
 
   it('手部目标随关键帧给出权重', () => {
-    const su = samplePrevizScript(script, 1, { clips }).figures[1];
+    const su = samplePrevizScript(script, 1).figures[1];
     expect(su.hands?.right).toEqual({ x: 1.2, y: 1, z: 0.4, weight: 1 });
   });
 
   it('道具关键帧：位置 / 高度 / 朝向插值', () => {
-    const prop = samplePrevizScript(script, 2, { clips }).props[0];
+    const prop = samplePrevizScript(script, 2).props[0];
     expect(prop.x).toBeCloseTo(0, 5);
     expect(prop.y).toBeCloseTo(0.25, 5);
     expect(prop.facing).toBeCloseTo(45, 5);
@@ -194,12 +203,12 @@ describe('预演脚本第 2 版：采样', () => {
   });
 
   it('机位：跟随人物的注视点随人物移动；绝对机位按权重淡入', () => {
-    const start = samplePrevizScript(script, 0, { clips }).camera;
+    const start = samplePrevizScript(script, 0).camera;
     expect(start.focusX).toBeCloseTo(-2, 5);
     expect(start.override).toBeUndefined();
-    const mid = samplePrevizScript(script, 3, { clips }).camera;
+    const mid = samplePrevizScript(script, 3).camera;
     expect(mid.override?.weight).toBeCloseTo(0.5, 5);
-    const end = samplePrevizScript(script, 4, { clips }).camera;
+    const end = samplePrevizScript(script, 4).camera;
     expect(end.override).toEqual({ position: [0, 2, 5], target: [0, 1.2, 0], weight: 1 });
   });
 

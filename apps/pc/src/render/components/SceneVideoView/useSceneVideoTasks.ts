@@ -95,7 +95,10 @@ export function useSceneVideoTasks(ref: SceneTaskRef | null, onTaskFinished?: ()
     let submitted = 0;
     for (const shot of input.shots) {
       const number = shotNumber(shot);
-      const prompt = buildShotVideoPrompt(shot, input.state);
+      // 只有视频服务支持声音且开启了「生成声音」时，提示词才带上语言与对白
+      const prompt = buildShotVideoPrompt(shot, input.state, {
+        withAudio: input.withAudio === true,
+      });
       if (number === null || !shot.description.trim()) {
         errors.push('有镜头还没有画面描述，已跳过');
         continue;

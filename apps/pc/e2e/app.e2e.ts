@@ -182,7 +182,8 @@ describe('小说编辑器 GUI', () => {
       false
     );
     expect(await page.exists({ text: '林舟', within: GROWTH_SECTION, exact: true })).toBe(false);
-    expect(await sectionCount(SECTION_MATERIALS)).toBe('7');
+    // 成长档案 JSON 是内部数据，不计入资料（江湖风物.md + 记忆库 README.md / 沈砚.md）
+    expect(await sectionCount(SECTION_MATERIALS)).toBe('3');
     await captureForReview('sample-work-poem');
 
     // 《星河旅人》：卷 / 章徽章与统计；角色、设定、成长档案、资料随之切换
@@ -1579,6 +1580,9 @@ describe('小说编辑器 GUI', () => {
     expect(
       suite.app.logs.join('').match(/Failed to read binary file: [^\n]*图集[^\n]*/g) ?? []
     ).toEqual([]);
+    // 解析正文引用的图片 / 视频时会逐级向上试候选路径：不存在的候选必须静默跳过，
+    // 不能在主进程日志里留下 get-file-info 的错误（10.2 已打开小说格式示例.md 与参考窗格）
+    expect(suite.app.logs.join('').match(/Failed to get file info: [^\n]*/g) ?? []).toEqual([]);
   });
 
   it('11. 单实例：第二次启动把文件夹转发给已有窗口', async () => {

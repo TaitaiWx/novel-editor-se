@@ -138,6 +138,30 @@ describe('useEditorSession', () => {
     expect(result.current.editorSessionHydratedRef.current).toBe(true);
   });
 
+  it('恢复时丢弃内部数据标签（旧会话里打开过的 分镜.json / 成长档案 JSON）', async () => {
+    const withInternal: FileNode[] = [
+      {
+        name: 'book',
+        path: '/book',
+        type: 'directory',
+        children: [
+          { name: 'a.md', path: '/book/a.md', type: 'file' },
+          { name: '规则.json', path: '/book/资料/记忆/规则.json', type: 'file' },
+          { name: '分镜.json', path: '/book/资料/视频/章/场/分镜.json', type: 'file' },
+        ],
+      },
+    ];
+    stored = JSON.stringify({
+      openTabs: ['/book/a.md', '/book/资料/记忆/规则.json'],
+      activeTab: '/book/资料/视频/章/场/分镜.json',
+      viewportSnapshots: { '/book/资料/记忆/规则.json': snap(1) },
+    });
+    const { result } = renderHook(() => useHarness({ sessionKey: 'k1', files: withInternal }));
+    await waitFor(() => expect(result.current.openTabs).toEqual(['/book/a.md']));
+    expect(result.current.activeTab).toBe('/book/a.md');
+    expect(result.current.initialViewportSnapshots).toEqual({});
+  });
+
   it('恢复时 activeTab 无效则回退到最后一个打开的标签', async () => {
     stored = JSON.stringify({ openTabs: ['/book/a.md', '/book/b.md'], activeTab: '/gone.md' });
     const { result } = renderHook(() => useHarness({ sessionKey: 'k1', files }));

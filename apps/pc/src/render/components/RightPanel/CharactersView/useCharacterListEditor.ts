@@ -217,6 +217,7 @@ export function useCharacterListEditor({
                   avatar: character.avatar,
                   design: character.design,
                   media: character.media,
+                  voice: character.voice,
                   aliases: character.aliases,
                   category: nextCategory,
                   highlightColor: character.highlightColor,

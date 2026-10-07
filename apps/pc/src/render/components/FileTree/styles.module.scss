@@ -192,6 +192,27 @@
         text-overflow: ellipsis;
       }
 
+      // 场景视频目录的标记（单击打开画布）
+      .sceneBadge {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        margin-left: 6px;
+        padding: 0 5px;
+        border-radius: 3px;
+        font-size: 10px;
+        line-height: 16px;
+        white-space: nowrap;
+        color: var(--ui-fg-muted, #8b8b8b);
+        background: var(--ui-interaction-accent-soft, rgba(0, 122, 204, 0.14));
+
+        svg {
+          width: 10px;
+          height: 10px;
+        }
+      }
+
       .itemSize {
         font-size: 10px;
         color: #666;

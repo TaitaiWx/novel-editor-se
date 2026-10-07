@@ -3,8 +3,10 @@
  * 还没有成片的镜头用占位卡（镜头号 + 景别 + 画面描述）代替，方便先看节奏。
  * 成片自带的声音会保留：按镜头的起点 / 时长混音后编码进样片（MP4 用 AAC；AAC 不可用时改用
  * WebM + Opus）；都不可用时只导出画面并返回 audioDropped，由调用方提示作者。
+ * 场景声音一并混入（planSceneAudioMix）：对白配音（镜头起点 + startSec）、音效（atSec）、
+ * 背景音乐（循环铺满、淡入淡出、对白时压低约 12dB）、环境音。读不到 / 解码失败的声音跳过，不让导出失败。
  */
-import type { Shot, Storyboard } from '@novel-editor/video';
+import { activeBgmPath, type SceneAudio, type Shot, type Storyboard } from '@novel-editor/video';
 import {
   animaticSize,
   buildAnimaticTimeline,
@@ -14,9 +16,10 @@ import {
   detectSupportedCodecs,
   encodeTimeline,
   isWebCodecsSupported,
-  mixAudioPlan,
+  mixScenePlan,
   pickDefaultCodec,
-  planAudioTimeline,
+  planSceneAudioMix,
+  type SceneMixShot,
   type ClipSource,
   type EncodeAudioOptions,
   type EncodeProgress,
@@ -30,6 +33,10 @@ export interface StitchInput {
   readFile: (fileName: string) => Promise<Uint8Array>;
   signal?: AbortSignal;
   onProgress?: (percent: number) => void;
+  /** 场景声音（配乐 / 环境音 / 压低）；镜头的对白配音与音效在 storyboard.shots 里 */
+  sceneAudio?: SceneAudio;
+  /** 读取作品内的配乐 / 音效（相对作品目录）；不给时只混成片原声与对白配音 */
+  readWorkAudio?: (relativePath: string) => Promise<Uint8Array>;
 }
 
 export interface StitchOutput {
@@ -73,26 +80,100 @@ export function canStitchAnimatic(): boolean {
   return isWebCodecsSupported();
 }
 
-/** 解码各镜头成片的声音并按时间轴混音；没有任何声音时返回 null */
+/** 按键缓存解码结果：同一个文件（例如多处用到的音效）只读取、解码一次；失败记为 null */
+function createAudioLoader() {
+  const cache = new Map<string, Promise<AudioBuffer | null>>();
+  return (key: string, read: () => Promise<Uint8Array>): Promise<AudioBuffer | null> => {
+    let pending = cache.get(key);
+    if (!pending) {
+      pending = read()
+        .then((bytes) => decodeAudioTrack(bytes))
+        .catch(() => null);
+      cache.set(key, pending);
+    }
+    return pending;
+  };
+}
+
+/** 解码成片原声、对白配音、音效、配乐、环境音，按 planSceneAudioMix 混音；没有任何声音时返回 null */
 async function mixTimelineAudio(
   timeline: Timeline,
+  input: StitchInput,
   clipBytes: ReadonlyMap<string, Uint8Array>
 ): Promise<EncodeAudioOptions['pcm'] | null> {
+  const load = createAudioLoader();
   const buffers = new Map<string, AudioBuffer>();
-  for (const [id, bytes] of clipBytes) {
-    const buffer = await decodeAudioTrack(bytes);
-    if (buffer) buffers.set(id, buffer);
-  }
-  const plan = planAudioTimeline(
-    timeline.clips.map((clip) => ({
+  const decodeInto = async (key: string, read: () => Promise<Uint8Array>) => {
+    const buffer = await load(key, read);
+    if (buffer) buffers.set(key, buffer);
+    return buffer ? buffer.duration * 1000 : 0;
+  };
+  const readWork = input.readWorkAudio;
+  const shots: SceneMixShot[] = [];
+  for (const [index, clip] of timeline.clips.entries()) {
+    const shot = input.storyboard.shots[index];
+    const bytes = clipBytes.get(clip.id);
+    const clipAudioDurationMs = bytes ? await decodeInto(`clip:${clip.id}`, async () => bytes) : 0;
+    const dialogue: NonNullable<SceneMixShot['dialogue']>[number][] = [];
+    for (const line of shot?.dialogue ?? []) {
+      const file = line.audioFile;
+      if (!file) continue;
+      const key = `scene:${file}`;
+      const durationMs = await decodeInto(key, () => input.readFile(file));
+      if (durationMs > 0) {
+        dialogue.push({ id: line.id, sourceId: key, startSec: line.startSec, durationMs });
+      }
+    }
+    const sfx: NonNullable<SceneMixShot['sfx']>[number][] = [];
+    for (const cue of shot?.sfx ?? []) {
+      const path = cue.path;
+      if (!path || !readWork) continue;
+      const key = `work:${path}`;
+      const durationMs = await decodeInto(key, () => readWork(path));
+      if (durationMs > 0) {
+        sfx.push({ id: cue.id, sourceId: key, atSec: cue.atSec, volume: cue.volume, durationMs });
+      }
+    }
+    shots.push({
       id: clip.id,
       durationMs: clip.durationMs,
       startMs: clip.startMs,
-      audioDurationMs: (buffers.get(clip.id)?.duration ?? 0) * 1000,
-    })),
-    { transitionMs: timeline.transitionMs }
-  );
-  return plan.hasAudio ? mixAudioPlan(plan, buffers) : null;
+      clipAudioDurationMs,
+      dialogue,
+      sfx,
+    });
+  }
+  const audio = input.sceneAudio;
+  const bgmPath = activeBgmPath(audio);
+  let bgm = null;
+  if (audio?.bgm && bgmPath && readWork) {
+    const key = `work:${bgmPath}`;
+    const durationMs = await decodeInto(key, () => readWork(bgmPath));
+    if (durationMs > 0) {
+      bgm = {
+        sourceId: key,
+        durationMs,
+        volume: audio.bgm.volume,
+        fadeInMs: audio.bgm.fadeInSec * 1000,
+        fadeOutMs: audio.bgm.fadeOutSec * 1000,
+      };
+    }
+  }
+  let ambience = null;
+  const ambiencePath = audio?.ambience?.path;
+  if (audio?.ambience && ambiencePath && readWork) {
+    const key = `work:${ambiencePath}`;
+    const durationMs = await decodeInto(key, () => readWork(ambiencePath));
+    if (durationMs > 0) ambience = { sourceId: key, durationMs, volume: audio.ambience.volume };
+  }
+  const plan = planSceneAudioMix({
+    shots,
+    transitionMs: timeline.transitionMs,
+    bgm,
+    ambience,
+    ducking: audio?.ducking !== false,
+  });
+  return plan.hasAudio ? mixScenePlan(plan, buffers) : null;
 }
 
 export async function stitchAnimatic(input: StitchInput): Promise<StitchOutput> {
@@ -116,7 +197,7 @@ export async function stitchAnimatic(input: StitchInput): Promise<StitchOutput> 
     const supported = await detectSupportedCodecs({ width, height, fps: FPS, bitrate: BITRATE });
     const preferred = pickDefaultCodec(supported);
     if (!preferred) throw new Error('没有可用的视频编码格式');
-    const pcm = await mixTimelineAudio(timeline, clipBytes);
+    const pcm = await mixTimelineAudio(timeline, input, clipBytes);
     const choice = await chooseAudioEncoding({
       video: preferred,
       supportedVideo: supported,

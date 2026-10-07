@@ -60,13 +60,13 @@ import {
   readEase,
   readHands,
   readLookAt,
-  readMotion,
   readPoint3,
   readPropKeys,
   readSize,
   resolveFigureLookAts,
   resolveFigureRef,
 } from './previz-validate-extras';
+import { createMotionBudget, readMotion, type MotionBudget } from './previz-motion-validate';
 
 const round = roundTo;
 
@@ -239,11 +239,6 @@ export interface PrevizValidateOptions {
   durationSec?: number;
   /** AI 没给机位时使用的景别 */
   shotSize?: PrevizShotSize;
-  /**
-   * 可用的动作片段 id（内置 + 动作库）：给出时引用不存在的片段会被去掉（回退到 pose）并给出警告；
-   * 省略时保留所有引用（读取已保存的脚本时动作库可能还没加载）
-   */
-  availableClips?: readonly string[];
 }
 
 function readFigure(
@@ -252,7 +247,8 @@ function readFigure(
   duration: number,
   usedColors: Set<string>,
   options: PrevizValidateOptions,
-  warnings: string[]
+  warnings: string[],
+  budget: MotionBudget
 ): PrevizFigureTrack | null {
   const label = `人物 ${index + 1}`;
   if (!isRecord(raw)) {
@@ -302,10 +298,11 @@ function readFigure(
     if (joints) key.joints = joints;
     const ease = readEase(pick(item, ['ease', 'easing', 'curve']));
     if (ease && ease !== 'linear') key.ease = ease;
-    const motion = readMotion(pick(item, ['motion', 'clip', 'animation', 'anim']), {
-      availableClips: options.availableClips,
+    // 旧版的动作片段引用（clip）没有轨迹，readMotion 静默丢弃
+    const motion = readMotion(pick(item, ['motion', 'animation', 'anim']), {
       warnings,
       label,
+      budget,
     });
     if (motion) key.motion = motion;
     const lookAt = readLookAt(pick(item, ['lookAt', 'gaze', 'look', 'lookTarget']));
@@ -432,13 +429,16 @@ export function validatePrevizScript(
   }
 
   const usedColors = new Set<string>();
+  const budget = createMotionBudget();
   const figureList = Array.isArray(rawFigures) ? rawFigures : [];
   if (figureList.length > PREVIZ_MAX_FIGURES) {
     warnings.push(`人物超过 ${PREVIZ_MAX_FIGURES} 个，只保留前 ${PREVIZ_MAX_FIGURES} 个`);
   }
   let figures = figureList
     .slice(0, PREVIZ_MAX_FIGURES)
-    .map((item, index) => readFigure(item, index, durationSec, usedColors, options, warnings))
+    .map((item, index) =>
+      readFigure(item, index, durationSec, usedColors, options, warnings, budget)
+    )
     .filter((item): item is PrevizFigureTrack => item !== null)
     .map((item, index) => ({ ...item, id: `f${index + 1}` }));
   resolveFigureLookAts(figures, warnings);
