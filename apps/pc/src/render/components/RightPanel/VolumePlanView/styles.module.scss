@@ -1,0 +1,684 @@
+// 卷纲：零输入推导的 幕 → 章 → 节拍，以及 节奏 / 人物线 / 伏笔 三个派生视图
+// 颜色沿用右侧面板的 --rp-* 变量（在 .rightPanel 上定义），保持柔和统一
+
+$muted: rgba(255, 255, 255, 0.45);
+$soft: rgba(255, 255, 255, 0.65);
+$line: rgba(255, 255, 255, 0.07);
+
+.volumePlan {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ui-fg-primary);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.volumeName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.volumeMeta {
+  flex-shrink: 0;
+  color: $muted;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.intentRow {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.intentInput {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.32);
+  }
+
+  &:focus {
+    border-color: var(--rp-accent-border-strong);
+  }
+}
+
+.primaryButton {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 6px;
+  border: 1px solid var(--rp-accent-border-strong);
+  background: var(--rp-accent-soft-strong);
+  color: var(--rp-accent-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(var(--rp-accent-rgb), 0.24);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: progress;
+  }
+}
+
+.modeSwitch {
+  display: flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+
+  button {
+    flex: 1;
+    min-width: 0;
+    height: 22px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: $muted;
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+      color: $soft;
+    }
+  }
+
+  .modeActive {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.88);
+  }
+}
+
+.status,
+.viewSummary {
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  color: $soft;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.structureRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: $muted;
+  font-size: 11px;
+
+  strong {
+    color: $soft;
+    font-weight: 600;
+  }
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--rp-accent-text);
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.morePanel {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid $line;
+  color: $muted;
+  font-size: 11px;
+  line-height: 1.6;
+
+  p {
+    margin: 0 0 6px;
+  }
+}
+
+.moreActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  button {
+    padding: 4px 8px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    color: $soft;
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+  }
+}
+
+// ─── 列表 ───────────────────────────────────────────────
+
+.outlineList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.act {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.actHeader {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.actDot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rp-accent);
+
+  &[data-tone='1'] {
+    background: var(--rp-info);
+  }
+
+  &[data-tone='2'] {
+    background: #8fb3a5;
+  }
+
+  &[data-tone='3'] {
+    background: #a99bc0;
+  }
+}
+
+.actTitle {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+button.actTitle {
+  cursor: pointer;
+
+  &:hover {
+    color: var(--rp-info-fg);
+  }
+}
+
+.actCount {
+  flex-shrink: 0;
+  color: $muted;
+  font-size: 10.5px;
+}
+
+.editableText {
+  display: block;
+  width: 100%;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.55;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: text;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.placeholder {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.inlineInput {
+  width: 100%;
+  font-size: 12px;
+}
+
+.actNote {
+  margin-left: 10px;
+  color: $muted;
+  font-size: 11px;
+}
+
+.chapters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 3px;
+  padding-left: 10px;
+  border-left: 1px solid $line;
+}
+
+.chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chapterHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chapterIndex {
+  flex-shrink: 0;
+  min-width: 16px;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chapterTitle {
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--rp-info-fg);
+  }
+}
+
+.continued {
+  color: $muted;
+}
+
+.chapterPeople {
+  margin-left: auto;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(var(--rp-info-rgb), 0.7);
+  font-size: 10.5px;
+}
+
+.beats {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 0 0 22px;
+  list-style: none;
+}
+
+.beat {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 1px 0;
+  border-radius: 4px;
+
+  &:hover .beatAction,
+  &:hover .grip,
+  &:focus-within .beatAction {
+    opacity: 1;
+  }
+}
+
+.beatDropTarget {
+  box-shadow: inset 0 2px 0 var(--rp-accent);
+}
+
+.beatSuggestion .beatText {
+  color: rgba(var(--rp-accent-rgb), 0.9);
+  font-style: italic;
+}
+
+.grip {
+  position: absolute;
+  left: -16px;
+  top: 3px;
+  display: inline-flex;
+  color: rgba(255, 255, 255, 0.3);
+  opacity: 0;
+  cursor: grab;
+}
+
+.beatBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.beatTitle {
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(var(--rp-info-rgb), 0.85);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--rp-info-fg);
+  }
+}
+
+.beatText {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11.5px;
+}
+
+.beatSource {
+  flex-shrink: 0;
+  margin-top: 3px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.beatAction {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: $muted;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--rp-accent-text);
+  }
+}
+
+.emptyBeats {
+  padding-left: 22px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 11px;
+}
+
+// ─── 派生视图 ───────────────────────────────────────────
+
+.derivedView {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.viewEmpty {
+  padding: 40px clamp(4px, 6%, 20px);
+  color: #6b7d91;
+  text-align: center;
+  line-height: 2;
+
+  span {
+    color: #4d5f72;
+    font-size: 11px;
+  }
+}
+
+.tensionCurve {
+  width: 100%;
+  height: 48px;
+
+  polyline {
+    stroke: var(--rp-accent);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+}
+
+.notes {
+  margin: 0;
+  padding: 0 0 0 14px;
+  color: $soft;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.tensionList,
+.foreshadowList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tensionRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 72px 28px;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.tensionTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+}
+
+.tensionBar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: rgba(var(--rp-accent-rgb), 0.45);
+  }
+
+  span[data-level='4'],
+  span[data-level='5'] {
+    background: rgba(var(--rp-accent-rgb), 0.8);
+  }
+}
+
+.tensionLabel {
+  color: $muted;
+  font-size: 10.5px;
+  text-align: right;
+}
+
+.lanes {
+  display: grid;
+  align-items: center;
+  row-gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.laneHeader {
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--rp-info-fg);
+  }
+}
+
+// 每行是真实的盒子（subgrid 继承外层列宽），而不是 display: contents：
+// 后者没有布局盒，行在无障碍树与按行定位（尺寸为 0）时都不可靠
+.laneRow {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.laneHeaderCell {
+  display: flex;
+  justify-content: center;
+}
+
+.laneName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11.5px;
+}
+
+.laneCell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+
+  &[data-active='true']::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    margin-top: -1px;
+    background: rgba(var(--rp-info-rgb), 0.18);
+  }
+}
+
+.laneDot {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--rp-info);
+}
+
+.foreshadowRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.foreshadowKeyword {
+  align-self: flex-start;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--rp-accent-soft);
+  color: var(--rp-accent-text);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.foreshadowText {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.foreshadowMeta {
+  color: rgba(var(--rp-accent-rgb), 0.85);
+  font-size: 10.5px;
+
+  &[data-echoed] {
+    color: $muted;
+  }
+}
