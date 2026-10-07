@@ -8,6 +8,7 @@ import ShortcutsSection from './ShortcutsSection';
 import DataSection from './DataSection';
 import AiSection from './AiSection';
 import AboutSection from './AboutSection';
+import StructureSection from './StructureSection';
 
 export type { SettingsTab } from './constants';
 
@@ -17,6 +18,8 @@ interface AppSettingsCenterProps {
   initialTab?: SettingsTab;
   onSettingsChange?: (settings: SettingsDraft) => void;
   onOpenShortcuts?: () => void;
+  /** 当前打开的文件夹（「正文结构」规则保存在项目里） */
+  folderPath?: string | null;
 }
 
 const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
@@ -25,6 +28,7 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
   initialTab = 'general',
   onSettingsChange,
   onOpenShortcuts,
+  folderPath = null,
 }) => {
   const {
     activeTab,
@@ -85,6 +89,8 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
                 systemProfile={systemProfile}
               />
             )}
+
+            {activeTab === 'structure' && <StructureSection folderPath={folderPath} />}
 
             {activeTab === 'shortcuts' && (
               <ShortcutsSection

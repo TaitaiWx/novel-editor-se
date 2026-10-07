@@ -1,7 +1,8 @@
 /**
  * 3D 预演脚本的插值、默认脚本与微调（纯函数）。
  *
- * - samplePrevizScript(script, t)：任意时刻的人物站位 / 朝向 / 姿势混合 / 步态相位、机位、道具与时段。
+ * - samplePrevizScript(script, t, { clips })：任意时刻的人物站位 / 朝向 / 姿势混合 / 步态相位 / 动作片段 / 视线 /
+ *   手部目标、机位（含跟随与绝对机位）、道具（含关键帧）与时段。
  *   引擎（渲染进程 three.js）逐帧调用它，播放与导出视频都走同一个函数，因此结果确定、可测试
  * - defaultPrevizScript：没有 AI 时的默认脚本（人物站成一排 + 缓慢推近）
  * - translateFigureTrack / orbitScriptCamera：「微调」里拖人物平移整段走位、拖空白处环绕机位
@@ -25,10 +26,24 @@ import {
   type PrevizJointAngles,
   type PrevizMood,
   type PrevizPoseId,
-  type PrevizPropItem,
   type PrevizScript,
   type PrevizShotSize,
 } from './previz';
+import type { MotionBlend, MotionLibrary } from './motion/clip';
+import {
+  addJointAngles,
+  applyEase,
+  cameraOverride,
+  gazeOffsets,
+  mixJointAngles,
+  sampleFigureMotion,
+  sampleHands,
+  samplePropItem,
+  yieldLegsToGait,
+  type CameraOverride,
+  type FigureHandsSample,
+  type PrevizPropSample,
+} from './previz-sample-motion';
 
 export interface PrevizGait {
   /** 步态相位（弧度，随走过的距离增长） */
@@ -53,6 +68,10 @@ export interface PrevizFigureSample {
   /** 关节微调（度，已插值） */
   joints: PrevizJointAngles;
   gait: PrevizGait;
+  /** 动作片段（关节局部旋转 + 权重；没有引用片段或片段未加载时省略） */
+  motion?: MotionBlend;
+  /** 手部目标（世界坐标 + 权重） */
+  hands?: FigureHandsSample;
 }
 
 export interface PrevizCameraSample {
@@ -68,6 +87,8 @@ export interface PrevizCameraSample {
   height: number;
   focusX: number;
   focusZ: number;
+  /** 绝对机位（关键帧给了 position 时） */
+  override?: CameraOverride;
 }
 
 export interface PrevizSample {
@@ -75,7 +96,12 @@ export interface PrevizSample {
   mood: PrevizMood;
   figures: PrevizFigureSample[];
   camera: PrevizCameraSample;
-  props: PrevizPropItem[];
+  props: PrevizPropSample[];
+}
+
+export interface PrevizSampleOptions {
+  /** 动作库（内置 + 作品动作库）：关键帧引用的片段从这里取，取不到时只用姿势 */
+  clips?: MotionLibrary;
 }
 
 /** 一个完整步态周期（左右各一步）走过的距离（米） */
@@ -133,14 +159,23 @@ const distance = (a: PrevizFigureKey, b: PrevizFigureKey) => Math.hypot(b.x - a.
 
 const gaitWeight = (pose: PrevizPoseId, kind: 'walk' | 'run') => (pose === kind ? 1 : 0);
 
-/** 人物在 t 时刻的状态：位置匀速（像走路一样不顿挫），朝向 / 姿势 / 关节平滑过渡 */
-export function sampleFigure(track: PrevizFigureTrack, t: number): PrevizFigureSample {
+/**
+ * 人物在 t 时刻的状态：位置默认匀速（像走路一样不顿挫，关键帧 ease 可改），朝向 / 姿势 / 关节平滑过渡；
+ * 关键帧引用的动作片段按 clips 采样并在关键帧之间交叉淡化。视线需要其他人物位置，由 samplePrevizScript 补上。
+ */
+export function sampleFigure(
+  track: PrevizFigureTrack,
+  t: number,
+  options: PrevizSampleOptions = {}
+): PrevizFigureSample {
   const [a, b, s, index] = segment(track.keys, t);
   const eased = easeInOut(s);
+  const moved = applyEase(a.ease, s, 'linear');
+  const turned = a.ease ? moved : eased;
   let travelled = 0;
   for (let i = 0; i < index; i += 1) travelled += distance(track.keys[i], track.keys[i + 1]);
   const length = distance(a, b);
-  travelled += length * s;
+  travelled += length * moved;
   const span = b.t - a.t;
   const speed = a !== b && span > 0 ? length / span : 0;
   const moving = clampNumber(speed / GAIT_FULL_SPEED, 0, 1);
@@ -148,19 +183,42 @@ export function sampleFigure(track: PrevizFigureTrack, t: number): PrevizFigureS
   const run = lerp(gaitWeight(a.pose, 'run'), gaitWeight(b.pose, 'run'), eased) * moving;
   const stride = run > walk ? PREVIZ_STRIDE.run : PREVIZ_STRIDE.walk;
   // 移动中朝向默认就是 AI 给的朝向；步态相位只取决于走过的距离，播放 / 拖动进度条都一致
-  return {
+  const sample: PrevizFigureSample = {
     id: track.id,
     name: track.name,
     color: track.color,
-    x: lerp(a.x, b.x, s),
-    z: lerp(a.z, b.z, s),
-    facing: lerpDegrees(a.facing, b.facing, eased),
+    x: lerp(a.x, b.x, moved),
+    z: lerp(a.z, b.z, moved),
+    facing: lerpDegrees(a.facing, b.facing, turned),
     poseFrom: a.pose,
     poseTo: b.pose,
     mix: a.pose === b.pose ? 0 : eased,
     joints: blendJoints(a.joints, b.joints, eased),
     gait: { phase: (travelled / stride) * Math.PI * 2, walk, run },
   };
+  const motion = yieldLegsToGait(sampleFigureMotion(a, b, t, options.clips), walk + run);
+  if (motion) sample.motion = motion;
+  const hands = sampleHands(a, b, eased);
+  if (hands) sample.hands = hands;
+  return sample;
+}
+
+/** 视线：关键帧 a 的视线目标在区间内平滑过渡到 b 的（目标人物按当前时刻的位置） */
+function applyGaze(
+  track: PrevizFigureTrack,
+  t: number,
+  sample: PrevizFigureSample,
+  figures: readonly PrevizFigureSample[]
+): void {
+  if (!track.keys.some((key) => key.lookAt)) return;
+  const [a, b, s] = segment(track.keys, t);
+  const from = gazeOffsets(sample, a.lookAt, figures);
+  const to = b === a ? null : gazeOffsets(sample, b.lookAt, figures);
+  const mixed = b === a ? from : mixJointAngles(from, to, easeInOut(s));
+  if (mixed) {
+    sample.joints = { ...sample.joints };
+    addJointAngles(sample.joints, mixed);
+  }
 }
 
 /** 人物中心（自动对准时的注视点） */
@@ -173,7 +231,17 @@ function figuresCenter(figures: readonly PrevizFigureSample[]): { x: number; z: 
   return { x: sum.x / figures.length, z: sum.z / figures.length };
 }
 
-function cameraValues(key: PrevizCameraKey, center: { x: number; z: number }) {
+function followFocus(
+  key: PrevizCameraKey,
+  center: { x: number; z: number },
+  figures: readonly PrevizFigureSample[]
+): { x: number; z: number } {
+  const followed = key.follow ? figures.find((item) => item.id === key.follow) : undefined;
+  if (followed) return { x: followed.x, z: followed.z };
+  return { x: key.focus?.x ?? center.x, z: key.focus?.z ?? center.z };
+}
+
+function cameraValues(key: PrevizCameraKey, focus: { x: number; z: number }) {
   const framing = PREVIZ_FRAMING[key.shotSize];
   return {
     framingHeight: framing.height,
@@ -182,8 +250,8 @@ function cameraValues(key: PrevizCameraKey, center: { x: number; z: number }) {
     elevation: PREVIZ_ANGLE_ELEVATION[key.angle] + key.pitch,
     yaw: key.yaw,
     height: key.height,
-    focusX: key.focus?.x ?? center.x,
-    focusZ: key.focus?.z ?? center.z,
+    focusX: focus.x,
+    focusZ: focus.z,
   };
 }
 
@@ -196,10 +264,13 @@ export function sampleCamera(
   const center = figuresCenter(figures);
   const fallback = keys.length ? keys : [staticCameraKey('medium')];
   const [a, b, s] = segment(fallback, t);
-  const from = cameraValues(a, center);
-  const to = cameraValues(b, center);
-  const eased = easeInOut(s);
-  return {
+  const focusA = followFocus(a, center, figures);
+  const focusB = followFocus(b, center, figures);
+  const from = cameraValues(a, focusA);
+  const to = cameraValues(b, focusB);
+  const eased = applyEase(a.ease, s, 'ease-in-out');
+  const override = cameraOverride(a, b, eased, focusA, focusB);
+  const sample: PrevizCameraSample = {
     framingHeight: Math.exp(lerp(Math.log(from.framingHeight), Math.log(to.framingHeight), eased)),
     targetY: lerp(from.targetY, to.targetY, eased),
     lens: lerp(from.lens, to.lens, eased),
@@ -209,18 +280,25 @@ export function sampleCamera(
     focusX: lerp(from.focusX, to.focusX, eased),
     focusZ: lerp(from.focusZ, to.focusZ, eased),
   };
+  if (override) sample.override = override;
+  return sample;
 }
 
 /** 脚本在 t 秒时的完整状态（t 夹在 [0, durationSec]） */
-export function samplePrevizScript(script: PrevizScript, t: number): PrevizSample {
+export function samplePrevizScript(
+  script: PrevizScript,
+  t: number,
+  options: PrevizSampleOptions = {}
+): PrevizSample {
   const time = clampNumber(Number.isFinite(t) ? t : 0, 0, script.durationSec);
-  const figures = script.figures.map((track) => sampleFigure(track, time));
+  const figures = script.figures.map((track) => sampleFigure(track, time, options));
+  script.figures.forEach((track, index) => applyGaze(track, time, figures[index], figures));
   return {
     t: time,
     mood: script.mood,
     figures,
     camera: sampleCamera(script.camera, time, figures),
-    props: script.props,
+    props: script.props.map((prop) => samplePropItem(prop, time)),
   };
 }
 
@@ -301,11 +379,12 @@ export function withPrevizMood(script: PrevizScript, mood: PrevizMood): PrevizSc
  * 拖动人物前调用：否则机位跟着人物中心一起移动，人物在画面里看起来没动。
  */
 export function pinCameraFocus(script: PrevizScript): PrevizScript {
-  if (script.camera.every((key) => key.focus)) return script;
+  const pinned = (key: PrevizCameraKey) => Boolean(key.focus || key.follow || key.position);
+  if (script.camera.every(pinned)) return script;
   return {
     ...script,
     camera: script.camera.map((key) => {
-      if (key.focus) return key;
+      if (pinned(key)) return key;
       const center = figuresCenter(script.figures.map((track) => sampleFigure(track, key.t)));
       return {
         ...key,

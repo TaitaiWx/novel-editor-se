@@ -65,7 +65,10 @@ export function selectChapterHeadings(headings: OutlineNode[]): OutlineNode[] {
   const normalized = headings.filter((item) => item.text.trim());
   if (normalized.length === 0) return [];
 
-  const chapterCandidates = normalized.filter((item) => isChapterHeading(item.text));
+  // 正文结构规则识别出的 1 级结构行（章 / 幕，例如 English「Chapter XII」、自定义规则）同样是章标题
+  const chapterCandidates = normalized.filter(
+    (item) => (item.source === 'structure-rule' && item.level === 1) || isChapterHeading(item.text)
+  );
   if (chapterCandidates.length >= 2) return chapterCandidates;
 
   const minLevel = Math.min(...normalized.map((item) => item.level || 1));

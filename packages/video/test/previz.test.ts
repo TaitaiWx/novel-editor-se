@@ -28,7 +28,7 @@ function expectOk(raw: unknown, options?: Parameters<typeof validatePrevizScript
 }
 
 const WALK: PrevizScript = {
-  version: 1,
+  version: 2,
   durationSec: 4,
   mood: 'dusk',
   figures: [
@@ -53,6 +53,12 @@ const WALK: PrevizScript = {
 describe('validatePrevizScript', () => {
   it('解析标准结构并保持数值', () => {
     const { script, warnings } = expectOk(WALK);
+    expect(warnings).toEqual([]);
+    expect(script).toEqual(WALK);
+  });
+
+  it('第 1 版脚本迁移为第 2 版：结构不变，只升级版本号', () => {
+    const { script, warnings } = expectOk({ ...WALK, version: 1 });
     expect(warnings).toEqual([]);
     expect(script).toEqual(WALK);
   });

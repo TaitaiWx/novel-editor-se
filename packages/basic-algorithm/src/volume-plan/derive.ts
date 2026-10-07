@@ -2,6 +2,7 @@
  * 零输入推导卷纲：章节标题 + 正文里的「第X幕 / 第X场」标记 + 小标题 + 已有章纲 → 幕 → 章 → 关键节拍
  */
 import { isDirectiveLine, sceneContainerTitle } from '../outline/novel-markers';
+import type { StructureClassifier } from '../outline/types';
 import {
   STRUCTURE_TEMPLATES,
   allocateChapters,
@@ -41,6 +42,22 @@ export interface VolumePlanOverlay {
 export interface DeriveVolumeOptions {
   /** 指定结构；省略时有幕标记按标记分幕，否则按章数自动挑选模板 */
   structure?: VolumeStructureId | null;
+  /**
+   * 结构行识别器（作者在「设置 → 正文结构」配置的规则，例如 English「Act I」「Scene 2」）；
+   * 传入时幕 / 场按它判断、标题为整行；省略时用内置的「第X幕 / 第X场」
+   */
+  classify?: StructureClassifier;
+}
+
+/** 一行的幕 / 场标题；不是时为 null */
+function markerTitle(
+  line: string,
+  kind: 'act' | 'scene',
+  classify: StructureClassifier | undefined
+): string | null {
+  if (classify) return classify(line) === kind ? line : null;
+  const match = line.match(kind === 'act' ? RE_ACT : RE_SCENE);
+  return match ? `${match[1]} ${match[2] || ''}`.trim() : null;
 }
 
 function fileBase(filePath: string): string {
@@ -56,8 +73,10 @@ export function firstSentence(line: string, max = BEAT_TEXT_MAX): string {
   return sentence.length > max ? `${sentence.slice(0, max)}…` : sentence;
 }
 
-function isStructuralLine(line: string): boolean {
-  return RE_ACT.test(line) || RE_SCENE.test(line) || RE_HEADING.test(line) || isDirectiveLine(line);
+function isStructuralLine(line: string, classify?: StructureClassifier): boolean {
+  if (RE_HEADING.test(line) || isDirectiveLine(line)) return true;
+  if (classify) return classify(line) !== null;
+  return RE_ACT.test(line) || RE_SCENE.test(line);
 }
 
 interface ChapterSegment {
@@ -81,7 +100,8 @@ function uniqueKey(base: string, used: Set<string>): string {
 function fallbackBeats(
   source: VolumeChapterSource,
   lines: string[],
-  used: Set<string>
+  used: Set<string>,
+  classify?: StructureClassifier
 ): VolumeBeat[] {
   const base = fileBase(source.path);
   const outline = (source.outline || []).map((item) => item.trim()).filter(Boolean);
@@ -98,7 +118,7 @@ function fallbackBeats(
     const match = raw.trim().match(RE_HEADING);
     if (!match || match[1].length < 2) return;
     const title = match[2].trim();
-    if (!title || RE_CHAPTER_HEADING.test(title)) return;
+    if (!title || RE_CHAPTER_HEADING.test(title) || classify?.(title) === 'chapter') return;
     headings.push({
       key: uniqueKey(`${base}#heading:${title}`, used),
       title: '',
@@ -110,7 +130,7 @@ function fallbackBeats(
   if (headings.length > 0) return headings;
   const openingIndex = lines.findIndex((raw) => {
     const trimmed = raw.trim();
-    return trimmed && !isStructuralLine(trimmed);
+    return trimmed && !isStructuralLine(trimmed, classify);
   });
   if (openingIndex < 0) return [];
   return [
@@ -125,7 +145,10 @@ function fallbackBeats(
 }
 
 /** 解析一章：按幕标记切段，段内收集场景节拍 */
-function parseChapter(source: VolumeChapterSource): ChapterSegment[] {
+function parseChapter(
+  source: VolumeChapterSource,
+  classify?: StructureClassifier
+): ChapterSegment[] {
   const lines = source.content.split(/\r?\n/);
   const base = fileBase(source.path);
   const used = new Set<string>();
@@ -136,22 +159,20 @@ function parseChapter(source: VolumeChapterSource): ChapterSegment[] {
   lines.forEach((raw, index) => {
     const trimmed = raw.trim();
     if (!trimmed) return;
-    const actMatch = trimmed.match(RE_ACT);
-    if (actMatch) {
+    const actTitle = markerTitle(trimmed, 'act', classify);
+    if (actTitle !== null) {
       pendingScene = null;
       segments.push({
-        act: { title: `${actMatch[1]} ${actMatch[2] || ''}`.trim(), line: index + 1 },
+        act: { title: actTitle, line: index + 1 },
         beats: [],
       });
       return;
     }
     // 场景：「第X场」标题，或小说格式的场景容器 :::scene{title=…}
-    const sceneMatch = trimmed.match(RE_SCENE);
-    const containerTitle = sceneMatch ? null : sceneContainerTitle(trimmed);
-    if (sceneMatch || containerTitle !== null) {
-      const title = sceneMatch
-        ? `${sceneMatch[1]} ${sceneMatch[2] || ''}`.trim()
-        : (containerTitle ?? '场景');
+    const sceneTitle = markerTitle(trimmed, 'scene', classify);
+    const containerTitle = sceneTitle !== null ? null : sceneContainerTitle(trimmed);
+    if (sceneTitle !== null || containerTitle !== null) {
+      const title = sceneTitle ?? containerTitle ?? '场景';
       const beat: VolumeBeat = {
         key: uniqueKey(`${base}#scene:${title}`, used),
         title,
@@ -164,14 +185,14 @@ function parseChapter(source: VolumeChapterSource): ChapterSegment[] {
       sceneCount += 1;
       return;
     }
-    if (pendingScene && !pendingScene.text && !isStructuralLine(trimmed)) {
+    if (pendingScene && !pendingScene.text && !isStructuralLine(trimmed, classify)) {
       pendingScene.text = firstSentence(trimmed);
       pendingScene = null;
     }
   });
 
   if (sceneCount === 0) {
-    segments[0].beats = fallbackBeats(source, lines, used);
+    segments[0].beats = fallbackBeats(source, lines, used, classify);
   }
   // 幕标记之前的空白开头不单独占位
   if (segments.length > 1 && segments[0].beats.length === 0) segments.shift();
@@ -250,9 +271,14 @@ function buildTemplateActs(
 }
 
 /** 正文里是否有幕标记 */
-export function hasActMarkers(chapters: VolumeChapterSource[]): boolean {
+export function hasActMarkers(
+  chapters: VolumeChapterSource[],
+  classify?: StructureClassifier
+): boolean {
   return chapters.some((chapter) =>
-    chapter.content.split(/\r?\n/).some((line) => RE_ACT.test(line.trim()))
+    chapter.content
+      .split(/\r?\n/)
+      .some((line) => markerTitle(line.trim(), 'act', classify) !== null)
   );
 }
 
@@ -263,11 +289,12 @@ export function deriveVolumeOutline(
   chapters: VolumeChapterSource[],
   options: DeriveVolumeOptions = {}
 ): VolumeOutline {
-  const markers = hasActMarkers(chapters);
+  const { classify } = options;
+  const markers = hasActMarkers(chapters, classify);
   let structure: VolumeStructureId =
     options.structure ?? (markers ? 'markers' : pickStructureByChapterCount(chapters.length));
   if (structure === 'markers' && !markers) structure = pickStructureByChapterCount(chapters.length);
-  const parsed = chapters.map(parseChapter);
+  const parsed = chapters.map((source) => parseChapter(source, classify));
   const acts =
     structure === 'markers'
       ? buildMarkerActs(chapters, parsed)

@@ -20,6 +20,8 @@ export interface AIProviderInfo {
   defaultModel: string;
   models: readonly string[];
   docsUrl?: string;
+  /** 视频服务支持「生成声音」 */
+  supportsAudio?: boolean;
   /** 已保存 API Key */
   configured: boolean;
   /** 密钥是否由系统钥匙串加密保存（false = 系统不支持加密，以受限权限文件保存） */
@@ -87,6 +89,8 @@ export interface VideoTaskSubmitPayload {
   firstFramePath?: string;
   /** 作品内的人物参考图（三视图 / 主要形象图，相对作品目录，最多 4 张） */
   referencePaths?: string[];
+  /** 生成与画面同步的声音（只对支持的视频服务生效，缺省沿用厂商默认） */
+  withAudio?: boolean;
 }
 
 export interface VideoSettingsInfo {
@@ -96,6 +100,29 @@ export interface VideoSettingsInfo {
 }
 
 /** 场景视频工作区：定位一个场景目录（<作品>/资料/视频/<章>/<场景>/） */
+/** 作品动作库（<作品>/资料/动作库/*.bvh，main/handlers/motion-library.ts） */
+export interface MotionLibraryRef {
+  /** 作品根目录（绝对路径，主进程校验） */
+  workPath: string;
+}
+
+export interface MotionLibraryEntry {
+  fileName: string;
+  /** 预演脚本里引用的片段 id（lib:<文件名去掉 .bvh>） */
+  clipId: string;
+  size: number;
+  mtimeMs: number;
+}
+
+export interface MotionLibraryListResult {
+  files: MotionLibraryEntry[];
+}
+
+export interface MotionLibraryImportResult {
+  fileName: string;
+  clipId: string;
+}
+
 export interface VideoSceneRef {
   /** 作品根目录（绝对路径，主进程校验） */
   workPath: string;

@@ -9,6 +9,7 @@
  * 不信任渲染进程：源文件必须是存在的绝对路径、普通文件、扩展名在白名单内，
  * 且（解析符号链接后）位于该窗口已上报的工作区内；字节不超过 50MB。
  * E2E 测试（NOVEL_EDITOR_E2E=1）可用 NOVEL_EDITOR_E2E_SAVE_PATH 跳过对话框，其他情况忽略该变量。
+ * 播放器截图 / 录制生成的字节（没有源文件）走 media-save-generated（见 media-save.ts）。
  */
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { copyFile, realpath, stat, writeFile } from 'fs/promises';
@@ -17,6 +18,7 @@ import { isPathInWorkspace } from './database/workspace-path';
 import { detectImageExtension } from './character-avatar';
 import { getWorkspaceRootForSender } from './session';
 import { isE2ETestMode } from '../launch-mode';
+import { registerMediaSaveHandler } from './media-save';
 
 export const MAX_MEDIA_EXPORT_BYTES = 50 * 1024 * 1024;
 
@@ -176,13 +178,14 @@ export async function exportMedia(
 }
 
 /** E2E 测试替身：只在 NOVEL_EDITOR_E2E=1 时生效 */
-function e2eSavePath(): string | null {
+export function e2eSavePath(): string | null {
   if (!isE2ETestMode()) return null;
   const value = process.env.NOVEL_EDITOR_E2E_SAVE_PATH;
   return value && path.isAbsolute(value) ? value : null;
 }
 
 export function registerMediaExportHandlers(): void {
+  registerMediaSaveHandler();
   ipcMain.handle('media-export', async (event, request: unknown): Promise<MediaExportResult> => {
     try {
       const window = BrowserWindow.fromWebContents(event.sender);

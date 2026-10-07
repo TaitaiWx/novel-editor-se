@@ -35,6 +35,7 @@ import {
   registerEntityMediaHandlers,
   registerWorkspaceSearchHandlers,
   registerMediaExportHandlers,
+  registerProjectStructureHandlers,
 } from './handlers';
 
 export { type FileNode } from './handlers';
@@ -57,4 +58,5 @@ export function setupIPC() {
   registerEntityMediaHandlers();
   registerWorkspaceSearchHandlers();
   registerMediaExportHandlers();
+  registerProjectStructureHandlers();
 }

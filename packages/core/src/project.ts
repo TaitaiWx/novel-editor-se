@@ -42,6 +42,7 @@ import {
   compareVolumeDirNames,
   parseChapterFileName,
 } from './story-layout';
+import { normalizeStructureConfig, type StructureConfig } from './structure-rules';
 import { computeTextStats, sumTextStats, type TextStats } from './text-stats';
 
 export const PROJECT_META_DIR = '.novel-editor';
@@ -57,6 +58,8 @@ export interface ProjectConfig {
   novelsDir: string;
   /** 新建章节的扩展名 */
   chapterExtension: '.md' | '.txt';
+  /** 正文结构规则（章 / 幕 / 场的识别预设与自定义规则，见 structure-rules.ts）；省略时用默认规则 */
+  structure?: StructureConfig;
 }
 
 export interface Project {
@@ -77,6 +80,9 @@ function normalizeConfig(raw: Partial<ProjectConfig>, root: string): ProjectConf
     createdAt: raw.createdAt || new Date(0).toISOString(),
     novelsDir: raw.novelsDir ?? DEFAULT_NOVELS_DIR,
     chapterExtension: raw.chapterExtension === '.txt' ? '.txt' : '.md',
+    ...(raw.structure !== undefined
+      ? { structure: normalizeStructureConfig(raw.structure).config }
+      : {}),
   };
 }
 

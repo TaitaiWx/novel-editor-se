@@ -25,6 +25,7 @@
     "./story-layout": "./src/story-layout.ts",
     "./gui-session": "./src/gui-session.ts",
     "./entity-media": "./src/entity-media.ts",
-    "./novel-format": "./src/novel-format.ts"
+    "./novel-format": "./src/novel-format.ts",
+    "./structure-rules": "./src/structure-rules.ts"
   }
 }

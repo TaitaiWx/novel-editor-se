@@ -26,26 +26,41 @@ export interface SceneBlock {
   endLine: number;
 }
 
-function isBoundary(line: string): boolean {
+/**
+ * 结构行识别器（作者在「设置 → 正文结构」配置的规则，见 utils/structureRules）；
+ * 省略时只认内置的「第X场 / 第X幕」
+ */
+export type SceneLineClassifier = (line: string) => 'chapter' | 'act' | 'scene' | null;
+
+/** 一行的场景标题；不是场景标记时为 null */
+function sceneTitleOf(trimmed: string, classify?: SceneLineClassifier): string | null {
+  if (classify) return classify(trimmed) === 'scene' ? trimmed : null;
+  const match = RE_SCENE.exec(trimmed);
+  return match ? `${match[1]} ${match[2] ?? ''}`.trim() : null;
+}
+
+function isBoundary(line: string, classify?: SceneLineClassifier): boolean {
   const trimmed = line.trim();
-  return RE_SCENE.test(trimmed) || RE_ACT.test(trimmed) || RE_HEADING.test(trimmed);
+  if (RE_HEADING.test(trimmed)) return true;
+  if (classify) return classify(trimmed) !== null;
+  return RE_SCENE.test(trimmed) || RE_ACT.test(trimmed);
 }
 
 /** 列出正文中所有「第X场」段落 */
-export function listSceneBlocks(text: string): SceneBlock[] {
+export function listSceneBlocks(text: string, classify?: SceneLineClassifier): SceneBlock[] {
   const lines = text.split(/\r?\n/);
   const blocks: SceneBlock[] = [];
   for (let index = 0; index < lines.length; index += 1) {
-    const match = RE_SCENE.exec(lines[index].trim());
-    if (!match) continue;
+    const title = sceneTitleOf(lines[index].trim(), classify);
+    if (title === null) continue;
     let end = index + 1;
-    while (end < lines.length && !isBoundary(lines[end])) end += 1;
+    while (end < lines.length && !isBoundary(lines[end], classify)) end += 1;
     const body = lines
       .slice(index + 1, end)
       .join('\n')
       .trim();
     blocks.push({
-      title: `${match[1]} ${match[2] ?? ''}`.trim(),
+      title,
       text: body,
       startLine: index + 1,
       endLine: end,
@@ -56,17 +71,27 @@ export function listSceneBlocks(text: string): SceneBlock[] {
 }
 
 /** 光标所在行属于哪一场（行号 1-based）；不在任何场内时返回 null */
-export function findSceneBlockAtLine(text: string, line: number): SceneBlock | null {
+export function findSceneBlockAtLine(
+  text: string,
+  line: number,
+  classify?: SceneLineClassifier
+): SceneBlock | null {
   return (
-    listSceneBlocks(text).find((block) => line >= block.startLine && line <= block.endLine) ?? null
+    listSceneBlocks(text, classify).find(
+      (block) => line >= block.startLine && line <= block.endLine
+    ) ?? null
   );
 }
 
 /** 按场景名定位：完全一致优先，其次只比较「第X场」前缀（作者改了场景小标题时仍能找到） */
-export function findSceneBlockByTitle(text: string, title: string): SceneBlock | null {
+export function findSceneBlockByTitle(
+  text: string,
+  title: string,
+  classify?: SceneLineClassifier
+): SceneBlock | null {
   const wanted = title.replace(/\s+/g, ' ').trim();
   if (!wanted) return null;
-  const blocks = listSceneBlocks(text);
+  const blocks = listSceneBlocks(text, classify);
   const exact = blocks.find((block) => block.title === wanted);
   if (exact) return exact;
   const prefix = RE_SCENE.exec(wanted)?.[1];
@@ -79,10 +104,10 @@ function clip(text: string, max: number): string {
 }
 
 /** 去掉章节标题、幕 / 场标记行，留下可读正文 */
-export function stripStructureLines(text: string): string {
+export function stripStructureLines(text: string, classify?: SceneLineClassifier): string {
   return text
     .split(/\r?\n/)
-    .filter((line) => !isBoundary(line))
+    .filter((line) => !isBoundary(line, classify))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -101,6 +126,8 @@ export interface SceneSourceInput {
   cursorLine?: number;
   /** 指定场景名（卷纲 / 重新打开标签） */
   sceneTitle?: string;
+  /** 结构行识别器（项目的正文结构规则）；省略时只认「第X场 / 第X幕」 */
+  classify?: SceneLineClassifier;
 }
 
 export interface SceneSource {
@@ -129,20 +156,27 @@ export function selectionSceneName(selection: string, enclosing: SceneBlock | nu
  */
 export function resolveSceneSource(input: SceneSourceInput): SceneSource {
   const docText = input.docText ?? '';
+  const { classify } = input;
   const selection = input.selectionText?.trim() ?? '';
   if (selection) {
     const enclosing =
-      input.selectionLine !== undefined ? findSceneBlockAtLine(docText, input.selectionLine) : null;
+      input.selectionLine !== undefined
+        ? findSceneBlockAtLine(docText, input.selectionLine, classify)
+        : null;
     return {
       scene: selectionSceneName(selection, enclosing),
       text: clip(selection, MAX_SCENE_SOURCE_CHARS),
       origin: 'selection',
     };
   }
-  const byTitle = input.sceneTitle ? findSceneBlockByTitle(docText, input.sceneTitle) : null;
+  const byTitle = input.sceneTitle
+    ? findSceneBlockByTitle(docText, input.sceneTitle, classify)
+    : null;
   const block =
     byTitle ??
-    (input.cursorLine !== undefined ? findSceneBlockAtLine(docText, input.cursorLine) : null);
+    (input.cursorLine !== undefined
+      ? findSceneBlockAtLine(docText, input.cursorLine, classify)
+      : null);
   if (block) {
     return {
       scene: input.sceneTitle?.trim() || block.title,
@@ -152,7 +186,7 @@ export function resolveSceneSource(input: SceneSourceInput): SceneSource {
   }
   return {
     scene: input.sceneTitle?.trim() || '全章',
-    text: clip(stripStructureLines(docText), MAX_SCENE_SOURCE_CHARS),
+    text: clip(stripStructureLines(docText, classify), MAX_SCENE_SOURCE_CHARS),
     origin: 'chapter',
   };
 }

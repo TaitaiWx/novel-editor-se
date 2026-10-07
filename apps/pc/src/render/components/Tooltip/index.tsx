@@ -11,6 +11,24 @@ interface TooltipProps {
   className?: string;
   /** 包裹元素的内联样式（例如作为 flex 子项时设置 flexGrow） */
   style?: React.CSSProperties;
+  /**
+   * 提示挂载的容器，默认 document.body。全屏时只有全屏元素内部会被绘制，
+   * 因此触发器位于全屏元素内时自动挂到全屏元素里；也可显式指定（例如播放器全屏时传入播放器根元素）
+   */
+  portalContainer?: HTMLElement | null;
+}
+
+/** 提示挂载位置：显式指定 > 包含触发器的全屏元素 > body */
+export function tooltipPortalTarget(
+  trigger: Element | null,
+  explicit?: HTMLElement | null
+): HTMLElement {
+  if (explicit) return explicit;
+  const fullscreen = document.fullscreenElement;
+  if (fullscreen instanceof HTMLElement && trigger && fullscreen.contains(trigger)) {
+    return fullscreen;
+  }
+  return document.body;
 }
 
 type TooltipPlacement = 'top' | 'bottom';
@@ -25,6 +43,7 @@ const Tooltip: React.FC<TooltipProps> = ({
   delay = 300,
   className,
   style,
+  portalContainer,
 }) => {
   const [visible, setVisible] = useState(false);
   const [placement, setPlacement] = useState<TooltipPlacement>(position);
@@ -129,7 +148,7 @@ const Tooltip: React.FC<TooltipProps> = ({
           >
             {content}
           </span>,
-          document.body
+          tooltipPortalTarget(triggerRef.current, portalContainer)
         )}
     </span>
   );

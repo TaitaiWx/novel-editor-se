@@ -15,10 +15,15 @@ import {
   parseShotFileName,
   sanitizePathSegment,
 } from '@novel-editor/video';
-import { mediaPathCandidates } from '../components/TextEditor/live-preview/media-loader';
+import {
+  mediaPathCandidates,
+  peekResolvedMedia,
+  resolveMediaRefs,
+} from '../components/TextEditor/live-preview/media-resolve';
 import { resolveImageSource } from '../components/TextEditor/live-preview/image-loader';
 import type { FileNode } from '../types';
 import {
+  PENDING_REFERENCE_PREFIX,
   referenceKindOf,
   type ReferenceGroup,
   type ReferenceItem,
@@ -78,13 +83,62 @@ function baseName(filePath: string): string {
   return filePath.split(/[\\/]/).pop() ?? filePath;
 }
 
+/** 本章引用的标识：语法 + 地址（同一文档内唯一） */
+export function documentMediaRefKey(ref: Pick<DocumentMediaRef, 'syntax' | 'src'>): string {
+  return `${ref.syntax}\n${ref.src}`;
+}
+
+function chapterItem(ref: DocumentMediaRef, path: string): ReferenceItem {
+  return {
+    path,
+    title: ref.caption.trim() || baseName(path),
+    kind: ref.kind,
+    group: 'chapter',
+    origin: 'auto',
+    refKey: documentMediaRefKey(ref),
+  };
+}
+
+/** 还没解析出路径的引用：占位（标题取说明文字，类型按扩展名），解析后原位替换 */
+export function pendingChapterItem(ref: DocumentMediaRef): ReferenceItem {
+  const refKey = documentMediaRefKey(ref);
+  const name = baseName(ref.src.split(/[?#]/)[0]);
+  return {
+    path: `${PENDING_REFERENCE_PREFIX}${refKey}`,
+    title: ref.caption.trim() || name,
+    kind: referenceKindOf(name) ?? ref.kind,
+    group: 'chapter',
+    origin: 'auto',
+    refKey,
+    pending: true,
+  };
+}
+
+/** 按解析结果（与 refs 一一对应，null = 找不到）生成本章条目，同一路径只取一次 */
+function itemsFromResolved(
+  refs: readonly DocumentMediaRef[],
+  resolved: ReadonlyArray<string | null | undefined>
+): ReferenceItem[] {
+  const items: ReferenceItem[] = [];
+  const seen = new Set<string>();
+  refs.forEach((ref, index) => {
+    const found = resolved[index];
+    if (found === null) return;
+    const item = found === undefined ? pendingChapterItem(ref) : chapterItem(ref, found);
+    if (seen.has(item.path)) return;
+    seen.add(item.path);
+    items.push(item);
+  });
+  return items;
+}
+
 /** 解析文档引用为本地文件（exists 判断候选路径是否存在；找不到的引用跳过） */
 export async function resolveDocumentMedia(
   refs: readonly DocumentMediaRef[],
   documentPath: string | null,
   exists: (path: string) => Promise<boolean>
 ): Promise<ReferenceItem[]> {
-  const items: ReferenceItem[] = [];
+  const resolved: Array<string | null> = [];
   for (const ref of refs) {
     const candidates =
       ref.syntax === 'directive'
@@ -98,16 +152,43 @@ export async function resolveDocumentMedia(
         break;
       }
     }
-    if (!found || items.some((item) => item.path === found)) continue;
-    items.push({
-      path: found,
-      title: ref.caption.trim() || baseName(found),
-      kind: ref.kind,
-      group: 'chapter',
-      origin: 'auto',
-    });
+    resolved.push(found);
   }
-  return items;
+  return itemsFromResolved(refs, resolved);
+}
+
+/** 经共享解析缓存（media-resolve）解析：已缓存的直接用，其余一次批量探测 */
+export async function resolveDocumentMediaCached(
+  refs: readonly DocumentMediaRef[],
+  documentPath: string | null
+): Promise<ReferenceItem[]> {
+  return itemsFromResolved(refs, await resolveMediaRefs(documentPath, refs));
+}
+
+/**
+ * 同步生成本章条目：缓存里有的直接用，没解析过的放占位（保持文档顺序），确认找不到的跳过。
+ * peek 默认读共享解析缓存。
+ */
+export function peekDocumentMedia(
+  refs: readonly DocumentMediaRef[],
+  documentPath: string | null,
+  peek: (ref: DocumentMediaRef) => string | null | undefined = (ref) =>
+    peekResolvedMedia(documentPath, ref)
+): ReferenceItem[] {
+  return itemsFromResolved(
+    refs,
+    refs.map((ref) => peek(ref))
+  );
+}
+
+/** 占位条目的选中路径换成解析后的路径（还没解析或找不到时原样返回） */
+export function remapPendingSelection(
+  selected: string | null,
+  resolved: readonly ReferenceItem[]
+): string | null {
+  if (!selected || !selected.startsWith(PENDING_REFERENCE_PREFIX)) return selected;
+  const refKey = selected.slice(PENDING_REFERENCE_PREFIX.length);
+  return resolved.find((item) => !item.pending && item.refKey === refKey)?.path ?? selected;
 }
 
 function normalize(path: string): string {
@@ -226,6 +307,7 @@ export function groupOf(item: ReferenceItem): ReferenceGroup {
  * - 作者打开 / 拖入的（origin 不是 auto）原位保留
  * - 仍然存在的自动项保留作者排好的位置（标题 / 分组更新）
  * - 不再存在的自动项移除；作者移除过的（dismissed）不再出现
+ * - 占位（pending）被同一引用解析出的条目原位替换
  * - 新增的自动项插到同组最后一项之后；同组没有时插到后面分组之前
  */
 export function reconcileAutoItems(
@@ -233,8 +315,11 @@ export function reconcileAutoItems(
   nextAuto: readonly ReferenceItem[],
   dismissed: ReadonlySet<string> = new Set()
 ): ReferenceItem[] {
+  const isDismissed = (item: ReferenceItem) =>
+    dismissed.has(item.path) ||
+    (item.refKey !== undefined && dismissed.has(`${PENDING_REFERENCE_PREFIX}${item.refKey}`));
   const nextByPath = new Map(
-    nextAuto.filter((item) => !dismissed.has(item.path)).map((item) => [item.path, item])
+    nextAuto.filter((item) => !isDismissed(item)).map((item) => [item.path, item])
   );
   const result: ReferenceItem[] = [];
   for (const item of current) {
@@ -244,10 +329,14 @@ export function reconcileAutoItems(
       nextByPath.delete(item.path);
       continue;
     }
-    const updated = nextByPath.get(item.path);
+    // 占位：解析出的条目（同一 refKey）原位替换，不改变其他条目的顺序
+    let updated = nextByPath.get(item.path);
+    if (!updated && item.pending && item.refKey !== undefined) {
+      updated = [...nextByPath.values()].find((entry) => entry.refKey === item.refKey);
+    }
     if (!updated) continue;
     result.push(updated);
-    nextByPath.delete(item.path);
+    nextByPath.delete(updated.path);
   }
   for (const item of nextByPath.values()) {
     const group = groupOf(item);
@@ -266,7 +355,9 @@ export function reconcileAutoItems(
     }
     result.splice(insertAt, 0, item);
   }
-  return result;
+  // 占位解析出的路径可能与已有条目重复：保留先出现的
+  const seen = new Set<string>();
+  return result.filter((item) => !seen.has(item.path) && Boolean(seen.add(item.path)));
 }
 
 /** 把 from 位置的参考移到 to 位置（越界时夹到两端；位置不变时返回原数组） */

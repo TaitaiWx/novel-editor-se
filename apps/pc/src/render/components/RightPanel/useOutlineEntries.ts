@@ -1,3 +1,4 @@
+import { useStructureClassifier } from '@/render/utils/structureRules';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   PersistedOutlineNodeInput,
@@ -45,14 +46,16 @@ export function useOutlineEntries(
 
   // Debounce content changes for liveEntries (300ms) to avoid re-parsing on every keystroke
   const debouncedContent = useDebounce(content, 300);
+  const classify = useStructureClassifier();
 
   const liveEntries = useMemo(() => {
-    const headings = extractOutline(debouncedContent, { enableHeuristic: false });
+    // 章标题按项目的正文结构规则识别（设置 → 正文结构，例如 English「Chapter 1」）
+    const headings = extractOutline(debouncedContent, { enableHeuristic: false, classify });
     return buildOutlineEntries(debouncedContent, headings).map((entry) => ({
       ...entry,
       source: 'document' as const,
     }));
-  }, [debouncedContent]);
+  }, [debouncedContent, classify]);
 
   const [persistedRows, setPersistedRows] = useState<PersistedOutlineRow[]>([]);
   const [versions, setVersions] = useState<PersistedOutlineVersionRow[]>([]);

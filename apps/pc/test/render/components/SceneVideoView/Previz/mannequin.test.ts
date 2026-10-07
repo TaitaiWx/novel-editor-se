@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
+import { PREVIZ_PROP_DEFAULT_SIZE } from '@novel-editor/video';
 import {
   applyPose,
   applyPoseSample,
@@ -150,7 +151,9 @@ describe('木偶小人', () => {
       prop.root.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(prop.root);
       expect(box.min.y, preset.kind).toBeGreaterThanOrEqual(-0.001);
-      expect(box.max.y, preset.kind).toBeGreaterThan(0.5);
+      // 高度与预演脚本的默认尺寸一致（size 按它缩放）
+      const height = PREVIZ_PROP_DEFAULT_SIZE[preset.kind][1];
+      expect(Math.abs(box.max.y - height) / height, preset.kind).toBeLessThan(0.1);
       setPropSelected(prop, true);
       expect(prop.materials[0].emissive.getHex()).not.toBe(0);
       setPropSelected(prop, false);

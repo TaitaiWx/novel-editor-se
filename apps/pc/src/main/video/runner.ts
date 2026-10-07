@@ -77,6 +77,7 @@ export interface VideoSubmitInput {
   /** 作品内的首帧图 / 人物参考图（相对作品目录），提交时读取 */
   firstFramePath?: string;
   referencePaths?: string[];
+  withAudio?: boolean;
 }
 
 const MIN_WAKE_MS = 500;
@@ -220,6 +221,7 @@ export class VideoTaskRunner {
           firstFrameFromPath ??
           (typeof params.firstFrameImage === 'string' ? params.firstFrameImage : undefined),
         ...(referenceImages.length ? { referenceImages } : {}),
+        ...(typeof params.withAudio === 'boolean' ? { withAudio: params.withAudio } : {}),
       });
       this.apply(task, { type: 'submitted', remoteTaskId });
     } catch (error) {
@@ -363,6 +365,7 @@ export class VideoTaskRunner {
     if (input.firstFrameImage) params.firstFrameImage = input.firstFrameImage;
     if (input.firstFramePath) params.firstFramePath = input.firstFramePath;
     if (input.referencePaths?.length) params.referencePaths = input.referencePaths;
+    if (typeof input.withAudio === 'boolean') params.withAudio = input.withAudio;
     const task = createVideoTask(
       {
         id: this.deps.createId?.() ?? randomUUID(),

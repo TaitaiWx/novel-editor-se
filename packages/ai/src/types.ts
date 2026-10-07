@@ -178,4 +178,6 @@ export interface ProviderDescriptor {
   /** CLI 读取密钥的环境变量名 */
   envKey: string;
   docsUrl?: string;
+  /** 视频服务：公开文档支持「生成声音」（请求里的 withAudio 会被映射） */
+  supportsAudio?: boolean;
 }

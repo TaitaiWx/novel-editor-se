@@ -21,6 +21,9 @@ export const PROP_PRESETS: readonly PropPreset[] = [
   { kind: 'pillar', label: '柱子', radius: 0.35 },
   { kind: 'tree', label: '树', radius: 1 },
   { kind: 'crate', label: '箱子', radius: 0.4 },
+  { kind: 'box', label: '方块', radius: 0.5 },
+  { kind: 'cylinder', label: '圆柱', radius: 0.25 },
+  { kind: 'sphere', label: '球', radius: 0.25 },
 ];
 
 export function propPreset(kind: PropKind): PropPreset {

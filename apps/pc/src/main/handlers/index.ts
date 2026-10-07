@@ -38,5 +38,6 @@ export { registerCharacterAvatarHandlers } from './character-avatar';
 export { registerEntityMediaHandlers } from './entity-media';
 export { registerWorkspaceSearchHandlers } from './workspace-search';
 export { registerMediaExportHandlers } from './media-export';
+export { registerProjectStructureHandlers } from './project-structure';
 
 export type { FileNode } from './file-system';

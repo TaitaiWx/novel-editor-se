@@ -1,21 +1,64 @@
 /**
- * 应用内的视频播放器：独立包 @novel-editor/media-player 的薄封装，
- * 只把控制按钮的提示换成应用统一的 Tooltip。其余行为与属性见包的 README。
+ * 应用内的视频播放器：独立包 @novel-editor/media-player 的薄封装。
+ * - 控制按钮的提示换成应用统一的 Tooltip；全屏时挂到播放器内部（挂到 body 的提示在全屏时看不见）
+ * - 截图 / 录制结果走主进程「另存为」（media-save-generated），而不是浏览器下载
+ * 其余行为与属性见包的 README。
  */
-import React from 'react';
-import { VideoPlayer as BaseVideoPlayer, type RenderTooltip } from '@novel-editor/media-player';
-import type { VideoPlayerProps } from '@novel-editor/media-player';
+import React, { forwardRef, useCallback } from 'react';
+import {
+  VideoPlayer as BaseVideoPlayer,
+  type RenderTooltip,
+  type VideoPlayerHandle,
+  type VideoPlayerProps,
+} from '@novel-editor/media-player';
 import Tooltip from '../Tooltip';
+import { useOptionalToast } from '../Toast';
+import { saveGeneratedMedia } from '../../utils/mediaExport';
 
 export { formatTime } from '@novel-editor/media-player';
-export type { VideoMetadata, VideoPlayerProps } from '@novel-editor/media-player';
+export type {
+  VideoMetadata,
+  VideoPlayerHandle,
+  VideoPlayerProps,
+} from '@novel-editor/media-player';
 
-const renderTooltip: RenderTooltip = (content, control) => (
-  <Tooltip content={content}>{control}</Tooltip>
+const renderTooltip: RenderTooltip = (content, control, context) => (
+  <Tooltip content={content} portalContainer={context.container}>
+    {control}
+  </Tooltip>
 );
 
-const VideoPlayer: React.FC<VideoPlayerProps> = (props) => (
-  <BaseVideoPlayer renderTooltip={renderTooltip} {...props} />
-);
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
+  const toast = useOptionalToast();
+  // 保存结果：成功提示位置；取消返回 false（播放器不再提示「已截图」）；失败抛出由播放器提示
+  const save = useCallback(
+    async (blob: Blob, fileName: string): Promise<boolean> => {
+      const result = await saveGeneratedMedia(blob, fileName);
+      if (result.error) throw new Error(result.error);
+      if (result.saved) toast?.success(`已保存到 ${result.filePath ?? ''}`, 5000);
+      return result.saved;
+    },
+    [toast]
+  );
+  const onScreenshot = useCallback(
+    (blob: Blob, meta: { fileName: string }) => save(blob, meta.fileName),
+    [save]
+  );
+  const onRecording = useCallback(
+    (blob: Blob, meta: { fileName: string }) => save(blob, meta.fileName),
+    [save]
+  );
+  return (
+    <BaseVideoPlayer
+      ref={ref}
+      renderTooltip={renderTooltip}
+      onScreenshot={onScreenshot}
+      onRecording={onRecording}
+      {...props}
+    />
+  );
+});
+
+VideoPlayer.displayName = 'VideoPlayer';
 
 export default VideoPlayer;

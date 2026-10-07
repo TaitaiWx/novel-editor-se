@@ -1,5 +1,5 @@
 import { extractOutline } from './extract-outline';
-import type { ActNode, SceneNode } from './types';
+import type { ActNode, SceneNode, StructureClassifier } from './types';
 import { isDirectiveLine, sceneContainerTitle } from './novel-markers';
 
 /**
@@ -18,7 +18,24 @@ const CHAPTERS_PER_ACT = 10;
  * 支持 "第X幕" → "第X场" 层级关系
  * 当未检测到幕/场景标记时，自动从章节标题生成幕结构
  */
-export function extractActs(text: string): ActNode[] {
+export interface ExtractActsOptions {
+  /** 结构行识别器（作者配置的规则）；传入时幕 / 场按它判断，标题为整行 */
+  classify?: StructureClassifier;
+}
+
+/** 一行的幕 / 场标题；不是时为 null */
+function markerTitle(
+  trimmed: string,
+  kind: 'act' | 'scene',
+  classify: StructureClassifier | undefined
+): string | null {
+  if (classify) return classify(trimmed) === kind ? trimmed : null;
+  const match = trimmed.match(kind === 'act' ? RE_ACT : RE_SCENE);
+  return match ? (match[1] + ' ' + (match[2] || '')).trim() : null;
+}
+
+export function extractActs(text: string, options: ExtractActsOptions = {}): ActNode[] {
+  const { classify } = options;
   if (!text) return [];
 
   const lines = text.split('\n');
@@ -33,10 +50,10 @@ export function extractActs(text: string): ActNode[] {
     const lineNum = i + 1;
 
     // 检测幕
-    const actMatch = trimmed.match(RE_ACT);
-    if (actMatch) {
+    const actTitle = markerTitle(trimmed, 'act', classify);
+    if (actTitle !== null) {
       currentAct = {
-        title: (actMatch[1] + ' ' + (actMatch[2] || '')).trim(),
+        title: actTitle,
         line: lineNum,
         scenes: [],
       };
@@ -46,13 +63,11 @@ export function extractActs(text: string): ActNode[] {
     }
 
     // 检测场景：「第X场」标题，或小说格式的场景容器 :::scene{title=…}
-    const sceneMatch = trimmed.match(RE_SCENE);
-    const containerTitle = sceneMatch ? null : sceneContainerTitle(trimmed);
-    if (sceneMatch || containerTitle !== null) {
+    const sceneTitle = markerTitle(trimmed, 'scene', classify);
+    const containerTitle = sceneTitle !== null ? null : sceneContainerTitle(trimmed);
+    if (sceneTitle !== null || containerTitle !== null) {
       currentScene = {
-        title: sceneMatch
-          ? (sceneMatch[1] + ' ' + (sceneMatch[2] || '')).trim()
-          : (containerTitle ?? ''),
+        title: sceneTitle ?? containerTitle ?? '',
         line: lineNum,
         preview: '',
       };
@@ -81,7 +96,7 @@ export function extractActs(text: string): ActNode[] {
 
   // Fallback: if no explicit act/scene markers, generate from chapter headings
   if (acts.length === 0) {
-    return generateActsFromChapters(text, lines);
+    return generateActsFromChapters(text, lines, classify);
   }
 
   return acts;
@@ -91,8 +106,12 @@ export function extractActs(text: string): ActNode[] {
  * 当正文没有"第X幕/第X场"标记时，从章节标题自动生成幕结构。
  * 每 CHAPTERS_PER_ACT 个章节归为一幕，每个章节作为一个场景。
  */
-function generateActsFromChapters(text: string, lines: string[]): ActNode[] {
-  const headings = extractOutline(text, { enableHeuristic: false });
+function generateActsFromChapters(
+  text: string,
+  lines: string[],
+  classify: StructureClassifier | undefined
+): ActNode[] {
+  const headings = extractOutline(text, { enableHeuristic: false, classify });
   if (headings.length === 0) return [];
 
   const acts: ActNode[] = [];

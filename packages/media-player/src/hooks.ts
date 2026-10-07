@@ -1,0 +1,216 @@
+/**
+ * 播放器的浏览器能力 hooks：全屏（含 webkit 前缀 / iOS 视频全屏）、画中画、录屏。
+ * 能力在挂载后检测（SSR 安全），不支持时对应按钮隐藏。
+ */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  FULLSCREEN_EVENTS,
+  enterFullscreen,
+  exitFullscreen,
+  getFullscreenElement,
+  isPictureInPicture,
+  nextVideoFrame,
+  supportsElementFullscreen,
+  supportsPictureInPicture,
+  supportsRecording,
+  supportsVideoFullscreen,
+  togglePictureInPicture,
+} from './features';
+import {
+  nextRecordingStatus,
+  startRecordingSession,
+  type RecordingEvent,
+  type RecordingResult,
+  type RecordingSession,
+  type RecordingStatus,
+} from './recorder';
+import { PlayerError } from './engines/types';
+
+type ElementRef<T> = React.RefObject<T | null>;
+
+const NOTICE_MS = 2400;
+
+/** 画面上方的短暂提示（截图 / 录制结果、速度变化、错误） */
+export function useNotice() {
+  const [notice, setNotice] = useState<{ message: string; tone: 'info' | 'error' } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    []
+  );
+  const showNotice = useCallback((message: string, tone: 'info' | 'error' = 'info') => {
+    setNotice({ message, tone });
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setNotice(null), NOTICE_MS);
+  }, []);
+  return { notice, showNotice };
+}
+
+export function useFullscreen(
+  rootRef: ElementRef<HTMLDivElement>,
+  videoRef: ElementRef<HTMLVideoElement>,
+  onChange?: () => void
+) {
+  const [fullscreen, setFullscreen] = useState(false);
+  const [supported, setSupported] = useState(false);
+  const changeRef = useRef(onChange);
+  changeRef.current = onChange;
+
+  useEffect(() => {
+    setSupported(
+      supportsElementFullscreen(rootRef.current) || supportsVideoFullscreen(videoRef.current)
+    );
+    const handle = () => {
+      const root = rootRef.current;
+      setFullscreen(!!root && getFullscreenElement() === root);
+      changeRef.current?.();
+    };
+    for (const name of FULLSCREEN_EVENTS) document.addEventListener(name, handle);
+    return () => {
+      for (const name of FULLSCREEN_EVENTS) document.removeEventListener(name, handle);
+    };
+  }, [rootRef, videoRef]);
+
+  const toggle = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    if (getFullscreenElement() === root) exitFullscreen();
+    else enterFullscreen(root, videoRef.current);
+  }, [rootRef, videoRef]);
+
+  return { fullscreen, supported, toggle };
+}
+
+export function usePictureInPicture(videoRef: ElementRef<HTMLVideoElement>, sourceKey: string) {
+  const [active, setActive] = useState(false);
+  const [supported, setSupported] = useState(false);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    setSupported(supportsPictureInPicture(video));
+    const sync = () => setActive(isPictureInPicture(video));
+    const events = [
+      'enterpictureinpicture',
+      'leavepictureinpicture',
+      'webkitpresentationmodechanged',
+    ];
+    for (const name of events) video.addEventListener(name, sync);
+    return () => {
+      for (const name of events) video.removeEventListener(name, sync);
+    };
+  }, [videoRef, sourceKey]);
+
+  const toggle = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    await togglePictureInPicture(video);
+  }, [videoRef]);
+
+  return { active, supported, toggle };
+}
+
+export interface UseRecordingOptions {
+  baseName: string;
+  maxDurationSeconds?: number;
+  onResult: (result: RecordingResult) => void;
+  onError: (error: PlayerError) => void;
+}
+
+export function useRecording(videoRef: ElementRef<HTMLVideoElement>, options: UseRecordingOptions) {
+  const [status, setStatus] = useState<RecordingStatus>('idle');
+  const [elapsed, setElapsed] = useState(0);
+  const [supported, setSupported] = useState(false);
+  const sessionRef = useRef<RecordingSession | null>(null);
+  const statusRef = useRef<RecordingStatus>('idle');
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  const dispatch = useCallback((event: RecordingEvent) => {
+    statusRef.current = nextRecordingStatus(statusRef.current, event);
+    setStatus(statusRef.current);
+  }, []);
+
+  useEffect(() => {
+    setSupported(supportsRecording(videoRef.current));
+  }, [videoRef]);
+
+  // 录制中每 250ms 刷新已录时长
+  useEffect(() => {
+    if (status !== 'recording') return;
+    const session = sessionRef.current;
+    const timer = setInterval(() => {
+      if (session) setElapsed((Date.now() - session.startedAt) / 1000);
+    }, 250);
+    return () => clearInterval(timer);
+  }, [status]);
+
+  // 卸载时停止录制（不再回调）
+  useEffect(
+    () => () => {
+      const session = sessionRef.current;
+      sessionRef.current = null;
+      if (session) void session.stop().catch(() => undefined);
+    },
+    []
+  );
+
+  const start = useCallback(async (): Promise<boolean> => {
+    const video = videoRef.current;
+    if (!video || statusRef.current !== 'idle') return false;
+    dispatch({ type: 'start' });
+    try {
+      // 暂停时先播放，否则录到的只有一帧
+      if (video.paused) {
+        const played = video.play() as Promise<void> | undefined;
+        await played?.catch?.(() => undefined);
+      }
+      await nextVideoFrame(video);
+      const session = startRecordingSession(video, {
+        baseName: optionsRef.current.baseName,
+        maxDurationSeconds: optionsRef.current.maxDurationSeconds,
+      });
+      sessionRef.current = session;
+      setElapsed(0);
+      dispatch({ type: 'started' });
+      session.result.then(
+        (result) => {
+          if (sessionRef.current !== session) return;
+          sessionRef.current = null;
+          dispatch({ type: 'finished' });
+          optionsRef.current.onResult(result);
+        },
+        (error: unknown) => {
+          if (sessionRef.current !== session) return;
+          sessionRef.current = null;
+          dispatch({ type: 'error' });
+          optionsRef.current.onError(
+            error instanceof PlayerError ? error : new PlayerError('unknown', '录制失败')
+          );
+        }
+      );
+      return true;
+    } catch (error) {
+      dispatch({ type: 'error' });
+      optionsRef.current.onError(
+        error instanceof PlayerError ? error : new PlayerError('unknown', '录制失败')
+      );
+      return false;
+    }
+  }, [videoRef, dispatch]);
+
+  const stop = useCallback(async (): Promise<RecordingResult | null> => {
+    const session = sessionRef.current;
+    if (!session || statusRef.current !== 'recording') return null;
+    dispatch({ type: 'stop' });
+    try {
+      return await session.stop();
+    } catch {
+      return null;
+    }
+  }, [dispatch]);
+
+  return { status, elapsed, supported, start, stop };
+}

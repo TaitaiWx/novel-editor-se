@@ -12,6 +12,9 @@ const LINK = '#7fa8d6';
 const MUTED = '#6b6b6b';
 const SURFACE = 'rgba(255, 255, 255, 0.04)';
 const BORDER = '#3a3a3a';
+// 任务复选框选中时的白色对勾（内联 SVG）
+const CHECK_MARK =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
 
 export const livePreviewTheme = EditorView.theme({
   // 标题：隐藏 # 后按级别放大
@@ -46,11 +49,33 @@ export const livePreviewTheme = EditorView.theme({
   // 列表 / 任务
   '.cm-lp-bullet': { color: '#9d86d6', padding: '0 2px' },
   '.cm-lp-list-number': { color: '#9d86d6' },
+  // 任务复选框：去掉浏览器原生外观，与 components/Checkbox 同一套方框样式（强调色沿用列表符号的紫色）
   '.cm-lp-checkbox': {
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    boxSizing: 'border-box',
+    width: '15px',
+    height: '15px',
     margin: '0 6px 0 0',
+    border: '1px solid #4a4a4a',
+    borderRadius: '4px',
+    background: '#252526',
     verticalAlign: 'middle',
-    accentColor: '#8c64dc',
     cursor: 'pointer',
+    transition: 'background-color 0.12s ease, border-color 0.12s ease',
+  },
+  '.cm-lp-checkbox:hover': { borderColor: '#5a5a5a' },
+  '.cm-lp-checkbox:checked': {
+    borderColor: '#8c64dc',
+    backgroundColor: '#8c64dc',
+    backgroundImage: CHECK_MARK,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'center',
+    backgroundSize: '11px 11px',
+  },
+  '.cm-lp-checkbox:focus-visible': {
+    outline: 'none',
+    boxShadow: '0 0 0 2px rgba(140, 100, 220, 0.45)',
   },
   '.cm-lp-task-done': { color: '#7d7d7d', textDecoration: 'line-through' },
 

@@ -21,6 +21,7 @@ import styles from './App.module.scss';
 import { VscLayoutSidebarLeft, VscLayoutSidebarRight } from 'react-icons/vsc';
 import { CENTER_MIN } from '@/render/app/layoutConstants';
 import { useAppController } from '@/render/hooks/useAppController';
+import { useProjectStructureRules } from '@/render/hooks/useProjectStructureRules';
 import { formatShortcutLabel } from '@/render/utils/appSettings';
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
@@ -73,6 +74,8 @@ const App: React.FC = () => {
   const { files, folderPath, projectLayout, isLoading, storyOrderMap, dbReady } = workspaceState;
   // 角色 / 设定 / 成长档案 / 资料跟随当前作品（普通文件夹为文件夹本身）
   const { workScopePath } = workspaceState;
+  // 正文结构规则（章 / 幕 / 场的识别，设置 → 正文结构）跟随打开的文件夹
+  useProjectStructureRules(folderPath);
   const { openTabs, activeTab, setActiveTab } = tabsState;
   const {
     sidebarCollapsed,
@@ -500,6 +503,7 @@ const App: React.FC = () => {
           initialTab={settingsCenterTab}
           onSettingsChange={handleAppSettingsChange}
           onOpenShortcuts={() => setShowShortcuts(true)}
+          folderPath={folderPath}
         />
 
         <AboutDialog visible={showAboutDialog} onClose={() => setShowAboutDialog(false)} />

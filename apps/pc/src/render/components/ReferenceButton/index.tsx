@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { VscFileMedia } from 'react-icons/vsc';
 import Tooltip from '../Tooltip';
 import {
@@ -8,6 +8,11 @@ import {
   type ReferenceAutoSource,
   type ReferenceItem,
 } from '../../utils/referencePane';
+import {
+  cancelReferenceWarmup,
+  invalidateReferencePaths,
+  scheduleReferenceWarmup,
+} from '../../utils/referenceWarmup';
 import styles from './styles.module.scss';
 
 interface ReferenceButtonProps {
@@ -29,9 +34,18 @@ const ReferenceButton: React.FC<ReferenceButtonProps> = ({ fallback = EMPTY, sou
     window.addEventListener(REFERENCE_STATE_EVENT, onState);
     return () => window.removeEventListener(REFERENCE_STATE_EVENT, onState);
   }, []);
+  // 文件树换了（刷新 / 重命名 / 移动 / 删除）：已解析的引用路径可能失效
+  const filesRef = useRef(source?.files);
   useEffect(() => {
+    if (source?.files !== filesRef.current) {
+      filesRef.current = source?.files;
+      invalidateReferencePaths();
+    }
     announceReferenceAutoSource({ fallback, source });
+    // 预解析本章引用，点「参考」时窗格同一帧打开
+    scheduleReferenceWarmup(source);
   }, [fallback, source]);
+  useEffect(() => cancelReferenceWarmup, []);
   const tip = open
     ? '收起参考窗格'
     : '在编辑器旁边看本章引用的图片 / 视频、场景视频和人物图（可拖动排序、拖入资料）';

@@ -65,7 +65,7 @@ function numberedLevel(prefix: string): number {
  * 时间复杂度 O(n)，单次遍历
  */
 export function extractOutline(text: string, options: OutlineOptions = {}): OutlineNode[] {
-  const { enableHeuristic = true, customPatterns = [] } = options;
+  const { enableHeuristic = true, customPatterns = [], classify } = options;
 
   if (!text) return [];
 
@@ -87,6 +87,18 @@ export function extractOutline(text: string, options: OutlineOptions = {}): Outl
         text: mdMatch[2].trim(),
         line: lineNum,
         source: 'markdown',
+      });
+      continue;
+    }
+
+    // 策略 1.5: 作者配置的结构规则（English「Chapter 1」、自定义正则等）
+    const structureKind = classify ? classify(trimmed) : null;
+    if (structureKind) {
+      result.push({
+        level: structureKind === 'scene' ? 2 : 1,
+        text: trimmed,
+        line: lineNum,
+        source: 'structure-rule',
       });
       continue;
     }

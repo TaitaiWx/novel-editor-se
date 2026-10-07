@@ -149,4 +149,40 @@ describe('Tooltip', () => {
     });
     expect(screen.getByRole('tooltip').textContent).toBe('挂载即悬停');
   });
+
+  it('全屏时挂到包含触发器的全屏元素里（挂到 body 的提示在全屏时看不见）；也可显式指定容器', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const { unmount } = render(
+      <Tooltip content="全屏提示" delay={0}>
+        <button>full</button>
+      </Tooltip>,
+      { container: host }
+    );
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: host });
+    try {
+      fireEvent.mouseEnter(screen.getByText('full').parentElement as HTMLElement);
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(screen.getByRole('tooltip').parentElement).toBe(host);
+    } finally {
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null });
+      unmount();
+      host.remove();
+    }
+    const target = document.createElement('section');
+    document.body.appendChild(target);
+    render(
+      <Tooltip content="指定容器" delay={0} portalContainer={target}>
+        <button>explicit</button>
+      </Tooltip>
+    );
+    fireEvent.mouseEnter(screen.getByText('explicit').parentElement as HTMLElement);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByRole('tooltip').parentElement).toBe(target);
+    target.remove();
+  });
 });

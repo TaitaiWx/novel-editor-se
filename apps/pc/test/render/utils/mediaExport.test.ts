@@ -5,7 +5,9 @@ import {
   exportFileName,
   exportMediaFile,
   exportMediaWithToast,
+  generatedFormatOf,
   planMediaExport,
+  saveGeneratedMedia,
 } from '@/render/utils/mediaExport';
 import { installElectronMock, uninstallElectronMock } from '../hooks/electronMock';
 
@@ -112,5 +114,41 @@ describe('exportMediaFile', () => {
     response = { saved: false, error: '文件不在当前打开的项目内' };
     await exportMediaWithToast({ sourcePath: '/p/a.png' }, toast);
     expect(toast.error).toHaveBeenCalledWith('导出失败：文件不在当前打开的项目内');
+  });
+});
+
+describe('播放器截图 / 录制保存（saveGeneratedMedia）', () => {
+  it('按 MIME 选择格式，把字节交给主进程', async () => {
+    const mock = installElectronMock((channel) =>
+      channel === 'media-save-generated' ? { saved: true, filePath: '/d/离港.webm' } : null
+    );
+    const blob = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])], {
+      type: 'video/webm;codecs=vp9,opus',
+    });
+    expect(await saveGeneratedMedia(blob, '离港.webm')).toEqual({
+      saved: true,
+      filePath: '/d/离港.webm',
+    });
+    const [channel, request] = mock.invoke.mock.calls[0] as [
+      string,
+      { defaultName: string; format: string; data: Uint8Array },
+    ];
+    expect(channel).toBe('media-save-generated');
+    expect(request.format).toBe('webm');
+    expect(request.defaultName).toBe('离港.webm');
+    expect(Array.from(request.data)).toEqual([0x1a, 0x45, 0xdf, 0xa3]);
+  });
+
+  it('不支持的格式 / 没有 IPC 时返回错误', async () => {
+    expect(generatedFormatOf('image/png')).toBe('png');
+    expect(generatedFormatOf('video/mp4;codecs=avc1')).toBe('mp4');
+    expect(generatedFormatOf('image/gif')).toBeNull();
+    expect(
+      (await saveGeneratedMedia(new Blob(['x'], { type: 'image/png' }), 'a.png')).error
+    ).toMatch(/无法保存/);
+    installElectronMock();
+    expect(
+      (await saveGeneratedMedia(new Blob(['x'], { type: 'image/gif' }), 'a.gif')).error
+    ).toMatch(/不支持/);
   });
 });

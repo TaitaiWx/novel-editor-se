@@ -4,6 +4,7 @@ import type { Character, CharacterCategory } from '../../types';
 import { CHARACTER_CATEGORY_LABELS, inferCharacterCategoryFromRole } from '../../utils';
 import { CharacterCard } from '../../CharacterCard';
 import Select from '../../../Select';
+import Switch from '../../../Switch';
 import { CATEGORY_OPTIONS, type CharacterCategoryFilter } from '../helpers';
 import type { CharacterListEditor } from '../useCharacterListEditor';
 
@@ -215,14 +216,13 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
                 className={styles.colorInput}
               />
             </label>
-            <label className={styles.highlightToggle}>
-              <input
-                type="checkbox"
-                checked={newHighlightFirstMentionOnly}
-                onChange={(e) => setNewHighlightFirstMentionOnly(e.target.checked)}
-              />
-              <span>仅在每章第一次出现时高亮</span>
-            </label>
+            <Switch
+              size="sm"
+              className={styles.highlightToggle}
+              checked={newHighlightFirstMentionOnly}
+              onChange={setNewHighlightFirstMentionOnly}
+              label="仅在每章第一次出现时高亮"
+            />
           </div>
           <button className={styles.submitButton} onClick={handleAdd}>
             确认添加

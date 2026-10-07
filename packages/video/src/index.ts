@@ -11,4 +11,6 @@ export * from './layout';
 export * from './cost';
 export * from './previz';
 export * from './previz-sample';
+export * from './previz-sample-motion';
 export * from './previz-validate';
+export * from './motion';

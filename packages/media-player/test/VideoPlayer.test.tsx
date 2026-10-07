@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import VideoPlayer, { clampTime, formatTime, frameWidth, ratioFromPointer } from '../src';
 
@@ -23,6 +23,15 @@ function setup(props: Partial<React.ComponentProps<typeof VideoPlayer>> = {}) {
   const video = group.querySelector('video') as HTMLVideoElement;
   return { ...utils, group, video };
 }
+
+// happy-dom 没有全屏 API：补一个，否则全屏按钮按「不支持」隐藏
+const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+beforeAll(() => {
+  HTMLElement.prototype.requestFullscreen = () => Promise.resolve();
+});
+afterAll(() => {
+  HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+});
 
 afterEach(() => {
   vi.restoreAllMocks();

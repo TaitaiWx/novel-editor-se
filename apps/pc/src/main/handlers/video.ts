@@ -25,6 +25,7 @@ import { downloadToFile, resolveInsideWork, writeJsonFile } from '../video/downl
 import { VideoTaskRunner, type VideoTaskRepo } from '../video/runner';
 import { isPathInWorkspace } from './database/workspace-path';
 import { getWorkspaceRootForSender } from './session';
+import { registerMotionLibraryHandlers } from './motion-library';
 import { registerVideoSceneHandlers } from './video-scene';
 
 const MAX_TEXT = 4000;
@@ -122,7 +123,13 @@ export function sanitizeSubmitPayload(raw: unknown): Omit<VideoTaskSubmitPayload
     firstFrameImage,
     ...(firstFramePath ? { firstFramePath } : {}),
     ...(referencePaths?.length ? { referencePaths } : {}),
+    ...(payload.withAudio === undefined ? {} : { withAudio: optionalBoolean(payload.withAudio) }),
   };
+}
+
+function optionalBoolean(value: unknown): boolean {
+  if (typeof value !== 'boolean') throw badRequest('生成声音必须是布尔值');
+  return value;
 }
 
 const storeRepo: VideoTaskRepo = {
@@ -201,6 +208,7 @@ export function registerVideoHandlers(
     guard(() => runner.retry(String(id)))
   );
   registerVideoSceneHandlers({ assertWorkPath, workspaceRootFor });
+  registerMotionLibraryHandlers({ assertWorkPath, workspaceRootFor });
   ipcMain.handle('video-settings-get', () =>
     guard((): VideoSettingsInfo => getProviderConfigStore().getVideoSettings())
   );

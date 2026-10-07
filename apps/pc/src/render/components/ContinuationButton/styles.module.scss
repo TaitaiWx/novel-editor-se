@@ -151,13 +151,6 @@ $muted: var(--ui-fg-muted);
   gap: 8px;
 }
 
-.checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
 %button-base {
   height: 28px;
   padding: 0 12px;

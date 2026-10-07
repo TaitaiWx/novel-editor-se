@@ -14,6 +14,7 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   novel: '作品管理',
   chapter: '章节管理',
   stats: '写作统计',
+  structure: '正文结构规则（章 / 幕 / 场的识别）',
   growth: '成长记录器 / 记忆库',
   ai: 'AI 续写（Key 读取环境变量）',
   video: '场景视频分镜',

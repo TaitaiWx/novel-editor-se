@@ -1,9 +1,11 @@
 /**
  * 小说格式指令（`::video` / `::image`）引用的本地媒体：
  * - 地址相对作品目录（推荐写法），先试文件所在目录，再逐级向上（最多 4 级）
+ * - 候选路径的探测与缓存在 media-resolve.ts（与参考窗格共用）
  * - 找到后经 `read-file-binary` 读取为 blob 地址（按路径缓存，淘汰时释放）
  */
 import { LruCache } from './lru';
+import { invalidateMediaResolveCache, resolveMediaPath } from './media-resolve';
 
 interface BinaryReadResult {
   base64Content: string;
@@ -20,42 +22,19 @@ const MEDIA_CACHE_SIZE = 16;
 const mediaCache = new LruCache<string, Promise<LoadedMedia>>(MEDIA_CACHE_SIZE);
 const blobUrls = new Map<string, string>();
 
-/** 地址候选：绝对路径原样；相对路径从文件所在目录开始逐级向上拼接 */
-export function mediaPathCandidates(filePath: string | null, src: string): string[] {
-  const value = src.trim();
-  if (!value) return [];
-  if (/^([a-zA-Z]:[\\/]|\/)/.test(value)) return [value];
-  if (!filePath) return [];
-  const separator = filePath.includes('\\') && !filePath.includes('/') ? '\\' : '/';
-  const parts = filePath.split(/[\\/]/);
-  parts.pop();
-  const candidates: string[] = [];
-  for (let depth = 0; depth < 5 && parts.length > 0; depth += 1) {
-    candidates.push([...parts, ...value.split(/[\\/]+/).filter(Boolean)].join(separator));
-    parts.pop();
-  }
-  return candidates;
-}
+export { mediaPathCandidates } from './media-resolve';
 
-function ipcRenderer() {
-  return typeof window !== 'undefined' ? window.electron?.ipcRenderer : undefined;
-}
-
-/** 第一个存在的候选路径；都不存在时为 null */
+/** 第一个存在的候选路径；都不存在时为 null（经共享的解析缓存，参考窗格同步可读） */
 export async function findExistingMedia(
   filePath: string | null,
   src: string
 ): Promise<string | null> {
-  const ipc = ipcRenderer();
-  if (!ipc) return null;
-  for (const candidate of mediaPathCandidates(filePath, src)) {
-    const exists = await ipc
-      .invoke('get-file-info', candidate)
-      .then(() => true)
-      .catch(() => false);
-    if (exists) return candidate;
-  }
-  return null;
+  if (!ipcRenderer()) return null;
+  return resolveMediaPath(filePath, { src, syntax: 'directive' });
+}
+
+function ipcRenderer() {
+  return typeof window !== 'undefined' ? window.electron?.ipcRenderer : undefined;
 }
 
 function base64ToBlob(base64: string, mimeType: string): Blob {
@@ -98,4 +77,5 @@ export function clearDirectiveMediaCache(): void {
   for (const url of blobUrls.values()) URL.revokeObjectURL(url);
   blobUrls.clear();
   mediaCache.clear();
+  invalidateMediaResolveCache();
 }

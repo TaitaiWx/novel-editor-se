@@ -1342,16 +1342,10 @@
   letter-spacing: 0.4px;
 }
 
+// 开关（Switch）的布局与文字色
 .highlightToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   color: rgba(255, 255, 255, 0.72);
   font-size: 11px;
-
-  input {
-    accent-color: rgba(var(--rp-info-rgb), 0.95);
-  }
 }
 
 .cardsContainer {

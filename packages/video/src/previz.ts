@@ -6,13 +6,19 @@
  * - validatePrevizScript（previz-validate.ts）宽松解析（容忍字段别名、字符串数字），把所有数值夹到安全范围，未知姿势回退站立
  * - 插值 / 默认脚本 / 微调在 previz-sample.ts（纯函数）
  *
+ * 第 2 版（向下兼容第 1 版，validatePrevizScript 自动迁移）由 AI 控制更多内容：
+ * - 人物：关键帧之间的缓动（ease）、动作片段（motion：引用内置 / 动作库 BVH 的 clip id，起点 / 速度 / 循环；
+ *   或 generate 文字描述，交给 MotionProvider 生成）、视线（lookAt：看向某个人物或某个点）、手部目标（hands，简易 IK）
+ * - 道具：类型 / 名字 / 尺寸 / 颜色 / 离地高度，以及位置 / 朝向关键帧（道具也能动）
+ * - 机位：跟随某个人物（follow）、绝对机位（position + target），关键帧缓动
+ *
  * 坐标约定（米）：地面为 x / z 平面，默认机位在 +z 方向看向原点；x 正 = 画面右侧，z 正 = 靠近镜头。
  * 朝向 facing（度）：0 = 面向镜头，90 = 面向画面右侧（+x），-90 = 面向画面左侧，180 = 背对镜头。
  *
  * 所有枚举都是英文 id，界面文字由渲染进程映射；不按中文关键词做任何判断。
  */
 
-export const PREVIZ_SCRIPT_VERSION = 1;
+export const PREVIZ_SCRIPT_VERSION = 2;
 export const PREVIZ_MIN_DURATION = 1;
 export const PREVIZ_MAX_DURATION = 10;
 /** 舞台范围（米）：站位、道具、注视点都夹在 ±8 内 */
@@ -28,6 +34,22 @@ export const PREVIZ_PITCH_MAX = 60;
 export const PREVIZ_HEIGHT_LIMIT = 2;
 /** 关节微调上限（度） */
 export const PREVIZ_JOINT_LIMIT = 170;
+export const PREVIZ_MAX_PROP_KEYS = 12;
+/** 道具尺寸上限（米） */
+export const PREVIZ_PROP_SIZE_MAX = 20;
+/** 手部目标 / 视线目标 / 绝对机位的高度范围（米） */
+export const PREVIZ_POINT_Y_MIN = 0;
+export const PREVIZ_POINT_Y_MAX = 12;
+/** 动作片段播放速度范围 */
+export const PREVIZ_MOTION_SPEED_MIN = 0.1;
+export const PREVIZ_MOTION_SPEED_MAX = 4;
+/** 动作片段 id / 生成描述的长度上限 */
+export const PREVIZ_CLIP_ID_MAX = 120;
+export const PREVIZ_MOTION_PROMPT_MAX = 200;
+
+/** 关键帧到下一个关键帧之间的缓动 */
+export const PREVIZ_EASINGS = ['linear', 'ease-in', 'ease-out', 'ease-in-out'] as const;
+export type PrevizEase = (typeof PREVIZ_EASINGS)[number];
 
 export const PREVIZ_POSES = [
   'stand',
@@ -95,6 +117,10 @@ export const PREVIZ_PROP_KINDS = [
   'pillar',
   'tree',
   'crate',
+  // 通用几何体：按 size 给出真实尺寸，配合 color / name 表达任意物体（马车、剑、石碑…）
+  'box',
+  'cylinder',
+  'sphere',
 ] as const;
 export type PrevizPropKind = (typeof PREVIZ_PROP_KINDS)[number];
 
@@ -138,6 +164,35 @@ export const PREVIZ_ANGLE_ELEVATION: Readonly<Record<PrevizAngle, number>> = {
 /** 关节旋转微调（度，XYZ 欧拉角，叠加在姿势之上） */
 export type PrevizJointAngles = Partial<Record<PrevizJoint, [number, number, number]>>;
 
+export interface PrevizPoint3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** 视线目标：看向某个人物（人物 id）或舞台上的某个点 */
+export type PrevizLookAt = { figure: string } | PrevizPoint3;
+
+/**
+ * 动作片段引用：clip 为内置（builtin:wave）或动作库（lib:<文件名>）的 id；
+ * generate 是交给动作生成服务（MotionProvider）的描述，生成后写回 clip。两者都没有时只用 pose。
+ */
+export interface PrevizMotionRef {
+  clip?: string;
+  /** 片段内起点（秒） */
+  start?: number;
+  /** 播放速度（1 = 原速） */
+  speed?: number;
+  loop?: boolean;
+  generate?: string;
+}
+
+/** 手部目标（世界坐标，米）：手尽量够到这个点（两段臂解析 IK） */
+export interface PrevizHandTargets {
+  left?: PrevizPoint3;
+  right?: PrevizPoint3;
+}
+
 export interface PrevizFigureKey {
   /** 时间（秒） */
   t: number;
@@ -147,6 +202,12 @@ export interface PrevizFigureKey {
   facing: number;
   pose: PrevizPoseId;
   joints?: PrevizJointAngles;
+  /** 从这一帧到下一帧的位置 / 朝向缓动（默认 linear：匀速，像走路一样不顿挫） */
+  ease?: PrevizEase;
+  /** 从这一帧开始播放的动作片段（覆盖 pose，片段没驱动的关节仍用 pose） */
+  motion?: PrevizMotionRef;
+  lookAt?: PrevizLookAt;
+  hands?: PrevizHandTargets;
 }
 
 export interface PrevizFigureTrack {
@@ -170,15 +231,56 @@ export interface PrevizCameraKey {
   height: number;
   /** 注视的地面点；省略时自动对准人物中心 */
   focus?: { x: number; z: number };
+  /** 跟随的人物 id：注视点随该人物移动（优先于 focus） */
+  follow?: string;
+  /** 绝对机位（米）：给出时覆盖景别 / 角度 / 环绕推出的相机位置，lens 仍然有效 */
+  position?: PrevizPoint3;
+  /** 绝对注视点；省略时用 follow / focus / 人物中心 */
+  target?: PrevizPoint3;
+  ease?: PrevizEase;
+}
+
+export interface PrevizPropKey {
+  t: number;
+  x: number;
+  z: number;
+  /** 离地高度（米，默认 0） */
+  y?: number;
+  facing: number;
+  ease?: PrevizEase;
 }
 
 export interface PrevizPropItem {
   id: string;
   kind: PrevizPropKind;
+  /** 起始位置 / 朝向（有 keys 时等于第一个关键帧） */
   x: number;
   z: number;
   facing: number;
+  y?: number;
+  /** 名字（例如「马车」），只用于显示 */
+  name?: string;
+  /** 尺寸（米，[宽, 高, 深]）：通用几何体为真实尺寸，其他类型按默认尺寸缩放 */
+  size?: [number, number, number];
+  color?: string;
+  /** 位置 / 朝向关键帧：道具也能动（推车、飞出的剑） */
+  keys?: PrevizPropKey[];
 }
+
+/** 各道具类型的默认尺寸（米，[宽, 高, 深]），size 相对它缩放 */
+export const PREVIZ_PROP_DEFAULT_SIZE: Readonly<Record<PrevizPropKind, [number, number, number]>> =
+  {
+    wall: [3.2, 2.7, 0.2],
+    door: [1.2, 2.3, 0.16],
+    table: [1.4, 0.77, 0.8],
+    chair: [0.46, 0.95, 0.44],
+    pillar: [0.62, 3.1, 0.62],
+    tree: [2, 3.5, 2],
+    crate: [0.6, 0.6, 0.6],
+    box: [1, 1, 1],
+    cylinder: [0.5, 1, 0.5],
+    sphere: [0.5, 0.5, 0.5],
+  };
 
 export interface PrevizScript {
   version: typeof PREVIZ_SCRIPT_VERSION;
@@ -201,6 +303,14 @@ const NUMBER_TRIPLE = {
   minItems: 3,
   maxItems: 3,
 } as const;
+
+const POINT3 = {
+  type: 'object',
+  description: 'meters; y = height above ground',
+  properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } },
+} as const;
+
+const EASE = { type: 'string', enum: [...PREVIZ_EASINGS] } as const;
 
 /** 期望 AI 返回的 JSON 结构（JSON Schema draft-07 子集），同时写进提示词 */
 export const PREVIZ_JSON_SCHEMA = {
@@ -232,6 +342,38 @@ export const PREVIZ_JSON_SCHEMA = {
                 z: { type: 'number', minimum: -PREVIZ_STAGE_LIMIT, maximum: PREVIZ_STAGE_LIMIT },
                 facing: { type: 'number', description: 'degrees, 0 = toward camera' },
                 pose: { type: 'string', enum: [...PREVIZ_POSES] },
+                ease: { ...EASE, description: 'easing of position / facing toward the next key' },
+                motion: {
+                  type: 'object',
+                  description:
+                    'motion clip played from this key (overrides pose): clip id from the list, or generate = text description',
+                  properties: {
+                    clip: { type: 'string' },
+                    start: { type: 'number', description: 'seconds into the clip' },
+                    speed: {
+                      type: 'number',
+                      minimum: PREVIZ_MOTION_SPEED_MIN,
+                      maximum: PREVIZ_MOTION_SPEED_MAX,
+                    },
+                    loop: { type: 'boolean' },
+                    generate: { type: 'string' },
+                  },
+                },
+                lookAt: {
+                  type: 'object',
+                  description: 'gaze target: { figure: name } or a point { x, y, z }',
+                  properties: {
+                    figure: { type: 'string' },
+                    x: { type: 'number' },
+                    y: { type: 'number' },
+                    z: { type: 'number' },
+                  },
+                },
+                hands: {
+                  type: 'object',
+                  description: 'optional hand targets (world meters), e.g. reaching a door handle',
+                  properties: { left: POINT3, right: POINT3 },
+                },
                 joints: {
                   type: 'object',
                   description: 'optional joint offsets in degrees [x, y, z]',
@@ -264,6 +406,10 @@ export const PREVIZ_JSON_SCHEMA = {
             type: 'object',
             properties: { x: { type: 'number' }, z: { type: 'number' } },
           },
+          follow: { type: 'string', description: 'figure name the camera keeps aimed at' },
+          position: { ...POINT3, description: 'absolute camera position (overrides yaw / angle)' },
+          target: { ...POINT3, description: 'absolute look-at point for position' },
+          ease: EASE,
         },
       },
     },
@@ -275,9 +421,30 @@ export const PREVIZ_JSON_SCHEMA = {
         required: ['kind', 'x', 'z'],
         properties: {
           kind: { type: 'string', enum: [...PREVIZ_PROP_KINDS] },
+          name: { type: 'string' },
           x: { type: 'number' },
           z: { type: 'number' },
+          y: { type: 'number', description: 'height above ground (meters)' },
           facing: { type: 'number' },
+          size: { ...NUMBER_TRIPLE, description: '[width, height, depth] in meters' },
+          color: { type: 'string', description: '#rrggbb' },
+          keys: {
+            type: 'array',
+            maxItems: PREVIZ_MAX_PROP_KEYS,
+            description: 'optional motion: position / facing keyframes',
+            items: {
+              type: 'object',
+              required: ['t', 'x', 'z'],
+              properties: {
+                t: { type: 'number' },
+                x: { type: 'number' },
+                z: { type: 'number' },
+                y: { type: 'number' },
+                facing: { type: 'number' },
+                ease: EASE,
+              },
+            },
+          },
         },
       },
     },

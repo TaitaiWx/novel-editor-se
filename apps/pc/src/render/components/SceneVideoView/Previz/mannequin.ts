@@ -198,14 +198,19 @@ export function buildMannequin(color: string): Mannequin {
   };
 }
 
-/** 姿势采样：两个姿势按 mix 混合 + 关节微调（度）+ 步态 */
+/** 姿势采样：两个姿势按 mix 混合 + 关节微调（度）+ 步态 + 可选的动作片段（关节四元数 + 权重） */
 export type PoseSample = Pick<
   PrevizFigureSample,
   'poseFrom' | 'poseTo' | 'mix' | 'joints' | 'gait'
->;
+> &
+  Partial<Pick<PrevizFigureSample, 'motion'>>;
 
 const DEG = Math.PI / 180;
 const ZERO: JointRotation = [0, 0, 0];
+const tempEuler = new THREE.Euler();
+const poseQuat = new THREE.Quaternion();
+const clipQuat = new THREE.Quaternion();
+const offsetQuat = new THREE.Quaternion();
 const mixRotation = (a: JointRotation, b: JointRotation, s: number): JointRotation => [
   a[0] + (b[0] - a[0]) * s,
   a[1] + (b[1] - a[1]) * s,
@@ -213,8 +218,9 @@ const mixRotation = (a: JointRotation, b: JointRotation, s: number): JointRotati
 ];
 
 /**
- * 按采样摆姿势：先清零，再按 mix 混合两个预设姿势，移动中的 walk / run 叠加步态周期，最后加上关节微调。
- * 髋部下移与整体前倾同样按 mix 混合（坐下、倒地是渐变过去的）。
+ * 按采样摆姿势：先清零，再按 mix 混合两个预设姿势，移动中的 walk / run 叠加步态周期；
+ * 有动作片段时按权重球面插值到片段的关节旋转（BVH 重定向结果），最后加上关节微调（视线、AI 微调）。
+ * 髋部下移与整体前倾同样按 mix 混合（坐下、倒地是渐变过去的），动作片段的髋部旋转 / 起伏叠加在上面。
  */
 export function applyPoseSample(mannequin: Mannequin, sample: PoseSample): void {
   const from = poseById(sample.poseFrom);
@@ -231,6 +237,18 @@ export function applyPoseSample(mannequin: Mannequin, sample: PoseSample): void 
       if (runCycle) rotation = mixRotation(rotation, runCycle[name] ?? ZERO, run);
     }
     const offset = sample.joints[name];
+    const motion = sample.motion?.joints[name];
+    if (motion && motion.weight > 0) {
+      poseQuat.setFromEuler(tempEuler.set(rotation[0], rotation[1], rotation[2]));
+      clipQuat.set(motion.q[0], motion.q[1], motion.q[2], motion.q[3]);
+      poseQuat.slerp(clipQuat, Math.min(1, motion.weight));
+      if (offset) {
+        offsetQuat.setFromEuler(tempEuler.set(offset[0] * DEG, offset[1] * DEG, offset[2] * DEG));
+        poseQuat.multiply(offsetQuat);
+      }
+      node.quaternion.copy(poseQuat);
+      continue;
+    }
     node.rotation.set(
       rotation[0] + (offset?.[0] ?? 0) * DEG,
       rotation[1] + (offset?.[1] ?? 0) * DEG,
@@ -240,9 +258,14 @@ export function applyPoseSample(mannequin: Mannequin, sample: PoseSample): void 
   const drop = (from.drop ?? 0) + ((to.drop ?? 0) - (from.drop ?? 0)) * mix;
   // 迈步时髋部随步伐轻微起伏
   const bob = (walk * 0.02 + run * 0.04) * Math.abs(Math.cos(sample.gait.phase));
-  mannequin.hips.position.y = HIP_HEIGHT - drop - bob;
+  mannequin.hips.position.y = HIP_HEIGHT - drop - bob + (sample.motion?.rootY ?? 0);
   const tilt = (from.tilt ?? 0) + ((to.tilt ?? 0) - (from.tilt ?? 0)) * mix;
-  mannequin.hips.rotation.x = tilt;
+  mannequin.hips.rotation.set(tilt, 0, 0);
+  const hipsMotion = sample.motion?.joints.hips;
+  if (hipsMotion && hipsMotion.weight > 0) {
+    clipQuat.set(hipsMotion.q[0], hipsMotion.q[1], hipsMotion.q[2], hipsMotion.q[3]);
+    mannequin.hips.quaternion.slerp(clipQuat, Math.min(1, hipsMotion.weight));
+  }
   if (mannequin.contact) {
     // 躺倒时身体沿前后方向铺开，接触阴影跟着拉长
     const lying = Math.min(1, Math.abs(tilt) / (Math.PI / 2));

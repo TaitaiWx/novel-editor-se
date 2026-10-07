@@ -522,3 +522,52 @@ $soft: rgba(255, 255, 255, 0.78);
     transition: width 0.1s linear;
   }
 }
+
+/* 微调 · 动作库 */
+
+.motionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  color: $soft;
+}
+
+.motionList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 96px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.motionChip,
+.motionChipError {
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid $line;
+  font-size: 11px;
+  line-height: 1.5;
+  color: $soft;
+  white-space: nowrap;
+}
+
+.motionChip[data-source='library'],
+.motionChip[data-source='generated'] {
+  border-color: rgba($accent, 0.45);
+  color: #e6f0fa;
+}
+
+.motionChipError {
+  border-style: dashed;
+  color: $muted;
+  text-decoration: line-through;
+}
+
+.hiddenInput {
+  display: none;
+}

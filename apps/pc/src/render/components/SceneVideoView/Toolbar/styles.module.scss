@@ -105,3 +105,24 @@
 .primary {
   @include ui.button-primary;
 }
+
+// 「生成声音」开关：按下（aria-checked）时高亮
+.toggle {
+  @include ui.button;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  font-size: 12px;
+
+  &[aria-checked='true'] {
+    border-color: rgba(78, 201, 176, 0.5);
+    background: rgba(78, 201, 176, 0.14);
+    color: #d4efe8;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { KnowledgeExportOptions } from '@/render/app/types';
+import Checkbox from '../Checkbox';
 import styles from './styles.module.scss';
 
 interface KnowledgeExportDialogProps {
@@ -24,45 +25,24 @@ const KnowledgeExportDialog: React.FC<KnowledgeExportDialogProps> = ({
       <p className={styles.exportPreviewDescription}>
         支持单独导出人物、设定或资料，也可以按需组合导出。
       </p>
-      <label className={styles.exportPreviewOption}>
-        <input
-          type="checkbox"
-          checked={options.includeCharacters}
-          onChange={(event) =>
-            onOptionsChange((prev) => ({
-              ...prev,
-              includeCharacters: event.target.checked,
-            }))
-          }
-        />
-        <span>角色卡</span>
-      </label>
-      <label className={styles.exportPreviewOption}>
-        <input
-          type="checkbox"
-          checked={options.includeLore}
-          onChange={(event) =>
-            onOptionsChange((prev) => ({
-              ...prev,
-              includeLore: event.target.checked,
-            }))
-          }
-        />
-        <span>设定资料</span>
-      </label>
-      <label className={styles.exportPreviewOption}>
-        <input
-          type="checkbox"
-          checked={options.includeMaterials}
-          onChange={(event) =>
-            onOptionsChange((prev) => ({
-              ...prev,
-              includeMaterials: event.target.checked,
-            }))
-          }
-        />
-        <span>资料卡</span>
-      </label>
+      <Checkbox
+        className={styles.exportPreviewOption}
+        checked={options.includeCharacters}
+        onChange={(checked) => onOptionsChange((prev) => ({ ...prev, includeCharacters: checked }))}
+        label="角色卡"
+      />
+      <Checkbox
+        className={styles.exportPreviewOption}
+        checked={options.includeLore}
+        onChange={(checked) => onOptionsChange((prev) => ({ ...prev, includeLore: checked }))}
+        label="设定资料"
+      />
+      <Checkbox
+        className={styles.exportPreviewOption}
+        checked={options.includeMaterials}
+        onChange={(checked) => onOptionsChange((prev) => ({ ...prev, includeMaterials: checked }))}
+        label="资料卡"
+      />
       <div className={styles.exportPreviewActions}>
         <button type="button" className={styles.exportPreviewCancel} onClick={onClose}>
           取消

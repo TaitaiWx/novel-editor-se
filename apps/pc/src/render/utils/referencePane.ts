@@ -29,6 +29,17 @@ export interface ReferenceItem {
   group?: ReferenceGroup;
   /** auto：「参考」按钮按当前文档自动生成，跟随文档更新；user：作者打开 / 拖入的，保留 */
   origin?: 'auto' | 'user';
+  /** 本章引用的标识（语法 + 地址），占位与解析后的条目据此对应 */
+  refKey?: string;
+  /** 占位：本章引用还没解析出路径（path 为 PENDING_REFERENCE_PREFIX + refKey），解析后原位替换 */
+  pending?: boolean;
+}
+
+/** 占位条目的 path 前缀（不是文件路径，不会被读取） */
+export const PENDING_REFERENCE_PREFIX = 'pending-ref:';
+
+export function isPendingReference(item: Pick<ReferenceItem, 'pending'> | null | undefined) {
+  return Boolean(item?.pending);
 }
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;

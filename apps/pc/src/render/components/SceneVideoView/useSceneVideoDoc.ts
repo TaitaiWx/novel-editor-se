@@ -1,3 +1,4 @@
+import { getStructureClassifier } from '@/render/utils/structureRules';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SCENE_STORYBOARD_JSON, storyboardToMarkdown } from '@novel-editor/video';
 import { notifyWorkspaceFilesChanged } from '@/render/utils/workspaceFiles';
@@ -97,7 +98,11 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
       let sourceText = seed?.sourceText ?? '';
       if (!sourceText && ipc) {
         const docText = await ipc.invoke('read-file', chapterPath).catch(() => '');
-        sourceText = resolveSceneSource({ docText, sceneTitle: scene }).text;
+        sourceText = resolveSceneSource({
+          docText,
+          sceneTitle: scene,
+          classify: getStructureClassifier(),
+        }).text;
       }
       const { characters, loreTitles } = prefillRef.current;
       return createSceneVideoState(

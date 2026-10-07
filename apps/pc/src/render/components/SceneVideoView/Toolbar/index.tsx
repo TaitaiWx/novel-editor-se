@@ -2,7 +2,7 @@
  * 场景视频顶部工具栏：标题｜全局设置（风格 / 比例 / 每镜时长 / 视频服务 / 形象图首帧）｜费用预估 + 生成
  */
 import React from 'react';
-import { VscAdd, VscGoToFile } from 'react-icons/vsc';
+import { VscAdd, VscGoToFile, VscMute, VscUnmute } from 'react-icons/vsc';
 import { ASPECT_RATIOS, type AspectRatio } from '@novel-editor/video';
 import type { AIProviderInfo } from '@/render/types/ai-api';
 import Select from '../../Select';
@@ -147,6 +147,33 @@ const Toolbar: React.FC<ToolbarProps> = ({
                     onChange((prev) => ({ ...prev, providerId: provider.id, model }));
                   }}
                 />
+              </Tooltip>
+            )}
+            {provider && (
+              <Tooltip
+                content={
+                  provider.supportsAudio
+                    ? '让视频服务同时生成与画面同步的声音（环境音、音效、台词）；关闭后只生成画面'
+                    : `${provider.label} 目前不支持生成声音（成片保留服务返回的音轨）`
+                }
+              >
+                <button
+                  type="button"
+                  className={styles.toggle}
+                  role="switch"
+                  aria-checked={Boolean(provider.supportsAudio && state.withAudio)}
+                  aria-label="生成声音"
+                  data-testid="scene-video-audio-toggle"
+                  disabled={!provider.supportsAudio}
+                  onClick={() => onChange((prev) => ({ ...prev, withAudio: !prev.withAudio }))}
+                >
+                  {provider.supportsAudio && state.withAudio ? (
+                    <VscUnmute aria-hidden="true" />
+                  ) : (
+                    <VscMute aria-hidden="true" />
+                  )}
+                  <span>生成声音</span>
+                </button>
               </Tooltip>
             )}
           </>

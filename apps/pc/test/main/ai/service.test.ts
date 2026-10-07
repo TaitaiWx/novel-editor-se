@@ -175,6 +175,9 @@ describe('Provider 配置', () => {
       'grok-image',
     ]);
     expect(JSON.stringify(list)).not.toContain('xai-secret');
+    // 只有公开文档支持生成声音的视频服务带 supportsAudio
+    expect(list.find((item) => item.id === 'seedance-video')?.supportsAudio).toBe(true);
+    expect(list.find((item) => item.id === 'minimax-video')?.supportsAudio).toBeUndefined();
     expect(list.find((item) => item.id === 'grok')).toMatchObject({
       configured: true,
       enabled: true,

@@ -71,13 +71,21 @@ describe('resolveDocumentMedia', () => {
       }
     );
     expect(items).toEqual([
-      { path: '/p/图/地图.png', title: '地图', kind: 'image', group: 'chapter', origin: 'auto' },
+      {
+        path: '/p/图/地图.png',
+        title: '地图',
+        kind: 'image',
+        group: 'chapter',
+        origin: 'auto',
+        refKey: 'markdown\n./图/地图.png',
+      },
       {
         path: '/p/novels/星河旅人/资料/视频/示例/离港.mp4',
         title: '离港',
         kind: 'video',
         group: 'chapter',
         origin: 'auto',
+        refKey: 'directive\nnovels/星河旅人/资料/视频/示例/离港.mp4',
       },
     ]);
     // 不存在的设定图：尝试了逐级向上的候选

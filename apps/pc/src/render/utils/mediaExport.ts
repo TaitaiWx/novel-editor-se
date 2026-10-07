@@ -188,3 +188,31 @@ export async function exportMediaWithToast(
   else if (result.error) toast?.error(`导出失败：${result.error}`);
   return result;
 }
+
+/** 播放器截图 / 录制可保存的格式（MIME → 主进程格式名） */
+const GENERATED_FORMATS: Record<string, 'png' | 'jpeg' | 'webp' | 'webm' | 'mp4'> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpeg',
+  'image/webp': 'webp',
+  'video/webm': 'webm',
+  'video/mp4': 'mp4',
+};
+
+/** MIME（可带参数）→ 主进程格式名；不支持时为 null */
+export function generatedFormatOf(mimeType: string) {
+  return GENERATED_FORMATS[mimeType.split(';')[0].trim().toLowerCase()] ?? null;
+}
+
+/** 保存播放器生成的截图 / 录制（弹出另存为对话框；作者取消时 saved 为 false） */
+export async function saveGeneratedMedia(blob: Blob, fileName: string): Promise<MediaExportResult> {
+  const ipc = window.electron?.ipcRenderer;
+  if (!ipc) return { saved: false, error: '当前环境无法保存文件' };
+  const format = generatedFormatOf(blob.type);
+  if (!format) return { saved: false, error: `不支持保存 ${blob.type || '未知'} 格式` };
+  try {
+    const data = new Uint8Array(await blob.arrayBuffer());
+    return await ipc.invoke('media-save-generated', { defaultName: fileName, format, data });
+  } catch (error) {
+    return { saved: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}

@@ -131,7 +131,24 @@ export function placementFromSample(camera: PrevizCameraSample, aspect = 16 / 9)
     round(Math.max(MIN_CAMERA_HEIGHT, targetY + Math.sin(elevation) * distance)),
     round(camera.focusZ + Math.cos(yaw) * horizontal),
   ];
-  return { position, target, fov, distance };
+  const override = camera.override;
+  if (!override || !(override.weight > 0)) return { position, target, fov, distance };
+  // 绝对机位（预演脚本给了 position / target）：按权重从景别推算的机位过渡过去
+  const w = Math.min(1, override.weight);
+  const mix = (a: readonly number[], b: readonly number[]): [number, number, number] => [
+    round(a[0] + (b[0] - a[0]) * w),
+    round(a[1] + (b[1] - a[1]) * w),
+    round(a[2] + (b[2] - a[2]) * w),
+  ];
+  const finalPosition = mix(position, override.position);
+  finalPosition[1] = Math.max(MIN_CAMERA_HEIGHT, finalPosition[1]);
+  const finalTarget = mix(target, override.target);
+  const finalDistance = Math.hypot(
+    finalPosition[0] - finalTarget[0],
+    finalPosition[1] - finalTarget[1],
+    finalPosition[2] - finalTarget[2]
+  );
+  return { position: finalPosition, target: finalTarget, fov, distance: finalDistance };
 }
 
 const round = (value: number) => Math.round(value * 1000) / 1000;

@@ -6,7 +6,12 @@
  * 视口里画面比画幅大一圈（框外有遮罩，见 FrameOverlay），截图 / 导出视频用 setViewOffset 只渲染取景框内的部分。
  */
 import * as THREE from 'three';
-import type { PrevizFigureSample, PrevizPropItem, PrevizSample } from '@novel-editor/video';
+import {
+  PREVIZ_PROP_DEFAULT_SIZE,
+  type PrevizFigureSample,
+  type PrevizPropSample,
+  type PrevizSample,
+} from '@novel-editor/video';
 import {
   frameRect,
   lightDirection,
@@ -22,6 +27,7 @@ import {
   setMannequinSelected,
   type Mannequin,
 } from './mannequin';
+import { applyHandTargets } from './ik';
 import { buildProp, disposeProp, type PropObject } from './propMeshes';
 import type { PrevizLabel, PrevizStageApi } from './types';
 
@@ -53,7 +59,7 @@ export class PrevizStage implements PrevizStageApi {
   private readonly camera = new THREE.PerspectiveCamera(38, 16 / 9, 0.05, 900);
   private readonly raycaster = new THREE.Raycaster();
   private readonly figures = new Map<string, { mannequin: Mannequin; color: string }>();
-  private readonly props = new Map<string, PropObject>();
+  private readonly props = new Map<string, { object: PropObject; key: string }>();
   private readonly ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
   private readonly grid: THREE.GridHelper;
   private readonly sky: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
@@ -242,26 +248,34 @@ export class PrevizStage implements PrevizStageApi {
       entry.mannequin.root.position.set(figure.x, 0, figure.z);
       entry.mannequin.root.rotation.y = figure.facing * DEG;
       applyPoseSample(entry.mannequin, figure);
+      applyHandTargets(entry.mannequin, figure.hands);
     }
   }
 
-  private syncProps(props: readonly PrevizPropItem[]): void {
+  /** 道具：类型 / 颜色变化时重建；尺寸按默认尺寸缩放，位置 / 高度 / 朝向逐帧更新（道具关键帧） */
+  private syncProps(props: readonly PrevizPropSample[]): void {
+    const keyOf = (prop: PrevizPropSample) => `${prop.kind}|${prop.color ?? ''}`;
     const byId = new Map(props.map((prop) => [prop.id, prop]));
-    for (const [id, object] of this.props) {
-      if (byId.get(id)?.kind === object.kind) continue;
-      this.scene.remove(object.root);
-      disposeProp(object);
+    for (const [id, entry] of this.props) {
+      const prop = byId.get(id);
+      if (prop && keyOf(prop) === entry.key) continue;
+      this.scene.remove(entry.object.root);
+      disposeProp(entry.object);
       this.props.delete(id);
     }
     for (const prop of props) {
-      let object = this.props.get(prop.id);
-      if (!object) {
-        object = buildProp(prop.kind);
-        this.props.set(prop.id, object);
-        this.scene.add(object.root);
+      let entry = this.props.get(prop.id);
+      if (!entry) {
+        entry = { object: buildProp(prop.kind, prop.color), key: keyOf(prop) };
+        this.props.set(prop.id, entry);
+        this.scene.add(entry.object.root);
       }
-      object.root.position.set(prop.x, 0, prop.z);
-      object.root.rotation.y = prop.facing * DEG;
+      const root = entry.object.root;
+      const base = PREVIZ_PROP_DEFAULT_SIZE[prop.kind];
+      const size = prop.size ?? base;
+      root.scale.set(size[0] / base[0], size[1] / base[1], size[2] / base[2]);
+      root.position.set(prop.x, prop.y ?? 0, prop.z);
+      root.rotation.y = prop.facing * DEG;
     }
   }
 
@@ -378,7 +392,7 @@ export class PrevizStage implements PrevizStageApi {
   dispose(): void {
     this.labelListener = null;
     for (const entry of this.figures.values()) disposeMannequin(entry.mannequin);
-    for (const object of this.props.values()) disposeProp(object);
+    for (const entry of this.props.values()) disposeProp(entry.object);
     this.figures.clear();
     this.props.clear();
     this.sky.geometry.dispose();

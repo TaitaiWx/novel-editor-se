@@ -202,6 +202,7 @@ export class AIService {
       defaultModel: descriptor.defaultModel,
       models: descriptor.models,
       docsUrl: descriptor.docsUrl,
+      ...(descriptor.supportsAudio ? { supportsAudio: true } : {}),
       configured,
       secureStorage: this.deps.credentials.isSecure(),
       enabled: defaults ? defaults.enabled : (stored.enabled ?? configured),

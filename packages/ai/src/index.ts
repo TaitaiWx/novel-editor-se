@@ -18,3 +18,4 @@ export * from './providers/seedance-video';
 export * from './providers/image';
 export * from './context';
 export * from './prompts';
+export * from './motion';

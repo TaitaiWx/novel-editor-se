@@ -1,0 +1,136 @@
+// 自绘复选框：与 Select / NumberInput 同一套边框、背景与焦点环
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ui-fg-primary);
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
+
+  &:hover:not(.disabled) .box {
+    border-color: #5a5a5a;
+  }
+}
+
+.withDescription {
+  align-items: flex-start;
+}
+
+.sm {
+  --checkbox-size: 14px;
+  font-size: 12px;
+}
+
+.md {
+  --checkbox-size: 16px;
+  font-size: 13px;
+}
+
+.control {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+
+  .withDescription & {
+    // 与首行文字垂直居中
+    margin-top: calc((1.45em - var(--checkbox-size)) / 2);
+  }
+}
+
+// 视觉隐藏但保留可聚焦、可点击的真实 checkbox
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 4px;
+  background: var(--ui-bg-elevated);
+  color: #fff;
+  pointer-events: none;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.checkIcon,
+.dashIcon {
+  display: none;
+  width: calc(var(--checkbox-size) - 4px);
+  height: calc(var(--checkbox-size) - 4px);
+}
+
+.input:checked + .box,
+.input:indeterminate + .box {
+  border-color: var(--ui-interaction-accent);
+  background: var(--ui-interaction-accent);
+}
+
+.input:checked:not(:indeterminate) + .box .checkIcon {
+  display: block;
+}
+
+.input:indeterminate + .box .dashIcon {
+  display: block;
+}
+
+.input:focus-visible + .box {
+  border-color: var(--ui-interaction-accent);
+  box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+}
+
+.text {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.45;
+}
+
+.label {
+  color: inherit;
+}
+
+.description {
+  color: var(--ui-fg-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.disabled {
+  color: var(--ui-fg-disabled);
+  cursor: not-allowed;
+
+  .box {
+    border-color: var(--ui-border-subtle);
+    background: var(--ui-bg-surface);
+  }
+
+  .input:checked + .box,
+  .input:indeterminate + .box {
+    border-color: transparent;
+    background: rgba(0, 122, 204, 0.35);
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .description {
+    color: var(--ui-fg-disabled);
+  }
+}

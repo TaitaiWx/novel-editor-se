@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electron', {
         'gui-session-publish',
         'get-file-info',
         'get-file-info-batch',
+        'get-files-exist',
         'get-default-data-path',
         'get-recent-folders',
         'get-last-folder',
@@ -219,6 +220,8 @@ contextBridge.exposeInMainWorld('electron', {
         'character-avatar-save',
         // 单个图片 / 视频导出（另存为，main/handlers/media-export.ts）
         'media-export',
+        // 播放器截图 / 录制结果另存为（main/handlers/media-save.ts）
+        'media-save-generated',
         // 人物 / 设定图集（资料/图集/）与 AI 出图（main/handlers/entity-media.ts）
         'entity-image-save',
         'entity-image-delete',
@@ -238,6 +241,13 @@ contextBridge.exposeInMainWorld('electron', {
         'video-scene-write-image',
         // 预演视频（镜头N-预演.mp4，3D 预演逐帧导出）
         'video-scene-write-media',
+        // 作品动作库（资料/动作库/*.bvh，3D 预演的动作片段；main/handlers/motion-library.ts）
+        'motion-library-list',
+        'motion-library-read',
+        'motion-library-import',
+        // 正文结构规则（设置 → 正文结构，main/handlers/project-structure.ts）
+        'project-structure-get',
+        'project-structure-set',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -275,6 +285,8 @@ contextBridge.exposeInMainWorld('electron', {
         // AI 流式输出片段、视频任务状态变化（main/handlers/ai-providers.ts、video.ts）
         'ai-stream-event',
         'video-task-updated',
+        // 正文结构规则保存后广播
+        'project-structure-changed',
         'open-file-from-ai',
         'open-settings-from-ai',
         'ai-apply-fix-request',
@@ -322,6 +334,8 @@ contextBridge.exposeInMainWorld('electron', {
         // AI 流式输出片段、视频任务状态变化（main/handlers/ai-providers.ts、video.ts）
         'ai-stream-event',
         'video-task-updated',
+        // 正文结构规则保存后广播
+        'project-structure-changed',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.removeListener(channel, listener);

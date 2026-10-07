@@ -5,6 +5,7 @@ import type { ContinuationState } from '../TextEditor/assist';
 import { describeAIError } from '../TextEditor/assist/ai-error';
 import { currentContinuationText } from '../TextEditor/assist/continuation-state';
 import type { ResolvedProvider } from '../../utils/continuationService';
+import Checkbox from '../Checkbox';
 import Select from '../Select';
 import { ContextDetails } from './ContextDetails';
 import {
@@ -127,14 +128,12 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
       </div>
 
       <div className={styles.row}>
-        <label className={styles.checkbox}>
-          <input
-            type="checkbox"
-            checked={form.followOutline}
-            onChange={(event) => update({ followOutline: event.target.checked })}
-          />
-          遵循章纲
-        </label>
+        <Checkbox
+          size="sm"
+          checked={form.followOutline}
+          onChange={(checked) => update({ followOutline: checked })}
+          label="遵循章纲"
+        />
         <Select
           className={styles.select}
           size="sm"

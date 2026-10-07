@@ -1,0 +1,149 @@
+// 开关：关闭时为中性灰轨道，打开时为强调色，与 Checkbox 同一套焦点环
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ui-fg-primary);
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
+
+  &:hover:not(.disabled) .track {
+    background: #4a4a4a;
+  }
+
+  &:hover:not(.disabled) .input:checked + .track {
+    background: #1a88d6;
+  }
+}
+
+.labelStart {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+}
+
+.withDescription {
+  align-items: flex-start;
+}
+
+.sm {
+  --switch-width: 26px;
+  --switch-height: 14px;
+  font-size: 12px;
+}
+
+.md {
+  --switch-width: 30px;
+  --switch-height: 16px;
+  font-size: 13px;
+}
+
+.control {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--switch-width);
+  height: var(--switch-height);
+
+  .withDescription & {
+    margin-top: calc((1.45em - var(--switch-height)) / 2);
+  }
+}
+
+// 视觉隐藏但保留可聚焦、可点击的真实控件
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.track {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: #3c3c3c;
+  pointer-events: none;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.12s ease;
+}
+
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(var(--switch-height) - 4px);
+  height: calc(var(--switch-height) - 4px);
+  border-radius: 50%;
+  background: #d4d4d4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.input:checked + .track {
+  background: var(--ui-interaction-accent);
+
+  .thumb {
+    background: #fff;
+    transform: translateX(calc(var(--switch-width) - var(--switch-height)));
+  }
+}
+
+.input:focus-visible + .track {
+  box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+}
+
+.text {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.45;
+}
+
+.label {
+  color: inherit;
+}
+
+.description {
+  color: var(--ui-fg-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.disabled {
+  color: var(--ui-fg-disabled);
+  cursor: not-allowed;
+
+  .track {
+    background: #2d2d2d;
+  }
+
+  .thumb {
+    background: #666;
+  }
+
+  .input:checked + .track {
+    background: rgba(0, 122, 204, 0.35);
+  }
+
+  .description {
+    color: var(--ui-fg-disabled);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track,
+  .thumb {
+    transition: none;
+  }
+}

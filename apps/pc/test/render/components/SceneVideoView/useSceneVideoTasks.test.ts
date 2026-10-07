@@ -147,6 +147,8 @@ describe('useSceneVideoTasks.submitShots', () => {
       firstFramePath: '资料/视频/001-启程/场景/首帧-1.png',
     });
     expect(submitted[1].shotIndex).toBe(2);
+    // 没有传 withAudio（服务不支持生成声音）时不发送该字段
+    expect('withAudio' in submitted[0]).toBe(false);
     expect('referencePaths' in submitted[1]).toBe(false);
     expect('firstFramePath' in submitted[1]).toBe(false);
     expect(result.current.tasks.map((item) => item.id)).toEqual(['t2', 't1']);
@@ -177,5 +179,30 @@ describe('useSceneVideoTasks.submitShots', () => {
       submitted: 0,
       errors: ['有镜头还没有画面描述，已跳过', '超出预算'],
     });
+  });
+});
+
+describe('useSceneVideoTasks.submitShots · 生成声音', () => {
+  it('视频服务支持生成声音时把开关带进每个任务', async () => {
+    const submitted: Record<string, unknown>[] = [];
+    installElectronMock((channel, payload) => {
+      if (channel === 'video-task-list') return { ok: true, data: [] };
+      if (channel === 'video-task-submit') {
+        submitted.push(payload as Record<string, unknown>);
+        return { ok: true, data: task({ id: `a${submitted.length}`, shotIndex: 1 }) };
+      }
+      return null;
+    });
+    const { result } = renderHook(() => useSceneVideoTasks(REF));
+    const state = sceneState([shot()]);
+    await act(async () => {
+      await result.current.submitShots({
+        state,
+        shots: state.storyboard.shots,
+        providerId: 'seedance-video',
+        withAudio: true,
+      });
+    });
+    expect(submitted[0]).toMatchObject({ providerId: 'seedance-video', withAudio: true });
   });
 });

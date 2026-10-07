@@ -9,6 +9,7 @@ import { lintNovelMarkup, resolveStatsTargets } from '@novel-editor/core';
 import { CliError } from '../errors';
 import { displayPath } from '../output';
 import type { CommandSpec } from '../types';
+import { loadStructureRules } from './structure';
 import { bool, str } from './util';
 
 export const lintCommands: CommandSpec[] = [
@@ -28,9 +29,11 @@ export const lintCommands: CommandSpec[] = [
       const project = await ctx.getProject();
       const target = str(args, 'target') ?? (project ? project.novelsPath : ctx.cwd);
       const resolved = await resolveStatsTargets(target, ctx.cwd, project);
+      // 章 / 幕标题会结束未闭合的场景：按项目的正文结构规则识别（ne structure）
+      const rules = await loadStructureRules(ctx);
       const files = [];
       for (const file of resolved.files) {
-        const issues = lintNovelMarkup(await readFile(file, 'utf-8'));
+        const issues = lintNovelMarkup(await readFile(file, 'utf-8'), rules);
         if (issues.length) files.push({ path: file, issues });
       }
       const issueCount = files.reduce((sum, file) => sum + file.issues.length, 0);

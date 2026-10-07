@@ -236,4 +236,17 @@ describe('参数校验', () => {
     expect(empty).not.toHaveProperty('firstFramePath');
     expect(empty).not.toHaveProperty('referencePaths');
   });
+
+  it('生成声音：只接受布尔值，缺省时不带该字段', () => {
+    expect(sanitizeSubmitPayload({ ...payload(), withAudio: true })).toMatchObject({
+      withAudio: true,
+    });
+    expect(sanitizeSubmitPayload({ ...payload(), withAudio: false })).toMatchObject({
+      withAudio: false,
+    });
+    expect('withAudio' in sanitizeSubmitPayload(payload())).toBe(false);
+    expect(() => sanitizeSubmitPayload({ ...payload(), withAudio: 'yes' })).toThrow(
+      '生成声音必须是布尔值'
+    );
+  });
 });

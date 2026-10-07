@@ -104,7 +104,18 @@ export const ReferenceMedia: React.FC<{
   version?: number;
   onInfo?: (info: MediaInfo) => void;
 }> = ({ item, compact, version = 0, onInfo }) => {
-  const { url, error } = useReferenceMedia(item, version);
+  // 占位（本章引用还没解析出路径）：显示骨架，解析完成后原位换成真正的媒体
+  const { url, error } = useReferenceMedia(item.pending ? null : item, version);
+  if (item.pending) {
+    return (
+      <div
+        className={styles.skeleton}
+        data-testid="reference-skeleton"
+        role="status"
+        aria-label={`正在定位：${item.title}`}
+      />
+    );
+  }
   if (!url) {
     return <div className={styles.placeholder}>{error ? `无法读取：${error}` : '读取中…'}</div>;
   }

@@ -6,6 +6,9 @@
  *   之后切换文档 / 作品、编辑指令、资料刷新（REFERENCE_AUTO_SOURCE_EVENT）都会更新自动内容，
  *   作者排好的顺序、加入的参考保留，移除过的自动项不再出现
  * 选中项按路径记录，列表变化时选中的参考不会跳到别的文件。
+ *
+ * 打开是同步的：本章引用的路径由共享解析缓存提供（编辑器实时渲染与 ReferenceButton 的空闲预热都会填充），
+ * 还没解析过的引用先放占位（顺序不变，主画面显示骨架），后台解析完成后原位替换。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -24,8 +27,11 @@ import {
   extractDocumentMediaRefs,
   insertReferenceItems,
   moveReferenceItem,
+  peekDocumentMedia,
   reconcileAutoItems,
+  remapPendingSelection,
   resolveDocumentMedia,
+  resolveDocumentMediaCached,
   sceneVideoReferenceItems,
 } from '../../utils/referenceSources';
 
@@ -33,8 +39,6 @@ export type ReferencePaneMode = 'closed' | 'docked' | 'mini';
 
 /** 自动内容的重新计算防抖（输入时不必每个字都解析） */
 export const AUTO_REFRESH_DEBOUNCE_MS = 300;
-/** 打开时等待本章引用解析的上限 */
-export const OPEN_RESOLVE_TIMEOUT_MS = 400;
 
 /** 合并新打开的参考：同一路径不重复，最多保留 30 个（新的在后） */
 export function mergeReferenceItems(
@@ -50,25 +54,35 @@ export function indexAfterRemove(length: number, index: number): number {
   return Math.max(0, Math.min(index, length - 2));
 }
 
-async function fileExists(path: string): Promise<boolean> {
-  const ipc = window.electron?.ipcRenderer;
-  if (!ipc) return false;
-  try {
-    const info = (await ipc.invoke('get-file-info', path)) as { isFile?: boolean } | null;
-    return Boolean(info) && info?.isFile !== false;
-  } catch {
-    return false;
-  }
-}
-
-/** 按自动来源计算自动内容（本章引用需要确认文件存在，是异步的） */
+/**
+ * 按自动来源计算自动内容（异步，确认文件存在）。
+ * 传入 exists 时逐个候选判断（测试用），否则经共享解析缓存批量探测。
+ */
 export async function buildAutoReferenceItems(
   fallback: readonly ReferenceItem[],
   source: ReferenceAutoSource | undefined,
-  exists: (path: string) => Promise<boolean> = fileExists
+  exists?: (path: string) => Promise<boolean>
 ): Promise<ReferenceItem[]> {
+  const refs = source ? extractDocumentMediaRefs(source.text) : [];
+  const chapter = !source
+    ? []
+    : exists
+      ? await resolveDocumentMedia(refs, source.documentPath, exists)
+      : await resolveDocumentMediaCached(refs, source.documentPath);
+  const scene = source
+    ? sceneVideoReferenceItems(source.files, source.workPath, source.documentPath)
+    : [];
+  return combineAutoItems(chapter, scene, fallback);
+}
+
+/** 同步计算自动内容：本章引用读缓存，未解析的放占位（见 peekDocumentMedia） */
+export function buildAutoReferenceItemsSync(
+  fallback: readonly ReferenceItem[],
+  source: ReferenceAutoSource | undefined,
+  peek?: Parameters<typeof peekDocumentMedia>[2]
+): ReferenceItem[] {
   const chapter = source
-    ? await resolveDocumentMedia(extractDocumentMediaRefs(source.text), source.documentPath, exists)
+    ? peekDocumentMedia(extractDocumentMediaRefs(source.text), source.documentPath, peek)
     : [];
   const scene = source
     ? sceneVideoReferenceItems(source.files, source.workPath, source.documentPath)
@@ -116,6 +130,8 @@ export function useReferencePaneState() {
     const next = await buildAutoReferenceItems(detail.fallback ?? [], detail.source);
     if (sequence !== sequenceRef.current || !autoModeRef.current) return;
     setItems((prev) => reconcileAutoItems(prev, next, dismissedRef.current));
+    // 选中的是占位：换成解析出的路径，主画面不跳
+    setSelectedPath((selected) => remapPendingSelection(selected, next));
   }, []);
 
   useEffect(() => {
@@ -133,14 +149,11 @@ export function useReferencePaneState() {
     return () => window.removeEventListener(REFERENCE_OPEN_EVENT, onOpen);
   }, []);
 
-  // 文件栏「参考」按钮：开着就收起；关着就以自动模式打开。
-  // 文档里有媒体引用时先解析（最多等 OPEN_RESOLVE_TIMEOUT_MS），避免主画面先显示人物图再跳到本章图片
-  const openingRef = useRef(false);
+  // 文件栏「参考」按钮：开着就收起；关着就以自动模式同步打开（本章引用读缓存，未解析的先放占位）
   useEffect(() => {
     const onToggle = (event: Event) => {
       const detail = (event as CustomEvent<ToggleReferenceDetail>).detail;
-      if (modeRef.current !== 'closed' || openingRef.current) {
-        openingRef.current = false;
+      if (modeRef.current !== 'closed') {
         reset();
         return;
       }
@@ -149,33 +162,12 @@ export function useReferencePaneState() {
       setAutoMode(true);
       autoModeRef.current = true;
       const source = detail?.source;
-      const initial = combineAutoItems(
-        source ? sceneVideoReferenceItems(source.files, source.workPath, source.documentPath) : [],
-        detail?.fallback ?? []
-      );
-      const show = (list: ReferenceItem[]) => {
-        openingRef.current = false;
-        setItems(list);
-        setSelectedPath(null);
-        setMode('docked');
-      };
-      if (!source || extractDocumentMediaRefs(source.text).length === 0) {
-        show(initial);
-        return;
-      }
-      openingRef.current = true;
-      const sequence = ++sequenceRef.current;
-      const timeout = new Promise<null>((resolve) =>
-        window.setTimeout(() => resolve(null), OPEN_RESOLVE_TIMEOUT_MS)
-      );
-      void Promise.race([buildAutoReferenceItems(detail?.fallback ?? [], source), timeout]).then(
-        (built) => {
-          if (sequence !== sequenceRef.current || !openingRef.current) return;
-          show(built ?? initial);
-          // 超时：先显示已有的，解析完成后再补上本章引用
-          if (!built) void refreshAuto();
-        }
-      );
+      setItems(buildAutoReferenceItemsSync(detail?.fallback ?? [], source));
+      setSelectedPath(null);
+      setMode('docked');
+      modeRef.current = 'docked';
+      // 有本章引用时后台确认（替换占位、校正过期缓存），不改变其他条目的顺序
+      if (source && extractDocumentMediaRefs(source.text).length > 0) void refreshAuto();
     };
     window.addEventListener(REFERENCE_TOGGLE_EVENT, onToggle);
     return () => window.removeEventListener(REFERENCE_TOGGLE_EVENT, onToggle);

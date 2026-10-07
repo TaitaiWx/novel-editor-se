@@ -4,7 +4,12 @@
  *
  * 编码器可注入（测试 / 没有 WebCodecs 的环境）；默认实现动态加载 @novel-editor/video/stitch。
  */
-import { previzFrameCount, samplePrevizScript, type PrevizScript } from '@novel-editor/video';
+import {
+  previzFrameCount,
+  samplePrevizScript,
+  type MotionLibrary,
+  type PrevizScript,
+} from '@novel-editor/video';
 import { captureSize } from './presets';
 import type { PrevizStageApi } from './types';
 
@@ -55,10 +60,16 @@ export async function renderPrevizVideo(
   script: PrevizScript,
   aspect: number,
   encode: PrevizVideoEncoder,
-  options: { onProgress?: (ratio: number) => void; signal?: AbortSignal } = {}
+  options: {
+    onProgress?: (ratio: number) => void;
+    signal?: AbortSignal;
+    /** 动作库：与播放时同一份，导出的动作与预览一致 */
+    clips?: MotionLibrary;
+  } = {}
 ): Promise<PrevizVideoOutput> {
   const size = captureSize(aspect, PREVIZ_LONG_EDGE);
-  stage.setSample(samplePrevizScript(script, 0));
+  const sampleOptions = { clips: options.clips };
+  stage.setSample(samplePrevizScript(script, 0, sampleOptions));
   const firstFrame = await stage.capture(size);
   const totalFrames = previzFrameCount(script, PREVIZ_FPS);
   stage.beginExport(size);
@@ -67,7 +78,8 @@ export async function renderPrevizVideo(
       ...size,
       fps: PREVIZ_FPS,
       totalFrames,
-      drawFrame: (index) => stage.renderExportFrame(samplePrevizScript(script, index / PREVIZ_FPS)),
+      drawFrame: (index) =>
+        stage.renderExportFrame(samplePrevizScript(script, index / PREVIZ_FPS, sampleOptions)),
       onProgress: (done, total) => options.onProgress?.(done / total),
       signal: options.signal,
     });

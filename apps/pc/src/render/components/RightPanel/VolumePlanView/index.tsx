@@ -13,6 +13,7 @@ import {
   type VolumeChapterPlan,
 } from '@novel-editor/basic-algorithm';
 import type { PersistedOutlineScopeInput } from '@/render/types/electron-api';
+import { useStructureClassifier } from '@/render/utils/structureRules';
 import { useAiConfig } from '../useAiConfig';
 import { OutlineList, type OutlineListHandlers } from './OutlineList';
 import { CharacterLanesView, ForeshadowView, TensionView } from './DerivedViews';
@@ -65,12 +66,14 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
       content,
     });
 
+    // 幕 / 场标记按项目的正文结构规则识别（设置 → 正文结构，例如 English「Act I」）
+    const classify = useStructureClassifier();
     const markerOutline = useMemo(
       () =>
-        chapters.length > 0 && hasActMarkers(chapters)
-          ? deriveVolumeOutline(chapters, { structure: 'markers' })
+        chapters.length > 0 && hasActMarkers(chapters, classify)
+          ? deriveVolumeOutline(chapters, { structure: 'markers', classify })
           : null,
-      [chapters]
+      [chapters, classify]
     );
     const { state, update } = useVolumePlanState({
       volumePath: target?.volumePath ?? null,
@@ -78,8 +81,8 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
       markerOutline,
     });
     const baseOutline = useMemo(
-      () => deriveVolumeOutline(chapters, { structure: state.structure }),
-      [chapters, state.structure]
+      () => deriveVolumeOutline(chapters, { structure: state.structure, classify }),
+      [chapters, state.structure, classify]
     );
     const outline = useMemo(() => applyVolumePlanOverlay(baseOutline, state), [baseOutline, state]);
     const lanes = useMemo(

@@ -1,0 +1,225 @@
+// 设置中心「正文结构」
+.hint {
+  margin-top: 18px;
+}
+
+.muted {
+  margin-top: 8px;
+  color: #8b8b8b;
+  font-size: 12px;
+}
+
+.error {
+  margin-top: 6px;
+  color: #e8a29a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.saved {
+  color: #9fd8ba;
+  font-size: 12px;
+}
+
+.switch {
+  justify-self: end;
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+
+  code {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #c8c8c8;
+    font-size: 11px;
+  }
+}
+
+.sectionTitle {
+  margin-top: 22px;
+  color: var(--ui-fg-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ruleHelp {
+  margin-top: 4px;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.6;
+
+  code {
+    color: #c8c8c8;
+  }
+}
+
+.rules {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ruleRow {
+  display: flex;
+  flex-direction: column;
+}
+
+.ruleFields {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto 28px;
+  gap: 8px;
+  align-items: center;
+}
+
+.patternInput {
+  height: 30px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+
+  &[aria-invalid='true'] {
+    border-color: rgba(224, 138, 128, 0.6);
+  }
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--ui-fg-primary);
+  }
+}
+
+.addButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: #b3b3b3;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--ui-fg-primary);
+    border-color: #4b4b50;
+  }
+}
+
+.testBox {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.testInput {
+  min-height: 120px;
+  resize: none;
+  field-sizing: content;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 4px;
+  background: #1f1f21;
+  color: var(--ui-fg-primary);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  outline: none;
+
+  &:focus {
+    border-color: var(--ui-interaction-accent);
+  }
+}
+
+.testResults {
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: auto;
+  max-height: 220px;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+}
+
+.testLine {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #c8c8c8;
+}
+
+.kindBadge {
+  flex-shrink: 0;
+  min-width: 30px;
+  padding: 0 6px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 11px;
+  color: #8b8b8b;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.chapter {
+  color: #e8e8e8;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.act {
+  color: #d9c18d;
+  background: rgba(215, 186, 125, 0.14);
+}
+
+.scene {
+  color: #c8b48a;
+  background: rgba(215, 186, 125, 0.08);
+}
+
+.saveRow {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  button {
+    margin-top: 0;
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+@media (max-width: 880px) {
+  .testBox {
+    grid-template-columns: 1fr;
+  }
+}

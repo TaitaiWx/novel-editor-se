@@ -22,10 +22,9 @@ import {
   replaceStoryboardShots,
   shotProgress,
   shotsNeedingGeneration,
-  shouldAutoStitch,
   updateShot,
 } from './sceneVideoState';
-import { animaticStoryboard, canStitchAnimatic, stitchAnimatic } from './stitchAnimatic';
+import { useSceneAnimatic } from './useSceneAnimatic';
 import { useSceneVideoDoc, type SaveStatus } from './useSceneVideoDoc';
 import { useSceneVideoTasks } from './useSceneVideoTasks';
 import { useVideoServices } from './useVideoServices';
@@ -109,7 +108,6 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [splitting, setSplitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [stitchProgress, setStitchProgress] = useState<number | null>(null);
   const [previzShotId, setPrevizShotId] = useState<string | null>(null);
   const imageServices = useImageServices();
   const [message, setMessage] = useState<Message>(null);
@@ -227,6 +225,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           shots,
           providerId: provider.id,
           model: state.model ?? provider.model,
+          ...(provider.supportsAudio ? { withAudio: state.withAudio } : {}),
           references,
         });
         setMessage(
@@ -244,72 +243,19 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     [provider, references, state, submitShots]
   );
 
-  // ─── 样片（自动合成） ───────────────────────────────────────────────
-
-  const stitch = useCallback(
-    async (signature: string | null) => {
-      if (!state || !workPath) return;
-      const storyboard = animaticStoryboard(
-        { ...state.storyboard, aspectRatio: state.aspectRatio },
-        state.storyboard.shots.map((shot) => shot.id)
-      );
-      if (storyboard.shots.length === 0) return;
-      const chosen = new Map<string, string>();
-      storyboard.shots.forEach((shot) => {
-        const file = chosenVersionFor(state, shot, files);
-        if (file) chosen.set(shot.id, file);
-      });
-      setStitchProgress(0);
-      try {
-        const output = await stitchAnimatic({
-          storyboard,
-          files: chosen,
-          readFile,
-          onProgress: setStitchProgress,
-        });
-        const ipc = window.electron?.ipcRenderer;
-        if (!ipc) throw new Error('没有打开项目');
-        const result = await ipc.invoke('video-scene-write-animatic', {
-          workPath,
-          chapter: doc.chapter,
-          scene,
-          ext: output.ext,
-          data: output.data,
-        });
-        if (!result.ok) throw new Error(result.error.message);
-        if (signature) updateState((prev) => ({ ...prev, animaticSignature: signature }));
-        await refreshFiles();
-        notifyWorkspaceFilesChanged();
-        setMessage(
-          output.audioDropped
-            ? {
-                tone: 'info',
-                text: `样片已保存到资料：${result.data.fileName}（当前环境无法编码声音，样片没有声音；镜头成片的原声不受影响）`,
-              }
-            : { tone: 'success', text: `样片已保存到资料：${result.data.fileName}` }
-        );
-      } catch (error) {
-        setMessage({
-          tone: 'error',
-          text: `合成样片失败：${error instanceof Error ? error.message : String(error)}`,
-        });
-      } finally {
-        setStitchProgress(null);
-      }
-    },
-    [doc.chapter, files, readFile, refreshFiles, scene, state, updateState, workPath]
-  );
-
-  const stitchSupported = canStitchAnimatic();
-  const autoStitchTriedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!state || !workPath || !stitchSupported || stitchProgress !== null) return;
-    const signature = shouldAutoStitch(state, files, tasks);
-    if (!signature || autoStitchTriedRef.current === signature) return;
-    // 同一组版本只自动尝试一次（失败后由作者在「样片」节点手动重试）
-    autoStitchTriedRef.current = signature;
-    void stitch(signature);
-  }, [files, state, stitch, stitchProgress, stitchSupported, tasks, workPath]);
+  // ─── 样片（全部镜头有成片时自动合成，useSceneAnimatic） ───────────────
+  const { stitch, stitchProgress, stitchSupported } = useSceneAnimatic({
+    state,
+    files,
+    tasks,
+    workPath,
+    chapter: doc.chapter,
+    scene,
+    readFile,
+    refreshFiles,
+    updateState,
+    onMessage: setMessage,
+  });
 
   // ─── 章纲（第一个成片出现后自动记录一次） ───────────────────────────
   useOutlineAutoLink({ state, files, workPath, chapterPath, dbReady, updateState });
@@ -639,6 +585,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           index={previzShot.index}
           state={state}
           characters={characters}
+          workPath={workPath}
           updateState={updateState}
           writeSceneImage={writeSceneImage}
           writePrevizVideo={writePrevizVideo}

@@ -1,6 +1,7 @@
 /**
  * 参考窗格（独立的 Electron 实例）
  *
+ * - 预解析：打开文档稍候再点「参考」，窗格在同一次点击后立即出现，第一张就是本章第一个引用，之后不重排
  * - 文件栏「参考」在 小说格式示例.md 上：本章 ::video[离港] 与 ::image、人物图，按来源分组
  * - 拖动缩略图排序；资料树拖来的文件加入窗格
  * - 「在资料中定位」：切换到所属作品、展开祖先目录、滚动到该行并高亮
@@ -94,6 +95,58 @@ async function selectTile(endsWith: string): Promise<void> {
 }
 
 describe('参考窗格', () => {
+  it('预解析后点「参考」立即打开：第一张是本章第一个引用，之后顺序不变', async () => {
+    const { page } = suite;
+    await ensureSidebarOpen(page);
+    await selectWork(page, FIXTURE_WORK);
+    await openProjectDocs(page);
+    await page.click({ text: '小说格式示例', within: SEL.projectNotes, exact: true });
+    await waitForEditorText(page, '星港城的黄昏是橘红色的');
+    // 等预解析（防抖 300ms + 空闲）把本章引用放进缓存
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const opened = await page.evaluate<{
+      elapsed: number;
+      title: string;
+      pending: boolean;
+      paths: string[];
+    }>(
+      async (pill: string, pane: string, tile: string) => {
+        const started = performance.now();
+        (document.querySelector(pill) as HTMLElement).click();
+        // React 在点击事件结束后的微任务里提交，最多等 50ms
+        while (!document.querySelector(pane) && performance.now() - started < 50) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        const tiles = Array.from(document.querySelectorAll<HTMLElement>(tile));
+        return {
+          elapsed: document.querySelector(pane) ? performance.now() - started : -1,
+          title: tiles[0]?.querySelector(':scope > span:last-of-type')?.textContent ?? '',
+          pending: tiles.some((node) => node.getAttribute('data-pending') === 'true'),
+          paths: tiles.map((node) => node.getAttribute('data-path') ?? ''),
+        };
+      },
+      '[data-testid="reference-pill"]',
+      PANE,
+      TILE
+    );
+    expect(opened.elapsed).toBeGreaterThanOrEqual(0);
+    expect(opened.elapsed).toBeLessThan(50);
+    expect(opened.title).toBe('星港城 · 码头');
+    expect(opened.pending).toBe(false);
+    expect(opened.paths[0].endsWith('星港城商会/图片.webp')).toBe(true);
+    expect(
+      await page.evaluate<string>(
+        (pane: string) => document.querySelector(`${pane} header span`)?.textContent ?? '',
+        PANE
+      )
+    ).toBe('星港城 · 码头');
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(await tilePaths()).toEqual(opened.paths);
+    // 收起，后面的用例重新打开
+    await page.click('[data-testid="reference-pill"]');
+    await page.waitForGone(PANE);
+  });
+
   it('「参考」按钮：本章的视频 离港 与图片、人物图，按来源分组', async () => {
     const { page } = suite;
     await ensureSidebarOpen(page);

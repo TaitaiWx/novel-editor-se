@@ -16,7 +16,6 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 import {
-  classifyStructureLine,
   imageDirectiveSource,
   parseDirectiveAttributes,
   parseDirectiveLine,
@@ -25,6 +24,11 @@ import {
 } from '@novel-editor/core/novel-format';
 import { loadDirectiveMedia, mediaPathCandidates } from './media-loader';
 import { mountMediaFigure } from './media-figure';
+import {
+  classifyLineInState,
+  structureRulesChanged,
+  structureRulesExtension,
+} from '../structure-rules';
 
 /** 视频地址候选（兼容旧名，实现见 media-loader） */
 export const videoPathCandidates = mediaPathCandidates;
@@ -190,7 +194,7 @@ function buildDecorations(view: EditorView, filePath: string | null): Decoration
   for (const { from, to } of view.visibleRanges) {
     let line = state.doc.lineAt(from);
     for (;;) {
-      const structure = classifyStructureLine(line.text);
+      const structure = classifyLineInState(state, line.text);
       if (structure) builder.add(line.from, line.from, STRUCTURE_LINE[structure]);
       if (line.number !== cursorLine && line.text.trimStart().startsWith('::')) {
         const directive = parseDirectiveLine(line.text);
@@ -351,6 +355,8 @@ const theme = EditorView.baseTheme({
 export function novelDirectivePreview(filePath: string | null): Extension {
   return [
     theme,
+    // 结构行（章 / 幕 / 场）按项目的正文结构规则识别，规则变化时立即重建
+    structureRulesExtension,
     ViewPlugin.fromClass(
       class {
         decorations: DecorationSet;
@@ -358,7 +364,12 @@ export function novelDirectivePreview(filePath: string | null): Extension {
           this.decorations = buildDecorations(view, filePath);
         }
         update(update: ViewUpdate) {
-          if (update.docChanged || update.viewportChanged || update.selectionSet) {
+          if (
+            update.docChanged ||
+            update.viewportChanged ||
+            update.selectionSet ||
+            structureRulesChanged(update)
+          ) {
             this.decorations = buildDecorations(update.view, filePath);
           }
         }

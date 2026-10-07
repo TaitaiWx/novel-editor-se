@@ -14,6 +14,8 @@ export interface SubmitShotsInput {
   shots: readonly Shot[];
   providerId: string;
   model?: string;
+  /** 生成声音：只在视频服务支持时传（undefined = 沿用厂商默认，不发送） */
+  withAudio?: boolean;
   /** 人物名 → 参考图（三视图优先，其次主要形象图；相对作品目录），提交时自动带上 */
   references?: Readonly<Record<string, readonly string[]>>;
 }
@@ -113,6 +115,7 @@ export function useSceneVideoTasks(ref: SceneTaskRef | null, onTaskFinished?: ()
             const referencePaths = referencePathsFor(shot, input.state, input.references);
             return referencePaths.length ? { referencePaths } : {};
           })(),
+          ...(input.withAudio === undefined ? {} : { withAudio: input.withAudio }),
           // 作者采用过首帧时，视频从这张首帧开始（人物与构图更稳）
           ...(input.state.keyframes?.[shot.id]
             ? { firstFramePath: input.state.keyframes[shot.id] }

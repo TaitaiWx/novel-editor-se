@@ -31,19 +31,10 @@
   color: #a8adb3;
 }
 
+// 复选框（Checkbox）的布局：每项独占一行
 .exportPreviewOption {
   display: flex;
-  align-items: center;
-  gap: 8px;
   margin-bottom: 10px;
-  font-size: 13px;
-  color: #d4d4d4;
-
-  input {
-    width: 14px;
-    height: 14px;
-    accent-color: #4c8dff;
-  }
 }
 
 .exportPreviewActions {

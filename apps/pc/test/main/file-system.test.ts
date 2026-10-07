@@ -106,6 +106,7 @@ describe('通道注册', () => {
         'write-file',
         'get-file-info',
         'get-file-info-batch',
+        'get-files-exist',
         'open-in-system-app',
         'show-item-in-folder',
         'open-external-url',

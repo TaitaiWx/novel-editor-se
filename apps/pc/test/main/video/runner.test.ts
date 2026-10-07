@@ -541,4 +541,16 @@ describe('downloadToFile', () => {
       })
     ).rejects.toMatchObject({ kind: 'aborted' });
   });
+
+  it('生成声音：任务参数记录 withAudio 并在提交时传给视频服务；没有时不传', async () => {
+    const { runner, repo, provider } = createRunner({ deps: { loadImages: async () => [] } });
+    runner.start();
+    await runner.submit({ ...input, withAudio: false });
+    expect(repo.get('t1')?.params).toMatchObject({ withAudio: false });
+    await runner.tick();
+    expect(provider.submitTask).toHaveBeenLastCalledWith(
+      expect.objectContaining({ withAudio: false })
+    );
+    runner.stop();
+  });
 });

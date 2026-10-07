@@ -1,7 +1,8 @@
 /**
  * 播放进度条：细线，悬停 / 拖动时变粗；点击或拖动跳转，← / → 每次 5 秒，Home / End 跳到首尾。
+ * 显示已缓冲的区间；悬停时在指针上方显示该位置的时间。
  */
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { formatTime, ratioFromPointer } from './format';
 import styles from './styles.module.scss';
 
@@ -13,19 +14,48 @@ interface ProgressBarProps {
   /** 跳转到指定时间（秒） */
   onSeek: (time: number) => void;
   onDragChange?: (dragging: boolean) => void;
+  /** 已缓冲的区间（秒） */
+  buffered?: ReadonlyArray<readonly [number, number]>;
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = ({ current, duration, onSeek, onDragChange }) => {
+/** TimeRanges → [start, end] 数组 */
+export function timeRangesToArray(
+  ranges: Pick<TimeRanges, 'length' | 'start' | 'end'> | null | undefined
+): Array<[number, number]> {
+  const list: Array<[number, number]> = [];
+  if (!ranges) return list;
+  for (let index = 0; index < ranges.length; index += 1) {
+    const start = ranges.start(index);
+    const end = ranges.end(index);
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) list.push([start, end]);
+  }
+  return list;
+}
+
+const ProgressBar: React.FC<ProgressBarProps> = ({
+  current,
+  duration,
+  onSeek,
+  onDragChange,
+  buffered = [],
+}) => {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
+  const [hover, setHover] = useState<number | null>(null);
   const known = Number.isFinite(duration) && duration > 0;
   const percent = known ? Math.min(100, Math.max(0, (current / duration) * 100)) : 0;
+  const toPercent = (time: number) => Math.min(100, Math.max(0, (time / duration) * 100));
+
+  const ratioAt = (clientX: number) => {
+    const track = trackRef.current;
+    if (!track) return 0;
+    const rect = track.getBoundingClientRect();
+    return ratioFromPointer(clientX, rect.left, rect.width);
+  };
 
   const seekToPointer = (clientX: number) => {
-    const track = trackRef.current;
-    if (!track || !known) return;
-    const rect = track.getBoundingClientRect();
-    onSeek(ratioFromPointer(clientX, rect.left, rect.width) * duration);
+    if (!trackRef.current || !known) return;
+    onSeek(ratioAt(clientX) * duration);
   };
 
   const endDrag = () => {
@@ -54,8 +84,10 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ current, duration, onSeek, on
         seekToPointer(event.clientX);
       }}
       onPointerMove={(event) => {
+        if (known) setHover(ratioAt(event.clientX));
         if (draggingRef.current) seekToPointer(event.clientX);
       }}
+      onPointerLeave={() => setHover(null)}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onClick={(event) => event.stopPropagation()}
@@ -77,9 +109,31 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ current, duration, onSeek, on
       }}
     >
       <div className={styles.progressTrack}>
+        {known &&
+          buffered.map(([start, end]) => (
+            <div
+              key={`${start}-${end}`}
+              className={styles.progressBuffered}
+              data-testid="video-buffered"
+              style={{
+                left: `${toPercent(start)}%`,
+                width: `${toPercent(end) - toPercent(start)}%`,
+              }}
+            />
+          ))}
         <div className={styles.progressFill} style={{ width: `${percent}%` }} />
         <div className={styles.progressThumb} style={{ left: `${percent}%` }} />
       </div>
+      {hover !== null && known && (
+        <span
+          className={styles.progressHover}
+          data-testid="video-hover-time"
+          aria-hidden="true"
+          style={{ left: `${hover * 100}%` }}
+        >
+          {formatTime(hover * duration)}
+        </span>
+      )}
     </div>
   );
 };

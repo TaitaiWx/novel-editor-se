@@ -109,6 +109,16 @@ describe('路径与标签', () => {
 });
 
 describe('状态持久化', () => {
+  it('生成声音默认开启；关闭后保存并恢复；旧文件没有该字段时视为开启', () => {
+    const state = baseState();
+    expect(state.withAudio).toBe(true);
+    const off = parseSceneVideoState(JSON.parse(JSON.stringify({ ...state, withAudio: false })));
+    expect(off?.withAudio).toBe(false);
+    const legacy = JSON.parse(JSON.stringify(state)) as Record<string, unknown>;
+    delete legacy.withAudio;
+    expect(parseSceneVideoState(legacy)?.withAudio).toBe(true);
+  });
+
   it('JSON 往返后完全一致（含空画面描述的新镜头）', () => {
     let state = replaceStoryboardShots(baseState(), [shot('月夜'), shot('雪原')]);
     state = appendShot(state);

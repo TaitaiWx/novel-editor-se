@@ -9,6 +9,7 @@ import {
 } from '@novel-editor/core/entity-media';
 import EntityGallery from '../../../EntityGallery';
 import Select from '../../../Select';
+import Switch from '../../../Switch';
 import styles from '../../styles.module.scss';
 import tabStyles from './styles.module.scss';
 import type {
@@ -298,18 +299,17 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
                       </span>
                     </div>
                   </label>
-                  <label className={styles.highlightToggle}>
-                    <input
-                      type="checkbox"
-                      checked={focusedCharacter.highlightFirstMentionOnly !== false}
-                      onChange={(event) =>
-                        void handleUpdateCharacterAttributes(focusedCharacter.id, {
-                          highlightFirstMentionOnly: event.target.checked,
-                        })
-                      }
-                    />
-                    <span>仅在每章第一次出现时高亮</span>
-                  </label>
+                  <Switch
+                    size="sm"
+                    className={styles.highlightToggle}
+                    checked={focusedCharacter.highlightFirstMentionOnly !== false}
+                    onChange={(checked) =>
+                      void handleUpdateCharacterAttributes(focusedCharacter.id, {
+                        highlightFirstMentionOnly: checked,
+                      })
+                    }
+                    label="仅在每章第一次出现时高亮"
+                  />
                 </div>
               </section>
 

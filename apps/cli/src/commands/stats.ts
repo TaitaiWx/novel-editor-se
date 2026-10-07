@@ -15,6 +15,7 @@ import {
 import { CliError } from '../errors';
 import { displayPath, formatDuration, formatNumber, renderStats, renderTable } from '../output';
 import type { CommandSpec } from '../types';
+import { countStructureLines, loadStructureRules } from './structure';
 import { bool, num, str } from './util';
 
 const LOG_NOTE =
@@ -33,9 +34,17 @@ export const statsCommands: CommandSpec[] = [
       const project = await ctx.getProject();
       const target = str(args, 'target') ?? (project ? project.novelsPath : ctx.cwd);
       const resolved = await resolveStatsTargets(target, ctx.cwd, project);
+      // 结构行（章 / 幕 / 场标题）按项目的正文结构规则计数（ne structure）
+      const rules = await loadStructureRules(ctx);
       const perFile = [];
+      const structure = { chapters: 0, acts: 0, scenes: 0 };
       for (const file of resolved.files) {
-        perFile.push({ path: file, stats: computeTextStats(await readFile(file, 'utf-8')) });
+        const content = await readFile(file, 'utf-8');
+        const counts = countStructureLines(content, rules);
+        structure.chapters += counts.chapters;
+        structure.acts += counts.acts;
+        structure.scenes += counts.scenes;
+        perFile.push({ path: file, stats: computeTextStats(content), structure: counts });
       }
       const stats = sumTextStats(perFile.map((item) => item.stats));
       const data = {
@@ -43,6 +52,7 @@ export const statsCommands: CommandSpec[] = [
         kind: resolved.kind,
         fileCount: resolved.files.length,
         stats,
+        structure,
         ...(bool(args, 'per-file') ? { files: perFile } : {}),
       };
       const lines = [
@@ -50,6 +60,11 @@ export const statsCommands: CommandSpec[] = [
         '',
         renderStats(stats),
       ];
+      if (structure.chapters || structure.acts || structure.scenes) {
+        lines.push(
+          `结构行: 章 ${structure.chapters} · 幕 ${structure.acts} · 场 ${structure.scenes}`
+        );
+      }
       if (bool(args, 'per-file') && perFile.length) {
         lines.push(
           '',

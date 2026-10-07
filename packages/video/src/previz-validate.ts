@@ -45,44 +45,30 @@ import {
   type PrevizShotSize,
   type PrevizValidation,
 } from './previz';
+import {
+  FACING_KEYS,
+  HEX_COLOR,
+  TIME_KEYS,
+  asNumber,
+  asText,
+  isRecord,
+  pick,
+  readPoint,
+  slug,
+} from './previz-validate-utils';
+import {
+  readEase,
+  readHands,
+  readLookAt,
+  readMotion,
+  readPoint3,
+  readPropKeys,
+  readSize,
+  resolveFigureLookAts,
+  resolveFigureRef,
+} from './previz-validate-extras';
 
 const round = roundTo;
-
-/* ----------------------------- 基础工具 ----------------------------- */
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function asNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const match = value.match(/-?\d+(?:\.\d+)?/);
-    if (match) return Number(match[0]);
-  }
-  return undefined;
-}
-
-function asText(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed || undefined;
-}
-
-function pick(record: Record<string, unknown>, keys: readonly string[]): unknown {
-  for (const key of keys) {
-    if (record[key] !== undefined) return record[key];
-  }
-  return undefined;
-}
-
-/** 枚举 id 规范化：小写、空格 / 下划线换成连字符 */
-function slug(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-');
-}
 
 /* ----------------------------- 别名 ----------------------------- */
 
@@ -205,29 +191,7 @@ function normalizePropKind(value: unknown): PrevizPropKind | undefined {
   return (PREVIZ_PROP_KINDS as readonly string[]).includes(id) ? (id as PrevizPropKind) : undefined;
 }
 
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
-
 /* ----------------------------- 字段读取 ----------------------------- */
-
-const TIME_KEYS = ['t', 'time', 'at', 'sec', 'seconds', 'timeSec'];
-const X_KEYS = ['x', 'posX', 'positionX'];
-const Z_KEYS = ['z', 'posZ', 'positionZ', 'depth'];
-const FACING_KEYS = ['facing', 'rotation', 'heading', 'direction', 'dir', 'rotY', 'face'];
-
-/** 位置：x / z，或 position: { x, z } / [x, z] */
-function readPoint(record: Record<string, unknown>): { x?: number; z?: number } {
-  let x = asNumber(pick(record, X_KEYS));
-  let z = asNumber(pick(record, Z_KEYS));
-  const nested = pick(record, ['position', 'pos', 'at', 'location']);
-  if (isRecord(nested)) {
-    x ??= asNumber(nested.x);
-    z ??= asNumber(nested.z ?? nested.y);
-  } else if (Array.isArray(nested) && nested.length >= 2) {
-    x ??= asNumber(nested[0]);
-    z ??= asNumber(nested[nested.length === 3 ? 2 : 1]);
-  }
-  return { x, z };
-}
 
 function readJoints(
   raw: unknown,
@@ -275,6 +239,11 @@ export interface PrevizValidateOptions {
   durationSec?: number;
   /** AI 没给机位时使用的景别 */
   shotSize?: PrevizShotSize;
+  /**
+   * 可用的动作片段 id（内置 + 动作库）：给出时引用不存在的片段会被去掉（回退到 pose）并给出警告；
+   * 省略时保留所有引用（读取已保存的脚本时动作库可能还没加载）
+   */
+  availableClips?: readonly string[];
 }
 
 function readFigure(
@@ -331,6 +300,18 @@ function readFigure(
       label
     );
     if (joints) key.joints = joints;
+    const ease = readEase(pick(item, ['ease', 'easing', 'curve']));
+    if (ease && ease !== 'linear') key.ease = ease;
+    const motion = readMotion(pick(item, ['motion', 'clip', 'animation', 'anim']), {
+      availableClips: options.availableClips,
+      warnings,
+      label,
+    });
+    if (motion) key.motion = motion;
+    const lookAt = readLookAt(pick(item, ['lookAt', 'gaze', 'look', 'lookTarget']));
+    if (lookAt) key.lookAt = lookAt;
+    const hands = readHands(pick(item, ['hands', 'handTargets', 'reach', 'ik']));
+    if (hands) key.hands = hands;
     keys.push(key);
     previous = key;
   });
@@ -348,7 +329,8 @@ function readCameraKey(
   duration: number,
   previous: PrevizCameraKey | null,
   options: PrevizValidateOptions,
-  warnings: string[]
+  warnings: string[],
+  figures: readonly PrevizFigureTrack[]
 ): PrevizCameraKey | null {
   if (!isRecord(raw)) return null;
   const rawSize = pick(raw, ['shotSize', 'size', 'framing', 'shot']);
@@ -398,6 +380,23 @@ function readCameraKey(
       key.focus = { x: clampToPrevizStage(point.x), z: clampToPrevizStage(point.z) };
     }
   }
+  // 跟随人物：没写时沿用上一个机位的跟随（写了 focus 则不跟随）
+  const rawFollow = pick(raw, ['follow', 'track', 'followFigure']);
+  const followRef = asText(rawFollow);
+  if (followRef) {
+    const id = resolveFigureRef(followRef, figures, warnings, `机位 ${index + 1} 的跟随`);
+    if (id) key.follow = id;
+  } else if (rawFollow === undefined && !key.focus && previous?.follow) {
+    key.follow = previous.follow;
+  }
+  const position = readPoint3(pick(raw, ['position', 'cameraPosition', 'eye']), 1.6);
+  if (position) {
+    key.position = position;
+    const target = readPoint3(pick(raw, ['target', 'lookAt', 'aim']), 1.2);
+    if (target) key.target = target;
+  }
+  const ease = readEase(pick(raw, ['ease', 'easing', 'curve']));
+  if (ease && ease !== 'linear') key.ease = ease;
   return key;
 }
 
@@ -442,6 +441,7 @@ export function validatePrevizScript(
     .map((item, index) => readFigure(item, index, durationSec, usedColors, options, warnings))
     .filter((item): item is PrevizFigureTrack => item !== null)
     .map((item, index) => ({ ...item, id: `f${index + 1}` }));
+  resolveFigureLookAts(figures, warnings);
   if (!figures.length && options.characters?.length) {
     warnings.push('脚本没有人物，已按镜头人物站成一排');
     figures = rowFigures(options.characters);
@@ -461,7 +461,8 @@ export function validatePrevizScript(
       durationSec,
       cameraKeys[cameraKeys.length - 1] ?? null,
       options,
-      warnings
+      warnings,
+      figures
     );
     if (key) cameraKeys.push(key);
   });
@@ -475,20 +476,36 @@ export function validatePrevizScript(
   const props: PrevizPropItem[] = [];
   for (const item of propList.slice(0, PREVIZ_MAX_PROPS)) {
     if (!isRecord(item)) continue;
-    const rawKind = pick(item, ['kind', 'type', 'prop', 'name']);
-    const kind = normalizePropKind(rawKind);
+    const rawKind = pick(item, ['kind', 'type', 'prop', 'shape']);
+    const name = asText(pick(item, ['name', 'label', 'title']));
+    const size = readSize(pick(item, ['size', 'dimensions', 'dims', 'scale']));
+    let kind = normalizePropKind(rawKind) ?? normalizePropKind(name);
+    if (!kind && (size || name)) {
+      // 不认识的物体：有尺寸 / 名字时用通用方块表示（AI 可以描述任意物体）
+      kind = 'box';
+      warnings.push(`道具 ${String(rawKind ?? name)} 用方块表示`);
+    }
     if (!kind) {
       warnings.push(`道具 ${String(rawKind)} 不支持，已忽略`);
       continue;
     }
+    const keys = readPropKeys(pick(item, ['keys', 'keyframes', 'path', 'track']), durationSec);
     const point = readPoint(item);
-    props.push({
+    const prop: PrevizPropItem = {
       id: `p${props.length + 1}`,
       kind,
-      x: clampToPrevizStage(point.x ?? 0),
-      z: clampToPrevizStage(point.z ?? -1.5),
-      facing: normalizeDegrees(asNumber(pick(item, FACING_KEYS)) ?? 0),
-    });
+      x: keys ? keys[0].x : clampToPrevizStage(point.x ?? 0),
+      z: keys ? keys[0].z : clampToPrevizStage(point.z ?? -1.5),
+      facing: keys ? keys[0].facing : normalizeDegrees(asNumber(pick(item, FACING_KEYS)) ?? 0),
+    };
+    const y = keys ? keys[0].y : asNumber(pick(item, ['y', 'height', 'elevation']));
+    if (y !== undefined && y !== 0) prop.y = round(clampNumber(y, 0, 12), 3);
+    if (name) prop.name = name.slice(0, 40);
+    if (size) prop.size = size;
+    const color = asText(item.color);
+    if (color && HEX_COLOR.test(color)) prop.color = color.toLowerCase();
+    if (keys && keys.length > 1) prop.keys = keys;
+    props.push(prop);
   }
 
   const rawMood = pick(root, ['mood', 'lighting', 'timeOfDay', 'light']);

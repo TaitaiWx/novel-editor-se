@@ -1,5 +1,6 @@
 /**
- * 3D 预演的简单道具（白模风格，只表达体积与位置）：墙、门、桌子、椅子、柱子、树、箱子。
+ * 3D 预演的简单道具（白模风格，只表达体积与位置）：墙、门、桌子、椅子、柱子、树、箱子，
+ * 以及通用几何体（方块 / 圆柱 / 球，按预演脚本的 size 缩放成任意物体）。color 给出时所有部件用这个颜色。
  */
 import * as THREE from 'three';
 import type { PropKind } from './presets';
@@ -14,13 +15,13 @@ export interface PropObject {
 
 const SELECTED_EMISSIVE = new THREE.Color('#2b5a86');
 
-export function buildProp(kind: PropKind): PropObject {
+export function buildProp(kind: PropKind, color?: string): PropObject {
   const root = new THREE.Group();
   const meshes: THREE.Mesh[] = [];
   const materials: THREE.MeshStandardMaterial[] = [];
   const geometries: THREE.BufferGeometry[] = [];
-  const material = (color: string, roughness = 0.85) => {
-    const item = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+  const material = (base: string, roughness = 0.85) => {
+    const item = new THREE.MeshStandardMaterial({ color: color ?? base, roughness, metalness: 0 });
     materials.push(item);
     return item;
   };
@@ -104,6 +105,18 @@ export function buildProp(kind: PropKind): PropObject {
       add(new THREE.IcosahedronGeometry(0.95, 1), leaves, [0, 2.6, 0]);
       add(new THREE.IcosahedronGeometry(0.7, 1), leaves, [0.45, 2.25, 0.2]);
       add(new THREE.IcosahedronGeometry(0.6, 1), leaves, [-0.4, 2.3, -0.25]);
+      break;
+    }
+    case 'box': {
+      box([1, 1, 1], material('#b8b2a6'), [0, 0.5, 0]);
+      break;
+    }
+    case 'cylinder': {
+      add(new THREE.CylinderGeometry(0.25, 0.25, 1, 24), material('#b8b2a6'), [0, 0.5, 0]);
+      break;
+    }
+    case 'sphere': {
+      add(new THREE.SphereGeometry(0.25, 24, 16), material('#b8b2a6'), [0, 0.25, 0]);
       break;
     }
     case 'crate':

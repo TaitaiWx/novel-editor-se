@@ -5,7 +5,16 @@ import { isImeComposing } from '../../utils/ime';
 import { buildFileTooltip, describeFileName, formatFileSize } from './fileDisplay';
 import { getFileIcon } from './fileIcons';
 import { NOVEL_EDITOR_PATH_MIME } from '../../utils/referencePane';
+import InlineCreateInput from './InlineCreateInput';
+import {
+  collectVisibleFilePaths,
+  findAncestorDirectoryPaths,
+  findTreePath,
+  sortNodes,
+} from './treeUtils';
 import styles from './styles.module.scss';
+
+export { findAncestorDirectoryPaths, findTreePath } from './treeUtils';
 
 export interface ContextMenuEvent {
   x: number;
@@ -43,125 +52,6 @@ interface FileTreeProps {
 export const FILE_TREE_REVEAL_HIGHLIGHT_MS = 2400;
 /** 树里一直找不到要定位的文件时，最多等待这么久（等待文件树刷新） */
 export const FILE_TREE_REVEAL_TIMEOUT_MS = 8000;
-
-function samePath(left: string, right: string): boolean {
-  const fix = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '');
-  return fix(left) === fix(right);
-}
-
-/** 树中与 targetPath 相同的节点路径（兼容分隔符差异）；不存在时为 null */
-export function findTreePath(nodes: FileNode[], targetPath: string): string | null {
-  for (const node of nodes) {
-    if (samePath(node.path, targetPath)) return node.path;
-    if (node.type === 'directory' && node.children) {
-      const found = findTreePath(node.children, targetPath);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-const sortNodes = (nodes: FileNode[]): FileNode[] => {
-  return [...nodes].sort((a, b) => {
-    if (a.type !== b.type) {
-      return a.type === 'directory' ? -1 : 1;
-    }
-    return a.name.localeCompare(b.name, 'zh-CN');
-  });
-};
-
-export function findAncestorDirectoryPaths(
-  nodes: FileNode[],
-  targetPath: string,
-  ancestors: string[] = []
-): string[] {
-  for (const node of nodes) {
-    if (node.path === targetPath) {
-      return node.type === 'directory' ? [...ancestors, node.path] : ancestors;
-    }
-    if (node.type === 'directory' && node.children) {
-      const result = findAncestorDirectoryPaths(node.children, targetPath, [
-        ...ancestors,
-        node.path,
-      ]);
-      if (result.length > 0) return result;
-    }
-  }
-  return [];
-}
-
-function collectVisibleFilePaths(nodes: FileNode[], expandedDirs: Set<string>): string[] {
-  const paths: string[] = [];
-  for (const node of nodes) {
-    if (node.type === 'file') {
-      paths.push(node.path);
-      continue;
-    }
-    if (node.children && expandedDirs.has(node.path)) {
-      paths.push(...collectVisibleFilePaths(sortNodes(node.children), expandedDirs));
-    }
-  }
-  return paths;
-}
-
-const InlineCreateInput: React.FC<{
-  type: 'file' | 'directory';
-  onSubmit: (name: string) => void;
-  onCancel: () => void;
-  level?: number;
-  baseIndent?: number;
-  showExpandIcon?: boolean;
-}> = ({ type, onSubmit, onCancel, level = 0, baseIndent = 8, showExpandIcon = true }) => {
-  const [value, setValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-  const submittedRef = useRef(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => inputRef.current?.focus(), 50);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    e.stopPropagation();
-    if (isImeComposing(e)) return;
-    if (e.key === 'Enter' && value.trim()) {
-      submittedRef.current = true;
-      onSubmit(value.trim());
-    } else if (e.key === 'Escape') {
-      onCancel();
-    }
-  };
-
-  const handleBlur = () => {
-    if (!submittedRef.current) {
-      onCancel();
-    }
-  };
-
-  const iconName = type === 'directory' ? 'folder' : value || 'file.txt';
-  const iconType = type === 'directory' ? 'directory' : 'file';
-  const { icon, className } = getFileIcon(iconName, iconType);
-
-  return (
-    <div className={styles.fileTreeItem}>
-      <div className={styles.itemHeader} style={{ paddingLeft: `${baseIndent + level * 16}px` }}>
-        {showExpandIcon ? (
-          <span className={`${styles.expandIcon} ${styles.hidden}`}>&#9654;</span>
-        ) : null}
-        <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
-        <input
-          ref={inputRef}
-          className={styles.inlineInput}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleBlur}
-          placeholder={type === 'file' ? '文件名' : '目录名'}
-        />
-      </div>
-    </div>
-  );
-};
 
 const FileTreeItem: React.FC<{
   node: FileNode;

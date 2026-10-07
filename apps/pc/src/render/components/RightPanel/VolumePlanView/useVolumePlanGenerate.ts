@@ -10,6 +10,7 @@ import {
   type VolumeOutline,
   type VolumeStructureId,
 } from '@novel-editor/basic-algorithm';
+import { getStructureClassifier } from '@/render/utils/structureRules';
 import { structureOptions } from './PlanToolbar';
 import type { VolumePlanGeneratedBy, VolumePlanState } from './volumePlanState';
 
@@ -117,7 +118,10 @@ export function useVolumePlanGenerate({
       const structures = pickVariantStructures(currentStructure, hasMarkers);
       const results = await Promise.all(
         structures.map(async (structure) => {
-          const outline = deriveVolumeOutline(chapters, { structure });
+          const outline = deriveVolumeOutline(chapters, {
+            structure,
+            classify: getStructureClassifier(),
+          });
           const { plan, by, note } = await planFor(outline);
           return {
             variant: { structure, label: getStructureLabel(structure), outline, plan, by },

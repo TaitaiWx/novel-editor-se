@@ -1,3 +1,4 @@
+import { getStructureClassifier } from '@/render/utils/structureRules';
 import { useCallback, useEffect, useRef } from 'react';
 import {
   OPEN_SCENE_VIDEO_EVENT,
@@ -65,6 +66,7 @@ export function useSceneVideoEntry(ctx: UseSceneVideoEntryContext) {
             selectionLine: state.doc.lineAt(selection.from).number,
             cursorLine: detail.line ?? state.doc.lineAt(selection.head).number,
             sceneTitle: detail.scene,
+            classify: getStructureClassifier(),
           });
         } else {
           const ipc = window.electron?.ipcRenderer;
@@ -73,6 +75,7 @@ export function useSceneVideoEntry(ctx: UseSceneVideoEntryContext) {
             docText,
             sceneTitle: detail.scene,
             cursorLine: detail.line,
+            classify: getStructureClassifier(),
           });
         }
         if (!source.text.trim()) {

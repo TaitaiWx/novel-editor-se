@@ -6,6 +6,7 @@
  *   切换文档、编辑指令、资料变化时自动更新（作者加入的参考与排好的顺序保留，见 useReferencePaneState）
  * - 拖动缩略图排序；资料树 / 系统文件管理器里的文件拖进来即加入；缩略图拖到正文插入 ::image / ::video 指令
  * - 显示中的文件在磁盘上被修改时自动重新读取（useReferenceHotReload）
+ * - 打开是同步的：本章引用还没解析出路径时先显示占位骨架，解析后原位替换
  * - 停靠在编辑器右侧，可拖动左边缘调整宽度；可缩成右下角的小卡片
  * 窗格状态只在当前窗口内存中，关闭后不保留。
  */
@@ -56,8 +57,8 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const versions = useReferenceHotReload({
     active: mode !== 'closed' && !hidden,
-    currentPath: current?.path ?? null,
-    paths: items.map((item) => item.path),
+    currentPath: current && !current.pending ? current.path : null,
+    paths: items.filter((item) => !item.pending).map((item) => item.path),
   });
   const { getSource } = pane;
   const directiveFor = useCallback(
@@ -224,12 +225,20 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
           onStep={step}
           onInfo={setInfo}
         />
-        <ReferenceInfo
-          item={current}
-          info={info}
-          directive={directiveFor(current)}
-          onRemove={() => removeAt(index)}
-        />
+        {current.pending ? (
+          <div className={styles.info} data-testid="reference-info">
+            <div className={styles.meta}>
+              <span className={styles.metaText}>正在定位文件…</span>
+            </div>
+          </div>
+        ) : (
+          <ReferenceInfo
+            item={current}
+            info={info}
+            directive={directiveFor(current)}
+            onRemove={() => removeAt(index)}
+          />
+        )}
         {items.length > 1 && (
           <ReferenceGrid
             items={items}

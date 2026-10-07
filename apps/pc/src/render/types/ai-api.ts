@@ -11,6 +11,9 @@ import type {
   AIIpcResult,
   AIProviderInfo,
   AIProviderUpdate,
+  MotionLibraryImportResult,
+  MotionLibraryListResult,
+  MotionLibraryRef,
   VideoSceneAnimaticPayload,
   VideoSceneFileRequest,
   VideoSceneLoadResult,
@@ -29,6 +32,10 @@ export type {
   AIProviderInfo,
   AIProviderUpdate,
   AIStreamEvent,
+  MotionLibraryEntry,
+  MotionLibraryImportResult,
+  MotionLibraryListResult,
+  MotionLibraryRef,
   SerializedAIError,
   VideoSceneAnimaticPayload,
   VideoSceneFileRequest,
@@ -81,6 +88,21 @@ export interface AIInvokeOverloads {
     channel: 'video-settings-set',
     update: Partial<VideoSettingsInfo>
   ): Promise<AIIpcResult<VideoSettingsInfo>>;
+  /** 作品动作库：列出 <作品>/资料/动作库/*.bvh */
+  invoke(
+    channel: 'motion-library-list',
+    ref: MotionLibraryRef
+  ): Promise<AIIpcResult<MotionLibraryListResult>>;
+  /** 读取动作库里的一个 .bvh（≤ 5MB） */
+  invoke(
+    channel: 'motion-library-read',
+    request: MotionLibraryRef & { fileName: string }
+  ): Promise<AIIpcResult<string>>;
+  /** 导入 / 保存 .bvh 到动作库（同名自动加序号，不覆盖） */
+  invoke(
+    channel: 'motion-library-import',
+    request: MotionLibraryRef & { fileName: string; data: string }
+  ): Promise<AIIpcResult<MotionLibraryImportResult>>;
   invoke(
     channel: 'video-scene-load',
     scene: VideoSceneRef

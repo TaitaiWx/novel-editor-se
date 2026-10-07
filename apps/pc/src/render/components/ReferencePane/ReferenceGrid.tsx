@@ -20,7 +20,14 @@ import styles from './styles.module.scss';
 
 const Thumb: React.FC<{ item: ReferenceItem; version: number }> = ({ item, version }) => {
   // 视频不为缩略图整段读取，只显示播放图标
-  const { url } = useReferenceMedia(item.kind === 'image' ? item : null, version);
+  const { url } = useReferenceMedia(item.kind === 'image' && !item.pending ? item : null, version);
+  if (item.pending) {
+    return (
+      <span className={styles.thumbMedia} aria-hidden="true">
+        <span className={styles.thumbSkeleton} />
+      </span>
+    );
+  }
   if (item.kind === 'video') {
     return (
       <span className={`${styles.thumbMedia} ${styles.thumbVideo}`} aria-hidden="true">
@@ -147,7 +154,8 @@ const ReferenceGrid: React.FC<{
                   title={`${item.title}（拖动排序，Alt + ← / → 移动）`}
                   data-testid="reference-tile"
                   data-path={item.path}
-                  draggable
+                  data-pending={item.pending ? 'true' : undefined}
+                  draggable={!item.pending}
                   onClick={() => onSelect(itemIndex)}
                   onKeyDown={(event) => {
                     if (!event.altKey) return;

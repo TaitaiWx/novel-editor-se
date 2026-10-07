@@ -1,3 +1,4 @@
+import { getStructureClassifier } from '@/render/utils/structureRules';
 import { extractOutline } from '@novel-editor/basic-algorithm';
 import type { PersistedOutlineNodeInput } from '@/render/types/electron-api';
 import { buildOutlineEntries, extractJsonBlock, splitTextIntoChunks } from './utils';
@@ -205,7 +206,10 @@ function buildChunkFallbacks(content: string): ChunkFallback[] {
 }
 
 function buildFallbackOutline(content: string): PersistedOutlineNodeInput[] {
-  const headings = extractOutline(content, { enableHeuristic: false });
+  const headings = extractOutline(content, {
+    enableHeuristic: false,
+    classify: getStructureClassifier(),
+  });
   const entries = buildOutlineEntries(content, headings);
   const meaningfulEntries = entries.filter((entry) => entry.text.trim());
 

@@ -10,6 +10,8 @@ import type { AboutInfo } from '../../shared/about';
 import type { LogUploadResult } from '../../shared/log-upload';
 import type { MenuShortcutBindings } from '../../shared/app-menu';
 import type { WorkspaceContentSearchResponse } from '../../shared/workspace-search';
+import type { ProjectStructureResult } from '../../shared/project-structure';
+import type { StructureConfig } from '@novel-editor/core/structure-rules';
 
 export type { AboutInfo } from '../../shared/about';
 export type { LogUploadResult } from '../../shared/log-upload';
@@ -159,6 +161,8 @@ export interface ElectronAPI {
       /** 用系统浏览器打开外部链接（仅 http(s) / mailto） */
       invoke(channel: 'open-external-url', url: string): Promise<{ success: boolean }>;
       invoke(channel: 'get-file-info-batch', filePaths: string[]): Promise<FileInfoBatchEntry[]>;
+      /** 批量判断文件是否存在：true / false；不在工作区内的路径为 null（未检查） */
+      invoke(channel: 'get-files-exist', filePaths: string[]): Promise<Array<boolean | null>>;
       invoke(channel: 'get-default-data-path'): Promise<string>;
       invoke(channel: 'get-recent-folders'): Promise<string[]>;
       invoke(channel: 'get-last-folder'): Promise<string | null>;
@@ -370,6 +374,14 @@ export interface ElectronAPI {
         }
       ): Promise<unknown>;
       invoke(channel: 'db-world-setting-delete', id: number): Promise<unknown>;
+      /** 正文结构规则（设置 → 正文结构）：folderPath 必须是当前窗口打开的项目 */
+      invoke(channel: 'project-structure-get', folderPath: string): Promise<ProjectStructureResult>;
+      /** 保存正文结构规则；成功后主进程广播 project-structure-changed */
+      invoke(
+        channel: 'project-structure-set',
+        folderPath: string,
+        config: StructureConfig
+      ): Promise<ProjectStructureResult>;
       /** 文件面板全文搜索：在 rootPath（工作区内的目录）下的 .md / .txt 中按字面量查找 */
       invoke(
         channel: 'workspace-search-content',
@@ -380,6 +392,15 @@ export interface ElectronAPI {
       invoke(
         channel: 'media-export',
         request: { sourcePath: string; defaultName?: string; format?: string; data?: Uint8Array }
+      ): Promise<{ saved: boolean; filePath?: string; error?: string }>;
+      /** 播放器截图 / 录制结果另存为：PNG / JPEG / WebP / WebM / MP4，按文件头校验 */
+      invoke(
+        channel: 'media-save-generated',
+        request: {
+          defaultName?: string;
+          format: 'png' | 'jpeg' | 'webp' | 'webm' | 'mp4';
+          data: Uint8Array;
+        }
       ): Promise<{ saved: boolean; filePath?: string; error?: string }>;
       /** 人物头像：保存到 <作品>/资料/人物头像/，返回相对作品目录的路径 */
       invoke(

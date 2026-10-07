@@ -15,7 +15,13 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
-import type { Extension } from '@codemirror/state';
+import type { EditorState, Extension } from '@codemirror/state';
+import type { StructureLineKind } from '@novel-editor/core/structure-rules';
+import {
+  classifyLineInState,
+  structureRulesChanged,
+  structureRulesExtension,
+} from './structure-rules';
 
 /** 编辑器角色高亮规则 */
 export interface CharacterHighlightPattern {
@@ -43,15 +49,6 @@ type HighlightMatcher = {
 
 // ── 正则 ──
 
-/** 中文幕标记 */
-const RE_ACT =
-  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u5e55)\s*(.*)/;
-/** 中文场景标记 */
-const RE_SCENE =
-  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u573a)\s*(.*)/;
-/** 中文章节/卷/回/节/部/篇/集 */
-const RE_CHAPTER =
-  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+[\u7ae0\u8282\u5e55\u56de\u7bc7\u96c6\u5377])\s*(.*)/;
 /** Markdown 标题 */
 const RE_HEADING = /^(#{1,6})\s+(.+)/;
 
@@ -226,12 +223,14 @@ function buildHighlightMatcher(patterns: PreparedHighlightPattern[]): HighlightM
   };
 }
 
-function isChapterBoundary(text: string): boolean {
-  const trimmed = text.trim();
+/** 章 / 幕标题（含 Markdown 标题里写的「# 第一章」「# Chapter 1」）是首现高亮的分界 */
+function isChapterBoundary(state: EditorState, trimmed: string, kind: StructureLineKind | null) {
   if (!trimmed) return false;
-  if (RE_CHAPTER.test(trimmed)) return true;
+  if (kind === 'chapter' || kind === 'act') return true;
   const headingMatch = RE_HEADING.exec(trimmed);
-  return Boolean(headingMatch && RE_CHAPTER.test(headingMatch[2].trim()));
+  if (!headingMatch) return false;
+  const headingKind = classifyLineInState(state, headingMatch[2].trim());
+  return headingKind === 'chapter' || headingKind === 'act';
 }
 
 function getCharacterMark(
@@ -267,16 +266,18 @@ function buildDecorations(
   for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
     const line = view.state.doc.line(lineNumber);
     const trimmedText = line.text.trim();
+    // 结构行按项目的正文结构规则识别（设置 → 正文结构）
+    const kind = trimmedText ? classifyLineInState(view.state, trimmedText) : null;
 
-    if (lineNumber > 1 && isChapterBoundary(line.text)) {
+    if (lineNumber > 1 && isChapterBoundary(view.state, trimmedText, kind)) {
       mentionedCharacterIds = new Set<number>();
     }
 
-    if (RE_ACT.test(trimmedText)) {
+    if (kind === 'act') {
       builder.add(line.from, line.from, actLineDeco);
-    } else if (RE_SCENE.test(trimmedText)) {
+    } else if (kind === 'scene') {
       builder.add(line.from, line.from, sceneLineDeco);
-    } else if (RE_CHAPTER.test(trimmedText)) {
+    } else if (kind === 'chapter') {
       builder.add(line.from, line.from, chapterLineDeco);
     } else if (RE_HEADING.test(trimmedText)) {
       builder.add(line.from, line.from, headingLineDeco);
@@ -327,7 +328,7 @@ export function writingDecorations(characterPatterns: CharacterHighlightPattern[
       }
 
       update(update: ViewUpdate) {
-        if (update.docChanged) {
+        if (update.docChanged || structureRulesChanged(update)) {
           this.decorations = buildDecorations(update.view, matcher, preparedPatterns);
         }
       }
@@ -372,5 +373,5 @@ export function writingDecorations(characterPatterns: CharacterHighlightPattern[
     },
   });
 
-  return [plugin, theme];
+  return [structureRulesExtension, plugin, theme];
 }

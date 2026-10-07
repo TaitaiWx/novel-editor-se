@@ -86,6 +86,7 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     models: SEEDANCE_VIDEO_DEFAULTS.models,
     envKey: providerEnvKey('seedance-video'),
     docsUrl: 'https://www.volcengine.com/docs/82379/1520757',
+    supportsAudio: true,
   },
   {
     id: 'seedream-image',

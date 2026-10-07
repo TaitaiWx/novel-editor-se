@@ -20,3 +20,5 @@ export * from './growth/storage';
 export * from './work-scope';
 export * from './entity-media';
 export * from './novel-format';
+export * from './structure-rules';
+export * from './structure-config';

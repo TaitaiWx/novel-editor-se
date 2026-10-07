@@ -37,6 +37,7 @@ import { createKeyedSerialQueue } from '../keyed-serial-queue';
 import { addRecentFolder } from '../recent-folders';
 import { getSampleDataPaths, syncSampleData, takeSampleUpgradeNotice } from '../sample-data';
 import { getWorkspaceRootForSender } from './session';
+import { checkFilesExist } from './files-exist';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -172,6 +173,11 @@ export function registerFileSystemHandlers(): void {
 
   ipcMain.handle('get-file-info-batch', (_event, filePaths: string[]) =>
     getFileInfoBatch(filePaths)
+  );
+
+  // 批量判断候选路径是否存在（只回答工作区内的绝对路径，见 files-exist.ts）
+  ipcMain.handle('get-files-exist', (event, filePaths: unknown) =>
+    checkFilesExist(filePaths, getWorkspaceRootForSender(event?.sender?.id))
   );
 
   ipcMain.handle('open-in-system-app', async (_event, filePath: string) => {

@@ -1,0 +1,94 @@
+/**
+ * 字幕（WebVTT `<track>`）与媒体错误文案。
+ * 字幕开关通过 textTracks 的 mode 控制（showing / disabled），浏览器负责绘制（全屏时同样显示）。
+ */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { PlayerError } from './engines/types';
+import type { CaptionOption } from './SettingsMenu';
+
+export interface PlayerTrack {
+  /** WebVTT 地址 */
+  src: string;
+  /** 语言代码，例如 zh-CN */
+  srclang?: string;
+  /** 菜单里显示的名称 */
+  label: string;
+  kind?: 'subtitles' | 'captions';
+  /** 默认打开 */
+  default?: boolean;
+}
+
+/** 默认打开的字幕下标；没有时为 -1 */
+export function defaultCaptionIndex(tracks: readonly PlayerTrack[] | undefined): number {
+  return tracks?.findIndex((track) => track.default) ?? -1;
+}
+
+/** 按下标设置各字幕的显示状态 */
+export function applyCaptionMode(
+  textTracks: { readonly length: number; [index: number]: { mode: string } } | null | undefined,
+  index: number
+): void {
+  if (!textTracks) return;
+  for (let position = 0; position < textTracks.length; position += 1) {
+    const track = textTracks[position];
+    if (track) track.mode = position === index ? 'showing' : 'disabled';
+  }
+}
+
+export function useCaptions(
+  videoRef: React.RefObject<HTMLVideoElement | null>,
+  tracks: readonly PlayerTrack[] | undefined
+) {
+  const tracksKey = (tracks ?? []).map((track) => `${track.src}|${track.label}`).join('\n');
+  const [index, setIndex] = useState(() => defaultCaptionIndex(tracks));
+  const lastOn = useRef(Math.max(0, defaultCaptionIndex(tracks)));
+  const defaultIndex = defaultCaptionIndex(tracks);
+
+  // 字幕列表变化：回到默认
+  useEffect(() => {
+    setIndex(defaultIndex);
+    lastOn.current = Math.max(0, defaultIndex);
+  }, [tracksKey, defaultIndex]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const apply = () => applyCaptionMode(video.textTracks, index);
+    apply();
+    // 字幕轨道是异步加入的，读到元数据后再设置一次
+    video.addEventListener('loadedmetadata', apply);
+    return () => video.removeEventListener('loadedmetadata', apply);
+  }, [videoRef, index, tracksKey]);
+
+  const options: CaptionOption[] = (tracks ?? []).map((track, position) => ({
+    index: position,
+    label: track.label,
+  }));
+
+  const select = useCallback((next: number) => {
+    if (next >= 0) lastOn.current = next;
+    setIndex(next);
+  }, []);
+
+  const toggle = useCallback(() => {
+    setIndex((value) => (value >= 0 ? -1 : lastOn.current));
+  }, []);
+
+  return { options, index, select, toggle };
+}
+
+/** MediaError.code → 错误 */
+export function mediaErrorMessage(code: number): PlayerError {
+  switch (code) {
+    case 1:
+      return new PlayerError('unknown', '视频加载被中止');
+    case 2:
+      return new PlayerError('network', '网络错误，视频加载失败');
+    case 3:
+      return new PlayerError('decode', '视频解码失败，文件可能已损坏');
+    case 4:
+      return new PlayerError('unsupported', '不支持这个视频格式或地址无法访问');
+    default:
+      return new PlayerError('unknown', '视频播放出错');
+  }
+}

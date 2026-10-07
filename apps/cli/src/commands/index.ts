@@ -14,6 +14,7 @@ import { chapterCommands, novelCommands } from './novel';
 import { projectCommands } from './project';
 import { statsCommands } from './stats';
 import { lintCommands } from './lint';
+import { structureCommands } from './structure';
 import { videoCommands } from './video';
 
 export const commands: CommandSpec[] = [];
@@ -31,6 +32,7 @@ commands.push(
   ...chapterCommands,
   ...statsCommands,
   ...lintCommands,
+  ...structureCommands,
   ...[...growthCommands, ...growthWorldCommands].map(withNovelOption),
   ...aiCommands,
   ...videoCommands,
