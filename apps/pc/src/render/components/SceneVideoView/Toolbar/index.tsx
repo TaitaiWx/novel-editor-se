@@ -5,6 +5,7 @@ import React from 'react';
 import { VscAdd, VscGoToFile } from 'react-icons/vsc';
 import { ASPECT_RATIOS, type AspectRatio } from '@novel-editor/video';
 import type { AIProviderInfo } from '@/render/types/ai-api';
+import Select from '../../Select';
 import Tooltip from '../../Tooltip';
 import { SCENE_SHOT_DURATIONS, SCENE_VIDEO_STYLES, type SceneVideoState } from '../sceneVideoState';
 import styles from './styles.module.scss';
@@ -66,60 +67,48 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       <div className={styles.settings}>
         <Tooltip content="画面风格（场景检查器里可以自定义）">
-          <select
+          <Select
             className={styles.select}
             aria-label="风格"
             value={presetStyle ? state.style : ''}
-            onChange={(event) => {
-              const style = event.target.value;
+            options={[
+              ...(presetStyle ? [] : [{ value: '', label: state.style }]),
+              ...SCENE_VIDEO_STYLES.map((style) => ({ value: style, label: style })),
+            ]}
+            onChange={(style) => {
               if (style) onChange((prev) => ({ ...prev, style }));
             }}
-          >
-            {!presetStyle && <option value="">{state.style}</option>}
-            {SCENE_VIDEO_STYLES.map((style) => (
-              <option key={style} value={style}>
-                {style}
-              </option>
-            ))}
-          </select>
+          />
         </Tooltip>
         <Tooltip content="画面比例">
-          <select
+          <Select<AspectRatio>
             className={styles.select}
             aria-label="画面比例"
             value={state.aspectRatio}
-            onChange={(event) => {
-              const aspectRatio = event.target.value as AspectRatio;
+            options={ASPECT_RATIOS.map((ratio) => ({ value: ratio, label: ratio }))}
+            onChange={(aspectRatio) => {
               onChange((prev) => ({
                 ...prev,
                 aspectRatio,
                 storyboard: { ...prev.storyboard, aspectRatio },
               }));
             }}
-          >
-            {ASPECT_RATIOS.map((ratio) => (
-              <option key={ratio} value={ratio}>
-                {ratio}
-              </option>
-            ))}
-          </select>
+          />
         </Tooltip>
         <Tooltip content="拆分镜时每个镜头的默认时长">
-          <select
+          <Select
             className={styles.select}
             aria-label="每镜时长"
-            value={state.shotDurationSec}
-            onChange={(event) => {
-              const shotDurationSec = Number(event.target.value);
+            value={String(state.shotDurationSec)}
+            options={SCENE_SHOT_DURATIONS.map((value) => ({
+              value: String(value),
+              label: `每镜 ${value} 秒`,
+            }))}
+            onChange={(value) => {
+              const shotDurationSec = Number(value);
               onChange((prev) => ({ ...prev, shotDurationSec }));
             }}
-          >
-            {SCENE_SHOT_DURATIONS.map((value) => (
-              <option key={value} value={value}>
-                每镜 {value} 秒
-              </option>
-            ))}
-          </select>
+          />
         </Tooltip>
         {!servicesLoaded ? null : videoProviders.length === 0 ? (
           <Tooltip content="支持 MiniMax（海螺）与 Seedance；没有配置也可以先拆分镜">
@@ -135,39 +124,29 @@ const Toolbar: React.FC<ToolbarProps> = ({
         ) : (
           <>
             <Tooltip content="视频服务">
-              <select
+              <Select
                 className={styles.select}
                 aria-label="视频服务"
                 value={provider?.id ?? ''}
-                onChange={(event) => {
-                  const providerId = event.target.value;
+                options={videoProviders.map((item) => ({ value: item.id, label: item.label }))}
+                onChange={(providerId) => {
                   onChange((prev) => ({ ...prev, providerId, model: undefined }));
                 }}
-              >
-                {videoProviders.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+              />
             </Tooltip>
             {provider && (
               <Tooltip content="视频模型">
-                <select
+                <Select
                   className={styles.select}
                   aria-label="视频模型"
                   value={state.model ?? provider.model}
-                  onChange={(event) => {
-                    const model = event.target.value;
+                  options={Array.from(new Set([provider.model, ...provider.models])).map(
+                    (model) => ({ value: model, label: model })
+                  )}
+                  onChange={(model) => {
                     onChange((prev) => ({ ...prev, providerId: provider.id, model }));
                   }}
-                >
-                  {Array.from(new Set([provider.model, ...provider.models])).map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
+                />
               </Tooltip>
             )}
           </>

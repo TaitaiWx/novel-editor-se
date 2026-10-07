@@ -1,0 +1,126 @@
+.results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0 18px;
+  outline: none;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 8px;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 14px;
+  color: #9aa8b7;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.groupIcon {
+  display: inline-flex;
+  color: var(--ui-fg-muted, #8b8b8b);
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.groupCount {
+  margin-left: auto;
+  color: #75879a;
+  font-variant-numeric: tabular-nums;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 8px;
+  padding: 5px 8px 5px 12px;
+  border-radius: 6px;
+  color: var(--ui-fg-primary, #d4d4d4);
+  font-size: 12.5px;
+  cursor: pointer;
+  outline: none;
+
+  &.active {
+    background: var(--ui-interaction-accent-soft);
+  }
+
+  &:hover:not(.active) {
+    background: var(--ui-interaction-hover-bg);
+  }
+}
+
+.itemLine {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.itemTitle {
+  flex-shrink: 0;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemLineNo {
+  flex-shrink: 0;
+  color: var(--ui-fg-muted, #8b8b8b);
+  font-size: 11px;
+}
+
+.itemDetail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-fg-muted, #8b8b8b);
+  font-size: 11px;
+}
+
+.preview {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: #a9b1ba;
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: rgba(214, 170, 72, 0.28);
+  color: #f0d79a;
+}
+
+.more {
+  margin: 2px 20px 0;
+  color: var(--ui-fg-muted, #8b8b8b);
+  font-size: 11px;
+}
+
+.status {
+  margin: 4px 14px 0;
+  color: var(--ui-fg-muted, #8b8b8b);
+  font-size: 12px;
+  line-height: 1.6;
+
+  &:empty {
+    display: none;
+  }
+}

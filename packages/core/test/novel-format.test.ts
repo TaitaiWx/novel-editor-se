@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classifyStructureLine,
   extractNovelScenes,
+  imageDirectiveSource,
   hasNovelMarkup,
   lintNovelMarkup,
   parseDirectiveAttributes,
@@ -249,5 +251,46 @@ describe('videoDirectiveSource', () => {
     expect(videoDirectiveSource('::video{src="  "}')).toBeNull();
     expect(videoDirectiveSource(':::video{src=a.mp4}')).toBeNull();
     expect(videoDirectiveSource('普通正文')).toBeNull();
+  });
+});
+
+describe('classifyStructureLine（不用 Markdown 语法的章 / 幕 / 场标题）', () => {
+  it('识别章 / 幕 / 场与特殊章节名', () => {
+    expect(classifyStructureLine('第一章 离港')).toBe('chapter');
+    expect(classifyStructureLine('第一章离港')).toBe('chapter');
+    expect(classifyStructureLine('  第12章：风暴  ')).toBe('chapter');
+    expect(classifyStructureLine('第十回 风起')).toBe('chapter');
+    expect(classifyStructureLine('楔子')).toBe('chapter');
+    expect(classifyStructureLine('番外：雪夜')).toBe('chapter');
+    expect(classifyStructureLine('第一幕 离乡')).toBe('act');
+    expect(classifyStructureLine('第二场 铁匠铺的夜')).toBe('scene');
+  });
+
+  it('正文句子、过长的行、幕 / 场后紧跟正文都不算', () => {
+    expect(classifyStructureLine('他说第三章说过的话。')).toBeNull();
+    expect(classifyStructureLine('第三章说过的话。')).toBeNull();
+    expect(classifyStructureLine('第一场雨下了很久')).toBeNull();
+    expect(classifyStructureLine(`第一章 ${'很'.repeat(40)}`)).toBeNull();
+    expect(classifyStructureLine('')).toBeNull();
+    expect(classifyStructureLine('序言写在后面')).toBeNull();
+  });
+
+  it('未闭合的场景在章 / 幕标题行前结束，场标题不打断', () => {
+    const scenes = extractNovelScenes(
+      [':::scene{title=港口}', '第一场 码头', '正文', '第二章 夜航', '下一章'].join('\n')
+    );
+    expect(scenes).toHaveLength(1);
+    expect(scenes[0]).toMatchObject({ startLine: 1, endLine: 3, unclosed: true });
+  });
+});
+
+describe('imageDirectiveSource', () => {
+  it('::image 的地址与说明；不是图片指令或没有 src 时为 null', () => {
+    expect(imageDirectiveSource('::image[码头]{src="资料/图集/a.webp"}')).toEqual({
+      src: '资料/图集/a.webp',
+      caption: '码头',
+    });
+    expect(imageDirectiveSource('::video[x]{src=a.mp4}')).toBeNull();
+    expect(imageDirectiveSource('::image[x]')).toBeNull();
   });
 });

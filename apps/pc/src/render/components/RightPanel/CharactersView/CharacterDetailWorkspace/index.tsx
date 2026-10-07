@@ -8,6 +8,7 @@ import {
   type MediaItem,
 } from '@novel-editor/core/entity-media';
 import EntityGallery from '../../../EntityGallery';
+import Select from '../../../Select';
 import styles from '../../styles.module.scss';
 import tabStyles from './styles.module.scss';
 import type {
@@ -20,6 +21,7 @@ import type {
 } from '../../types';
 import { CHARACTER_CATEGORY_LABELS, DEFAULT_CHARACTER_HIGHLIGHT_COLOR } from '../../utils';
 import { CAMP_LABELS } from '../../constants';
+import { CATEGORY_OPTIONS } from '../helpers';
 import { CharacterCurrentStateSection } from '../CharacterCurrentStateSection';
 import { CharacterTimelineSection } from '../CharacterTimelineSection';
 import { CharacterGrowthButton } from '../CharacterGrowthButton';
@@ -265,18 +267,16 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
                 <div className={styles.highlightConfigPanel}>
                   <label className={styles.categoryField}>
                     <span className={styles.highlightFieldLabel}>人物分类</span>
-                    <select
+                    <Select<CharacterCategory>
+                      block
+                      size="lg"
+                      aria-label="人物分类"
                       value={focusedCharacter.category}
-                      onChange={(event) =>
-                        void handleUpdateCharacterAttributes(focusedCharacter.id, {
-                          category: event.target.value as CharacterCategory,
-                        })
+                      options={CATEGORY_OPTIONS}
+                      onChange={(category) =>
+                        void handleUpdateCharacterAttributes(focusedCharacter.id, { category })
                       }
-                      className={styles.formInput}
-                    >
-                      <option value="major">主要角色</option>
-                      <option value="secondary">次要角色</option>
-                    </select>
+                    />
                   </label>
                   <label className={styles.highlightColorField}>
                     <span className={styles.highlightFieldLabel}>高亮颜色</span>

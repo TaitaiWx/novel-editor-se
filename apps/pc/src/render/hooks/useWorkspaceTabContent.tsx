@@ -1,3 +1,4 @@
+import { characterReferenceItems } from '../utils/referencePane';
 import {
   characterReferencePaths,
   isSafeMediaPath,
@@ -177,6 +178,19 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
         };
       }),
     [workspaceCharacters]
+  );
+  // 文件栏「参考」按钮：窗格还空着时先放当前作品人物的三视图 / 形象图
+  const referenceFallback = useMemo(
+    () =>
+      characterReferenceItems(
+        scopePath ?? null,
+        sceneVideoCharacters.map((item) => ({
+          name: item.name,
+          avatar: item.avatar,
+          turnaround: item.turnaround,
+        }))
+      ),
+    [scopePath, sceneVideoCharacters]
   );
   const sceneVideoLoreTitles = useMemo(
     () => workspaceLoreEntries.map((item) => item.title),
@@ -367,6 +381,7 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
   return {
     workspaceTabLabels,
     editorCharacterHighlights,
+    referenceFallback,
     specialTabContent,
   };
 }

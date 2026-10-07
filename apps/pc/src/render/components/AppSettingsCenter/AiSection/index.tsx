@@ -3,10 +3,18 @@ import { AiOutlineApi } from 'react-icons/ai';
 import type { AIPresetKey, AIProvider, SettingsDraft } from '../../../utils/appSettings';
 import { AI_PRESET_OPTIONS, type AIPresetOption } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
+import NumberInput from '../../NumberInput';
+import Select, { type SelectOption } from '../../Select';
 import ApiKeyField from './ApiKeyField';
 import ProviderList from './ProviderList';
 import sharedStyles from '../styles.module.scss';
 import styles from './styles.module.scss';
+
+const PROVIDER_OPTIONS: SelectOption<AIProvider>[] = [
+  { value: 'openai-compatible', label: 'OpenAI 兼容' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'deepseek', label: 'DeepSeek' },
+];
 
 interface AiSectionProps {
   aiSettings: SettingsDraft['ai'];
@@ -65,17 +73,14 @@ const AiSection: React.FC<AiSectionProps> = ({
             选择常见服务后，自动填入推荐的接口地址和模型。
           </div>
         </div>
-        <select
-          className={sharedStyles.select}
+        <Select<AIPresetKey>
+          block
+          size="lg"
+          aria-label="服务预设"
           value={aiSettings.preset || 'openai-official'}
-          onChange={(e) => applyAIPreset(e.target.value as AIPresetKey)}
-        >
-          {AI_PRESET_OPTIONS.map((preset) => (
-            <option key={preset.key} value={preset.key}>
-              {preset.label}
-            </option>
-          ))}
-        </select>
+          options={AI_PRESET_OPTIONS.map((preset) => ({ value: preset.key, label: preset.label }))}
+          onChange={(value) => applyAIPreset(value)}
+        />
       </div>
 
       <div className={sharedStyles.formRow}>
@@ -85,15 +90,14 @@ const AiSection: React.FC<AiSectionProps> = ({
             用于匹配不同服务的接口协议。大多数服务选择 OpenAI 兼容即可。
           </div>
         </div>
-        <select
-          className={sharedStyles.select}
+        <Select<AIProvider>
+          block
+          size="lg"
+          aria-label="服务类型"
           value={aiSettings.provider}
-          onChange={(e) => setAI('provider', e.target.value as AIProvider)}
-        >
-          <option value="openai-compatible">OpenAI 兼容</option>
-          <option value="openai">OpenAI</option>
-          <option value="deepseek">DeepSeek</option>
-        </select>
+          options={PROVIDER_OPTIONS}
+          onChange={(value) => setAI('provider', value)}
+        />
       </div>
 
       <div className={sharedStyles.formRow}>
@@ -117,14 +121,24 @@ const AiSection: React.FC<AiSectionProps> = ({
           <div className={sharedStyles.formDesc}>可从推荐模型中选择，也可以手动填写。</div>
         </div>
         <div className={styles.dualInputGroup}>
-          <select
-            className={sharedStyles.select}
+          <Select
+            block
+            size="lg"
+            aria-label="模型名称"
             value={
               activeAIPreset.models.includes(aiSettings.model) ? aiSettings.model : '__custom__'
             }
-            onChange={(e) => {
-              if (e.target.value === '__custom__') return;
-              const newModel = e.target.value;
+            options={[
+              ...activeAIPreset.models.map((model) => ({
+                value: model,
+                label: model === 'deepseek-chat' ? 'deepseek-chat / DeepSeek-V3.2' : model,
+              })),
+              ...(aiSettings.preset !== 'deepseek-official'
+                ? [{ value: '__custom__', label: '手动输入' }]
+                : []),
+            ]}
+            onChange={(newModel) => {
+              if (newModel === '__custom__') return;
               setAI('model', newModel);
               if (newModel === 'deepseek-reasoner') {
                 setAI('maxTokens', 65536);
@@ -132,20 +146,7 @@ const AiSection: React.FC<AiSectionProps> = ({
                 setAI('maxTokens', 8192);
               }
             }}
-          >
-            {activeAIPreset.models.map((model) => (
-              <option key={model} value={model}>
-                {model === 'deepseek-chat'
-                  ? 'deepseek-chat / DeepSeek-V3.2'
-                  : model === 'deepseek-reasoner'
-                    ? 'deepseek-reasoner'
-                    : model}
-              </option>
-            ))}
-            {aiSettings.preset !== 'deepseek-official' && (
-              <option value="__custom__">手动输入</option>
-            )}
-          </select>
+          />
           <input
             className={sharedStyles.input}
             value={aiSettings.model}
@@ -179,18 +180,15 @@ const AiSection: React.FC<AiSectionProps> = ({
           <div className={sharedStyles.formLabel}>温度</div>
           <div className={sharedStyles.formDesc}>数值越高，回复越发散；数值越低，回复越稳定。</div>
         </div>
-        <input
-          className={sharedStyles.input}
-          type="number"
-          min="0"
-          max="2"
-          step="0.1"
+        <NumberInput
+          block
+          size="lg"
+          aria-label="温度"
+          min={0}
+          max={2}
+          step={0.1}
           value={aiSettings.temperature}
-          onChange={(e) => {
-            // 只在无法解析（如清空输入）时回退默认值，0 是合法温度
-            const value = Number.parseFloat(e.target.value);
-            setAI('temperature', Number.isNaN(value) ? 1.3 : value);
-          }}
+          onChange={(value) => setAI('temperature', value)}
         />
       </div>
 
@@ -199,16 +197,15 @@ const AiSection: React.FC<AiSectionProps> = ({
           <div className={sharedStyles.formLabel}>上下文长度</div>
           <div className={sharedStyles.formDesc}>用于控制单次请求可携带的上下文上限。</div>
         </div>
-        <input
-          className={sharedStyles.input}
-          type="number"
-          min="128000"
-          max="1000000"
-          step="10000"
+        <NumberInput
+          block
+          size="lg"
+          aria-label="上下文长度"
+          min={128000}
+          max={1000000}
+          step={10000}
           value={aiSettings.contextTokens}
-          onChange={(e) =>
-            setAI('contextTokens', Math.max(128000, Number(e.target.value) || 128000))
-          }
+          onChange={(value) => setAI('contextTokens', value)}
         />
       </div>
 
@@ -219,14 +216,15 @@ const AiSection: React.FC<AiSectionProps> = ({
             限制 AI 单次回复的最大长度。较长回复会消耗更多额度。
           </div>
         </div>
-        <input
-          className={sharedStyles.input}
-          type="number"
-          min="512"
-          max="65536"
-          step="128"
+        <NumberInput
+          block
+          size="lg"
+          aria-label="单次回复长度"
+          min={512}
+          max={65536}
+          step={128}
           value={aiSettings.maxTokens}
-          onChange={(e) => setAI('maxTokens', Math.max(512, Number(e.target.value) || 8192))}
+          onChange={(value) => setAI('maxTokens', value)}
         />
       </div>
     </div>

@@ -57,6 +57,8 @@ import {
   openProjectMenu,
   refreshWorkspace,
   renameByDoubleClick,
+  searchGroup,
+  searchWorkspace,
   selectWork,
   storyRow,
   focusEditorEnd,
@@ -1344,30 +1346,80 @@ describe('小说编辑器 GUI', () => {
     await captureForReview('latex-demo-tail');
   });
 
-  it('10.2 小说格式与参考窗格：场景条 / 视频卡片就地渲染；资料图片在编辑器旁边打开；章纲有使用说明', async () => {
+  it('10.2 小说格式与参考窗格：章标题 / 场景条 / 图片 / 视频就地渲染；「参考」按钮与资料图片在编辑器旁边打开；章纲有使用说明', async () => {
     await ensureSidebarOpen();
     await openProjectDocs(page);
     await page.click({ text: '小说格式示例', within: SEL.projectNotes, exact: true });
-    await waitForEditorText(page, '这一篇演示「小说格式」的写法');
-    // :::scene 渲染为场景条（「场景 · 港口」），::video 渲染为视频卡片
+    await waitForEditorText(page, '星港城的黄昏是橘红色的');
+    // 不用 # 的章节名显示为章标题；:::scene 显示为场景条；:char 显示称呼
+    await page.waitFor(
+      () =>
+        Array.from(document.querySelectorAll('.cm-content .cm-lp-chapter-title')).some((el) =>
+          el.textContent?.includes('第一章 离港')
+        ),
+      { message: '章标题样式' }
+    );
     await page.waitFor(
       () =>
         Array.from(document.querySelectorAll('.cm-content .cm-lp-scene')).some((el) =>
-          el.textContent?.includes('港口')
+          el.textContent?.includes('星港城的黄昏')
         ),
       { message: '场景条已渲染' }
     );
-    await page.waitForTarget('.cm-content .cm-lp-video');
+    expect(
+      await page.evaluate<string[]>(() =>
+        Array.from(document.querySelectorAll('.cm-content .cm-lp-char')).map(
+          (el) => el.textContent ?? ''
+        )
+      )
+    ).toContain('阿舟');
+    // ::image 就地显示示例图片，::video 就地显示可播放的视频（示例里的真实文件）
+    await page.waitFor(
+      () =>
+        (document.querySelector('.cm-content img.cm-lp-image-directive') as HTMLImageElement | null)
+          ?.naturalWidth ?? 0,
+      { timeout: 10_000, message: '示例图片已加载' }
+    );
+    await page.waitFor(
+      () =>
+        ((document.querySelector('.cm-content video.cm-lp-video-player') as HTMLVideoElement | null)
+          ?.readyState ?? 0) >= 1,
+      { timeout: 10_000, message: '示例视频已加载' }
+    );
+    await captureForReview('novel-format-demo');
+    // 视频「在旁边看」→ 参考窗格播放
+    await page.click('.cm-content .cm-lp-video .cm-lp-media-beside');
+    await page.waitFor(
+      () =>
+        (
+          document.querySelector(
+            '[data-testid="reference-pane"] [data-testid="reference-video"]'
+          ) as HTMLVideoElement | null
+        )?.src.startsWith('blob:') ?? false,
+      { timeout: 10_000, message: '参考窗格播放示例视频' }
+    );
+    await page.click('[data-testid="reference-pane"] [aria-label="关闭参考"]');
+    await page.waitForGone('[data-testid="reference-pane"]');
+
+    // 文件栏「参考」：没有内容时先放当前作品人物的三视图 / 形象图，再按一次收起
+    await page.click('[data-testid="reference-pill"]');
+    await page.waitFor(
+      () =>
+        (
+          document.querySelector(
+            '[data-testid="reference-pane"] [data-testid="reference-image"]'
+          ) as HTMLImageElement | null
+        )?.src.startsWith('blob:') ?? false,
+      { timeout: 10_000, message: '参考窗格显示人物参考' }
+    );
     expect(
       await page.evaluate<string>(
-        () => document.querySelector('.cm-content .cm-lp-video')?.textContent ?? ''
+        () => document.querySelector('[data-testid="reference-pane"] header')?.textContent ?? ''
       )
-    ).toContain('林舟离港');
-    await captureForReview('novel-format-demo');
-    // 示例路径不存在：单击后标记为找不到，不打开参考窗格
-    await page.click('.cm-content .cm-lp-video');
-    await page.waitForTarget('.cm-content .cm-lp-video-missing');
-    expect(await page.exists('[data-testid="reference-pane"]')).toBe(false);
+    ).toContain('三视图');
+    await captureForReview('reference-pane-characters');
+    await page.click('[data-testid="reference-pill"]');
+    await page.waitForGone('[data-testid="reference-pane"]');
 
     // 资料里的图片：右键「在编辑器旁边打开」→ 编辑器右侧的参考窗格
     await selectWork(page, FIXTURE_WORK);
@@ -1408,6 +1460,48 @@ describe('小说编辑器 GUI', () => {
     );
     expect(steps).toBe(3);
     await page.press('Escape');
+  });
+
+  it('10b. 文件面板搜索：按文件名找到项目说明，按正文内容找到章节，Esc 关闭', async () => {
+    await ensureSidebarOpen();
+    await selectWork(page, FIXTURE_WORK);
+
+    // 按文件名：根目录的项目说明（不在正文树里）也能搜到，关键词高亮
+    await searchWorkspace(page, '小说格式');
+    const docOption = `${searchGroup('项目说明')} [role="option"]`;
+    await page.waitForTarget(docOption);
+    expect(
+      await page.evaluate(
+        (selector: string) => document.querySelector(`${selector} mark`)?.textContent ?? '',
+        docOption
+      )
+    ).toBe('小说格式');
+    await page.click({ text: '小说格式示例.md', within: searchGroup('项目说明'), exact: true });
+    // 打开后搜索关闭，面板恢复为完整的树
+    await page.waitForGone(SEL.searchInput);
+    await page.waitForTarget(SEL.workspaceTree);
+    await waitForEditorText(page, '星港城的黄昏是橘红色的');
+
+    // 按正文内容：主进程全文搜索，命中行带高亮，点击打开章节
+    await searchWorkspace(page, '林舟背起行囊');
+    await page.waitForTarget({ text: '001-启程', within: searchGroup('内容'), exact: true });
+    const preview = await page.evaluate(
+      (selector: string) =>
+        Array.from(document.querySelectorAll(`${selector} mark`)).map((node) => node.textContent),
+      searchGroup('内容')
+    );
+    expect(preview).toContain('林舟背起行囊');
+    await captureForReview('file-panel-search');
+    await page.click({ text: '001-启程', within: searchGroup('内容'), exact: true });
+    await page.waitForGone(SEL.searchInput);
+    await waitForEditorText(page, '林舟背起行囊');
+
+    // Esc 关闭搜索：清空关键词并恢复树
+    await searchWorkspace(page, '不存在的关键词');
+    await page.waitForTarget({ text: '没有找到「不存在的关键词」', within: SEL.searchResults });
+    await page.press('Escape');
+    await page.waitForGone(SEL.searchResults);
+    await page.waitForTarget(SEL.workspaceTree);
   });
 
   it('11. 单实例：第二次启动把文件夹转发给已有窗口', async () => {

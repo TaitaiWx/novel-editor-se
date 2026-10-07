@@ -14,6 +14,7 @@ import {
   type InspirationSlot,
   type InspirationSource,
 } from '../inspiration';
+import Select from '../../Select';
 import styles from './styles.module.scss';
 
 const SOURCES = Object.keys(INSPIRATION_SOURCE_LABELS) as InspirationSource[];
@@ -107,18 +108,16 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
         <form className={styles.group} onSubmit={(event) => void handleAddTerm(event)}>
           <div className={styles.groupLabel}>我的词池</div>
           <div className={styles.termRow}>
-            <select
+            <Select<InspirationSlot>
               className={styles.select}
               aria-label="加入哪一签"
               value={termSlot}
-              onChange={(event) => setTermSlot(event.target.value as InspirationSlot)}
-            >
-              {INSPIRATION_SLOTS.map((slot) => (
-                <option key={slot} value={slot}>
-                  {INSPIRATION_SLOT_LABELS[slot]}
-                </option>
-              ))}
-            </select>
+              options={INSPIRATION_SLOTS.map((slot) => ({
+                value: slot,
+                label: INSPIRATION_SLOT_LABELS[slot],
+              }))}
+              onChange={setTermSlot}
+            />
             <input
               className={styles.input}
               aria-label="新词"

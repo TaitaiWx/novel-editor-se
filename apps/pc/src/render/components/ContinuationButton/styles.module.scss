@@ -124,8 +124,7 @@ $muted: var(--ui-fg-muted);
   color: #e2dbf7;
 }
 
-.input,
-.select {
+.input {
   height: 26px;
   padding: 0 8px;
   border: 1px solid var(--ui-border-subtle);
@@ -306,4 +305,15 @@ $muted: var(--ui-fg-muted);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+// 文件栏变窄时只显示图标（文字说明在 Tooltip 里）
+@container editor-header (max-width: 760px) {
+  .pillLabel {
+    display: none;
+  }
+
+  .pill {
+    padding: 0 7px;
+  }
 }

@@ -14,6 +14,7 @@ import {
   uninstallElectronMock,
   type ElectronMock,
 } from '../hooks/electronMock';
+import { chooseOption, getCombobox, selectOptionTexts } from '../helpers/select';
 
 interface Options {
   stored?: SettingsDraft | null;
@@ -119,7 +120,7 @@ describe('AppSettingsCenter', () => {
     ]) {
       fireEvent.click(switchFor(label));
     }
-    fireEvent.change(inputFor('千字进度标记阈值', 'select'), { target: { value: '2000' } });
+    chooseOption('千字进度标记阈值', '每 2000 字显示一个标记');
     await waitFor(() => {
       const saved = lastSaved(mock).general;
       expect(saved.thousandCharMarkerStep).toBe(2000);
@@ -314,27 +315,25 @@ describe('AppSettingsCenter', () => {
     await waitFor(() => expect(lastSaved(mock).ai.enabled).toBe(true));
     expect(lastSaved(mock).ai.enabledExplicitlySet).toBe(true);
 
-    fireEvent.change(inputFor('服务预设', 'select'), { target: { value: 'deepseek-official' } });
+    chooseOption('服务预设', 'DeepSeek 官方');
     await waitFor(() => expect(lastSaved(mock).ai.baseUrl).toBe('https://api.deepseek.com/v1'));
     expect(lastSaved(mock).ai.model).toBe('deepseek-chat');
     expect(inputFor('模型名称').disabled).toBe(true);
-    expect(screen.queryByRole('option', { name: '手动输入' })).toBeNull();
+    expect(selectOptionTexts('模型名称')).not.toContain('手动输入');
 
-    fireEvent.change(inputFor('模型名称', 'select'), { target: { value: 'deepseek-reasoner' } });
+    chooseOption('模型名称', 'deepseek-reasoner');
     await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(65536));
-    fireEvent.change(inputFor('模型名称', 'select'), { target: { value: 'deepseek-chat' } });
+    chooseOption('模型名称', 'deepseek-chat / DeepSeek-V3.2');
     await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(8192));
 
     // 自定义预设：保留原 baseUrl/model
-    fireEvent.change(inputFor('服务预设', 'select'), { target: { value: 'custom' } });
+    chooseOption('服务预设', '自定义兼容接口');
     await waitFor(() => expect(lastSaved(mock).ai.preset).toBe('custom'));
     expect(lastSaved(mock).ai.baseUrl).toBe('https://api.deepseek.com/v1');
-    expect((inputFor('模型名称', 'select') as unknown as HTMLSelectElement).value).toBe(
-      '__custom__'
-    );
-    fireEvent.change(inputFor('模型名称', 'select'), { target: { value: '__custom__' } });
+    expect(getCombobox('模型名称').textContent).toBe('手动输入');
+    chooseOption('模型名称', '手动输入');
 
-    fireEvent.change(inputFor('服务类型', 'select'), { target: { value: 'openai' } });
+    chooseOption('服务类型', 'OpenAI');
     fireEvent.change(inputFor('接口地址'), { target: { value: 'https://x.test/v1' } });
     fireEvent.change(inputFor('模型名称'), { target: { value: 'my-model' } });
     // Key 只写不读：输入后点「保存 Key」交给主进程加密保存，草稿里只记录 hasApiKey
@@ -346,8 +345,11 @@ describe('AppSettingsCenter', () => {
     });
     expect(inputFor('API Key').value).toBe('');
     fireEvent.change(inputFor('温度'), { target: { value: '0.7' } });
+    // 超出范围的值在失焦时夹取到最小值
     fireEvent.change(inputFor('上下文长度'), { target: { value: '10' } });
+    fireEvent.blur(inputFor('上下文长度'));
     fireEvent.change(inputFor('单次回复长度'), { target: { value: '100' } });
+    fireEvent.blur(inputFor('单次回复长度'));
     await waitFor(() => {
       const ai = lastSaved(mock).ai;
       expect(ai.provider).toBe('openai');
@@ -359,11 +361,17 @@ describe('AppSettingsCenter', () => {
       expect(ai.contextTokens).toBe(128000);
       expect(ai.maxTokens).toBe(512);
     });
-    fireEvent.change(inputFor('温度'), { target: { value: '' } });
-    fireEvent.change(inputFor('上下文长度'), { target: { value: '' } });
-    fireEvent.change(inputFor('单次回复长度'), { target: { value: '' } });
-    await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(8192));
-    expect(lastSaved(mock).ai.temperature).toBe(1.3);
+    // 清空后失焦恢复为当前值，非数字输入直接被拒绝
+    for (const label of ['温度', '上下文长度', '单次回复长度']) {
+      fireEvent.change(inputFor(label), { target: { value: '' } });
+      fireEvent.blur(inputFor(label));
+    }
+    fireEvent.change(inputFor('温度'), { target: { value: 'abc' } });
+    expect(inputFor('温度').value).toBe('0.7');
+    fireEvent.click(screen.getByRole('button', { name: '增加单次回复长度' }));
+    await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(640));
+    expect(lastSaved(mock).ai.temperature).toBe(0.7);
+    expect(lastSaved(mock).ai.contextTokens).toBe(128000);
   });
 
   it('AI：保存成功提示后自动消失；保存失败提示', async () => {

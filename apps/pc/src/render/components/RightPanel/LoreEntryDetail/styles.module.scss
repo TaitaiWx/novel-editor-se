@@ -119,7 +119,7 @@ $muted: var(--ui-fg-muted);
 }
 
 .select {
-  @include control;
+  min-width: 120px;
 }
 
 .input {

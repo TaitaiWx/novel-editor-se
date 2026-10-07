@@ -13,6 +13,7 @@ import {
   type ContinuationState,
 } from '@/render/components/TextEditor/assist/continuation-state';
 import type { AIProviderInfo } from '@/shared/ai';
+import { chooseOption } from '../helpers/select';
 
 afterEach(() => cleanup());
 
@@ -164,9 +165,7 @@ describe('ContinuationPanel', () => {
     fireEvent.click(screen.getByRole('radio', { name: '约 500 字' }));
     fireEvent.click(screen.getByRole('radio', { name: '收束本章' }));
     fireEvent.click(screen.getByRole('checkbox', { name: '遵循章纲' }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'AI 服务' }), {
-      target: { value: 'openai-compatible' },
-    });
+    chooseOption('AI 服务', '默认 AI');
     fireEvent.click(screen.getByRole('button', { name: '生成建议' }));
     const form = props.onGenerate.mock.calls[0][0];
     expect(toContinuationOptions(form)).toEqual({

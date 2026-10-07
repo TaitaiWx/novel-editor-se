@@ -102,16 +102,17 @@ describe('FilePanel', () => {
     );
   });
 
-  it('搜索过滤角色与设定分区', () => {
+  it('搜索时用分组结果列表替换树：只列出匹配的人物', () => {
     renderPanel();
     fireEvent.click(screen.getByLabelText(/搜索文件/));
     fireEvent.change(screen.getByPlaceholderText('搜索作品内容...'), {
       target: { value: '白芷' },
     });
+    const results = screen.getByRole('listbox', { name: '搜索结果' });
+    expect(within(results).getByRole('region', { name: '人物' }).textContent).toContain('白芷');
     expect(screen.queryByText('林舟')).toBeNull();
-    expect(screen.getByText('白芷')).toBeTruthy();
     expect(screen.queryByText('灵气体系')).toBeNull();
-    expect(screen.getByText('还没有正文文件')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: '正文' })).toBeNull();
   });
 
   it('折叠角色分区', () => {

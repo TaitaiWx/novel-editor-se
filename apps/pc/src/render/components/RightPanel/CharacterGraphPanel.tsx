@@ -1,4 +1,5 @@
 import React from 'react';
+import Select from '../Select';
 import styles from './styles.module.scss';
 import type { Character, CharacterRelation, RelationTone, CharacterCamp } from './types';
 import { RELATION_TONE_LABELS, CAMP_LABELS } from './constants';
@@ -73,6 +74,11 @@ export const CharacterGraphPanel: React.FC<CharacterGraphPanelProps> = React.mem
         </div>
       );
     }
+
+    const characterOptions = characters.map((character) => ({
+      value: String(character.id),
+      label: character.name,
+    }));
 
     return (
       <div className={styles.graphPanel}>
@@ -178,43 +184,37 @@ export const CharacterGraphPanel: React.FC<CharacterGraphPanelProps> = React.mem
             {selectedCharacter ? `${selectedCharacter.name} 的关系` : '关系编辑器'}
           </div>
           <div className={styles.graphFormGrid}>
-            <select
-              className={styles.formInput}
-              value={relationSourceId}
-              onChange={(e) => onRelationSourceChange(Number(e.target.value) || '')}
-            >
-              <option value="">关系起点</option>
-              {characters.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
-                </option>
-              ))}
-            </select>
-            <select
-              className={styles.formInput}
-              value={relationTargetId}
-              onChange={(e) => onRelationTargetChange(Number(e.target.value) || '')}
-            >
-              <option value="">关系终点</option>
-              {characters.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              block
+              size="lg"
+              aria-label="关系起点"
+              placeholder="关系起点"
+              value={relationSourceId === '' ? '' : String(relationSourceId)}
+              options={characterOptions}
+              onChange={(value) => onRelationSourceChange(Number(value) || '')}
+            />
+            <Select
+              block
+              size="lg"
+              aria-label="关系终点"
+              placeholder="关系终点"
+              value={relationTargetId === '' ? '' : String(relationTargetId)}
+              options={characterOptions}
+              onChange={(value) => onRelationTargetChange(Number(value) || '')}
+            />
           </div>
           <div className={styles.graphFormGrid}>
-            <select
-              className={styles.formInput}
+            <Select<RelationTone>
+              block
+              size="lg"
+              aria-label="关系基调"
               value={relationTone}
-              onChange={(e) => onRelationToneChange(e.target.value as RelationTone)}
-            >
-              {(Object.keys(RELATION_TONE_LABELS) as RelationTone[]).map((tone) => (
-                <option key={tone} value={tone}>
-                  {RELATION_TONE_LABELS[tone]}
-                </option>
-              ))}
-            </select>
+              options={(Object.keys(RELATION_TONE_LABELS) as RelationTone[]).map((tone) => ({
+                value: tone,
+                label: RELATION_TONE_LABELS[tone],
+              }))}
+              onChange={onRelationToneChange}
+            />
             <input
               className={styles.formInput}
               value={relationLabel}

@@ -3,6 +3,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { AssistantContextSectionProps } from '@/render/components/RightPanel/AssistantContextSection';
+import { chooseOption, selectOptionTexts } from '../../helpers/select';
 
 vi.mock('@/render/components/RightPanel/AIView', () => ({
   AIView: () => <div data-testid="ai-view" />,
@@ -68,12 +69,10 @@ describe('AI 助手「上下文」分区', () => {
     fireEvent.click(screen.getByRole('button', { name: '从当前章移除 地图.png' }));
     expect(context.onRemoveMaterial).toHaveBeenCalledWith('/n/资料/地图.png');
 
-    const select = screen.getByLabelText('选择要关联到当前章的资料') as HTMLSelectElement;
-    expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
-      '选择一份资料关联到当前章',
-      '年表.md',
-    ]);
-    fireEvent.change(select, { target: { value: '/n/资料/年表.md' } });
+    const select = screen.getByRole('combobox', { name: '选择要关联到当前章的资料' });
+    expect(select.textContent).toBe('选择一份资料关联到当前章');
+    expect(selectOptionTexts(select)).toEqual(['年表.md']);
+    chooseOption(select, '年表.md');
     fireEvent.click(screen.getByRole('button', { name: '关联' }));
     expect(context.onAddMaterial).toHaveBeenCalledWith('/n/资料/年表.md');
   });

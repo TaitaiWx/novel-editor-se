@@ -38,6 +38,7 @@ import {
   type PartyBook,
 } from '@novel-editor/core';
 import type { ProjectSeedData } from '@novel-editor/store';
+import { SAMPLE_CHARACTER_ART, SAMPLE_LORE_ART } from './sample-media/characters.mjs';
 import { POEM_WORK_DIR, buildPoemMemory, buildPoemSeedParts } from './sample-data-poem.mts';
 
 export const SAMPLE_DATA_DIR = path.resolve(
@@ -283,12 +284,41 @@ export function buildSampleMemory(): MemoryBundle {
 
 // ─── 人物 / 设定 / 大纲种子 ─────────────────────────────────────────────────
 
+/** 示例图片（scripts/generate-sample-media.mjs 生成）对应的图集条目 */
+const SAMPLE_MEDIA_TIME = '2026-10-01T08:00:00.000Z';
+function sampleMedia(entries: Array<[string, 'portrait' | 'turnaround' | 'concept']>) {
+  return entries.map(([path, kind], index) => ({
+    id: `sample-${kind}-${index + 1}`,
+    path,
+    kind,
+    source: 'upload',
+    createdAt: SAMPLE_MEDIA_TIME,
+  }));
+}
+
+/** 人物设计 + 形象图 / 三视图（只有《星河旅人》的人物有示例图片） */
+function characterVisuals(name: string): Record<string, unknown> {
+  const art = SAMPLE_CHARACTER_ART.find((item) => item.name === name);
+  if (!art) return {};
+  const portrait = `资料/图集/人物/${name}/形象图.webp`;
+  return {
+    avatar: portrait,
+    design: art.design,
+    media: sampleMedia([
+      [portrait, 'portrait'],
+      [`资料/图集/人物/${name}/三视图.webp`, 'turnaround'],
+    ]),
+  };
+}
+
 function characterAttributes(
   category: 'major' | 'secondary',
   aliases: string[],
-  currentState: Array<[string, string]>
+  currentState: Array<[string, string]>,
+  name?: string
 ): string {
   return JSON.stringify({
+    ...(name ? characterVisuals(name) : {}),
     aliases,
     category,
     highlightColor: '#9cdcfe',
@@ -318,7 +348,8 @@ export function buildSampleSeed(): ProjectSeedData {
           ['道途', '战士之道'],
           ['伤势', '左臂旧伤未愈'],
           ['随身', '旧剑「青石」、星图碎片'],
-        ]
+        ],
+        '林舟'
       ),
     },
     {
@@ -332,26 +363,27 @@ export function buildSampleSeed(): ProjectSeedData {
         [
           ['道途', '牧师之道'],
           ['随身', '药篓（驱狼草、止血草）'],
-        ]
+        ],
+        '苏晴'
       ),
     },
     {
       name: '白鸦',
       role: '领航员',
       description: '黑帆船的主人，左耳挂着银色罗盘耳坠。父亲曾为林舟的父亲领航。',
-      attributes: characterAttributes('secondary', [], [['立场', '暂时同行，目的不明']]),
+      attributes: characterAttributes('secondary', [], [['立场', '暂时同行，目的不明']], '白鸦'),
     },
     {
       name: '秦伯',
       role: '老铁匠 · 林舟的师父',
       description: '青石镇的老铁匠，嗜酒，手艺极好。把佩剑青石与星图碎片交给林舟。',
-      attributes: characterAttributes('secondary', ['老铁匠'], [['所在', '青石镇']]),
+      attributes: characterAttributes('secondary', ['老铁匠'], [['所在', '青石镇']], '秦伯'),
     },
     {
       name: '小石头',
       role: '青石镇的孩子',
       description: '总跟在林舟身后的小孩，答应替他看好铁匠铺。',
-      attributes: characterAttributes('secondary', [], []),
+      attributes: characterAttributes('secondary', [], [], '小石头'),
     },
   ];
 
@@ -460,6 +492,14 @@ export function buildSampleSeed(): ProjectSeedData {
       title,
       content,
       tags: JSON.stringify(tags),
+      ...(novelId === 1 && SAMPLE_LORE_ART.some((item) => item.title === title)
+        ? {
+            attributes: JSON.stringify({
+              cover: `资料/图集/设定/${title}/图片.webp`,
+              media: sampleMedia([[`资料/图集/设定/${title}/图片.webp`, 'concept']]),
+            }),
+          }
+        : {}),
     });
 
   return {

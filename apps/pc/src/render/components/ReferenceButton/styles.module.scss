@@ -1,0 +1,64 @@
+// 参考窗格入口：与「场景视频」同一套胶囊样式，柔和的青绿色
+$tone: #4ec9b0;
+
+.slot {
+  order: -1;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid rgba($tone, 0.26);
+  border-radius: 999px;
+  background: rgba($tone, 0.08);
+  color: #a8d8cc;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: rgba($tone, 0.16);
+    border-color: rgba($tone, 0.45);
+    color: #d4efe8;
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.active {
+  background: rgba($tone, 0.2);
+  border-color: rgba($tone, 0.5);
+  color: #d4efe8;
+}
+
+// 文件栏变窄时只显示图标（文字说明在 Tooltip 里）
+@container editor-header (max-width: 760px) {
+  .label {
+    display: none;
+  }
+
+  .pill {
+    padding: 0 7px;
+  }
+}

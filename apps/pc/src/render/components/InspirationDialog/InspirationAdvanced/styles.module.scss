@@ -60,7 +60,10 @@
   gap: 6px;
 }
 
-.select,
+.select {
+  flex-shrink: 0;
+}
+
 .input {
   min-width: 0;
   padding: 6px 8px;

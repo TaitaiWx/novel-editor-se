@@ -5,6 +5,7 @@ import type { ContinuationState } from '../TextEditor/assist';
 import { describeAIError } from '../TextEditor/assist/ai-error';
 import { currentContinuationText } from '../TextEditor/assist/continuation-state';
 import type { ResolvedProvider } from '../../utils/continuationService';
+import Select from '../Select';
 import { ContextDetails } from './ContextDetails';
 import {
   DEFAULT_PANEL_FORM,
@@ -134,19 +135,17 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
           />
           遵循章纲
         </label>
-        <select
+        <Select
           className={styles.select}
+          size="sm"
           aria-label="AI 服务"
           value={form.providerId}
-          onChange={(event) => update({ providerId: event.target.value })}
-        >
-          <option value="">自动（{resolvedProvider?.label ?? '读取中…'}）</option>
-          {usable.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: '', label: `自动（${resolvedProvider?.label ?? '读取中…'}）` },
+            ...usable.map((item) => ({ value: item.id, label: item.label })),
+          ]}
+          onChange={(providerId) => update({ providerId })}
+        />
       </div>
 
       <button

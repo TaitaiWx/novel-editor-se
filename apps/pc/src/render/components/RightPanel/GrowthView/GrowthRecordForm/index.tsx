@@ -7,6 +7,7 @@ import type {
 } from '@novel-editor/core/growth';
 import { HelpTip } from '../HelpTip';
 import { GROWTH_TIPS } from '../growthGuide';
+import Select from '../../../Select';
 import styles from './styles.module.scss';
 
 export type RecordType = Exclude<GrowthEventType, 'choice'>;
@@ -82,7 +83,7 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
   const [chapter, setChapter] = useState(defaultChapter ? String(defaultChapter) : '');
   const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const firstFieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+  const firstFieldRef = useRef<HTMLInputElement | HTMLButtonElement | null>(null);
 
   // 切换类型后把焦点放到第一个输入框，保证「选类型 → 输入 → Enter」一气呵成
   useEffect(() => {
@@ -146,7 +147,7 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
   const knownSkill = (id: string) =>
     sheet.skills.find((skill) => skill.id === id && skill.level > 0) ?? null;
 
-  const bindFirst = (node: HTMLInputElement | HTMLSelectElement | null) => {
+  const bindFirst = (node: HTMLInputElement | HTMLButtonElement | null) => {
     firstFieldRef.current = node;
   };
 
@@ -186,37 +187,33 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
       {(needsAttribute || needsSkill) && (
         <label className={styles.field}>
           <span className={styles.label}>{needsAttribute ? '哪项属性' : '哪个技能'}</span>
-          <select
+          <Select
             ref={bindFirst}
-            className={styles.input}
+            block
             value={target}
             aria-label={needsAttribute ? '属性' : '技能'}
-            onChange={(event) => setTarget(event.target.value)}
-          >
-            <option value="">{needsAttribute ? '选择属性…' : '选择技能…'}</option>
-            {needsAttribute
-              ? ruleset.attributes.map((attr) => (
-                  <option key={attr.key} value={attr.key}>
-                    {attr.name}（当前 {sheet.attributes[attr.key] ?? attr.initial}）
-                  </option>
-                ))
-              : ruleset.skills.map((skill) => {
-                  const known = knownSkill(skill.id);
-                  const suffix =
-                    type === 'skill-exp'
-                      ? known
-                        ? `Lv.${known.level}`
-                        : '未学会'
-                      : known
-                        ? `Lv.${known.level} → ${known.level + 1}`
-                        : '学会';
-                  return (
-                    <option key={skill.id} value={skill.id}>
-                      {skill.name}（{suffix}）
-                    </option>
-                  );
-                })}
-          </select>
+            placeholder={needsAttribute ? '选择属性…' : '选择技能…'}
+            options={
+              needsAttribute
+                ? ruleset.attributes.map((attr) => ({
+                    value: attr.key,
+                    label: `${attr.name}（当前 ${sheet.attributes[attr.key] ?? attr.initial}）`,
+                  }))
+                : ruleset.skills.map((skill) => {
+                    const known = knownSkill(skill.id);
+                    const suffix =
+                      type === 'skill-exp'
+                        ? known
+                          ? `Lv.${known.level}`
+                          : '未学会'
+                        : known
+                          ? `Lv.${known.level} → ${known.level + 1}`
+                          : '学会';
+                    return { value: skill.id, label: `${skill.name}（${suffix}）` };
+                  })
+            }
+            onChange={setTarget}
+          />
         </label>
       )}
 

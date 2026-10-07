@@ -161,7 +161,29 @@ export interface NovelScene {
 
 const HEADING_RE = /^#{1,2}\s/;
 
-/** 按 `:::scene` 容器切出场景；未闭合的在下一个场景开始或 ≤2 级标题前结束 */
+export type StructureLineKind = 'chapter' | 'act' | 'scene';
+
+const CN_NUMBER = '[一二三四五六七八九十百千万零〇两\\d]+';
+// 章标题允许紧跟标题（「第一章离港」）；幕 / 场要求分隔，避免「第一场雨……」误判
+const CHAPTER_LINE_RE = new RegExp(`^第${CN_NUMBER}[章回卷部篇集节]`);
+const SPECIAL_CHAPTER_RE = /^(?:序章|序幕|楔子|引子|尾声|终章|后记|番外)(?:[\s:：·、\-—]|$)/;
+const ACT_LINE_RE = new RegExp(`^第${CN_NUMBER}幕(?:[\\s:：·、.\\-—]|$)`);
+const SCENE_LINE_RE = new RegExp(`^第${CN_NUMBER}场(?:[\\s:：·、.\\-—]|$)`);
+
+/**
+ * 不用 Markdown 语法的结构行（很多作者直接写「第一章 离港」「第一幕 离乡」「第一场 清晨」）：
+ * 独占一行、不超过 40 字、不以句读结尾（避免把正文里的「第三章说过……。」当成标题）
+ */
+export function classifyStructureLine(line: string): StructureLineKind | null {
+  const text = line.trim();
+  if (!text || text.length > 40 || /[。！？!?，,；;”"]$/.test(text)) return null;
+  if (CHAPTER_LINE_RE.test(text) || SPECIAL_CHAPTER_RE.test(text)) return 'chapter';
+  if (ACT_LINE_RE.test(text)) return 'act';
+  if (SCENE_LINE_RE.test(text)) return 'scene';
+  return null;
+}
+
+/** 按 `:::scene` 容器切出场景；未闭合的在下一个场景开始、≤2 级标题或章 / 幕标题行前结束 */
 export function extractNovelScenes(text: string): NovelScene[] {
   const lines = text.split(/\r?\n/);
   const scenes: NovelScene[] = [];
@@ -192,10 +214,25 @@ export function extractNovelScenes(text: string): NovelScene[] {
       finish(lineNumber, false);
       return;
     }
-    if (current && HEADING_RE.test(line)) finish(lineNumber - 1, true);
+    if (current && (HEADING_RE.test(line) || isChapterOrActLine(line))) {
+      finish(lineNumber - 1, true);
+    }
   });
   if (current) finish(lines.length, true);
   return scenes;
+}
+
+function isChapterOrActLine(line: string): boolean {
+  const kind = classifyStructureLine(line);
+  return kind === 'chapter' || kind === 'act';
+}
+
+/** `::image[说明]{src=…}` 的图片地址；不是图片指令时为 null */
+export function imageDirectiveSource(line: string): { src: string; caption: string } | null {
+  const directive = parseDirectiveLine(line);
+  if (directive?.kind !== 'leaf' || directive.name !== 'image') return null;
+  const src = directive.attributes.values.src?.trim();
+  return src ? { src, caption: directive.label } : null;
 }
 
 export interface NovelMarkupIssue {

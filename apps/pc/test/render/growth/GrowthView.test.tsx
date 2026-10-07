@@ -10,6 +10,7 @@ import {
 import { GrowthView } from '@/render/components/RightPanel/GrowthView';
 import { GROWTH_TOUR_STORAGE_KEY } from '@/render/components/RightPanel/GrowthView/growthGuide';
 import { installElectronMock, uninstallElectronMock } from '../hooks/electronMock';
+import { chooseOption, selectOptionTexts } from '../helpers/select';
 import { FOLDER, buildSnapshot, createGrowthBackend, ok } from './fixtures';
 
 beforeEach(() => {
@@ -104,15 +105,15 @@ describe('成长卡：记一笔', () => {
     fireEvent.click(within(form).getByRole('tab', { name: '属性变化' }));
     fireEvent.submit(form);
     expect(within(form).getByRole('alert').textContent).toContain('请选择属性');
-    fireEvent.change(within(form).getByLabelText('属性'), { target: { value: 'str' } });
+    chooseOption('属性', /^力量/, within(form));
     fireEvent.change(within(form).getByLabelText('变化多少'), { target: { value: '+2' } });
     fireEvent.submit(form);
     expect(await screen.findByText('阿尔 的力量 +2')).toBeTruthy();
 
     form = await openRecord();
     fireEvent.click(within(form).getByRole('tab', { name: '技能' }));
-    expect(within(form).getByRole('option', { name: '回气（学会）' })).toBeTruthy();
-    fireEvent.change(within(form).getByLabelText('技能'), { target: { value: 'second-wind' } });
+    expect(selectOptionTexts('技能', within(form))).toContain('回气（学会）');
+    chooseOption('技能', '回气（学会）', within(form));
     fireEvent.submit(form);
     expect(await screen.findByText('阿尔 学会了「回气」')).toBeTruthy();
 
@@ -148,7 +149,7 @@ describe('成长卡：记一笔', () => {
     renderSheet({ currentChapter: 4 });
     const form = await openRecord();
     fireEvent.click(within(form).getByRole('tab', { name: '技能' }));
-    fireEvent.change(within(form).getByLabelText('技能'), { target: { value: 'fireball' } });
+    chooseOption('技能', /^火球术/, within(form));
     fireEvent.submit(form);
     const alert = await within(form).findByRole('alert');
     expect(alert.textContent).toContain('无法提升「火球术」');

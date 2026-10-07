@@ -1,21 +1,24 @@
 $muted: var(--ui-fg-muted);
 $accent: #569cd6;
+$line: rgba(255, 255, 255, 0.1);
+$soft: rgba(255, 255, 255, 0.78);
 
 .overlay {
   position: fixed;
   inset: 0;
   z-index: 10020;
+  outline: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  padding: 28px;
   background: rgba(0, 0, 0, 0.6);
 }
 
 .dialog {
   display: flex;
   flex-direction: column;
-  width: min(1180px, 100%);
+  width: min(1280px, 100%);
   max-height: 100%;
   overflow: hidden;
   border-radius: 12px;
@@ -29,6 +32,7 @@ $accent: #569cd6;
   align-items: center;
   gap: 12px;
   height: 46px;
+  flex-shrink: 0;
   padding: 0 10px 0 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
@@ -38,16 +42,22 @@ $accent: #569cd6;
   font-size: 14px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
 }
 
 .hint {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-size: 12px;
   color: $muted;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .iconButton {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 28px;
@@ -71,16 +81,31 @@ $accent: #569cd6;
   padding: 16px;
 }
 
-.frame {
-  position: relative;
+/* 视口 */
+
+.viewportWrap {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
-  max-height: 70vh;
+}
+
+.viewport,
+.viewportOrbiting {
+  position: relative;
+  height: min(66vh, 620px);
+  min-height: 320px;
   overflow: hidden;
   border-radius: 8px;
   background: #1b1c1f;
   cursor: grab;
   touch-action: none;
+  user-select: none;
+}
+
+.viewportOrbiting {
+  cursor: grabbing;
 }
 
 .canvas {
@@ -99,12 +124,155 @@ $accent: #569cd6;
   color: $muted;
 }
 
+.overlayLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 取景框：框外压暗，框线细而柔和 */
+.frameMask {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(12, 13, 15, 0.52);
+  outline: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.frameTag {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  font-size: 11px;
+  line-height: 14px;
+  color: rgba(255, 255, 255, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+.thirds {
+  position: absolute;
+  inset: 0;
+
+  i,
+  b {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.28);
+  }
+
+  i {
+    top: 0;
+    bottom: 0;
+    width: 1px;
+  }
+
+  b {
+    left: 0;
+    right: 0;
+    height: 1px;
+  }
+}
+
+.safeArea {
+  position: absolute;
+  inset: 5%;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+}
+
+.nameTag,
+.nameTagActive {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(24, 25, 28, 0.78);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.nameTagActive {
+  background: rgba(36, 66, 96, 0.92);
+  box-shadow:
+    0 0 0 1px rgba($accent, 0.7),
+    0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.viewTools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolGap {
+  flex: 1;
+}
+
+.tool,
+.toolActive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid $line;
+  background: transparent;
+  color: $soft;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.toolActive {
+  border-color: rgba($accent, 0.55);
+  background: rgba($accent, 0.16);
+  color: #e6f0fa;
+}
+
+/* 侧栏 */
+
 .side {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  width: 240px;
+  width: 272px;
   flex-shrink: 0;
+  min-height: 0;
+  max-height: calc(min(66vh, 620px) + 34px);
+}
+
+.sideScroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.sideFoot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 8px;
 }
 
 .group {
@@ -113,6 +281,9 @@ $accent: #569cd6;
   gap: 8px;
 
   h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin: 0;
     font-size: 12px;
     font-weight: 600;
@@ -120,28 +291,12 @@ $accent: #569cd6;
   }
 }
 
-.field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
+.count {
+  font-weight: 400;
   color: $muted;
-
-  select,
-  input {
-    flex: 1;
-  }
-
-  select {
-    height: 28px;
-    padding: 0 8px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(0, 0, 0, 0.2);
-    color: var(--ui-fg-primary);
-    font: inherit;
-  }
 }
+
+/* 单选按钮组 */
 
 .segment {
   display: flex;
@@ -150,32 +305,105 @@ $accent: #569cd6;
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.04);
 
-  button {
+  .choice,
+  .choiceActive {
     flex: 1;
     height: 24px;
+    padding: 0 4px;
     border: none;
     border-radius: 5px;
-    background: transparent;
-    color: $muted;
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
   }
 }
 
-.segmentActive {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: var(--ui-fg-primary) !important;
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  .choice,
+  .choiceActive {
+    height: 24px;
+    padding: 0 9px;
+    border-radius: 999px;
+  }
 }
 
-.figureList {
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+
+  .choice,
+  .choiceActive {
+    height: 26px;
+    padding: 0;
+    border-radius: 6px;
+  }
+}
+
+.choice,
+.choiceActive {
+  border: 1px solid $line;
+  background: transparent;
+  color: $muted;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--ui-fg-primary);
+  }
+}
+
+.choiceActive {
+  border-color: rgba($accent, 0.55);
+  background: rgba($accent, 0.18);
+  color: #e6f0fa;
+}
+
+.segment .choiceActive {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ui-fg-primary);
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: $muted;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    accent-color: $accent;
+  }
+}
+
+.sliderLabel {
+  width: 52px;
+  flex-shrink: 0;
+}
+
+.sliderValue {
+  width: 40px;
+  flex-shrink: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: $soft;
+}
+
+/* 人物 / 道具列表 */
+
+.itemList {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.figure,
-.figureActive {
+.item,
+.itemActive {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -184,45 +412,80 @@ $accent: #569cd6;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: transparent;
-  color: rgba(255, 255, 255, 0.78);
+  color: $soft;
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
-.figureActive {
+.itemActive {
   border-color: rgba($accent, 0.6);
   background: rgba($accent, 0.16);
+}
+
+.addRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.addChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: $muted;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    border-color: rgba($accent, 0.5);
+    color: var(--ui-fg-primary);
+  }
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.detailHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .iconButton {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.detailName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  color: $soft;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .dot {
   width: 8px;
   height: 8px;
+  flex-shrink: 0;
   border-radius: 50%;
-}
-
-.poses {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-}
-
-.pose,
-.poseActive {
-  height: 26px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.75);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.poseActive {
-  border-color: rgba($accent, 0.6);
-  background: rgba($accent, 0.18);
-  color: #e6f0fa;
 }
 
 .error {
@@ -232,7 +495,6 @@ $accent: #569cd6;
 }
 
 .primary {
-  margin-top: auto;
   height: 32px;
   border-radius: 8px;
   border: 1px solid rgba($accent, 0.4);
@@ -241,6 +503,10 @@ $accent: #569cd6;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba($accent, 0.28);
+  }
 
   &:disabled {
     opacity: 0.5;

@@ -1,50 +1,152 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LENSES,
+  MIN_CAMERA_HEIGHT,
+  MOODS,
   POSE_PRESETS,
-  SHOT_CAMERA,
+  PROP_PRESETS,
+  SHOT_FRAMING,
+  SHOT_SIZES,
   STAGE_LIMIT,
   cameraPlacement,
+  captureSize,
+  clampPedestal,
+  clampPitch,
   clampToStage,
+  createFigure,
+  createProp,
+  defaultCameraView,
   defaultFigures,
+  defaultLensFor,
+  figuresCenter,
+  frameRect,
+  lensFov,
+  lightDirection,
+  moodById,
+  nextFigureId,
+  nextPropId,
+  normalizeRotation,
+  normalizeYaw,
   poseById,
+  propPreset,
+  ratioOf,
+  type PrevizCameraView,
 } from '@/render/components/SceneVideoView/Previz/presets';
 
-describe('Previz 预设', () => {
-  it('poseById：找到对应姿势，未知 id 回退站立', () => {
+const view = (patch: Partial<PrevizCameraView> = {}): PrevizCameraView => ({
+  ...defaultCameraView('中景'),
+  ...patch,
+});
+
+describe('Previz 姿势', () => {
+  it('poseById：找到对应姿势，未知 id 回退站立；id 唯一', () => {
     expect(poseById('sit').label).toBe('坐');
     expect(poseById('fallen').drop).toBeGreaterThan(0);
     expect(poseById('不存在')).toBe(POSE_PRESETS[0]);
     expect(poseById('不存在').id).toBe('stand');
     expect(new Set(POSE_PRESETS.map((pose) => pose.id)).size).toBe(POSE_PRESETS.length);
+    expect(new Set(POSE_PRESETS.map((pose) => pose.label)).size).toBe(POSE_PRESETS.length);
   });
 
-  it('cameraPlacement：景别越近相机越近、视角越窄；未知景别按中景', () => {
-    const order = ['大远景', '远景', '全景', '中景', '近景', '特写', '大特写'];
-    const distances = order.map((size) => cameraPlacement(size, 'eye').position[2]);
+  it('包含常用的新姿势：指向 / 跪地 / 回头 / 交谈 / 蹲下', () => {
+    const labels = POSE_PRESETS.map((pose) => pose.label);
+    for (const label of ['站立', '行走', '奔跑', '坐', '拔剑', '对峙', '拥抱', '倒地']) {
+      expect(labels).toContain(label);
+    }
+    for (const label of ['指向', '跪地', '回头', '交谈', '蹲下']) expect(labels).toContain(label);
+  });
+});
+
+describe('Previz 机位', () => {
+  it('景别从远到近：相机越来越近；未知景别按中景', () => {
+    const distances = SHOT_SIZES.map(
+      (size) => cameraPlacement(view({ shotSize: size, lens: 50 })).distance
+    );
     expect(distances).toEqual([...distances].sort((a, b) => b - a));
-    const fovs = order.map((size) => cameraPlacement(size, 'eye').fov);
-    expect(fovs).toEqual([...fovs].sort((a, b) => b - a));
-    expect(cameraPlacement('奇怪的景别', 'eye')).toEqual(cameraPlacement('中景', 'eye'));
+    expect(cameraPlacement(view({ shotSize: '奇怪的景别' }))).toEqual(cameraPlacement(view()));
   });
 
-  it('cameraPlacement：平视高度等于预设；俯视抬高、仰视降低（不低于 0.15）；注视点在 0.9–1.6', () => {
-    const preset = SHOT_CAMERA['中景'];
-    const eye = cameraPlacement('中景', 'eye');
-    expect(eye.position).toEqual([0, preset.height, preset.distance]);
-    expect(eye.target).toEqual([0, 1.45, 0]);
-    const high = cameraPlacement('中景', 'high');
-    expect(high.position[1]).toBeCloseTo(preset.height + preset.distance * 0.55);
-    const low = cameraPlacement('中景', 'low');
-    expect(low.position[1]).toBeCloseTo(Math.max(0.15, preset.height * 0.25));
-    expect(low.position[1]).toBeLessThan(eye.position[1]);
-    // 大远景的注视点被限制在 1.6，特写不低于 0.9
-    expect(cameraPlacement('大远景', 'eye').target[1]).toBe(1.6);
-    for (const size of Object.keys(SHOT_CAMERA)) {
-      const y = cameraPlacement(size, 'low').position[1];
-      expect(y).toBeGreaterThanOrEqual(0.15);
+  it('焦距：越长视角越窄、相机越远（人物大小不变）', () => {
+    const fovs = LENSES.map((lens) => lensFov(lens, 16 / 9));
+    expect(fovs).toEqual([...fovs].sort((a, b) => b - a));
+    const distances = LENSES.map((lens) => cameraPlacement(view({ lens })).distance);
+    expect(distances).toEqual([...distances].sort((a, b) => a - b));
+    // 50mm 横画幅 16:9：竖直视角约 22.9°
+    expect(lensFov(50, 16 / 9)).toBeCloseTo(22.9, 0);
+    // 竖画幅以长边为高：视角比横画幅大
+    expect(lensFov(50, 9 / 16)).toBeGreaterThan(lensFov(50, 16 / 9));
+    // 画面竖直方向正好框住景别高度
+    const placement = cameraPlacement(view({ lens: 35 }));
+    const framed = 2 * placement.distance * Math.tan((placement.fov * Math.PI) / 360);
+    expect(framed).toBeCloseTo(SHOT_FRAMING['中景'].height, 2);
+  });
+
+  it('defaultLensFor / defaultCameraView：景别对应常用焦距，未知景别按中景', () => {
+    expect(defaultLensFor('远景')).toBe(24);
+    expect(defaultLensFor('特写')).toBe(85);
+    expect(defaultLensFor('??')).toBe(50);
+    expect(defaultCameraView('??')).toMatchObject({ shotSize: '中景', angle: 'eye', yaw: 0 });
+    expect(defaultCameraView('全景', { x: 1, z: -2 })).toMatchObject({ focusX: 1, focusZ: -2 });
+  });
+
+  it('角度：平视与注视点同高；俯视更高、仰视更低（不低于最低高度）', () => {
+    const eye = cameraPlacement(view());
+    expect(eye.position[1]).toBeCloseTo(eye.target[1]);
+    expect(eye.position[0]).toBeCloseTo(0);
+    expect(eye.position[2]).toBeCloseTo(eye.distance);
+    expect(cameraPlacement(view({ angle: 'high' })).position[1]).toBeGreaterThan(eye.position[1]);
+    expect(cameraPlacement(view({ angle: 'low' })).position[1]).toBeLessThan(eye.position[1]);
+    for (const size of SHOT_SIZES) {
+      const low = cameraPlacement(view({ shotSize: size, angle: 'low', pitch: -60 }));
+      expect(low.position[1]).toBeGreaterThanOrEqual(MIN_CAMERA_HEIGHT);
     }
   });
 
+  it('环绕 / 升降 / 对准点：绕注视点转动，升降同时移动相机与注视点', () => {
+    const side = cameraPlacement(view({ yaw: 90, focusX: 1, focusZ: 2 }));
+    expect(side.target).toEqual([1, SHOT_FRAMING['中景'].targetY, 2]);
+    expect(side.position[0]).toBeCloseTo(1 + side.distance, 2);
+    expect(side.position[2]).toBeCloseTo(2, 2);
+    const back = cameraPlacement(view({ yaw: 180 }));
+    expect(back.position[2]).toBeCloseTo(-back.distance, 2);
+    const raised = cameraPlacement(view({ pedestal: 0.5 }));
+    expect(raised.target[1]).toBeCloseTo(SHOT_FRAMING['中景'].targetY + 0.5);
+    expect(raised.position[1]).toBeCloseTo(raised.target[1]);
+    expect(cameraPlacement(view({ pitch: 30 })).position[1]).toBeGreaterThan(raised.target[1]);
+  });
+
+  it('normalizeYaw / clampPitch / clampPedestal', () => {
+    expect(normalizeYaw(190)).toBe(-170);
+    expect(normalizeYaw(-190)).toBe(170);
+    expect(normalizeYaw(180)).toBe(180);
+    expect(normalizeYaw(-180)).toBe(180);
+    expect(normalizeYaw(725)).toBe(5);
+    expect(clampPitch(99)).toBe(60);
+    expect(clampPitch(-99)).toBe(-50);
+    expect(clampPedestal(5)).toBe(2);
+    expect(clampPedestal(-0.123)).toBe(-0.12);
+  });
+
+  it('ratioOf / frameRect / captureSize：取景框居中、比例正确；截图长边 1280', () => {
+    expect(ratioOf('16:9')).toBeCloseTo(16 / 9);
+    expect(ratioOf('9:16')).toBeCloseTo(9 / 16);
+    expect(ratioOf('乱写')).toBeCloseTo(16 / 9);
+    const wide = frameRect(1000, 600, 16 / 9);
+    expect(wide.width / wide.height).toBeCloseTo(16 / 9, 1);
+    expect(wide.x * 2 + wide.width).toBeCloseTo(1000, -1);
+    expect(wide.x).toBe(20);
+    const tall = frameRect(1000, 600, 9 / 16);
+    expect(tall.height).toBe(560);
+    expect(tall.width).toBe(315);
+    expect(tall.x).toBe(Math.round((1000 - 315) / 2));
+    expect(captureSize(16 / 9)).toEqual({ width: 1280, height: 720 });
+    expect(captureSize(9 / 16)).toEqual({ width: 720, height: 1280 });
+    expect(captureSize(1)).toEqual({ width: 1280, height: 1280 });
+    expect(captureSize(2.39).height % 2).toBe(0);
+  });
+});
+
+describe('Previz 人物', () => {
   it('defaultFigures：沿 X 轴居中排开、间距 0.9，面向镜头；没有人物时给一个占位', () => {
     const three = defaultFigures(['林舟', '苏晴', '秦伯']);
     expect(three.map((figure) => figure.x)).toEqual([-0.9, 0, 0.9]);
@@ -56,15 +158,65 @@ describe('Previz 预设', () => {
     const placeholder = defaultFigures([]);
     expect(placeholder).toHaveLength(1);
     expect(placeholder[0]).toMatchObject({ name: '人物', x: 0 });
-    // 颜色循环使用
     const seven = defaultFigures(['1', '2', '3', '4', '5', '6', '7']);
     expect(seven[6].color).toBe(seven[0].color);
   });
 
-  it('clampToStage：限制在地面范围内并保留两位小数', () => {
+  it('createFigure / nextFigureId：放在最右侧再往右 0.9 米、颜色不重复、id 只增不减', () => {
+    const two = defaultFigures(['林舟', '苏晴']);
+    const third = createFigure('秦伯', two);
+    expect(third).toMatchObject({ id: 'f3', name: '秦伯', x: 1.35, z: 0, pose: 'stand' });
+    expect(two.map((figure) => figure.color)).not.toContain(third.color);
+    expect(nextFigureId([{ id: 'f1' }, { id: 'f7' }, { id: 'x' }])).toBe('f8');
+    expect(createFigure('a', [])).toMatchObject({ id: 'f1', x: 0 });
+    // 右侧超出舞台时放到左侧
+    const edge = [{ ...two[0], x: STAGE_LIMIT }];
+    expect(createFigure('b', edge).x).toBeCloseTo(STAGE_LIMIT - 0.9);
+  });
+
+  it('clampToStage / figuresCenter / normalizeRotation', () => {
     expect(clampToStage(100)).toBe(STAGE_LIMIT);
     expect(clampToStage(-100)).toBe(-STAGE_LIMIT);
     expect(clampToStage(1.23456)).toBe(1.23);
     expect(clampToStage(-0.005)).toBeCloseTo(0);
+    expect(figuresCenter([])).toEqual({ x: 0, z: 0 });
+    expect(figuresCenter(defaultFigures(['a', 'b', 'c']))).toEqual({ x: 0, z: 0 });
+    expect(
+      figuresCenter([
+        { x: 1, z: 2 },
+        { x: 2, z: -1 },
+      ])
+    ).toEqual({ x: 1.5, z: 0.5 });
+    expect(normalizeRotation((200 * Math.PI) / 180)).toBeCloseTo((-160 * Math.PI) / 180);
+    expect(normalizeRotation((-200 * Math.PI) / 180)).toBeCloseTo((160 * Math.PI) / 180);
+  });
+});
+
+describe('Previz 场景', () => {
+  it('道具：包含墙 / 门 / 桌子 / 树 / 柱子；新道具放在人物后方左右错开', () => {
+    const labels = PROP_PRESETS.map((preset) => preset.label);
+    for (const label of ['墙', '门', '桌子', '树', '柱子']) expect(labels).toContain(label);
+    expect(propPreset('door').label).toBe('门');
+    const first = createProp('table', []);
+    expect(first).toMatchObject({ id: 'p1', kind: 'table', x: 0, rotation: 0 });
+    expect(first.z).toBeLessThan(0);
+    const second = createProp('tree', [first]);
+    const third = createProp('pillar', [first, second]);
+    expect(second.id).toBe('p2');
+    expect(Math.sign(second.x)).toBe(-Math.sign(third.x));
+    expect(createProp('wall', []).z).toBeLessThan(first.z);
+    expect(nextPropId([{ id: 'p3' }, { id: 'f9' }])).toBe('p4');
+  });
+
+  it('时段：白天 / 黄昏 / 夜晚，主光方向是单位向量且在地平线以上', () => {
+    expect(MOODS.map((mood) => mood.label)).toEqual(['白天', '黄昏', '夜晚']);
+    expect(moodById('nope').id).toBe('day');
+    for (const mood of MOODS) {
+      const [x, y, z] = lightDirection(mood);
+      expect(Math.hypot(x, y, z)).toBeCloseTo(1, 2);
+      expect(y).toBeGreaterThan(0);
+    }
+    // 黄昏的太阳更低
+    expect(lightDirection(moodById('dusk'))[1]).toBeLessThan(lightDirection(moodById('day'))[1]);
   });
 });

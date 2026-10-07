@@ -17,8 +17,11 @@ import {
 import Tooltip from '../Tooltip';
 import {
   REFERENCE_OPEN_EVENT,
+  REFERENCE_TOGGLE_EVENT,
+  announceReferenceState,
   type OpenReferenceDetail,
   type ReferenceItem,
+  type ToggleReferenceDetail,
 } from '../../utils/referencePane';
 import { useReferenceMedia } from './useReferenceMedia';
 import styles from './styles.module.scss';
@@ -94,6 +97,29 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
     return () => window.removeEventListener(REFERENCE_OPEN_EVENT, onOpen);
   }, []);
 
+  // 文件栏「参考」按钮：开着就收起；关着就打开（没有内容时先放当前作品的人物参考）
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  useEffect(() => {
+    const onToggle = (event: Event) => {
+      const detail = (event as CustomEvent<ToggleReferenceDetail>).detail;
+      if (modeRef.current !== 'closed') {
+        setMode('closed');
+        setItems([]);
+        setIndex(0);
+        return;
+      }
+      setItems(detail?.fallback ?? []);
+      setIndex(0);
+      setMode('docked');
+    };
+    window.addEventListener(REFERENCE_TOGGLE_EVENT, onToggle);
+    return () => window.removeEventListener(REFERENCE_TOGGLE_EVENT, onToggle);
+  }, []);
+  useEffect(() => {
+    announceReferenceState(mode !== 'closed');
+  }, [mode]);
+
   const close = useCallback(() => {
     setMode('closed');
     setItems([]);
@@ -102,7 +128,40 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
   const step = (offset: number) =>
     setIndex((current) => (items.length ? (current + offset + items.length) % items.length : 0));
 
-  if (mode === 'closed' || items.length === 0 || hidden) return null;
+  if (mode === 'closed' || hidden) return null;
+  if (items.length === 0) {
+    return (
+      <aside
+        className={styles.pane}
+        style={{ width }}
+        aria-label="参考窗格"
+        data-testid="reference-pane"
+      >
+        <header className={styles.head}>
+          <span className={styles.title}>参考</span>
+          <Tooltip content="关闭参考">
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label="关闭参考"
+              onClick={close}
+            >
+              <VscClose />
+            </button>
+          </Tooltip>
+        </header>
+        <div className={styles.empty} data-testid="reference-empty">
+          <p>写作时在这里对照图片和视频。</p>
+          <ul>
+            <li>资料里的图片 / 视频：右键「在编辑器旁边打开」</li>
+            <li>人物、设定的图集：右键图片「在编辑器旁边打开」</li>
+            <li>正文里的 ::image / ::video：点「在旁边看」</li>
+            <li>场景视频：镜头与样片的「在旁边看」</li>
+          </ul>
+        </div>
+      </aside>
+    );
+  }
   const current = items[Math.min(index, items.length - 1)];
 
   if (mode === 'mini') {

@@ -9,6 +9,7 @@ import type { GuiSessionSnapshot } from '@novel-editor/core/gui-session';
 import type { AboutInfo } from '../../shared/about';
 import type { LogUploadResult } from '../../shared/log-upload';
 import type { MenuShortcutBindings } from '../../shared/app-menu';
+import type { WorkspaceContentSearchResponse } from '../../shared/workspace-search';
 
 export type { AboutInfo } from '../../shared/about';
 export type { LogUploadResult } from '../../shared/log-upload';
@@ -369,6 +370,12 @@ export interface ElectronAPI {
         }
       ): Promise<unknown>;
       invoke(channel: 'db-world-setting-delete', id: number): Promise<unknown>;
+      /** 文件面板全文搜索：在 rootPath（工作区内的目录）下的 .md / .txt 中按字面量查找 */
+      invoke(
+        channel: 'workspace-search-content',
+        rootPath: string,
+        query: string
+      ): Promise<WorkspaceContentSearchResponse>;
       /** 人物头像：保存到 <作品>/资料/人物头像/，返回相对作品目录的路径 */
       invoke(
         channel: 'character-avatar-save',

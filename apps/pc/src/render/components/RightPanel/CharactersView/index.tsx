@@ -160,6 +160,7 @@ export const CharactersView: React.FC<{
     const cardsView = (
       <CharacterListPanel
         characters={characters}
+        workPath={folderPath}
         linksCount={links.length}
         aiGenerating={aiGenerating}
         aiStatus={aiStatus}

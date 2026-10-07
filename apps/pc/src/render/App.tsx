@@ -16,6 +16,7 @@ import InspirationButton from './components/InspirationButton';
 import ContinuationButton from './components/ContinuationButton';
 import EditorGrowthRecord from './components/EditorGrowthRecord';
 import SceneVideoButton from './components/SceneVideoButton';
+import ReferenceButton from './components/ReferenceButton';
 import styles from './App.module.scss';
 import { VscLayoutSidebarLeft, VscLayoutSidebarRight } from 'react-icons/vsc';
 import { CENTER_MIN } from '@/render/app/layoutConstants';
@@ -59,6 +60,7 @@ const App: React.FC = () => {
     assistantContext,
     workspaceTabLabels,
     editorCharacterHighlights,
+    referenceFallback,
     specialTabContent,
     handleAssistantApplyFix,
     handleAssistantPreviewDiff,
@@ -352,6 +354,7 @@ const App: React.FC = () => {
                     <InspirationButton shortcut={appSettings.shortcuts.openInspiration} />
                     <ContinuationButton editorViewRef={editorViewRef} />
                     <SceneVideoButton shortcutLabel={formatShortcutLabel('Mod+Alt+V')} />
+                    <ReferenceButton fallback={referenceFallback} />
                   </>
                 }
                 emptyStateActions={

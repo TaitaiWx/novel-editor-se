@@ -30,6 +30,12 @@ export interface TimelineEditorState {
 
 export type CharacterCategoryFilter = CharacterCategory | 'all';
 
+/** 人物分类下拉的选项（新建人物与人物详情共用） */
+export const CATEGORY_OPTIONS: ReadonlyArray<{ value: CharacterCategory; label: string }> = [
+  { value: 'major', label: '主要角色' },
+  { value: 'secondary', label: '次要角色' },
+];
+
 export type GraphLayout = Record<number, { x: number; y: number }>;
 
 export interface CharacterDbRow {

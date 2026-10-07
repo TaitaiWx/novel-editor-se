@@ -612,6 +612,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           characters={
             previzShot.shot.characters?.length ? previzShot.shot.characters : state.characters
           }
+          availableCharacters={state.characters}
           aspectRatio={state.aspectRatio}
           onSave={async (png) => {
             const path = await writeSceneImage('previz', previzShot.shot, png);

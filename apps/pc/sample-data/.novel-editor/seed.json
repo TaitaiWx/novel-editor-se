@@ -19,7 +19,7 @@
       "name": "林舟",
       "role": "主角 · 旅人",
       "description": "青石镇长大的少年，父亲三十年前追着星图出海未归。跟随老铁匠秦伯学过几年打铁和剑术，性子倔，认准的事不回头。",
-      "attributes": "{\"aliases\":[\"阿舟\"],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"道途\",\"value\":\"战士之道\"},{\"id\":\"state-2\",\"label\":\"伤势\",\"value\":\"左臂旧伤未愈\"},{\"id\":\"state-3\",\"label\":\"随身\",\"value\":\"旧剑「青石」、星图碎片\"}]}",
+      "attributes": "{\"avatar\":\"资料/图集/人物/林舟/形象图.webp\",\"design\":{\"appearance\":\"十七岁，身形清瘦，黑发束成发髻，眉眼倔强；左臂有一道旧伤，常缠着绷带\",\"outfit\":\"灰蓝色交领短打、深色长裤、旧皮靴；背后斜挎秦伯打的旧剑「青石」\",\"personality\":\"倔强、话少，认准的事不回头；对小石头和秦伯很温柔\"},\"media\":[{\"id\":\"sample-portrait-1\",\"path\":\"资料/图集/人物/林舟/形象图.webp\",\"kind\":\"portrait\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"},{\"id\":\"sample-turnaround-2\",\"path\":\"资料/图集/人物/林舟/三视图.webp\",\"kind\":\"turnaround\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"}],\"aliases\":[\"阿舟\"],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"道途\",\"value\":\"战士之道\"},{\"id\":\"state-2\",\"label\":\"伤势\",\"value\":\"左臂旧伤未愈\"},{\"id\":\"state-3\",\"label\":\"随身\",\"value\":\"旧剑「青石」、星图碎片\"}]}",
       "novel_id": 1,
       "sort_order": 0
     },
@@ -27,7 +27,7 @@
       "name": "苏晴",
       "role": "女主 · 雾林药师",
       "description": "迷雾森林边缘长大的草药师，嘴硬心软。第三卷之后会揭开雾林药师与灯塔守望者的渊源。",
-      "attributes": "{\"aliases\":[],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"道途\",\"value\":\"牧师之道\"},{\"id\":\"state-2\",\"label\":\"随身\",\"value\":\"药篓（驱狼草、止血草）\"}]}",
+      "attributes": "{\"avatar\":\"资料/图集/人物/苏晴/形象图.webp\",\"design\":{\"appearance\":\"深棕长发编成一条发辫搭在肩前，眼睛很亮，笑起来有点坏\",\"outfit\":\"草绿色长袍、米色交领、橙褐腰封；背一只竹编药篓，装着驱狼草和止血草\",\"personality\":\"嘴硬心软，懂草药，遇事比林舟冷静\"},\"media\":[{\"id\":\"sample-portrait-1\",\"path\":\"资料/图集/人物/苏晴/形象图.webp\",\"kind\":\"portrait\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"},{\"id\":\"sample-turnaround-2\",\"path\":\"资料/图集/人物/苏晴/三视图.webp\",\"kind\":\"turnaround\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"}],\"aliases\":[],\"category\":\"major\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"道途\",\"value\":\"牧师之道\"},{\"id\":\"state-2\",\"label\":\"随身\",\"value\":\"药篓（驱狼草、止血草）\"}]}",
       "novel_id": 1,
       "sort_order": 1
     },
@@ -35,7 +35,7 @@
       "name": "白鸦",
       "role": "领航员",
       "description": "黑帆船的主人，左耳挂着银色罗盘耳坠。父亲曾为林舟的父亲领航。",
-      "attributes": "{\"aliases\":[],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"立场\",\"value\":\"暂时同行，目的不明\"}]}",
+      "attributes": "{\"avatar\":\"资料/图集/人物/白鸦/形象图.webp\",\"design\":{\"appearance\":\"高个，银白色及颌短发，眼神很淡；左耳挂一枚银色罗盘耳坠\",\"outfit\":\"黑色及踝长外套、银色滚边与纽扣、浅灰衬衣、黑长靴\",\"personality\":\"寡言、守信，只说必要的话；对星海航路了如指掌\"},\"media\":[{\"id\":\"sample-portrait-1\",\"path\":\"资料/图集/人物/白鸦/形象图.webp\",\"kind\":\"portrait\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"},{\"id\":\"sample-turnaround-2\",\"path\":\"资料/图集/人物/白鸦/三视图.webp\",\"kind\":\"turnaround\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"}],\"aliases\":[],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"立场\",\"value\":\"暂时同行，目的不明\"}]}",
       "novel_id": 1,
       "sort_order": 2
     },
@@ -43,7 +43,7 @@
       "name": "秦伯",
       "role": "老铁匠 · 林舟的师父",
       "description": "青石镇的老铁匠，嗜酒，手艺极好。把佩剑青石与星图碎片交给林舟。",
-      "attributes": "{\"aliases\":[\"老铁匠\"],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"所在\",\"value\":\"青石镇\"}]}",
+      "attributes": "{\"avatar\":\"资料/图集/人物/秦伯/形象图.webp\",\"design\":{\"appearance\":\"五十多岁，灰白短发和短须，手臂粗壮，满是烫伤的旧疤\",\"outfit\":\"褐色粗布衣挽起袖子，系一条厚皮围裙，手里常拎着铁锤\",\"personality\":\"嗜酒、嘴上不饶人，手艺极好；把林舟当亲儿子\"},\"media\":[{\"id\":\"sample-portrait-1\",\"path\":\"资料/图集/人物/秦伯/形象图.webp\",\"kind\":\"portrait\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"},{\"id\":\"sample-turnaround-2\",\"path\":\"资料/图集/人物/秦伯/三视图.webp\",\"kind\":\"turnaround\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"}],\"aliases\":[\"老铁匠\"],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[{\"id\":\"state-1\",\"label\":\"所在\",\"value\":\"青石镇\"}]}",
       "novel_id": 1,
       "sort_order": 3
     },
@@ -51,7 +51,7 @@
       "name": "小石头",
       "role": "青石镇的孩子",
       "description": "总跟在林舟身后的小孩，答应替他看好铁匠铺。",
-      "attributes": "{\"aliases\":[],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[]}",
+      "attributes": "{\"avatar\":\"资料/图集/人物/小石头/形象图.webp\",\"design\":{\"appearance\":\"八岁，头发乱糟糟地翘着，脸蛋晒得黑红，总是光着脚\",\"outfit\":\"打着补丁的土黄短衫、短裤\",\"personality\":\"黏人、认真，答应的事一定做到\"},\"media\":[{\"id\":\"sample-portrait-1\",\"path\":\"资料/图集/人物/小石头/形象图.webp\",\"kind\":\"portrait\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"},{\"id\":\"sample-turnaround-2\",\"path\":\"资料/图集/人物/小石头/三视图.webp\",\"kind\":\"turnaround\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"}],\"aliases\":[],\"category\":\"secondary\",\"highlightColor\":\"#9cdcfe\",\"highlightFirstMentionOnly\":true,\"currentState\":[]}",
       "novel_id": 1,
       "sort_order": 4
     },
@@ -85,14 +85,16 @@
       "category": "world",
       "title": "星辉灯塔",
       "content": "星海孤礁上的古老灯塔。嵌入完整星图后会点亮，在海面铺出通往「星河」的航路。",
-      "tags": "[\"地点\",\"主线\"]"
+      "tags": "[\"地点\",\"主线\"]",
+      "attributes": "{\"cover\":\"资料/图集/设定/星辉灯塔/图片.webp\",\"media\":[{\"id\":\"sample-concept-1\",\"path\":\"资料/图集/设定/星辉灯塔/图片.webp\",\"kind\":\"concept\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"}]}"
     },
     {
       "novel_id": 1,
       "category": "faction",
       "title": "星港城商会",
       "content": "掌控西境大半航线的商人联盟，第二卷之后成为主要对手。",
-      "tags": "[\"反派\"]"
+      "tags": "[\"反派\"]",
+      "attributes": "{\"cover\":\"资料/图集/设定/星港城商会/图片.webp\",\"media\":[{\"id\":\"sample-concept-1\",\"path\":\"资料/图集/设定/星港城商会/图片.webp\",\"kind\":\"concept\",\"source\":\"upload\",\"createdAt\":\"2026-10-01T08:00:00.000Z\"}]}"
     },
     {
       "novel_id": 1,

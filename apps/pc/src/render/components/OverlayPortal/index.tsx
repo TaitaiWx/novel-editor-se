@@ -48,6 +48,9 @@ const OverlayPortal = React.forwardRef<HTMLDivElement, OverlayPortalProps>(
         if (!target) return;
         if (contentRef.current?.contains(target)) return;
         if (containRefs.some((ref) => ref.current?.contains(target))) return;
+        // 嵌套弹层（例如弹窗里 Select 的下拉列表，渲染在 body 下）里的点击不算「外部」
+        const element = target instanceof Element ? target : target.parentElement;
+        if (element?.closest('[data-overlay-nested]')) return;
         onClose();
       };
 

@@ -33,6 +33,7 @@ import {
   registerVideoHandlers,
   registerCharacterAvatarHandlers,
   registerEntityMediaHandlers,
+  registerWorkspaceSearchHandlers,
 } from './handlers';
 
 export { type FileNode } from './handlers';
@@ -53,4 +54,5 @@ export function setupIPC() {
   registerVideoHandlers();
   registerCharacterAvatarHandlers();
   registerEntityMediaHandlers();
+  registerWorkspaceSearchHandlers();
 }

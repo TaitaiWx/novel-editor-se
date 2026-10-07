@@ -1,0 +1,120 @@
+// 自绘数字输入：与 Select 触发器同一套边框、背景与焦点环
+.field {
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 6px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  overflow: hidden;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+
+  &:hover:not(.disabled) {
+    border-color: #505050;
+  }
+
+  &:focus-within {
+    border-color: var(--ui-interaction-accent);
+    box-shadow: 0 0 0 2px var(--ui-interaction-accent-soft);
+  }
+}
+
+.sm {
+  height: 26px;
+}
+
+.md {
+  height: 30px;
+}
+
+.lg {
+  height: 34px;
+}
+
+.block {
+  display: flex;
+  width: 100%;
+}
+
+.disabled {
+  background: var(--ui-bg-surface);
+  border-color: var(--ui-border-subtle);
+  color: var(--ui-fg-disabled);
+}
+
+.input {
+  flex: 1;
+  width: 0;
+  min-width: 48px;
+  padding: 0 4px 0 10px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  font-variant-numeric: tabular-nums;
+
+  &::placeholder {
+    color: var(--ui-fg-muted);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.suffix {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-right: 8px;
+  color: var(--ui-fg-muted);
+  white-space: nowrap;
+}
+
+.steppers {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-left: 1px solid var(--ui-border-subtle);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+
+  & + & {
+    border-left: 1px solid var(--ui-border-subtle);
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--ui-interaction-hover-bg);
+    color: var(--ui-fg-primary);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--ui-interaction-active-bg);
+  }
+
+  &:disabled {
+    color: var(--ui-fg-disabled);
+    cursor: default;
+  }
+}

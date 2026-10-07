@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { clearDirectiveMediaCache } from '@/render/components/TextEditor/live-preview/media-loader';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
@@ -91,16 +92,17 @@ describe('novelDirectivePreview（编辑器）', () => {
     view?.destroy();
     view = null;
     uninstallElectronMock();
+    clearDirectiveMediaCache();
     document.body.innerHTML = '';
   });
 
-  it('非光标行显示场景条 / 视频卡片 / 场景结束线；未知指令保留源码', () => {
+  it('非光标行显示场景条 / 视频播放器 / 场景结束线；未知指令保留源码', () => {
     const v = mount(0);
     const scene = v.dom.querySelector('.cm-lp-scene');
     expect(scene?.textContent).toBe('场景 · 港口 · 视角 林舟');
-    const video = v.dom.querySelector('.cm-lp-video');
-    expect(video?.textContent).toBe('▶ 视频 · 启航');
-    expect(video?.getAttribute('aria-label')).toBe('播放视频 启航');
+    const video = v.dom.querySelector('.cm-lp-media.cm-lp-video');
+    expect(video?.getAttribute('aria-label')).toBe('视频 启航');
+    expect(video?.querySelector('.cm-lp-media-caption')?.textContent).toContain('视频 · 启航');
     expect(v.dom.querySelector('.cm-lp-scene-end')?.textContent).toBe('场景结束');
     expect(v.dom.textContent).toContain('::note[不认识的指令]');
     expect(v.dom.textContent).not.toContain(':::scene');
@@ -113,11 +115,11 @@ describe('novelDirectivePreview（编辑器）', () => {
     v.dispatch({ selection: EditorSelection.cursor(0) });
     expect(v.dom.querySelector('.cm-lp-scene')).not.toBeNull();
     v.dispatch({ selection: EditorSelection.cursor(DOC.indexOf('::video') + 3) });
-    expect(v.dom.querySelector('.cm-lp-video')).toBeNull();
+    expect(v.dom.querySelector('.cm-lp-media')).toBeNull();
     expect(v.dom.querySelector('.cm-lp-scene')).not.toBeNull();
   });
 
-  it('没有说明的视频卡片显示文件名', () => {
+  it('没有说明的视频显示文件名', () => {
     const parent = document.createElement('div');
     document.body.appendChild(parent);
     view = new EditorView({
@@ -127,51 +129,123 @@ describe('novelDirectivePreview（编辑器）', () => {
       }),
       parent,
     });
-    expect(view.dom.querySelector('.cm-lp-video')?.textContent).toBe('▶ 视频 · 样片-1.mp4');
+    expect(view.dom.querySelector('.cm-lp-media')?.getAttribute('aria-label')).toBe(
+      '视频 样片-1.mp4'
+    );
   });
 
-  it('点击视频卡片：找到存在的候选后在参考窗格打开', async () => {
+  it('视频就地加载为播放器；「在旁边看」在参考窗格打开实际找到的文件', async () => {
+    const found = '/p/novels/星河/资料/视频/镜头1-v1.mp4';
     const mock = installElectronMock((channel, candidate) => {
-      if (channel !== 'get-file-info') return null;
-      if (candidate === '/p/novels/星河/资料/视频/镜头1-v1.mp4') return { size: 1 };
-      throw new Error('不存在');
+      if (channel === 'get-file-info') {
+        if (candidate === found) return { size: 1 };
+        throw new Error('不存在');
+      }
+      if (channel === 'read-file-binary') return { base64Content: 'AAAA', mimeType: 'video/mp4' };
+      return null;
     });
     const listener = vi.fn();
     window.addEventListener(REFERENCE_OPEN_EVENT, listener);
     const v = mount(0);
-    const video = v.dom.querySelector('.cm-lp-video') as HTMLElement;
-    video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+    const player = await vi.waitFor(() => {
+      const element = v.dom.querySelector('video.cm-lp-video-player') as HTMLVideoElement | null;
+      expect(element).not.toBeNull();
+      return element as HTMLVideoElement;
+    });
+    expect(player.controls).toBe(true);
+    expect(mock.invoke).toHaveBeenCalledWith('read-file-binary', found);
+    const beside = v.dom.querySelector('.cm-lp-media-beside') as HTMLElement;
+    expect(beside.getAttribute('aria-label')).toBe('在旁边看 启航');
+    beside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    expect(listener).toHaveBeenCalledTimes(1);
     const detail = (listener.mock.calls[0][0] as CustomEvent<OpenReferenceDetail>).detail;
-    expect(detail.items).toEqual([
-      { path: '/p/novels/星河/资料/视频/镜头1-v1.mp4', title: '启航', kind: 'video' },
-    ]);
-    expect(mock.invoke).toHaveBeenCalledWith(
-      'get-file-info',
-      '/p/novels/星河/资料/视频/镜头1-v1.mp4'
-    );
-    expect(video.classList.contains('cm-lp-video-missing')).toBe(false);
+    expect(detail.items).toEqual([{ path: found, title: '启航', kind: 'video' }]);
     window.removeEventListener(REFERENCE_OPEN_EVENT, listener);
   });
 
-  it('点击视频卡片：所有候选都不存在时标记为缺失', async () => {
+  it('所有候选都不存在时显示「找不到视频」', async () => {
     const mock = installElectronMock(() => {
       throw new Error('不存在');
     });
     const v = mount(0);
-    const video = v.dom.querySelector('.cm-lp-video') as HTMLElement;
-    video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    await vi.waitFor(() => expect(video.classList.contains('cm-lp-video-missing')).toBe(true));
-    // /p/novels/星河 向上逐级：4 个候选都试过
-    expect(mock.invoke).toHaveBeenCalledTimes(4);
+    await vi.waitFor(() =>
+      expect(v.dom.querySelector('.cm-lp-media-missing')?.textContent).toContain(
+        '找不到视频：资料/视频/镜头1-v1.mp4'
+      )
+    );
+    // /p/novels/星河 向上逐级：4 个候选都试过，不读取文件
+    expect(mock.invoke.mock.calls.filter(([channel]) => channel === 'get-file-info')).toHaveLength(
+      4
+    );
+    expect(v.dom.querySelector('.cm-lp-media-beside')).toBeNull();
   });
 
-  it('没有 electron 时点击直接标记缺失', async () => {
+  it('没有 electron 时直接显示找不到', async () => {
     uninstallElectronMock();
     const v = mount(0);
-    const video = v.dom.querySelector('.cm-lp-video') as HTMLElement;
-    video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    await vi.waitFor(() => expect(video.classList.contains('cm-lp-video-missing')).toBe(true));
+    await vi.waitFor(() => expect(v.dom.querySelector('.cm-lp-media-missing')).not.toBeNull());
+  });
+
+  it('::image 就地显示图片', async () => {
+    installElectronMock((channel) => {
+      if (channel === 'get-file-info') return { size: 1 };
+      if (channel === 'read-file-binary') return { base64Content: 'AAAA', mimeType: 'image/webp' };
+      return null;
+    });
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    view = new EditorView({
+      state: EditorState.create({
+        doc: '开头\n::image[码头]{src="资料/图集/设定/星港城/图片.webp"}',
+        extensions: [novelDirectivePreview('/p/novels/星河/001.md')],
+      }),
+      parent,
+    });
+    const img = await vi.waitFor(() => {
+      const element = view?.dom.querySelector('img.cm-lp-image-directive') as HTMLImageElement;
+      expect(element).toBeTruthy();
+      return element;
+    });
+    expect(img.alt).toBe('码头');
+  });
+
+  it('不用 Markdown 语法的章 / 幕 / 场标题行带标题样式；正文里的「第三章说过……。」不算', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    view = new EditorView({
+      state: EditorState.create({
+        doc: '第一章 离港\n第一幕 离乡\n第一场 清晨\n他说第三章说过的话。\n楔子',
+        extensions: [novelDirectivePreview(null)],
+      }),
+      parent,
+    });
+    const lines = Array.from(view.dom.querySelectorAll('.cm-line'));
+    expect(lines[0].classList.contains('cm-lp-chapter-title')).toBe(true);
+    expect(lines[1].classList.contains('cm-lp-act-title')).toBe(true);
+    expect(lines[2].classList.contains('cm-lp-scene-title')).toBe(true);
+    expect(lines[3].className).not.toMatch(/cm-lp-(chapter|act|scene)-title/);
+    expect(lines[4].classList.contains('cm-lp-chapter-title')).toBe(true);
+  });
+
+  it('行内 :char[称呼]{id=人物} 显示称呼，悬停提示人物；光标所在行显示源码', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const doc = '第一行\n:char[阿舟]{id=林舟}把行囊甩上肩。';
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: { anchor: 0 },
+        extensions: [novelDirectivePreview(null)],
+      }),
+      parent,
+    });
+    const chip = view.dom.querySelector('.cm-lp-char') as HTMLElement;
+    expect(chip.textContent).toBe('阿舟');
+    expect(chip.title).toBe('人物：林舟');
+    expect(view.dom.textContent).not.toContain(':char[');
+    view.dispatch({ selection: EditorSelection.cursor(doc.length) });
+    expect(view.dom.querySelector('.cm-lp-char')).toBeNull();
+    expect(view.dom.textContent).toContain(':char[阿舟]{id=林舟}');
   });
 
   it('编辑文档后重新构建（新增的场景行被渲染）', () => {

@@ -28,7 +28,7 @@ const SceneVideoButton: React.FC<SceneVideoButtonProps> = ({ shortcutLabel }) =>
         onClick={() => requestOpenSceneVideo()}
       >
         <VscDeviceCameraVideo className={styles.icon} aria-hidden="true" />
-        <span>场景视频</span>
+        <span className={styles.label}>场景视频</span>
       </button>
     </Tooltip>
   </span>

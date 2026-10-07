@@ -13,27 +13,22 @@ import { buildStoryStructure, getSplitWorkspaceOptions } from '../../utils/story
 import type { FilePanelProps, ObjectContextMenuTarget } from './types';
 import {
   countFiles,
-  filterCharacters,
-  filterGrowthSheets,
-  filterLoreEntries,
-  filterTree,
   getFolderName,
   groupCharacters,
   handleRowActivationKey,
   resolvePasteTargetDir,
-  shouldShowCharactersSection,
-  shouldShowGrowthSection,
-  shouldShowLoreSection,
 } from './utils';
 import { useExternalFileDrop } from './hooks/useExternalFileDrop';
 import { useStoryDragReorder } from './hooks/useStoryDragReorder';
 import { useFilePanelSearch } from './hooks/useFilePanelSearch';
+import { useFilePanelSearchResults } from './hooks/useFilePanelSearchResults';
 import { useStoryTreeReveal } from './hooks/useStoryTreeReveal';
 import { useWorkScopedNodes } from './hooks/useWorkScopedNodes';
 import StoryTreeNode, { type StoryTreeContext } from './StoryTreeNode';
 import SectionHeader from './SectionHeader';
 import WorkspaceHeader, { buildCreateMenuItems } from './WorkspaceHeader';
 import SearchBar from './SearchBar';
+import SearchResults, { searchOptionId } from './SearchResults';
 import CharacterSection from './CharacterSection';
 import LoreSection from './LoreSection';
 import WorkSwitcher from './WorkSwitcher';
@@ -142,13 +137,10 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     const folderName = useMemo(() => getFolderName(folderPath), [folderPath]);
     const workspaceLabel = projectName?.trim() || folderName;
 
-    const filteredFiles = useMemo(() => {
-      if (!searchQuery.trim()) return files;
-      return filterTree(files, searchQuery.trim());
-    }, [files, searchQuery]);
+    // 搜索不再过滤树：关键词非空时用独立的分组结果列表替换整棵树（见 SearchResults）
     const { storyNodes, materialNodes } = useMemo(
-      () => splitWorkspaceFiles(filteredFiles, getSplitWorkspaceOptions(projectLayout)),
-      [filteredFiles, projectLayout]
+      () => splitWorkspaceFiles(files, getSplitWorkspaceOptions(projectLayout)),
+      [files, projectLayout]
     );
     // 正文结构：项目文档 + 作品 / 卷 / 章（`ne init` 项目）或按名称推断的卷（普通文件夹）
     const storyStructure = useMemo(
@@ -158,9 +150,9 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     const storyDisplayNodes = storyStructure.displayNodes;
     // 项目根目录的说明文档（欢迎使用.md 等）：头部「搜索」左侧的「项目说明」图标
     const projectDocNodes = storyStructure.projectDocs;
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const searching = searchQuery.trim().length > 0;
 
-    // 当前作品：正文 / 资料只显示这部作品（搜索时跨作品显示全部结果）
+    // 当前作品：正文 / 资料只显示这部作品（搜索结果跨作品，见 useFilePanelSearchResults）
     const {
       workScope,
       workScopeOptions,
@@ -177,33 +169,11 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       workScopeOptions: workScopeOptionsProp,
       storyDisplayNodes,
       materialNodes,
-      searching: Boolean(normalizedQuery),
+      searching: false,
     });
     const materialFileCount = useMemo(() => countFiles(scopedMaterialNodes), [scopedMaterialNodes]);
-    const filteredCharacters = useMemo(
-      () => filterCharacters(characters, normalizedQuery),
-      [characters, normalizedQuery]
-    );
-    const filteredLoreEntries = useMemo(
-      () => filterLoreEntries(loreEntries, normalizedQuery),
-      [loreEntries, normalizedQuery]
-    );
-    const groupedCharacters = useMemo(
-      () => groupCharacters(filteredCharacters),
-      [filteredCharacters]
-    );
-    const showCharactersSection = shouldShowCharactersSection(
-      normalizedQuery,
-      filteredCharacters.length
-    );
-    const showLoreSection = shouldShowLoreSection(normalizedQuery, filteredLoreEntries.length);
-    const filteredGrowthSheets = useMemo(
-      () => filterGrowthSheets(growthIndex?.sheets ?? EMPTY_GROWTH_SHEETS, normalizedQuery),
-      [growthIndex, normalizedQuery]
-    );
-    const showGrowthSection =
-      Boolean(onOpenGrowth) &&
-      shouldShowGrowthSection(normalizedQuery, filteredGrowthSheets.length);
+    const groupedCharacters = useMemo(() => groupCharacters(characters), [characters]);
+    const growthSheets = growthIndex?.sheets ?? EMPTY_GROWTH_SHEETS;
 
     const {
       revealPath,
@@ -233,6 +203,26 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       },
       [searchQuery, closeSearch, onFileSelect, triggerRevealPath]
     );
+
+    const handleOpenGrowthFromSearch = useCallback(
+      (name: string) => onOpenGrowth?.(name),
+      [onOpenGrowth]
+    );
+    const searchResults = useFilePanelSearchResults({
+      query: searchQuery,
+      rootPath: folderPath,
+      projectDocs: projectDocNodes,
+      storyNodes: storyDisplayNodes,
+      materialNodes,
+      characters,
+      loreEntries,
+      growthSheets,
+      onOpenFile: handleFileSelectFromSearch,
+      onOpenCharacter: onOpenCharacterNode,
+      onOpenLore: onOpenLoreNode,
+      onOpenGrowth: onOpenGrowth ? handleOpenGrowthFromSearch : undefined,
+      closeSearch,
+    });
 
     const handlePanelKeyDown = useCallback(
       (e: React.KeyboardEvent) => {
@@ -311,14 +301,6 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
             <LoadingSpinner message="正在加载..." />
           ) : folderPath ? (
             <>
-              {showSearch && (
-                <SearchBar
-                  inputRef={searchInputRef}
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  onDismiss={closeSearch}
-                />
-              )}
               <div className={styles.workspaceSection}>
                 <WorkspaceHeader
                   workspaceLabel={workspaceLabel}
@@ -342,7 +324,19 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   onRefresh={onRefresh}
                   onContextMenu={(event) => emitObjectContextMenu(event, { kind: 'project-root' })}
                 />
-                {isProjectMode && workScope && (
+                {showSearch && (
+                  <SearchBar
+                    inputRef={searchInputRef}
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    onDismiss={closeSearch}
+                    onNavigate={searchResults.navigate}
+                    activeDescendant={
+                      searchResults.activeKey ? searchOptionId(searchResults.activeKey) : undefined
+                    }
+                  />
+                )}
+                {isProjectMode && workScope && !searching && (
                   <WorkSwitcher
                     current={workScope}
                     options={workScopeOptions}
@@ -351,52 +345,64 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                     onCreate={onCreateWork}
                   />
                 )}
-                <div className={styles.workspaceTree}>
-                  <section className={styles.objectSection} aria-label="正文">
-                    <SectionHeader
-                      title="正文"
-                      count={
-                        scopeToWork && workScope ? workChapterCounts[workScope.path] : undefined
-                      }
-                      singleClickOnly
-                      onToggle={() => toggleSection('story')}
-                      onContextMenu={(event) =>
-                        emitObjectContextMenu(event, { kind: 'story-root' })
-                      }
-                    />
-                    {!collapsedSections.story &&
-                      (scopedStoryNodes.length > 0 ? (
-                        <div className={styles.storyTree}>
-                          {scopedStoryNodes.map((node) => (
-                            <StoryTreeNode
-                              key={node.path}
-                              node={node}
-                              level={0}
-                              parentPath={
-                                node.storyKind === 'work'
-                                  ? storyStructure.worksParentPath
-                                  : storyParentPath
-                              }
-                              tree={storyTree}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className={styles.objectEmpty}>
-                          {scopeToWork && workScope?.kind === 'work'
-                            ? '这部作品还没有章节'
-                            : '还没有正文文件'}
-                        </div>
-                      ))}
-                  </section>
+                {searching ? (
+                  <SearchResults
+                    query={searchQuery}
+                    groups={searchResults.groups}
+                    activeKey={searchResults.activeKey}
+                    contentSearching={searchResults.contentSearching}
+                    contentTruncated={searchResults.contentTruncated}
+                    contentError={searchResults.contentError}
+                    onOpen={searchResults.openItem}
+                    onHover={searchResults.setActiveKey}
+                    onDismiss={closeSearch}
+                  />
+                ) : (
+                  <div className={styles.workspaceTree}>
+                    <section className={styles.objectSection} aria-label="正文">
+                      <SectionHeader
+                        title="正文"
+                        count={
+                          scopeToWork && workScope ? workChapterCounts[workScope.path] : undefined
+                        }
+                        singleClickOnly
+                        onToggle={() => toggleSection('story')}
+                        onContextMenu={(event) =>
+                          emitObjectContextMenu(event, { kind: 'story-root' })
+                        }
+                      />
+                      {!collapsedSections.story &&
+                        (scopedStoryNodes.length > 0 ? (
+                          <div className={styles.storyTree}>
+                            {scopedStoryNodes.map((node) => (
+                              <StoryTreeNode
+                                key={node.path}
+                                node={node}
+                                level={0}
+                                parentPath={
+                                  node.storyKind === 'work'
+                                    ? storyStructure.worksParentPath
+                                    : storyParentPath
+                                }
+                                tree={storyTree}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={styles.objectEmpty}>
+                            {scopeToWork && workScope?.kind === 'work'
+                              ? '这部作品还没有章节'
+                              : '还没有正文文件'}
+                          </div>
+                        ))}
+                    </section>
 
-                  {(showCharactersSection || showGrowthSection) && (
                     <CharacterSection
                       groups={groupedCharacters}
-                      characters={filteredCharacters}
-                      growthSheets={filteredGrowthSheets}
+                      characters={characters}
+                      growthSheets={growthSheets}
                       workPath={workScope?.path ?? folderPath}
-                      filtering={normalizedQuery.length > 0}
+                      filtering={false}
                       collapsed={collapsedSections.characters}
                       activeWorkspaceTab={activeWorkspaceTab}
                       generationStatus={characterGenerationStatus}
@@ -409,13 +415,11 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       onOpenOverview={onOpenCharacters}
                       onContextMenu={emitObjectContextMenu}
                     />
-                  )}
 
-                  {showLoreSection && (
                     <LoreSection
-                      entries={filteredLoreEntries}
+                      entries={loreEntries}
                       workPath={workScope?.path ?? folderPath}
-                      filtering={normalizedQuery.length > 0}
+                      filtering={false}
                       collapsed={collapsedSections.lore}
                       activeWorkspaceTab={activeWorkspaceTab}
                       onToggle={() => toggleSection('lore')}
@@ -426,47 +430,47 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       onCreate={onCreateLoreEntry}
                       onContextMenu={emitObjectContextMenu}
                     />
-                  )}
 
-                  <section className={styles.objectSection} aria-label="资料">
-                    <SectionHeader
-                      title="资料"
-                      icon={<AiOutlineFolderOpen />}
-                      count={materialFileCount}
-                      onToggle={() => toggleSection('materials')}
-                      onContextMenu={(event) =>
-                        emitObjectContextMenu(event, { kind: 'materials-root' })
-                      }
-                    />
-                    {!collapsedSections.materials &&
-                      (scopedMaterialNodes.length > 0 ? (
-                        <div className={styles.supportMaterialsTree}>
-                          <FileTree
-                            files={scopedMaterialNodes}
-                            fill={false}
-                            showFileSizes={showFileSizes}
-                            showExpandIcon={false}
-                            baseIndent={8}
-                            itemMetaMap={materialUsageMap}
-                            onFileSelect={handleFileSelectFromSearch}
-                            selectedFile={selectedFile}
-                            onContextMenu={onContextMenu}
-                            onBackgroundContextMenu={onBackgroundContextMenu}
-                            creatingType={creatingType}
-                            createTargetPath={createTargetPath}
-                            onInlineCreate={onInlineCreate}
-                            onCancelCreate={onCancelCreate}
-                            revealPath={revealPath}
-                            onRenameNode={onRenameNode}
-                          />
-                        </div>
-                      ) : (
-                        <div className={styles.objectEmpty}>
-                          导入的图片、文档和其他素材会出现在这里
-                        </div>
-                      ))}
-                  </section>
-                </div>
+                    <section className={styles.objectSection} aria-label="资料">
+                      <SectionHeader
+                        title="资料"
+                        icon={<AiOutlineFolderOpen />}
+                        count={materialFileCount}
+                        onToggle={() => toggleSection('materials')}
+                        onContextMenu={(event) =>
+                          emitObjectContextMenu(event, { kind: 'materials-root' })
+                        }
+                      />
+                      {!collapsedSections.materials &&
+                        (scopedMaterialNodes.length > 0 ? (
+                          <div className={styles.supportMaterialsTree}>
+                            <FileTree
+                              files={scopedMaterialNodes}
+                              fill={false}
+                              showFileSizes={showFileSizes}
+                              showExpandIcon={false}
+                              baseIndent={8}
+                              itemMetaMap={materialUsageMap}
+                              onFileSelect={handleFileSelectFromSearch}
+                              selectedFile={selectedFile}
+                              onContextMenu={onContextMenu}
+                              onBackgroundContextMenu={onBackgroundContextMenu}
+                              creatingType={creatingType}
+                              createTargetPath={createTargetPath}
+                              onInlineCreate={onInlineCreate}
+                              onCancelCreate={onCancelCreate}
+                              revealPath={revealPath}
+                              onRenameNode={onRenameNode}
+                            />
+                          </div>
+                        ) : (
+                          <div className={styles.objectEmpty}>
+                            导入的图片、文档和其他素材会出现在这里
+                          </div>
+                        ))}
+                    </section>
+                  </div>
+                )}
               </div>
             </>
           ) : (

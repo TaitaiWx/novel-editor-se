@@ -8,6 +8,7 @@ import {
   uninstallElectronMock,
   type ElectronMock,
 } from '../../hooks/electronMock';
+import { chooseOption } from '../../helpers/select';
 
 interface Row {
   id: number;
@@ -419,7 +420,7 @@ describe('LoreView', () => {
     );
 
     // 分类即时保存
-    fireEvent.change(within(detail).getByLabelText('设定分类'), { target: { value: 'faction' } });
+    chooseOption('设定分类', '势力', within(detail));
     await waitFor(() => expect(rows.find((row) => row.id === 4)?.category).toBe('faction'));
 
     fireEvent.click(within(detail).getByRole('tab', { name: '内容' }));

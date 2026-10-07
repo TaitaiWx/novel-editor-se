@@ -1,75 +1,105 @@
 /**
- * 3D 预演（摆拍）：像 Blender 一样先用木偶小人摆好站位、朝向、姿势，选景别与角度，截一张图作为首帧构图参考。
- * 不需要专业参数：拖动地面上的人物改站位，点选人物换姿势，景别默认跟镜头一致。
+ * 3D 预演（摆拍）：像片场走位一样，先用木偶小人摆好站位、朝向、姿势，加几件道具、选时段，
+ * 再定景别 / 角度 / 焦距 / 机位，截一张图作为首帧构图参考。
+ *
+ * 操作：拖人物 / 道具改站位，Shift + 拖动旋转；拖空白处转动机位；Q / E 旋转、Delete 移除、⌘/Ctrl + Z 撤销。
+ * 取景框、三分线、安全框、名字标签都是 DOM 叠加层，不进截图；截图按画幅比例、长边 1280。
  */
-import React, { useEffect, useRef, useState } from 'react';
-import { VscClose } from 'react-icons/vsc';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { VscClose, VscDiscard, VscScreenFull } from 'react-icons/vsc';
 import Tooltip from '../../Tooltip';
-import {
-  CAMERA_ANGLES,
-  POSE_PRESETS,
-  SHOT_CAMERA,
-  clampToStage,
-  defaultFigures,
-  type CameraAngle,
-  type PrevizFigure,
-} from './presets';
+import CameraPanel from './CameraPanel';
+import FigurePanel from './FigurePanel';
+import FrameOverlay from './FrameOverlay';
+import ScenePanel from './ScenePanel';
+import { captureSize, ratioOf } from './presets';
+import type { CreatePrevizStage, PrevizLabel, PrevizStageApi } from './types';
+import { usePrevizPointer } from './usePrevizPointer';
+import { usePrevizScene, type PrevizOverlays } from './usePrevizScene';
 import styles from './styles.module.scss';
 
-/** 舞台接口（three.js 实现在 stage.ts，测试可注入假实现） */
-export interface PrevizStageApi {
-  resize(width: number, height: number): void;
-  setCamera(shotSize: string, angle: CameraAngle): void;
-  setFigures(figures: readonly PrevizFigure[], selectedId: string | null): void;
-  pickGround(clientX: number, clientY: number): { x: number; z: number } | null;
-  pickFigure(clientX: number, clientY: number): string | null;
-  capture(): Promise<Uint8Array>;
-  dispose(): void;
-}
+export type { CreatePrevizStage, PrevizLabel, PrevizStageApi } from './types';
 
-export type CreatePrevizStage = (canvas: HTMLCanvasElement) => Promise<PrevizStageApi>;
-
+/**
+ * GPU 忙（例如同时开着别的 Electron 窗口）时 WebGL 上下文偶尔创建失败（three 读取着色器精度为 null），
+ * 稍等后重试几次再判定为不支持
+ */
+const STAGE_ATTEMPTS = 3;
 const defaultCreateStage: CreatePrevizStage = async (canvas) => {
   const { PrevizStage } = await import('./stage');
-  return new PrevizStage(canvas);
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < STAGE_ATTEMPTS; attempt += 1) {
+    try {
+      return new PrevizStage(canvas);
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 };
-
-function ratioOf(aspectRatio: string): number {
-  const [w, h] = aspectRatio.split(':').map(Number);
-  return w > 0 && h > 0 ? w / h : 16 / 9;
-}
 
 export interface PrevizDialogProps {
   shotLabel: string;
   shotSize: string;
+  /** 本镜头的人物（默认摆上舞台） */
   characters: readonly string[];
+  /** 本场全部人物（可再添加到舞台上），默认同 characters */
+  availableCharacters?: readonly string[];
   aspectRatio: string;
   onSave: (png: Uint8Array) => Promise<void>;
   onClose: () => void;
   createStage?: CreatePrevizStage;
 }
 
+const ROTATE_STEP = Math.PI / 12;
+
+const sameLabels = (a: readonly PrevizLabel[], b: readonly PrevizLabel[]) =>
+  a.length === b.length &&
+  a.every(
+    (label, index) =>
+      label.id === b[index].id &&
+      label.x === b[index].x &&
+      label.y === b[index].y &&
+      label.visible === b[index].visible
+  );
+
+const isTextInput = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  (target.tagName === 'TEXTAREA' ||
+    target.isContentEditable ||
+    (target.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'range'));
+
 const PrevizDialog: React.FC<PrevizDialogProps> = ({
   shotLabel,
-  shotSize: initialShotSize,
+  shotSize,
   characters,
+  availableCharacters,
   aspectRatio,
   onSave,
   onClose,
   createStage = defaultCreateStage,
 }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<PrevizStageApi | null>(null);
-  const dragRef = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [figures, setFigures] = useState<PrevizFigure[]>(() => defaultFigures(characters));
-  const [selectedId, setSelectedId] = useState<string | null>(figures[0]?.id ?? null);
-  const [shotSize, setShotSize] = useState(SHOT_CAMERA[initialShotSize] ? initialShotSize : '中景');
-  const [angle, setAngle] = useState<CameraAngle>('eye');
-  const selected = figures.find((figure) => figure.id === selectedId) ?? null;
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [labels, setLabels] = useState<PrevizLabel[]>([]);
+  const scene = usePrevizScene(characters, shotSize);
+  const pointer = usePrevizPointer(stageRef, scene);
+  const aspect = ratioOf(aspectRatio);
+
+  const measure = useCallback(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const next = { width: frame.clientWidth, height: frame.clientHeight };
+    setSize((prev) => (prev.width === next.width && prev.height === next.height ? prev : next));
+    stageRef.current?.resize(next.width, next.height);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -82,8 +112,8 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
           return;
         }
         stageRef.current = stage;
-        const frame = frameRef.current;
-        if (frame) stage.resize(frame.clientWidth, frame.clientHeight);
+        stage.onLabels((next) => setLabels((prev) => (sameLabels(prev, next) ? prev : next)));
+        measure();
         setReady(true);
       })
       .catch(() => setError('当前环境不支持 3D 预演（需要 WebGL）'));
@@ -92,36 +122,45 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
       stageRef.current?.dispose();
       stageRef.current = null;
     };
-  }, [createStage]);
+  }, [createStage, measure]);
+
+  // 打开后焦点放到弹窗上，Esc / Q / E / Delete / ⌘Z 立即可用
+  useEffect(() => {
+    dialogRef.current?.focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() =>
-      stageRef.current?.resize(frame.clientWidth, frame.clientHeight)
-    );
+    const observer = new ResizeObserver(measure);
     observer.observe(frame);
     return () => observer.disconnect();
-  }, []);
+  }, [measure]);
 
+  const { view, figures, props, selectedId, mood } = scene;
   useEffect(() => {
-    if (ready) stageRef.current?.setCamera(shotSize, angle);
-  }, [angle, ready, shotSize]);
+    if (ready) stageRef.current?.setFrame(aspect);
+  }, [aspect, ready]);
+  useEffect(() => {
+    if (ready) stageRef.current?.setCamera(view);
+  }, [ready, view]);
+  useEffect(() => {
+    if (ready) stageRef.current?.setMood(mood);
+  }, [mood, ready]);
   useEffect(() => {
     if (ready) stageRef.current?.setFigures(figures, selectedId);
   }, [figures, ready, selectedId]);
-
-  const updateSelected = (patch: Partial<PrevizFigure>) =>
-    setFigures((prev) =>
-      prev.map((figure) => (figure.id === selectedId ? { ...figure, ...patch } : figure))
-    );
+  useEffect(() => {
+    if (ready) stageRef.current?.setProps(props, selectedId);
+  }, [props, ready, selectedId]);
 
   const save = async () => {
     const stage = stageRef.current;
     if (!stage) return;
     setSaving(true);
+    setError('');
     try {
-      await onSave(await stage.capture());
+      await onSave(await stage.capture(captureSize(aspect)));
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -130,18 +169,50 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
     }
   };
 
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (isTextInput(event.target)) return;
+    const mod = event.metaKey || event.ctrlKey;
+    if (mod && event.key.toLowerCase() === 'z' && !event.shiftKey) {
+      event.preventDefault();
+      scene.undo();
+      return;
+    }
+    if (mod || event.altKey || !selectedId) return;
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      scene.removeItem(selectedId);
+    } else if (event.key === 'q' || event.key === 'Q') {
+      scene.rotateBy(selectedId, ROTATE_STEP);
+    } else if (event.key === 'e' || event.key === 'E') {
+      scene.rotateBy(selectedId, -ROTATE_STEP);
+    }
+  };
+
+  const toggleOverlay = (key: keyof PrevizOverlays) =>
+    scene.setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
+
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       className={styles.overlay}
       role="dialog"
+      aria-modal="true"
       aria-label={`3D 预演 · ${shotLabel}`}
       data-testid="previz-dialog"
+      data-stage={ready ? 'ready' : error ? 'error' : 'loading'}
+      onKeyDown={onKeyDown}
     >
       <div className={styles.dialog}>
         <header className={styles.head}>
           <h2 className={styles.title}>3D 预演 · {shotLabel}</h2>
           <span className={styles.hint}>
-            拖动人物改站位，点选人物换姿势；截图会作为首帧的构图参考
+            拖人物或道具改站位（Shift + 拖动旋转），拖空白处转动机位；截图会作为首帧的构图参考
           </span>
           <Tooltip content="关闭（不保存）">
             <button
@@ -155,136 +226,92 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
           </Tooltip>
         </header>
         <div className={styles.body}>
-          <div
-            ref={frameRef}
-            className={styles.frame}
-            style={{ aspectRatio: String(ratioOf(aspectRatio)) }}
-            onPointerDown={(event) => {
-              const stage = stageRef.current;
-              if (!stage) return;
-              const id = stage.pickFigure(event.clientX, event.clientY);
-              if (id) {
-                setSelectedId(id);
-                dragRef.current = id;
-                event.currentTarget.setPointerCapture?.(event.pointerId);
-              }
-            }}
-            onPointerMove={(event) => {
-              const id = dragRef.current;
-              const stage = stageRef.current;
-              if (!id || !stage) return;
-              const point = stage.pickGround(event.clientX, event.clientY);
-              if (!point) return;
-              setFigures((prev) =>
-                prev.map((figure) =>
-                  figure.id === id
-                    ? { ...figure, x: clampToStage(point.x), z: clampToStage(point.z) }
-                    : figure
-                )
-              );
-            }}
-            onPointerUp={() => {
-              dragRef.current = null;
-            }}
-          >
-            <canvas ref={canvasRef} className={styles.canvas} data-testid="previz-canvas" />
-            {!ready && <span className={styles.status}>{error || '正在准备 3D 舞台…'}</span>}
+          <div className={styles.viewportWrap}>
+            <div
+              ref={frameRef}
+              className={pointer.orbiting ? styles.viewportOrbiting : styles.viewport}
+              onPointerDown={pointer.onPointerDown}
+              onPointerMove={pointer.onPointerMove}
+              onPointerUp={pointer.onPointerUp}
+              onPointerCancel={pointer.onPointerCancel}
+            >
+              <canvas ref={canvasRef} className={styles.canvas} data-testid="previz-canvas" />
+              {ready && (
+                <FrameOverlay
+                  width={size.width}
+                  height={size.height}
+                  aspect={aspect}
+                  aspectLabel={aspectRatio}
+                  overlays={scene.overlays}
+                  labels={labels}
+                  figures={figures}
+                  selectedId={selectedId}
+                />
+              )}
+              {!ready && <span className={styles.status}>{error || '正在准备 3D 舞台…'}</span>}
+            </div>
+            <div className={styles.viewTools} role="toolbar" aria-label="视图">
+              <button
+                type="button"
+                aria-pressed={scene.overlays.thirds}
+                className={scene.overlays.thirds ? styles.toolActive : styles.tool}
+                onClick={() => toggleOverlay('thirds')}
+              >
+                三分线
+              </button>
+              <button
+                type="button"
+                aria-pressed={scene.overlays.safe}
+                className={scene.overlays.safe ? styles.toolActive : styles.tool}
+                onClick={() => toggleOverlay('safe')}
+              >
+                安全框
+              </button>
+              <span className={styles.toolGap} />
+              <Tooltip content="撤销上一步（⌘/Ctrl + Z）">
+                <button
+                  type="button"
+                  className={styles.tool}
+                  aria-label="撤销"
+                  disabled={!scene.canUndo}
+                  onClick={scene.undo}
+                >
+                  <VscDiscard />
+                </button>
+              </Tooltip>
+              <Tooltip content="回到正面、对准人物">
+                <button
+                  type="button"
+                  className={styles.tool}
+                  aria-label="重置视角"
+                  onClick={scene.camera.reset}
+                >
+                  <VscScreenFull />
+                </button>
+              </Tooltip>
+            </div>
           </div>
           <aside className={styles.side}>
-            <section className={styles.group} aria-label="镜头">
-              <h3>镜头</h3>
-              <label className={styles.field}>
-                <span>景别</span>
-                <select
-                  aria-label="预演景别"
-                  value={shotSize}
-                  onChange={(event) => setShotSize(event.target.value)}
-                >
-                  {Object.keys(SHOT_CAMERA).map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className={styles.segment} role="radiogroup" aria-label="镜头角度">
-                {CAMERA_ANGLES.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={angle === item.id}
-                    className={angle === item.id ? styles.segmentActive : undefined}
-                    onClick={() => setAngle(item.id)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </section>
-            <section className={styles.group} aria-label="人物">
-              <h3>人物</h3>
-              <div className={styles.figureList} role="listbox" aria-label="预演人物">
-                {figures.map((figure) => (
-                  <button
-                    key={figure.id}
-                    type="button"
-                    role="option"
-                    aria-selected={figure.id === selectedId}
-                    className={figure.id === selectedId ? styles.figureActive : styles.figure}
-                    onClick={() => setSelectedId(figure.id)}
-                  >
-                    <span className={styles.dot} style={{ background: figure.color }} />
-                    {figure.name}
-                  </button>
-                ))}
-              </div>
-              {selected && (
-                <>
-                  <div className={styles.poses} role="radiogroup" aria-label="姿势">
-                    {POSE_PRESETS.map((pose) => (
-                      <button
-                        key={pose.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected.pose === pose.id}
-                        className={selected.pose === pose.id ? styles.poseActive : styles.pose}
-                        onClick={() => updateSelected({ pose: pose.id })}
-                      >
-                        {pose.label}
-                      </button>
-                    ))}
-                  </div>
-                  <label className={styles.field}>
-                    <span>朝向</span>
-                    <input
-                      type="range"
-                      aria-label="人物朝向"
-                      min={-180}
-                      max={180}
-                      step={15}
-                      value={Math.round((selected.rotation * 180) / Math.PI)}
-                      onChange={(event) =>
-                        updateSelected({ rotation: (Number(event.target.value) * Math.PI) / 180 })
-                      }
-                    />
-                  </label>
-                </>
+            <div className={styles.sideScroll}>
+              <CameraPanel view={view} camera={scene.camera} />
+              <FigurePanel scene={scene} availableCharacters={availableCharacters ?? characters} />
+              <ScenePanel scene={scene} />
+            </div>
+            <footer className={styles.sideFoot}>
+              {error && ready && (
+                <p className={styles.error} role="alert">
+                  {error}
+                </p>
               )}
-            </section>
-            {error && ready && (
-              <p className={styles.error} role="alert">
-                {error}
-              </p>
-            )}
-            <button
-              type="button"
-              className={styles.primary}
-              disabled={!ready || saving}
-              onClick={() => void save()}
-            >
-              {saving ? '保存中…' : '截图作为构图'}
-            </button>
+              <button
+                type="button"
+                className={styles.primary}
+                disabled={!ready || saving}
+                onClick={() => void save()}
+              >
+                {saving ? '保存中…' : '截图作为构图'}
+              </button>
+            </footer>
           </aside>
         </div>
       </div>

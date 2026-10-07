@@ -213,6 +213,8 @@ contextBridge.exposeInMainWorld('electron', {
         'ai-complete',
         'ai-stream-start',
         'ai-stream-cancel',
+        // 文件面板全文搜索（main/handlers/workspace-search.ts）
+        'workspace-search-content',
         // 人物头像（保存到 <作品>/资料/人物头像/）
         'character-avatar-save',
         // 人物 / 设定图集（资料/图集/）与 AI 出图（main/handlers/entity-media.ts）

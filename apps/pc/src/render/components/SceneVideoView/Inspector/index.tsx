@@ -11,6 +11,8 @@ import {
   type ShotSize,
 } from '@novel-editor/video';
 import type { VideoTask } from '@/render/types/ai-api';
+import NumberInput from '../../NumberInput';
+import Select from '../../Select';
 import Tooltip from '../../Tooltip';
 import CharacterAvatar from '../../CharacterAvatar';
 import { MediaImage } from '../../EntityGallery/MediaTile';
@@ -164,23 +166,18 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
           )}
         </div>
         {addable.length > 0 && (
-          <select
-            className={styles.input}
+          <Select
+            block
+            size="lg"
             aria-label="添加人物"
+            placeholder="＋ 添加人物"
             value=""
-            onChange={(event) => {
-              const name = event.target.value;
+            options={addable.map((item) => ({ value: item.name, label: item.name }))}
+            onChange={(name) => {
               if (!name) return;
               onChange((prev) => ({ ...prev, characters: [...prev.characters, name] }));
             }}
-          >
-            <option value="">＋ 添加人物</option>
-            {addable.map((item) => (
-              <option key={item.name} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
+          />
         )}
       </div>
       <div className={styles.field}>
@@ -329,36 +326,27 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
       <div className={styles.row}>
         <label className={styles.field}>
           <span className={styles.label}>景别</span>
-          <select
-            className={styles.input}
+          <Select<ShotSize>
+            block
+            size="lg"
             aria-label={`${label} 景别`}
             value={shot.shotSize}
-            onChange={(event) => onUpdateShot({ shotSize: event.target.value as ShotSize })}
-          >
-            {SHOT_SIZES.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
+            options={SHOT_SIZES.map((size) => ({ value: size, label: size }))}
+            onChange={(shotSize) => onUpdateShot({ shotSize })}
+          />
         </label>
         <label className={styles.field}>
           <span className={styles.label}>时长（秒）</span>
-          <input
-            type="number"
-            className={styles.input}
+          <NumberInput
+            block
+            size="lg"
             aria-label={`${label} 时长（秒）`}
             min={SHOT_DURATION_MIN}
             max={SHOT_DURATION_MAX}
             step={1}
+            suffix="秒"
             value={shot.durationSec}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              if (!Number.isFinite(value)) return;
-              onUpdateShot({
-                durationSec: Math.min(SHOT_DURATION_MAX, Math.max(SHOT_DURATION_MIN, value)),
-              });
-            }}
+            onChange={(durationSec) => onUpdateShot({ durationSec })}
           />
         </label>
       </div>

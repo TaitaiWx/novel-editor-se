@@ -8,13 +8,18 @@
   background-color: #252526;
   border-bottom: 1px solid #333;
   flex-shrink: 0;
+  gap: 12px;
+  // 文件栏右侧的胶囊按钮在窄窗口下只显示图标（见各胶囊的 @container 规则）
+  container: editor-header / inline-size;
 }
 
 .fileInfo {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .fileName {
@@ -24,6 +29,9 @@
   display: flex;
   align-items: center;
   gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
 }
@@ -35,6 +43,7 @@
 }
 
 .languageBadge {
+  flex-shrink: 0;
   background-color: rgba(0, 122, 204, 0.12);
   color: #569cd6;
   padding: 1px 6px;
@@ -56,6 +65,7 @@
 }
 
 .autoSaveStatus {
+  flex-shrink: 0;
   color: #555;
   font-size: 11px;
   white-space: nowrap;
@@ -97,5 +107,12 @@
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+}
+
+@container editor-header (max-width: 560px) {
+  .autoSaveStatus,
+  .languageBadge {
+    display: none;
   }
 }

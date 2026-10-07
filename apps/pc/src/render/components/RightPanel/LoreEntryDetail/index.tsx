@@ -12,6 +12,7 @@ import { MediaImage } from '../../EntityGallery/MediaTile';
 import { LORE_CATEGORY_LABELS } from '../constants';
 import type { LoreDraft } from '../lore-data';
 import type { LoreCategory, LoreEntry } from '../types';
+import Select from '../../Select';
 import styles from './styles.module.scss';
 
 export type LoreDetailTab = 'content' | 'gallery' | 'related';
@@ -126,18 +127,16 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
           <div className={styles.metaRow}>
             <label className={styles.metaField}>
               <span>分类</span>
-              <select
+              <Select<LoreCategory>
                 className={styles.select}
                 aria-label="设定分类"
                 value={entry.category}
-                onChange={(event) => void save({ category: event.target.value as LoreCategory })}
-              >
-                {(Object.keys(LORE_CATEGORY_LABELS) as LoreCategory[]).map((item) => (
-                  <option key={item} value={item}>
-                    {LORE_CATEGORY_LABELS[item]}
-                  </option>
-                ))}
-              </select>
+                options={(Object.keys(LORE_CATEGORY_LABELS) as LoreCategory[]).map((item) => ({
+                  value: item,
+                  label: LORE_CATEGORY_LABELS[item],
+                }))}
+                onChange={(category) => void save({ category })}
+              />
             </label>
             <label className={styles.metaField}>
               <span>目录</span>

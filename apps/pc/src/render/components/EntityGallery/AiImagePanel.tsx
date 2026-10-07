@@ -6,6 +6,7 @@ import {
   type MediaKindOption,
 } from '@novel-editor/core/entity-media';
 import type { AIProviderInfo } from '@/render/types/ai-api';
+import Select from '../Select';
 import Tooltip from '../Tooltip';
 import styles from './styles.module.scss';
 
@@ -111,31 +112,21 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
         </div>
       )}
       <div className={styles.aiOptions}>
-        <select
+        <Select
           className={styles.select}
           aria-label="画风"
           value={style}
-          onChange={(event) => setStyle(event.target.value)}
-        >
-          {IMAGE_STYLES.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
+          options={IMAGE_STYLES.map((item) => ({ value: item, label: item }))}
+          onChange={setStyle}
+        />
         {providers.length > 1 && (
-          <select
+          <Select
             className={styles.select}
             aria-label="图片服务"
             value={providerId}
-            onChange={(event) => setProviderId(event.target.value)}
-          >
-            {providers.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+            options={providers.map((item) => ({ value: item.id, label: item.label }))}
+            onChange={setProviderId}
+          />
         )}
         <input
           className={styles.input}

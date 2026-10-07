@@ -7,6 +7,7 @@ import SceneVideoView from '@/render/components/SceneVideoView';
 import { setSceneVideoSeed } from '@/render/components/SceneVideoView/events';
 import type { VideoTask } from '@novel-editor/video';
 import { installElectronMock, uninstallElectronMock } from '../../hooks/electronMock';
+import { chooseOption } from '../../helpers/select';
 
 const WORK = '/w/novels/星河旅人';
 const CHAPTER_PATH = `${WORK}/第一卷-离乡/001-启程.md`;
@@ -267,9 +268,7 @@ describe('场景视频画布', () => {
     fireEvent.change(within(inspector).getByLabelText('镜头 1 画面描述'), {
       target: { value: '晨雾里的镇口老槐树' },
     });
-    fireEvent.change(within(inspector).getByLabelText('镜头 1 景别'), {
-      target: { value: '大远景' },
-    });
+    chooseOption('镜头 1 景别', '大远景', within(inspector));
     expect(node('镜头 1').textContent).toContain('晨雾里的镇口老槐树');
     fireEvent.click(within(inspector).getByLabelText('后移镜头 1'));
     expect(node('镜头 2').textContent).toContain('晨雾里的镇口老槐树');
@@ -406,7 +405,7 @@ describe('场景视频画布', () => {
     expect(node('镜头 1').textContent).toContain('v2 / 2');
     expect(calls(electron, 'read-file')).toHaveLength(0);
     expect(calls(electron, 'ai-complete')).toHaveLength(0);
-    expect((screen.getByLabelText('风格') as HTMLSelectElement).value).toBe('水墨');
+    expect(screen.getByRole('combobox', { name: '风格' }).textContent).toBe('水墨');
 
     // 已有成片：自动在本章章纲里记录一次（分镜表 + 成片路径），并记下已记录
     await waitFor(() =>

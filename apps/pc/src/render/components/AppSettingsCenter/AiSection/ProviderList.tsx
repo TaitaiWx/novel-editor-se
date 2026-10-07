@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { AIIpcResult, AIProviderInfo, AIProviderUpdate } from '../../../types/ai-api';
+import NumberInput from '../../NumberInput';
 import sharedStyles from '../styles.module.scss';
 import ApiKeyField from './ApiKeyField';
 import styles from './styles.module.scss';
@@ -134,14 +135,17 @@ const ProviderRow: React.FC<{
         {isVideo && (
           <label className={styles.fieldLabel}>
             每秒单价（{info.currency ?? 'CNY'}，用于费用预估，可不填）
-            <input
-              className={sharedStyles.input}
-              type="number"
-              min="0"
-              step="0.01"
-              value={draft.price}
-              onChange={(e) => setDraft({ ...draft, price: e.target.value })}
-              onBlur={() => void save()}
+            <NumberInput
+              block
+              size="lg"
+              allowEmpty
+              min={0}
+              step={0.01}
+              aria-label={`${info.label} 每秒单价`}
+              value={draft.price.trim() ? Number(draft.price) : null}
+              onChange={(value) => setDraft((prev) => ({ ...prev, price: String(value) }))}
+              onClear={() => setDraft((prev) => ({ ...prev, price: '' }))}
+              onCommit={(value) => void save({ price: value === null ? '' : String(value) })}
             />
           </label>
         )}

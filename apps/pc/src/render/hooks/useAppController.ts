@@ -218,7 +218,7 @@ export function useAppController() {
     ...chapterMaterials,
     ...tabs,
   });
-  const { workspaceTabLabels, editorCharacterHighlights, specialTabContent } =
+  const { workspaceTabLabels, editorCharacterHighlights, referenceFallback, specialTabContent } =
     useWorkspaceTabContent({
       ...workspaceState,
       ...tabsState,
@@ -280,6 +280,7 @@ export function useAppController() {
     assistantContext,
     workspaceTabLabels,
     editorCharacterHighlights,
+    referenceFallback,
     specialTabContent,
     handleAssistantApplyFix,
     handleAssistantPreviewDiff,

@@ -32,6 +32,9 @@ export const SEL = {
   projectNotes: '[role="dialog"] [aria-label="项目说明"]',
   /** 行内重命名输入框（双击名称 / F2） */
   renameInput: 'input[aria-label^="重命名"]',
+  /** 文件面板搜索框与它的分组结果列表（项目说明 / 正文 / 人物 / 设定 / 资料 / 内容） */
+  searchInput: 'input[aria-label="搜索作品内容"]',
+  searchResults: '[role="listbox"][aria-label="搜索结果"]',
 } as const;
 
 /** 等待主界面加载完成并打开了指定项目（以目录名判断） */
@@ -117,6 +120,29 @@ export async function openProjectMenu(page: Page): Promise<void> {
 export async function openProjectDocs(page: Page): Promise<void> {
   if (!(await page.exists(SEL.projectNotes))) await page.click(SEL.projectNotesTrigger);
   await page.waitForTarget(`${SEL.projectNotes} li`);
+}
+
+/**
+ * 打开文件面板搜索（头部「搜索文件」按钮）并输入关键词，等待结果列表出现。
+ * 搜索框已打开时先清空再输入
+ */
+export async function searchWorkspace(page: Page, query: string): Promise<void> {
+  if (!(await page.exists(SEL.searchInput))) {
+    await page.click(`${SEL.workspaceHeader} button[aria-label^="搜索文件"]`);
+    await page.waitForTarget(SEL.searchInput);
+  }
+  await page.evaluate((selector: string) => {
+    const input = document.querySelector<HTMLInputElement>(selector);
+    input?.focus();
+    input?.select();
+  }, SEL.searchInput);
+  await page.type(query);
+  await page.waitForTarget(SEL.searchResults);
+}
+
+/** 搜索结果中某个分组（按分组名，如「项目说明」「内容」）的选择器 */
+export function searchGroup(label: string): string {
+  return `${SEL.searchResults} section[aria-label="${label}"]`;
 }
 
 /** 项目菜单 →「刷新」（重新扫描作品目录） */

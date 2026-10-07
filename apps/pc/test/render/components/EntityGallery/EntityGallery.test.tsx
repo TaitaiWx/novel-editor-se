@@ -7,6 +7,7 @@ import EntityGallery from '@/render/components/EntityGallery';
 import { dataUrlToBytes } from '@/render/components/EntityGallery/mediaActions';
 import { clearAvatarCache } from '@/render/utils/characterAvatar';
 import { installElectronMock, uninstallElectronMock } from '../../hooks/electronMock';
+import { chooseOption } from '../../helpers/select';
 
 const PNG_URL = 'data:image/png;base64,iVBORw0KGgo=';
 
@@ -175,7 +176,7 @@ describe('EntityGallery（人物 / 设定图集）', () => {
     fireEvent.click(aiButton);
     const panel = await screen.findByRole('region', { name: 'AI 生成图片' });
     fireEvent.click(within(panel).getByRole('radio', { name: '三视图' }));
-    fireEvent.change(within(panel).getByLabelText('画风'), { target: { value: '水墨' } });
+    chooseOption('画风', '水墨', within(panel));
     fireEvent.change(within(panel).getByLabelText('补充一句（可不填）'), {
       target: { value: '雪夜' },
     });

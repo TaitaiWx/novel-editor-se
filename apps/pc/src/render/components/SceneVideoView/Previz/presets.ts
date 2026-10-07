@@ -1,173 +1,13 @@
 /**
- * 3D 预演（摆拍）的预设：人物姿势与机位。纯数据 + 纯函数，便于测试；渲染在 Previz/stage.ts。
+ * 3D 预演（摆拍）的预设与纯函数入口：人物站位；姿势在 poses.ts，机位在 camera.ts，道具与氛围在 scenery.ts。
+ * 渲染在 Previz/stage.ts（three.js，按需加载）。
  *
- * 只管构图：站位、朝向、姿势和镜头远近 / 角度，截图后作为生成首帧图的构图参考，不导出动作视频。
+ * 只管构图：站位、朝向、姿势和镜头远近 / 角度 / 焦距，截图后作为生成首帧图的构图参考，不导出动作视频。
  */
 
-/** 关节旋转（弧度，XYZ 欧拉角）；没写的关节保持站立姿势 */
-export type JointName =
-  | 'spine'
-  | 'head'
-  | 'leftUpperArm'
-  | 'leftForearm'
-  | 'rightUpperArm'
-  | 'rightForearm'
-  | 'leftThigh'
-  | 'leftShin'
-  | 'rightThigh'
-  | 'rightShin';
-
-export type JointRotation = readonly [number, number, number];
-
-export interface PosePreset {
-  id: string;
-  label: string;
-  joints: Partial<Record<JointName, JointRotation>>;
-  /** 身体整体下移（坐 / 倒地） */
-  drop?: number;
-  /** 身体整体前倾 / 倒地（绕 X 轴） */
-  tilt?: number;
-}
-
-const D = Math.PI / 180;
-
-export const POSE_PRESETS: readonly PosePreset[] = [
-  {
-    id: 'stand',
-    label: '站立',
-    joints: { leftUpperArm: [0, 0, 8 * D], rightUpperArm: [0, 0, -8 * D] },
-  },
-  {
-    id: 'walk',
-    label: '行走',
-    joints: {
-      leftUpperArm: [25 * D, 0, 6 * D],
-      rightUpperArm: [-25 * D, 0, -6 * D],
-      leftThigh: [-25 * D, 0, 0],
-      rightThigh: [25 * D, 0, 0],
-      rightShin: [20 * D, 0, 0],
-    },
-  },
-  {
-    id: 'run',
-    label: '奔跑',
-    tilt: 12 * D,
-    joints: {
-      leftUpperArm: [50 * D, 0, 8 * D],
-      leftForearm: [-70 * D, 0, 0],
-      rightUpperArm: [-50 * D, 0, -8 * D],
-      rightForearm: [-70 * D, 0, 0],
-      leftThigh: [-55 * D, 0, 0],
-      leftShin: [60 * D, 0, 0],
-      rightThigh: [35 * D, 0, 0],
-      rightShin: [70 * D, 0, 0],
-    },
-  },
-  {
-    id: 'sit',
-    label: '坐',
-    drop: 0.42,
-    joints: {
-      leftThigh: [-90 * D, 0, 0],
-      rightThigh: [-90 * D, 0, 0],
-      leftShin: [90 * D, 0, 0],
-      rightShin: [90 * D, 0, 0],
-      leftUpperArm: [-20 * D, 0, 8 * D],
-      rightUpperArm: [-20 * D, 0, -8 * D],
-    },
-  },
-  {
-    id: 'draw-sword',
-    label: '拔剑',
-    joints: {
-      rightUpperArm: [-150 * D, 0, -10 * D],
-      rightForearm: [-10 * D, 0, 0],
-      leftUpperArm: [-20 * D, 0, 20 * D],
-      leftThigh: [-15 * D, 0, 0],
-      rightThigh: [15 * D, 0, 0],
-    },
-  },
-  {
-    id: 'face-off',
-    label: '对峙',
-    joints: {
-      spine: [10 * D, 0, 0],
-      leftUpperArm: [-60 * D, 0, 20 * D],
-      leftForearm: [-40 * D, 0, 0],
-      rightUpperArm: [-60 * D, 0, -20 * D],
-      rightForearm: [-40 * D, 0, 0],
-      leftThigh: [-20 * D, 0, 10 * D],
-      rightThigh: [20 * D, 0, -10 * D],
-    },
-  },
-  {
-    id: 'embrace',
-    label: '拥抱',
-    joints: {
-      leftUpperArm: [-80 * D, 0, -30 * D],
-      leftForearm: [0, -60 * D, 0],
-      rightUpperArm: [-80 * D, 0, 30 * D],
-      rightForearm: [0, 60 * D, 0],
-    },
-  },
-  {
-    id: 'fallen',
-    label: '倒地',
-    drop: 0.82,
-    tilt: -88 * D,
-    joints: {
-      leftUpperArm: [0, 0, 70 * D],
-      rightUpperArm: [0, 0, -70 * D],
-      leftThigh: [0, 0, 10 * D],
-      rightThigh: [0, 0, -10 * D],
-    },
-  },
-];
-
-export function poseById(id: string): PosePreset {
-  return POSE_PRESETS.find((pose) => pose.id === id) ?? POSE_PRESETS[0];
-}
-
-/** 机位：景别决定镜头距离与高度；角度决定俯仰 */
-export interface CameraPreset {
-  distance: number;
-  height: number;
-  fov: number;
-}
-
-export const SHOT_CAMERA: Record<string, CameraPreset> = {
-  大远景: { distance: 16, height: 6, fov: 50 },
-  远景: { distance: 11, height: 3.2, fov: 45 },
-  全景: { distance: 6.5, height: 1.6, fov: 40 },
-  中景: { distance: 4, height: 1.45, fov: 38 },
-  近景: { distance: 2.4, height: 1.55, fov: 34 },
-  特写: { distance: 1.3, height: 1.62, fov: 30 },
-  大特写: { distance: 0.8, height: 1.65, fov: 28 },
-};
-
-export type CameraAngle = 'eye' | 'high' | 'low';
-
-export const CAMERA_ANGLES: ReadonlyArray<{ id: CameraAngle; label: string }> = [
-  { id: 'eye', label: '平视' },
-  { id: 'high', label: '俯视' },
-  { id: 'low', label: '仰视' },
-];
-
-/** 由景别 + 角度得到相机位置与注视点（人物在原点附近，相机在 +Z 方向） */
-export function cameraPlacement(
-  shotSize: string,
-  angle: CameraAngle
-): { position: [number, number, number]; target: [number, number, number]; fov: number } {
-  const preset = SHOT_CAMERA[shotSize] ?? SHOT_CAMERA['中景'];
-  const targetY = Math.min(1.6, Math.max(0.9, preset.height));
-  const lift =
-    angle === 'high' ? preset.distance * 0.55 : angle === 'low' ? -preset.height * 0.75 : 0;
-  return {
-    position: [0, Math.max(0.15, preset.height + lift), preset.distance],
-    target: [0, targetY, 0],
-    fov: preset.fov,
-  };
-}
+export * from './poses';
+export * from './camera';
+export * from './scenery';
 
 export interface PrevizFigure {
   id: string;
@@ -177,10 +17,16 @@ export interface PrevizFigure {
   /** 朝向（弧度，0 = 面向镜头） */
   rotation: number;
   pose: string;
+  /** 人物标识色（木偶会带一点这个颜色，名字标签用它做色点） */
   color: string;
+  /** 头部左右转（度，正 = 向人物左侧），叠加在姿势之上 */
+  headTurn?: number;
+  /** 抬右手（度，0–170），叠加在姿势之上 */
+  armRaise?: number;
 }
 
-const FIGURE_COLORS = ['#c9a27a', '#8fb3d9', '#a9c79a', '#d4a5c0', '#c7c08a', '#9fb0c9'];
+/** 柔和的人物标识色 */
+export const FIGURE_COLORS = ['#c9a27a', '#8fb3d9', '#a9c79a', '#d4a5c0', '#c7c08a', '#9fb0c9'];
 
 /** 默认站位：人物沿 X 轴一字排开、面向镜头，间距 0.9 米 */
 export function defaultFigures(names: readonly string[]): PrevizFigure[] {
@@ -198,9 +44,64 @@ export function defaultFigures(names: readonly string[]): PrevizFigure[] {
   }));
 }
 
-/** 地面范围（米）：拖动人物时限制在这个范围内 */
+/** 新人物的 id：f1、f2…，只增不减 */
+export function nextFigureId(figures: readonly { id: string }[]): string {
+  const max = figures.reduce((acc, item) => {
+    const match = /^f(\d+)$/.exec(item.id);
+    return match ? Math.max(acc, Number(match[1])) : acc;
+  }, 0);
+  return `f${max + 1}`;
+}
+
+/** 添加人物：放在现有人物右侧 0.9 米处（超出舞台则回到左侧），颜色取下一个没用过的 */
+export function createFigure(name: string, existing: readonly PrevizFigure[]): PrevizFigure {
+  const used = new Set(existing.map((figure) => figure.color));
+  const color =
+    FIGURE_COLORS.find((item) => !used.has(item)) ??
+    FIGURE_COLORS[existing.length % FIGURE_COLORS.length];
+  const right = existing.length ? Math.max(...existing.map((figure) => figure.x)) + 0.9 : 0;
+  const left = existing.length ? Math.min(...existing.map((figure) => figure.x)) - 0.9 : 0;
+  const x = right <= STAGE_LIMIT ? right : left;
+  return {
+    id: nextFigureId(existing),
+    name,
+    x: clampToStage(x),
+    z: 0,
+    rotation: 0,
+    pose: 'stand',
+    color,
+  };
+}
+
+/** 地面范围（米）：拖动人物 / 道具时限制在这个范围内 */
 export const STAGE_LIMIT = 8;
 
 export function clampToStage(value: number): number {
   return Math.max(-STAGE_LIMIT, Math.min(STAGE_LIMIT, Math.round(value * 100) / 100));
+}
+
+/** 人物站位的中心（「重置视角」时相机对准这里） */
+export function figuresCenter(figures: readonly { x: number; z: number }[]): {
+  x: number;
+  z: number;
+} {
+  if (!figures.length) return { x: 0, z: 0 };
+  const sum = figures.reduce((acc, item) => ({ x: acc.x + item.x, z: acc.z + item.z }), {
+    x: 0,
+    z: 0,
+  });
+  const round = (value: number) => Math.round(value * 100) / 100 || 0;
+  return { x: round(sum.x / figures.length), z: round(sum.z / figures.length) };
+}
+
+/** 弧度 ↔ 度（滑块用整数度） */
+export const toDegrees = (radians: number) => Math.round((radians * 180) / Math.PI);
+export const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+
+/** 朝向规范到 [-180, 180] 度后转回弧度（旋转按钮连续加减时不越界） */
+export function normalizeRotation(radians: number): number {
+  let degrees = toDegrees(radians) % 360;
+  if (degrees > 180) degrees -= 360;
+  if (degrees < -180) degrees += 360;
+  return toRadians(degrees);
 }

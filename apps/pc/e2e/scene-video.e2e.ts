@@ -16,6 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { captureForReview, ensureSidebarOpen, openChapter, setupAppSuite } from './support/suite';
 import { createTinyMp4 } from './support/mp4-fixture';
+import { comboboxSelector, selectedOptionText } from './support/select';
 
 const suite = setupAppSuite({ fixture: { prefix: 'novel-editor-e2e-scene-video-' } });
 
@@ -190,7 +191,8 @@ describe('场景视频', () => {
       within: '[data-testid="scene-video-view"]',
     });
     // 视频服务已配置（工具栏出现下拉框）
-    await page.waitForTarget('select[aria-label="视频服务"]');
+    await page.waitForTarget(comboboxSelector('视频服务'));
+    expect(await selectedOptionText(page, '视频服务')).toBe('MiniMax 海螺视频');
     // 画布：自动用 AI（Grok mock）拆分镜，不需要点任何按钮
     const SHOT_NODES = '[data-testid="scene-canvas"] [role="group"][aria-label^="镜头 "]';
     await page.waitFor((selector: string) => document.querySelectorAll(selector).length >= 3, {
@@ -271,6 +273,12 @@ describe('场景视频', () => {
     const submit = requests.find((item) => item.path === '/v1/video_generation');
     expect(submit?.auth).toBe(`Bearer ${API_KEY}`);
     expect(String(submit?.body.prompt)).toContain('青石镇镇口的老槐树');
+    // 出场人物的三视图 / 主要形象图作为参考图一起提交（MiniMax subject_reference）
+    const subject = submit?.body.subject_reference as Array<{ image: string[] }> | undefined;
+    expect(subject?.[0]?.image.length).toBeGreaterThan(0);
+    expect(subject?.[0]?.image.every((url) => url.startsWith('data:image/webp;base64,'))).toBe(
+      true
+    );
     expect(requests.filter((item) => item.path === '/v1/video_generation')).toHaveLength(1);
 
     // 结果都在资料里：成片 + 提示词记录 + 自动保存的 分镜.json / 分镜.md（不需要手动导出）
@@ -325,10 +333,18 @@ describe('场景视频', () => {
       await ensureSidebarOpen(page);
     }
   }, 120_000);
-  it('人物节点提示缺三视图；成片在编辑器旁边打开；3D 预演截图保存为首帧构图', async () => {
+  it('人物节点显示三视图；成片在编辑器旁边打开；3D 预演截图保存为首帧构图', async () => {
     const { page, fixture } = suite;
-    // 示例人物还没有三视图：画布人物节点给出提示（生成视频时三视图会自动作为参考图）
-    await page.waitForTarget({ text: '缺三视图', within: '[data-testid="scene-canvas"]' });
+    // 示例人物带三视图：画布人物节点直接显示（生成视频时自动作为参考图）
+    await page.waitFor(
+      () =>
+        Array.from(
+          document.querySelectorAll<HTMLImageElement>(
+            '[data-testid="scene-canvas"] [data-testid="character-turnaround"] img'
+          )
+        ).some((img) => img.naturalWidth > 0),
+      { timeout: 10_000, message: '人物节点显示三视图' }
+    );
 
     // 检查器「在旁边看」：成片在编辑器右侧的参考窗格里播放，可缩成小卡片、关闭
     await page.click('[role="group"][aria-label="镜头 1"] p');
@@ -352,18 +368,17 @@ describe('场景视频', () => {
     await page.waitForTarget('[data-testid="keyframe-section"]');
     await page.click({ text: '3D 预演', within: '[data-testid="keyframe-section"]', exact: true });
     await page.waitForTarget('[data-testid="previz-dialog"]');
-    const ready = await page.waitFor<'canvas' | 'unsupported'>(
+    // 等舞台真正就绪（three.js 动态加载 + WebGL 上下文），没有 WebGL 的环境只验证提示
+    const ready = await page.waitFor<'ready' | 'error'>(
       () => {
-        const dialog = document.querySelector('[data-testid="previz-dialog"]');
-        if (dialog?.textContent?.includes('当前环境不支持 3D 预演')) return 'unsupported';
-        const canvas = dialog?.querySelector(
-          '[data-testid="previz-canvas"]'
-        ) as HTMLCanvasElement | null;
-        return canvas && canvas.width > 0 ? 'canvas' : null;
+        const stage = document
+          .querySelector('[data-testid="previz-dialog"]')
+          ?.getAttribute('data-stage');
+        return stage === 'ready' || stage === 'error' ? stage : null;
       },
-      { timeout: 15_000, message: '3D 预演画布就绪' }
+      { timeout: 20_000, message: '3D 预演舞台就绪' }
     );
-    if (ready === 'unsupported') {
+    if (ready === 'error') {
       // 没有 WebGL 的环境（部分 CI）：给出提示即可
       await page.click('[aria-label="关闭预演"]');
       await page.waitForGone('[data-testid="previz-dialog"]');

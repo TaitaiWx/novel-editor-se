@@ -8,6 +8,7 @@ import ReferencePane, {
   clampPaneWidth,
   mergeReferenceItems,
 } from '@/render/components/ReferencePane';
+import ReferenceButton from '@/render/components/ReferenceButton';
 import {
   referenceItemFor,
   requestOpenReference,
@@ -78,6 +79,41 @@ describe('ReferencePane 组件', () => {
     act(() => {
       requestOpenReference({ items, index });
     });
+
+  it('文件栏「参考」按钮：没有内容时放默认人物参考；再按一次收起；按钮显示按下状态', async () => {
+    render(
+      <>
+        <ReferenceButton fallback={[A, B]} />
+        <ReferencePane />
+      </>
+    );
+    const button = screen.getByRole('button', { name: '参考' });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(button);
+    const pane = screen.getByTestId('reference-pane');
+    expect(within(pane).getAllByText('地图').length).toBeGreaterThan(0);
+    expect(within(pane).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      '地图',
+      '人物',
+    ]);
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(button);
+    expect(screen.queryByTestId('reference-pane')).toBeNull();
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('没有任何参考时打开显示使用说明', () => {
+    render(
+      <>
+        <ReferenceButton />
+        <ReferencePane />
+      </>
+    );
+    fireEvent.click(screen.getByRole('button', { name: '参考' }));
+    expect(screen.getByTestId('reference-empty').textContent).toContain('在编辑器旁边打开');
+    fireEvent.click(screen.getByRole('button', { name: '关闭参考' }));
+    expect(screen.queryByTestId('reference-pane')).toBeNull();
+  });
 
   it('没有打开参考时不渲染；收到打开事件后停靠显示图片', async () => {
     const { container } = render(<ReferencePane />);

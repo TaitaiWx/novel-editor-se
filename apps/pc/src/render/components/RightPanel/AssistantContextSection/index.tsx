@@ -10,6 +10,7 @@ import {
   formatAssistantGenerationProgress,
   type AssistantArtifactGenerationStatus,
 } from '@/render/utils/assistantGeneration';
+import Select from '../../Select';
 import styles from './styles.module.scss';
 
 export type AssistantContextKind = 'characters' | 'lore' | 'materials';
@@ -202,19 +203,17 @@ export const AssistantContextSection: React.FC<AssistantContextSectionProps> = (
             )}
             {isChapter && onAddMaterial && addableMaterials.length > 0 && (
               <div className={styles.addRow}>
-                <select
+                <Select
                   className={styles.select}
                   aria-label="选择要关联到当前章的资料"
+                  placeholder="选择一份资料关联到当前章"
                   value={pendingMaterialPath}
-                  onChange={(event) => setPendingMaterialPath(event.target.value)}
-                >
-                  <option value="">选择一份资料关联到当前章</option>
-                  {addableMaterials.map((item) => (
-                    <option key={item.path} value={item.path}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
+                  options={addableMaterials.map((item) => ({
+                    value: item.path,
+                    label: item.name,
+                  }))}
+                  onChange={setPendingMaterialPath}
+                />
                 <button
                   type="button"
                   className={styles.primaryButton}

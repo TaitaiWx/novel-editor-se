@@ -35,5 +35,6 @@ export { registerAIProviderHandlers } from './ai-providers';
 export { registerVideoHandlers } from './video';
 export { registerCharacterAvatarHandlers } from './character-avatar';
 export { registerEntityMediaHandlers } from './entity-media';
+export { registerWorkspaceSearchHandlers } from './workspace-search';
 
 export type { FileNode } from './file-system';

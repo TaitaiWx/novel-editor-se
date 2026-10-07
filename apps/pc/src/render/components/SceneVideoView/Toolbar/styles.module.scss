@@ -62,11 +62,7 @@
 }
 
 .select {
-  @include ui.input;
-  width: auto;
-  height: 30px;
-  padding: 0 8px;
-  font-size: 12px;
+  max-width: 180px;
 }
 
 .toggle {

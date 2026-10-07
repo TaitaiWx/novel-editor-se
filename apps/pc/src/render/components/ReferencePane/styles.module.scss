@@ -202,3 +202,21 @@ $muted: var(--ui-fg-muted);
   font-size: 11.5px;
   color: rgba(255, 255, 255, 0.8);
 }
+
+.empty {
+  flex: 1;
+  padding: 16px;
+  color: $muted;
+  font-size: 13px;
+  line-height: 1.7;
+
+  p {
+    margin: 0 0 8px;
+    color: var(--ui-fg-primary);
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+  }
+}

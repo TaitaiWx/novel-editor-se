@@ -1,6 +1,7 @@
 import React from 'react';
 import { AiOutlineSetting } from 'react-icons/ai';
 import { type SettingsDraft, THOUSAND_CHAR_MARKER_STEP_OPTIONS } from '../../../utils/appSettings';
+import Select from '../../Select';
 import type { SystemProfileInfo } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
 import sharedStyles from '../styles.module.scss';
@@ -74,17 +75,17 @@ const GeneralSection: React.FC<GeneralSectionProps> = ({ settings, setGeneral, s
             控制正文里每隔多少字显示一个进度标记。推荐 1000，长章节可调到 2000。
           </div>
         </div>
-        <select
-          className={sharedStyles.select}
-          value={settings.general.thousandCharMarkerStep}
-          onChange={(e) => setGeneral('thousandCharMarkerStep', Number(e.target.value))}
-        >
-          {THOUSAND_CHAR_MARKER_STEP_OPTIONS.map((value) => (
-            <option key={value} value={value}>
-              每 {value} 字显示一个标记
-            </option>
-          ))}
-        </select>
+        <Select
+          block
+          size="lg"
+          aria-label="千字进度标记阈值"
+          value={String(settings.general.thousandCharMarkerStep)}
+          options={THOUSAND_CHAR_MARKER_STEP_OPTIONS.map((value) => ({
+            value: String(value),
+            label: `每 ${value} 字显示一个标记`,
+          }))}
+          onChange={(value) => setGeneral('thousandCharMarkerStep', Number(value))}
+        />
       </div>
 
       <div className={sharedStyles.formRow}>

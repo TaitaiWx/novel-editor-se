@@ -3,11 +3,14 @@ import styles from '../../styles.module.scss';
 import type { Character, CharacterCategory } from '../../types';
 import { CHARACTER_CATEGORY_LABELS, inferCharacterCategoryFromRole } from '../../utils';
 import { CharacterCard } from '../../CharacterCard';
-import type { CharacterCategoryFilter } from '../helpers';
+import Select from '../../../Select';
+import { CATEGORY_OPTIONS, type CharacterCategoryFilter } from '../helpers';
 import type { CharacterListEditor } from '../useCharacterListEditor';
 
 interface CharacterListPanelProps {
   characters: Character[];
+  /** 作品目录：形象图是相对它的路径 */
+  workPath?: string | null;
   linksCount: number;
   aiGenerating: boolean;
   aiStatus: string;
@@ -20,6 +23,7 @@ interface CharacterListPanelProps {
  * 人物列表面板：总览、筛选、批量分类、新增表单与按分类分组的人物卡片。
  */
 export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
+  workPath = null,
   characters,
   linksCount,
   aiGenerating,
@@ -185,14 +189,14 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
           />
           <label className={styles.categoryField}>
             <span className={styles.highlightFieldLabel}>人物分类</span>
-            <select
+            <Select<CharacterCategory>
+              block
+              size="lg"
+              aria-label="人物分类"
               value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value as CharacterCategory)}
-              className={styles.formInput}
-            >
-              <option value="major">主要角色</option>
-              <option value="secondary">次要角色</option>
-            </select>
+              options={CATEGORY_OPTIONS}
+              onChange={setNewCategory}
+            />
           </label>
           <textarea
             placeholder="角色描述、设定..."
@@ -253,6 +257,7 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
                 <CharacterCard
                   key={character.id}
                   character={character}
+                  workPath={workPath}
                   index={index}
                   dragIndex={dragIndex}
                   dropIndex={dropIndex}

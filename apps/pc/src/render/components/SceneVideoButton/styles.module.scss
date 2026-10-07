@@ -45,3 +45,14 @@ $tone: #569cd6;
   flex-shrink: 0;
   font-size: 14px;
 }
+
+// 文件栏变窄时只显示图标（文字说明在 Tooltip 里）
+@container editor-header (max-width: 760px) {
+  .label {
+    display: none;
+  }
+
+  .pill {
+    padding: 0 7px;
+  }
+}

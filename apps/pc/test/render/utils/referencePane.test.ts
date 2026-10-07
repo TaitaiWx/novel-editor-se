@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   REFERENCE_OPEN_EVENT,
+  characterReferenceItems,
   isReferenceMedia,
   joinWorkPath,
   referenceItemFor,
@@ -65,5 +66,37 @@ describe('requestOpenReference', () => {
     expect(listener).toHaveBeenCalledTimes(1);
     const detail = (listener.mock.calls[0][0] as CustomEvent<OpenReferenceDetail>).detail;
     expect(detail).toEqual({ items: [item], index: 0 });
+  });
+});
+
+describe('characterReferenceItems（「参考」按钮的默认内容）', () => {
+  it('每个人物先三视图再形象图，转成作品内的绝对路径；跳过 data URL、网址与非图片', () => {
+    expect(
+      characterReferenceItems('/w/星河旅人', [
+        {
+          name: '林舟',
+          avatar: '资料/图集/人物/林舟/形象图.webp',
+          turnaround: '资料/图集/人物/林舟/三视图.webp',
+        },
+        { name: '苏晴', avatar: 'data:image/png;base64,AAAA' },
+        { name: '白鸦', avatar: 'https://example.com/a.png' },
+        { name: '秦伯', avatar: '资料/图集/人物/秦伯/说明.txt' },
+      ])
+    ).toEqual([
+      {
+        path: '/w/星河旅人/资料/图集/人物/林舟/三视图.webp',
+        title: '林舟 · 三视图',
+        kind: 'image',
+      },
+      {
+        path: '/w/星河旅人/资料/图集/人物/林舟/形象图.webp',
+        title: '林舟 · 形象图',
+        kind: 'image',
+      },
+    ]);
+  });
+
+  it('没有作品目录时为空', () => {
+    expect(characterReferenceItems(null, [{ name: '林舟', avatar: 'a.png' }])).toEqual([]);
   });
 });

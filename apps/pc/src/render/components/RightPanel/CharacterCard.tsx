@@ -1,10 +1,13 @@
 import React, { useMemo } from 'react';
+import CharacterAvatar from '../CharacterAvatar';
 import type { Character } from './types';
 import { CHARACTER_CATEGORY_LABELS, getRoleColor } from './utils';
 import styles from './styles.module.scss';
 
 export const CharacterCard: React.FC<{
   character: Character;
+  /** 作品目录：形象图是相对它的路径，经 read-file-binary 读取（不能直接放进 img src） */
+  workPath?: string | null;
   index: number;
   dragIndex: number | null;
   dropIndex: number | null;
@@ -18,6 +21,7 @@ export const CharacterCard: React.FC<{
 }> = React.memo(
   ({
     character: c,
+    workPath = null,
     index: i,
     dragIndex,
     dropIndex,
@@ -52,7 +56,13 @@ export const CharacterCard: React.FC<{
         >
           <div className={styles.cardBody}>
             {c.avatar && (
-              <img src={c.avatar} alt={c.name} className={styles.cardAvatar} draggable={false} />
+              <CharacterAvatar
+                name={c.name}
+                avatar={c.avatar}
+                workPath={workPath}
+                size={48}
+                className={styles.cardAvatar}
+              />
             )}
             <div className={styles.cardInfo}>
               <div className={styles.cardHeader}>

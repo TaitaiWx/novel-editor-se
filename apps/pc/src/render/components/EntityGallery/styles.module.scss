@@ -49,7 +49,7 @@ $hint: #d7ba7d;
 }
 
 .select {
-  @include control;
+  flex-shrink: 0;
 }
 
 .input {
