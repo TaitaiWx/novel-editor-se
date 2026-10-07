@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { storyboardToMarkdown } from '@novel-editor/video';
+import { SCENE_STORYBOARD_JSON, storyboardToMarkdown } from '@novel-editor/video';
+import { notifyWorkspaceFilesChanged } from '@/render/utils/workspaceFiles';
 import { getSceneVideoSeed } from './events';
 import {
   detectCharacters,
@@ -31,14 +32,17 @@ export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
 /**
  * 场景视频工作区的状态：打开时读取 分镜.json（没有则用种子 / 章节正文新建），
- * 作者修改后防抖写回；目录内的成片文件列表随任务完成刷新。
- * 只打开不修改时不写任何文件。
+ * 作者修改后防抖写回 分镜.json，并同时重写可读的 分镜.md（不需要手动「导出」）；
+ * 目录内的成片文件列表随任务完成刷新。只打开不修改时不写任何文件。
+ * 写入后目录里出现新文件时通知文件面板静默刷新，资料里随即可见。
  */
 export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
   const { tabPath, workPath, chapterPath, scene } = options;
   const chapter = chapterNameFromPath(chapterPath);
   const [state, setStateRaw] = useState<SceneVideoState | null>(null);
   const [files, setFiles] = useState<string[]>([]);
+  /** 场景目录的绝对路径（主进程按作品目录解析；在资料中定位用） */
+  const [dir, setDir] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveError, setSaveError] = useState('');
@@ -55,8 +59,13 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
     const ipc = window.electron?.ipcRenderer;
     if (!ipc || !workPath) return;
     const result = await ipc.invoke('video-scene-load', { workPath, chapter, scene });
-    if (result.ok) setFiles(result.data.files);
+    if (result.ok) {
+      setFiles(result.data.files);
+      setDir(result.data.dir);
+    }
   }, [chapter, scene, workPath]);
+  const refreshFilesRef = useRef<(() => Promise<void>) | null>(null);
+  refreshFilesRef.current = refreshFiles;
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +81,10 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
           .invoke('video-scene-load', { workPath, chapter, scene })
           .catch(() => null);
         if (result?.ok) {
-          if (!cancelled) setFiles(result.data.files);
+          if (!cancelled) {
+            setFiles(result.data.files);
+            setDir(result.data.dir);
+          }
           loaded = parseSceneVideoState(result.data.state);
         }
       }
@@ -111,36 +123,41 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
     };
   }, [chapter, chapterPath, scene, tabPath, workPath]);
 
-  const persist = useCallback(
-    async (markdown?: string) => {
-      const ipc = window.electron?.ipcRenderer;
-      const current = stateRef.current;
-      if (!ipc || !workPath || !current) return null;
-      setSaveStatus('saving');
-      const result = await ipc
-        .invoke('video-scene-save', {
-          workPath,
-          chapter: current.chapter,
-          scene: current.scene,
-          state: current,
-          ...(markdown !== undefined ? { markdown } : {}),
-        })
-        .catch((error: unknown) => ({
-          ok: false as const,
-          error: { message: error instanceof Error ? error.message : String(error) },
-        }));
-      if (result.ok) {
-        dirtyRef.current = false;
-        setSaveStatus('saved');
-        setSaveError('');
-        return result.data;
+  const filesRef = useRef<string[]>([]);
+  filesRef.current = files;
+
+  const persist = useCallback(async () => {
+    const ipc = window.electron?.ipcRenderer;
+    const current = stateRef.current;
+    if (!ipc || !workPath || !current) return null;
+    setSaveStatus('saving');
+    const result = await ipc
+      .invoke('video-scene-save', {
+        workPath,
+        chapter: current.chapter,
+        scene: current.scene,
+        state: current,
+        markdown: storyboardToMarkdown(storyboardForExport(current)),
+      })
+      .catch((error: unknown) => ({
+        ok: false as const,
+        error: { message: error instanceof Error ? error.message : String(error) },
+      }));
+    if (result.ok) {
+      dirtyRef.current = false;
+      setSaveStatus('saved');
+      setSaveError('');
+      // 第一次保存会新建场景目录与分镜表：刷新文件列表，并让资料面板显示出来
+      if (!filesRef.current.includes(SCENE_STORYBOARD_JSON)) {
+        void refreshFilesRef.current?.();
+        notifyWorkspaceFilesChanged();
       }
-      setSaveStatus('error');
-      setSaveError(result.error.message);
-      return null;
-    },
-    [workPath]
-  );
+      return result.data;
+    }
+    setSaveStatus('error');
+    setSaveError(result.error.message);
+    return null;
+  }, [workPath]);
 
   /** 修改状态（标记为未保存并防抖写回） */
   const updateState = useCallback(
@@ -173,19 +190,6 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
     [persist]
   );
 
-  /** 导出 Markdown 分镜表（同时保存 分镜.json），返回 分镜.md 的绝对路径 */
-  const exportMarkdown = useCallback(async () => {
-    const current = stateRef.current;
-    if (!current) return null;
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    const saved = await persist(storyboardToMarkdown(storyboardForExport(current)));
-    if (saved) void refreshFiles();
-    return saved?.markdownPath ?? null;
-  }, [persist, refreshFiles]);
-
   const applyPendingSeed = useCallback(() => {
     if (pendingSeed === null) return;
     const text = pendingSeed;
@@ -197,13 +201,13 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
     chapter,
     state,
     files,
+    dir,
     loading,
     saveStatus,
     saveError,
     pendingSeed,
     updateState,
     refreshFiles,
-    exportMarkdown,
     applyPendingSeed,
     dismissPendingSeed: () => setPendingSeed(null),
   };

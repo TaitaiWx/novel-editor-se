@@ -46,3 +46,25 @@ export function getSceneVideoSeed(tabPath: string): SceneVideoSeed | null {
 export function clearSceneVideoSeed(tabPath: string): void {
   seeds.delete(tabPath);
 }
+
+// ─── 从资料打开：单击 资料/视频/<章>/<场景>/分镜.json 直接打开这一场的画布 ─────────
+
+const STORYBOARD_FILE_RE = /[\\/]资料[\\/]视频[\\/][^\\/]+[\\/][^\\/]+[\\/]分镜\.json$/;
+
+export function isSceneStoryboardFile(filePath: string): boolean {
+  return STORYBOARD_FILE_RE.test(filePath);
+}
+
+/** 分镜.json 里记录的章节与场景；内容不完整时返回 null（按普通文件打开） */
+export function sceneVideoTargetFromStoryboard(
+  raw: string
+): { chapterPath: string; scene: string } | null {
+  try {
+    const data = JSON.parse(raw) as { chapterPath?: unknown; scene?: unknown };
+    const chapterPath = typeof data.chapterPath === 'string' ? data.chapterPath.trim() : '';
+    const scene = typeof data.scene === 'string' ? data.scene.trim() : '';
+    return chapterPath && scene ? { chapterPath, scene } : null;
+  } catch {
+    return null;
+  }
+}

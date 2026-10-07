@@ -8,7 +8,6 @@ import {
   describeTensionCurve,
   findForeshadowing,
   hasActMarkers,
-  nextStructure,
   type VolumeBeat,
   type VolumeChapterPlan,
 } from '@novel-editor/basic-algorithm';
@@ -16,6 +15,8 @@ import type { PersistedOutlineScopeInput } from '@/render/types/electron-api';
 import { useAiConfig } from '../useAiConfig';
 import { OutlineList, type OutlineListHandlers } from './OutlineList';
 import { CharacterLanesView, ForeshadowView, TensionView } from './DerivedViews';
+import { PlanToolbar } from './PlanToolbar';
+import { VolumeOverview, buildActSegments, countWords, formatWordCount } from './VolumeOverview';
 import { CURRENT_DOCUMENT_PATH, useVolumeSources } from './useVolumeSources';
 import { useVolumePlanState } from './useVolumePlanState';
 import { useVolumePlanGenerate } from './useVolumePlanGenerate';
@@ -52,7 +53,6 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
   ({ content, folderPath, dbReady, scope = null, onScrollToLine, onOpenSourceLocation }) => {
     const aiConfig = useAiConfig();
     const [mode, setMode] = useState<VolumePlanMode>('list');
-    const [moreOpen, setMoreOpen] = useState(false);
     const [status, setStatus] = useState('');
     const target = useMemo(() => resolveVolumeTarget(scope, folderPath), [folderPath, scope]);
     const { chapters, characters, loading, reload } = useVolumeSources({
@@ -99,6 +99,25 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
       [chapters, mode]
     );
     const laneNames = useMemo(() => lanes.map((lane) => lane.name), [lanes]);
+    const wordsByChapter = useMemo(
+      () => new Map(chapters.map((chapter) => [chapter.path, countWords(chapter.content)])),
+      [chapters]
+    );
+    const totalWords = useMemo(
+      () => Array.from(wordsByChapter.values()).reduce((sum, count) => sum + count, 0),
+      [wordsByChapter]
+    );
+    const segments = useMemo(
+      () => buildActSegments(outline, wordsByChapter),
+      [outline, wordsByChapter]
+    );
+    const listRef = React.useRef<HTMLDivElement>(null);
+    const jumpToAct = useCallback((actKey: string) => {
+      const target = Array.from(
+        listRef.current?.querySelectorAll<HTMLElement>('[data-act-key]') ?? []
+      ).find((element) => element.dataset.actKey === actKey);
+      target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, []);
 
     const { generate, generating } = useVolumePlanGenerate({
       outline: baseOutline,
@@ -184,7 +203,15 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
         <div className={styles.head}>
           <span className={styles.volumeName}>{target?.label ?? '当前文档'}</span>
           <span className={styles.volumeMeta}>
-            {loading && chapters.length === 0 ? '读取中…' : `${outline.chapterCount} 章`}
+            {loading && chapters.length === 0
+              ? '读取中…'
+              : [
+                  `${outline.acts.length} 段`,
+                  `${outline.chapterCount} 章`,
+                  totalWords > 0 ? `${formatWordCount(totalWords)} 字` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
           </span>
         </div>
 
@@ -233,85 +260,71 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
 
         {mode === 'list' && (
           <>
-            <div className={styles.structureRow}>
-              <span>
-                结构：<strong>{outline.structureLabel}</strong>
-              </span>
-              <button
-                type="button"
-                className={styles.linkButton}
-                onClick={() =>
-                  update((prev) => ({
-                    ...prev,
-                    structure: nextStructure(baseOutline.structure, baseOutline.hasMarkers),
-                  }))
-                }
-              >
-                换一种结构
-              </button>
-              <button
-                type="button"
-                className={styles.linkButton}
-                aria-expanded={moreOpen}
-                onClick={() => setMoreOpen((open) => !open)}
-              >
-                更多
-              </button>
-            </div>
-            {moreOpen && (
-              <div className={styles.morePanel}>
-                {!aiConfig.ready && (
-                  <p>未开启 AI：「生成卷纲」按结构模板给出每段说明与空白章节的建议。</p>
-                )}
-                {state.generatedBy && (
-                  <p>
-                    上次由{state.generatedBy === 'ai' ? ' AI ' : '结构模板'}生成
-                    {state.generatedAt ? `（${new Date(state.generatedAt).toLocaleString()}）` : ''}
-                  </p>
-                )}
-                <div className={styles.moreActions}>
-                  <button
-                    type="button"
-                    disabled={!hasGenerated}
-                    onClick={() =>
-                      update((prev) => ({
-                        ...prev,
-                        actNotes: {},
-                        suggestions: {},
-                        generatedBy: null,
-                        generatedAt: null,
-                      }))
-                    }
-                  >
-                    清除生成的说明与建议
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!hasOverrides}
-                    onClick={() => update((prev) => ({ ...prev, beatEdits: {}, beatOrder: {} }))}
-                  >
-                    撤销所有改写与排序
-                  </button>
-                  <button
-                    type="button"
-                    disabled={state.structure === null}
-                    onClick={() =>
-                      update((prev) => ({ ...prev, structure: EMPTY_VOLUME_PLAN.structure }))
-                    }
-                  >
-                    恢复自动结构
-                  </button>
-                </div>
-              </div>
-            )}
+            <PlanToolbar
+              structure={outline.structure}
+              hasMarkers={baseOutline.hasMarkers}
+              onSelectStructure={(structure) => update((prev) => ({ ...prev, structure }))}
+              moreContent={
+                <>
+                  {!aiConfig.ready && (
+                    <p>未开启 AI：「生成卷纲」按结构模板给出每段说明与空白章节的建议。</p>
+                  )}
+                  {state.generatedBy && (
+                    <p>
+                      上次由{state.generatedBy === 'ai' ? ' AI ' : '结构模板'}生成
+                      {state.generatedAt
+                        ? `（${new Date(state.generatedAt).toLocaleString()}）`
+                        : ''}
+                    </p>
+                  )}
+                  <div className={styles.moreActions}>
+                    <button
+                      type="button"
+                      disabled={!hasGenerated}
+                      onClick={() =>
+                        update((prev) => ({
+                          ...prev,
+                          actNotes: {},
+                          suggestions: {},
+                          generatedBy: null,
+                          generatedAt: null,
+                        }))
+                      }
+                    >
+                      清除生成的说明与建议
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!hasOverrides}
+                      onClick={() => update((prev) => ({ ...prev, beatEdits: {}, beatOrder: {} }))}
+                    >
+                      撤销所有改写与排序
+                    </button>
+                    <button
+                      type="button"
+                      disabled={state.structure === null}
+                      onClick={() =>
+                        update((prev) => ({ ...prev, structure: EMPTY_VOLUME_PLAN.structure }))
+                      }
+                    >
+                      恢复自动结构
+                    </button>
+                  </div>
+                </>
+              }
+            />
+            <VolumeOverview segments={segments} onJump={jumpToAct} />
             {outline.chapterCount === 0 && !loading && (
               <div className={styles.viewSummary}>本卷还没有章节，可以先按下面的结构动笔</div>
             )}
-            <OutlineList
-              outline={outline}
-              charactersByChapter={charactersByChapter}
-              handlers={handlers}
-            />
+            <div ref={listRef}>
+              <OutlineList
+                outline={outline}
+                charactersByChapter={charactersByChapter}
+                wordsByChapter={wordsByChapter}
+                handlers={handlers}
+              />
+            </div>
           </>
         )}
         {mode === 'tension' && (

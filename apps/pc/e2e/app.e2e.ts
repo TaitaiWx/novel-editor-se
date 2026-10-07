@@ -51,6 +51,7 @@ import {
   commitInlineRename,
   expandTreePath,
   openProjectDocs,
+  openProjectMenu,
   refreshWorkspace,
   renameByDoubleClick,
   selectWork,
@@ -124,17 +125,31 @@ describe('小说编辑器 GUI', () => {
     expect(titles).not.toContain('novels');
     expect(titles).not.toContain('未分卷');
     expect(titles).not.toContain('剑与诗');
-    // 根目录说明文档收在项目菜单的「项目说明」分组里（带数量），不在文件树中
-    expect(titles).not.toContain('项目说明');
+    // 根目录说明文档在项目名下方的「项目说明」分区（默认折叠），不在正文树中
     expect(titles).not.toContain('欢迎使用');
-    expect(await page.exists(SEL.projectNotes)).toBe(false);
+    expect(await page.exists(SEL.projectNotes)).toBe(true);
+    expect(
+      await page.evaluate<boolean>(
+        (notes: string, switcher: string) => {
+          const section = document.querySelector(notes);
+          const work = document.querySelector(switcher);
+          return Boolean(
+            section &&
+              work &&
+              section.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING
+          );
+        },
+        SEL.projectNotes,
+        SEL.workSwitcher
+      ),
+      '项目说明在作品切换器之上（属于项目，不属于某部作品）'
+    ).toBe(true);
 
-    // 顶部：项目菜单「示例作品集 ▾」| 搜索 / 新建 | 折叠侧边栏（最右侧）；
-    // 打开文件夹 / 刷新 / 项目说明收进项目菜单，没有铅笔按钮（双击项目名重命名）
+    // 顶部：项目名 | 搜索 / 新建 / ⋯ 更多 | 折叠侧边栏（最右侧）；
+    // 打开文件夹 / 刷新等收进「⋯」，没有铅笔按钮（双击项目名重命名）
     const headerButtons = await workspaceHeaderButtons(page);
-    expect(headerButtons[0]).toBe('project-menu-trigger');
-    expect(headerButtons.at(-1)).toBe('折叠侧边栏');
-    expect(headerButtons).toHaveLength(4);
+    expect(headerButtons[0]).toMatch(/^搜索文件/);
+    expect(headerButtons.slice(1)).toEqual(['新建', 'project-menu-trigger', '折叠侧边栏']);
     for (const gone of ['修改作品名', '更换文件夹', '重新扫描作品目录']) {
       expect(headerButtons).not.toContain(gone);
     }
@@ -197,8 +212,8 @@ describe('小说编辑器 GUI', () => {
     expect(await page.exists({ text: '听雨楼', within: SECTION_LORE, exact: true })).toBe(false);
     expect(Number(await sectionCount(SECTION_MATERIALS))).toBeGreaterThan(10);
 
-    // 欢迎使用.md 是项目文档，不是「章」：收在项目菜单的「项目说明」分组里
-    await openProjectDocs(page);
+    // 「⋯ 更多」：在访达中显示、重命名项目、打开其他文件夹、打开最近使用、刷新（不含项目说明）
+    await openProjectMenu(page);
     const revealLabel =
       process.platform === 'darwin'
         ? '在访达中显示'
@@ -211,15 +226,20 @@ describe('小说编辑器 GUI', () => {
     for (const item of ['重命名项目', '打开其他文件夹…', '打开最近使用', '刷新']) {
       expect(await page.exists({ text: item, within: SEL.projectMenu, exact: true })).toBe(true);
     }
+    expect(await page.exists({ text: '项目说明', within: SEL.projectMenu })).toBe(false);
+    await captureForReview('project-menu');
+    await page.press('Escape');
+    await page.waitForGone(SEL.projectMenu);
+
+    // 欢迎使用.md 是项目文档，不是「章」：在「项目说明」分区里
+    await openProjectDocs(page);
     expect(await page.exists({ text: '欢迎使用', within: SEL.projectNotes, exact: true })).toBe(
       true
     );
     expect(await page.exists({ text: '排版示例', within: SEL.projectNotes, exact: true })).toBe(
       true
     );
-    await captureForReview('project-menu');
-    await page.press('Escape');
-    await page.waitForGone(SEL.projectMenu);
+    await captureForReview('project-docs');
 
     // 长卷名：默认侧边栏宽度下省略显示，完整名称在悬停提示中；双击名称进入行内重命名
     const longVolume = '第三卷-群星尽头的漫长归途与未竟之约';
@@ -263,10 +283,9 @@ describe('小说编辑器 GUI', () => {
       await page.waitForGone({ text: longVolume, within: SEL.workspaceTree, exact: true });
     }
 
-    // 欢迎使用.md：功能导览（从项目菜单「项目说明」打开）
+    // 欢迎使用.md：功能导览（从「项目说明」分区打开）
     await openProjectDocs(page);
     await page.click({ text: '欢迎使用', within: SEL.projectNotes, exact: true });
-    await page.waitForGone(SEL.projectNotes);
     await waitForEditorText(page, '欢迎使用小说编辑器');
     await captureForReview('sample-welcome');
 
@@ -758,6 +777,49 @@ describe('小说编辑器 GUI', () => {
     expect(intent).toBe('');
     // 本卷只有第一卷的三章，不混入第二卷
     expect(await page.exists({ text: '星港城', within: SEL.storyline, exact: true })).toBe(false);
+    // 总览条：每一幕一段；头部汇总 段数 · 章数 · 字数
+    await page.waitForTarget(`${SEL.storyline} [role="list"][aria-label="卷纲结构总览"]`);
+    expect(
+      await page.evaluate<number>(
+        (sel: string) =>
+          document.querySelectorAll(`${sel} [aria-label="卷纲结构总览"] [role="listitem"]`).length,
+        SEL.storyline
+      )
+    ).toBe(3);
+    expect(
+      await page.evaluate<string>(
+        (sel: string) => document.querySelector(`${sel} [class*="volumeMeta"]`)?.textContent ?? '',
+        SEL.storyline
+      )
+    ).toMatch(/^3 段 · 3 章 · .+ 字$/);
+    // 节拍图标悬停有说明（tooltip）
+    // 节拍图标（悬停行时才显示）：悬停图标出现说明。直接在 Tooltip 包裹层上派发 mouseover
+    await page.evaluate((sel: string) => {
+      const button = document.querySelector(
+        `${sel} button[aria-label="插入到章纲 第一场 清晨的青石镇"]`
+      );
+      button?.parentElement?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    }, SEL.storyline);
+    await page.waitFor(
+      () =>
+        (document.querySelector('[role="tooltip"]')?.textContent ?? '').startsWith('加入本章章纲'),
+      { message: '节拍「加入章纲」图标的悬停说明' }
+    );
+    // 结构菜单：直接列出全部结构（不再盲目轮换）
+    await page.click(`${SEL.storyline} button[aria-label^="卷纲结构："]`);
+    await page.waitForTarget('[role="menu"][aria-label="卷纲结构"]');
+    for (const label of ['按正文幕标记', '三幕式', '起承转合', '英雄之旅']) {
+      expect(
+        await page.exists({
+          text: label,
+          within: '[role="menu"][aria-label="卷纲结构"]',
+          exact: true,
+        })
+      ).toBe(true);
+    }
+    await captureForReview('volume-plan-structure-menu');
+    await page.press('Escape');
+    await page.waitForGone('[role="menu"][aria-label="卷纲结构"]');
     await captureForReview('volume-plan-list');
 
     // 同一份数据派生人物线：林舟（种子人物）出现在泳道里
@@ -1095,7 +1157,7 @@ describe('小说编辑器 GUI', () => {
 
   it('10. Markdown 实时渲染：标题、表格、公式就地渲染，坏公式只影响自身，光标处显示源码', async () => {
     await ensureSidebarOpen();
-    // 排版示例.md 在项目根目录：从项目菜单「项目说明」打开
+    // 排版示例.md 在项目根目录：从「项目说明」分区打开
     await openProjectDocs(page);
     await page.click({ text: '排版示例', within: SEL.projectNotes, exact: true });
     await waitForEditorText(page, '角色属性表');

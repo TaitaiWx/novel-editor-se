@@ -20,12 +20,22 @@
 
   .workspaceName {
     min-width: 0;
+    padding: 2px 4px;
+    margin-left: -4px;
+    border-radius: 4px;
+    cursor: default;
+    user-select: none;
     font-size: 12px;
     font-weight: 700;
     color: var(--ui-fg-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+
+    &:focus-visible {
+      outline: 1px solid var(--ui-interaction-focus-ring);
+      outline-offset: 1px;
+    }
   }
 
   .projectNameInput {

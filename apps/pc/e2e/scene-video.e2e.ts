@@ -5,8 +5,9 @@
  * - 文本服务（xAI Grok，OpenAI 兼容 /v1/chat/completions）：返回 4 个镜头的分镜 JSON
  * - 视频服务（MiniMax 形状）：提交 → 第一次查询生成中 → 之后成功 → 取文件地址 → 下载测试内生成的小 MP4
  *
- * 流程：打开 001-启程 → 选中「第一场」正文 → 文件栏「场景视频」→ AI 生成分镜（≥3 个镜头）
- * → 只勾选镜头 1 → 生成选中镜头 → 任务完成 → 成片落盘到 资料/视频/001-启程/第一场 清晨的青石镇/ → 预览播放器出现
+ * 流程（画布）：打开 001-启程 → 选中「第一场」正文 → 文件栏「场景视频」→ 自动用 AI 拆分镜（≥3 个镜头节点）
+ * → 点镜头 1 节点上的「生成」→ 任务完成 → 成片落盘到 资料/视频/001-启程/第一场 清晨的青石镇/
+ * → 节点显示成片、资料面板自动出现「视频」目录、分镜.md 自动写入、自动记录到本章章纲
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -188,112 +189,139 @@ describe('场景视频', () => {
       text: `001-启程 · ${SCENE}`,
       within: '[data-testid="scene-video-view"]',
     });
-    // 左栏：场景正文来自选区；视频服务已配置（下拉框出现）
+    // 视频服务已配置（工具栏出现下拉框）
+    await page.waitForTarget('select[aria-label="视频服务"]');
+    // 画布：自动用 AI（Grok mock）拆分镜，不需要点任何按钮
+    const SHOT_NODES = '[data-testid="scene-canvas"] [role="group"][aria-label^="镜头 "]';
+    await page.waitFor((selector: string) => document.querySelectorAll(selector).length >= 3, {
+      args: [SHOT_NODES],
+      timeout: 15_000,
+      message: 'AI 自动拆出至少 3 个镜头节点',
+    });
+    const chat = requests.find((item) => item.path === '/v1/chat/completions');
+    expect(JSON.stringify(chat?.body.messages)).toContain('石板路还湿着');
+    // 节点：人物 → 场景 → 镜头 → 样片，节点之间有连线
+    for (const label of ['人物 林舟', '场景', '样片']) {
+      await page.waitForTarget(
+        `[data-testid="scene-canvas"] [role="group"][aria-label="${label}"]`
+      );
+    }
+    expect(
+      await page.evaluate<number>(
+        () => document.querySelectorAll('[data-testid="scene-canvas"] path[data-edge]').length
+      )
+    ).toBeGreaterThanOrEqual(5);
+    // 「生成 N 个镜头」只计还没有成片的镜头：4 × 6 秒 × ¥0.5
+    await page.waitFor(
+      () =>
+        document.querySelector('[data-testid="scene-video-estimate"]')?.textContent ===
+        '预计 ¥12.00 · 4 个镜头 · 共 24 秒',
+      { message: '费用预估覆盖全部未生成的镜头' }
+    );
+    // 单击场景节点：右侧检查器显示场景正文（来自选区）
+    await page.click('[data-testid="scene-canvas"] [role="group"][aria-label="场景"] p');
+    await page.waitForTarget('[data-testid="scene-inspector"]');
     expect(
       await page.evaluate<string>(
         () =>
           (
             document.querySelector(
-              '[data-testid="scene-video-view"] textarea'
+              '[data-testid="scene-inspector"] textarea'
             ) as HTMLTextAreaElement
           ).value
       )
     ).toContain('“舟哥！”');
-    await page.waitForTarget('select[aria-label="视频服务"]');
-    await captureForReview(page, 'scene-video-open');
+    await captureForReview(page, 'scene-video-canvas');
 
-    // 中栏：AI 生成分镜（Grok mock）→ 4 个镜头
-    await page.click({ text: 'AI 生成分镜', within: '[data-testid="scene-video-view"]' });
-    await page.waitFor(() => document.querySelectorAll('li[aria-label^="镜头 "]').length >= 3, {
-      timeout: 15_000,
-      message: 'AI 分镜出现至少 3 个镜头',
-    });
-    const chat = requests.find((item) => item.path === '/v1/chat/completions');
-    expect(JSON.stringify(chat?.body.messages)).toContain('石板路还湿着');
-
-    // 只生成镜头 1：取消勾选其余镜头
-    await page.evaluate(() => {
-      document
-        .querySelectorAll<HTMLInputElement>('input[aria-label^="选择镜头 "]')
-        .forEach((input) => {
-          if (input.getAttribute('aria-label') !== '选择镜头 1' && input.checked) input.click();
-        });
-    });
+    // 只生成镜头 1：直接点节点上的「生成」
+    const generateShot1 = 'button[aria-label="生成镜头 1"]';
     await page.waitFor(
-      () =>
-        document.querySelector('[data-testid="scene-video-estimate"]')?.textContent ===
-        '预计 ¥3.00 · 1 个镜头 · 共 6 秒',
-      { message: '费用预估只计镜头 1' }
+      (selector: string) =>
+        !(document.querySelector(selector) as HTMLButtonElement | null)?.disabled,
+      { args: [generateShot1], message: '镜头 1 的「生成」可用' }
     );
-    await captureForReview(page, 'scene-video-storyboard');
-
-    // 按钮可用后再点击，并确认任务确实提交（任务列表出现一行），失败时立即报错而不是空等 60 秒
-    await page.waitFor(
-      () =>
-        Array.from(
-          document.querySelectorAll<HTMLButtonElement>('[data-testid="scene-video-view"] button')
-        ).some((button) => button.textContent === '生成选中镜头' && !button.disabled),
-      { message: '「生成选中镜头」可用' }
-    );
-    await page.click({ text: '生成选中镜头', within: '[data-testid="scene-video-view"]' });
-    await page.waitFor(() => document.querySelectorAll('ul[aria-label="生成任务"] li').length > 0, {
+    await page.click(generateShot1);
+    await page.waitUntil(() => requests.some((item) => item.path === '/v1/video_generation'), {
       timeout: 10_000,
-      message: '镜头 1 已提交（任务列表出现）',
+      message: '镜头 1 已提交',
     });
-    // 提交 → 轮询（第一次生成中，之后成功）→ 下载；轮询间隔 5 秒
+    // 提交 → 轮询（第一次生成中，之后成功）→ 下载；轮询间隔 5 秒。完成后节点直接显示成片
     try {
       await page.waitFor(
         () =>
-          Array.from(document.querySelectorAll('ul[aria-label="生成任务"] li')).some((li) =>
-            li.textContent?.includes('已完成')
-          ),
-        { timeout: 60_000, message: '镜头 1 生成完成' }
+          (
+            document.querySelector(
+              '[role="group"][aria-label="镜头 1"] [data-testid="shot-video"]'
+            ) as HTMLVideoElement | null
+          )?.src.startsWith('blob:') ?? false,
+        { timeout: 60_000, message: '镜头 1 节点显示成片' }
       );
     } catch (error) {
-      // 附上任务列表与 mock 收到的请求，便于区分「没提交 / 轮询失败退避 / 下载失败」
-      const taskList = await page
+      const nodeText = await page
         .evaluate<string>(
-          () => document.querySelector('ul[aria-label="生成任务"]')?.textContent ?? '(无任务列表)'
+          () =>
+            document.querySelector('[role="group"][aria-label="镜头 1"]')?.textContent ?? '(无节点)'
         )
         .catch(() => '(读取失败)');
       const seen = requests.map((item) => `${item.method} ${item.path}`).join(', ');
       throw new Error(
-        `${error instanceof Error ? error.message : String(error)}\n任务列表: ${taskList}\nmock 请求: ${seen}`
+        `${error instanceof Error ? error.message : String(error)}\n镜头 1 节点: ${nodeText}\nmock 请求: ${seen}`
       );
     }
     const submit = requests.find((item) => item.path === '/v1/video_generation');
     expect(submit?.auth).toBe(`Bearer ${API_KEY}`);
     expect(String(submit?.body.prompt)).toContain('青石镇镇口的老槐树');
+    expect(requests.filter((item) => item.path === '/v1/video_generation')).toHaveLength(1);
 
-    // 成片与提示词记录落盘
+    // 结果都在资料里：成片 + 提示词记录 + 自动保存的 分镜.json / 分镜.md（不需要手动导出）
     const videoFile = fixture.resolve(...SCENE_DIR, '镜头1-v1.mp4');
     await page.waitUntil(() => existsSync(videoFile), { message: '镜头1-v1.mp4 已落盘' });
     expect((await readFile(videoFile)).equals(Buffer.from(mp4))).toBe(true);
     expect(existsSync(fixture.resolve(...SCENE_DIR, '镜头1-v1.prompt.json'))).toBe(true);
-    // 分镜随修改自动保存为 分镜.json
-    await page.waitUntil(() => existsSync(fixture.resolve(...SCENE_DIR, '分镜.json')), {
-      message: '分镜.json 已保存',
+    await page.waitUntil(() => existsSync(fixture.resolve(...SCENE_DIR, '分镜.md')), {
+      message: '分镜.md 已自动写入',
     });
+    // 第一个成片出现后自动在本章章纲里记录一次
+    await page.waitUntil(
+      async () => {
+        const raw = await readFile(fixture.resolve(...SCENE_DIR, '分镜.json'), 'utf-8').catch(
+          () => '{}'
+        );
+        return (JSON.parse(raw) as { outlineLinked?: boolean }).outlineLinked === true;
+      },
+      { timeout: 15_000, message: '分镜.json 记录已回链章纲' }
+    );
+    // 资料面板自动刷新：不用手动「刷新」就能看到 视频 目录
+    await page.waitFor(
+      () =>
+        document.querySelector('section[aria-label="资料"]')?.textContent?.includes('视频') ??
+        false,
+      { timeout: 10_000, message: '资料里出现「视频」目录' }
+    );
+    // 「在资料中查看」：展开并定位到这一场的文件夹
+    await page.click('button[aria-label="在资料中查看"]');
+    await page.waitFor(
+      (scene: string) =>
+        document.querySelector('section[aria-label="资料"]')?.textContent?.includes(scene) ?? false,
+      { args: [SCENE], timeout: 10_000, message: '资料中定位到场景文件夹' }
+    );
 
-    // 右栏：预览播放器加载本地成片（blob 地址）
+    // 检查器：镜头 1 的版本与预览
+    await page.click('[role="group"][aria-label="镜头 1"] p');
     await page.waitFor(
       () =>
         (
           document.querySelector('[data-testid="scene-video-preview"]') as HTMLVideoElement | null
-        )?.src.startsWith('blob:'),
-      { timeout: 15_000, message: '预览播放器出现' }
+        )?.src.startsWith('blob:') ?? false,
+      { timeout: 15_000, message: '检查器预览播放器出现' }
     );
-    await page.waitForTarget({ text: 'v1', within: '[data-testid="scene-video-view"]' });
+    await page.waitForTarget({ text: 'v1', within: '[data-testid="scene-inspector"]' });
     await captureForReview(page, 'scene-video-done');
-    // 宽布局（容器 > 1080px）才是三栏：折叠侧边栏后再截一张，结束时展开还原
     if (process.env.NOVEL_EDITOR_E2E_SCREENSHOT_DIR) {
       await page.click('[aria-label="折叠侧边栏"]');
       await page.waitForTarget('[title="展开侧边栏"]');
-      await page.evaluate(() =>
-        document.querySelector('[data-testid="scene-video-view"]')?.scrollTo?.(0, 0)
-      );
       await new Promise((resolve) => setTimeout(resolve, 300));
-      await captureForReview(page, 'scene-video-three-columns');
+      await captureForReview(page, 'scene-video-canvas-wide');
       await ensureSidebarOpen(page);
     }
   }, 120_000);

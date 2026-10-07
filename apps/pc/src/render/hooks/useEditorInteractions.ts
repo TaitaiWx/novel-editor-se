@@ -1,4 +1,8 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import {
+  REVEAL_IN_FILE_PANEL_EVENT,
+  type RevealInFilePanelDetail,
+} from '@/render/utils/workspaceFiles';
 import type { ContextMenuEvent } from '@/render/components/FileTree';
 import type { CursorPosition } from '@/render/app/types';
 import { EditorSelection } from '@codemirror/state';
@@ -173,6 +177,26 @@ export function useEditorInteractions(ctx: UseEditorInteractionsContext) {
     },
     [setTransientHighlightLine]
   );
+
+  // 其他视图请求「在资料中定位」（例如场景视频的成片）：退出专注模式、展开侧边栏并高亮该文件
+  useEffect(() => {
+    const onReveal = (event: Event) => {
+      const path = (event as CustomEvent<RevealInFilePanelDetail>).detail?.path;
+      if (!path) return;
+      if (focusMode) setFocusMode(false);
+      if (sidebarCollapsedRef.current) handleExpandSidebar();
+      setFilePanelRevealRequest({ path, id: `reveal-${++filePanelRevealCounterRef.current}` });
+    };
+    window.addEventListener(REVEAL_IN_FILE_PANEL_EVENT, onReveal);
+    return () => window.removeEventListener(REVEAL_IN_FILE_PANEL_EVENT, onReveal);
+  }, [
+    filePanelRevealCounterRef,
+    focusMode,
+    handleExpandSidebar,
+    setFilePanelRevealRequest,
+    setFocusMode,
+    sidebarCollapsedRef,
+  ]);
 
   const handleOpenSourceLocation = useCallback(
     (filePath: string, line: number, contentKey?: string) => {

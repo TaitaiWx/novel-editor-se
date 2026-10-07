@@ -7,6 +7,10 @@ interface TooltipProps {
   children: React.ReactNode;
   position?: 'top' | 'bottom';
   delay?: number;
+  /** 包裹元素的附加类名（需要定位包裹元素时使用，例如绝对定位的拖动手柄） */
+  className?: string;
+  /** 包裹元素的内联样式（例如作为 flex 子项时设置 flexGrow） */
+  style?: React.CSSProperties;
 }
 
 type TooltipPlacement = 'top' | 'bottom';
@@ -14,7 +18,14 @@ type TooltipPlacement = 'top' | 'bottom';
 const VIEWPORT_PADDING = 8;
 const TOOLTIP_GAP = 6;
 
-const Tooltip: React.FC<TooltipProps> = ({ content, children, position = 'top', delay = 300 }) => {
+const Tooltip: React.FC<TooltipProps> = ({
+  content,
+  children,
+  position = 'top',
+  delay = 300,
+  className,
+  style,
+}) => {
   const [visible, setVisible] = useState(false);
   const [placement, setPlacement] = useState<TooltipPlacement>(position);
   const [coords, setCoords] = useState({ left: 0, top: 0 });
@@ -97,7 +108,13 @@ const Tooltip: React.FC<TooltipProps> = ({ content, children, position = 'top', 
   }, [updatePosition, visible]);
 
   return (
-    <span ref={triggerRef} className={styles.wrapper} onMouseEnter={show} onMouseLeave={hide}>
+    <span
+      ref={triggerRef}
+      className={className ? `${styles.wrapper} ${className}` : styles.wrapper}
+      style={style}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+    >
       {children}
       {visible &&
         content &&

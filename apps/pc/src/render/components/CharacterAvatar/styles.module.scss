@@ -1,0 +1,23 @@
+.avatar,
+.initial {
+  --avatar-accent: #9cdcfe;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.avatar {
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid var(--ui-border-subtle);
+}
+
+.initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--avatar-accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--avatar-accent) 36%, transparent);
+  color: var(--avatar-accent);
+  font-weight: 600;
+  line-height: 1;
+}

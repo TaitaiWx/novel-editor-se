@@ -50,7 +50,22 @@ export interface SceneVideoState {
   selectedShotIds: string[];
   /** 每个镜头选用的成片文件名（拼接样片 / 回链章纲使用） */
   chosenVersions: Record<string, string>;
+  /** 画布上作者拖动过的节点位置（未拖动的节点自动排布） */
+  canvas: SceneCanvasState;
+  /** 最近一次自动合成样片时各镜头选用的版本签名（未变化时不重复合成） */
+  animaticSignature?: string;
+  /** 已自动在本章章纲里记录这一场的视频（只记录一次） */
+  outlineLinked?: boolean;
   updatedAt: string;
+}
+
+export interface CanvasPoint {
+  x: number;
+  y: number;
+}
+
+export interface SceneCanvasState {
+  positions: Record<string, CanvasPoint>;
 }
 
 export interface CreateSceneStateInput {
@@ -80,8 +95,26 @@ export function createSceneVideoState(input: CreateSceneStateInput, now: Date): 
     nextShotNumber: 1,
     selectedShotIds: [],
     chosenVersions: {},
+    canvas: { positions: {} },
     updatedAt: now.toISOString(),
   };
+}
+
+const CANVAS_COORD_LIMIT = 100_000;
+
+/** 画布位置：只保留有限数值，丢弃无效项 */
+export function parseCanvasState(raw: unknown): SceneCanvasState {
+  const positions: Record<string, CanvasPoint> = {};
+  const source = isRecord(raw) && isRecord(raw.positions) ? raw.positions : {};
+  for (const [id, point] of Object.entries(source)) {
+    if (!isRecord(point)) continue;
+    const x = Number(point.x);
+    const y = Number(point.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (Math.abs(x) > CANVAS_COORD_LIMIT || Math.abs(y) > CANVAS_COORD_LIMIT) continue;
+    positions[id] = { x: Math.round(x), y: Math.round(y) };
+  }
+  return { positions };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -183,9 +216,12 @@ export function parseSceneVideoState(raw: unknown): SceneVideoState | null {
       ? raw.selectedShotIds.filter((id): id is string => typeof id === 'string' && ids.has(id))
       : [],
     chosenVersions: chosen,
+    canvas: parseCanvasState(raw.canvas),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
   if (typeof raw.model === 'string' && raw.model) state.model = raw.model;
+  if (typeof raw.animaticSignature === 'string') state.animaticSignature = raw.animaticSignature;
+  if (raw.outlineLinked === true) state.outlineLinked = true;
   const style = str(rawBoard.style);
   if (style) state.storyboard.style = style;
   return state;
@@ -194,8 +230,13 @@ export function parseSceneVideoState(raw: unknown): SceneVideoState | null {
 /** 用新分镜替换当前分镜（AI / 兜底拆分）：重新编号，默认全部选中，清空已选版本 */
 export function replaceStoryboardShots(state: SceneVideoState, shots: Shot[]): SceneVideoState {
   const renumbered = renumberShots(shots.slice(0, STORYBOARD_MAX_SHOTS), state.nextShotNumber);
+  // 旧镜头在画布上的位置作废（场景 / 人物 / 样片节点的位置保留）
+  const positions = Object.fromEntries(
+    Object.entries(state.canvas.positions).filter(([id]) => shotNumber({ id }) === null)
+  );
   return {
     ...state,
+    canvas: { ...state.canvas, positions },
     storyboard: { ...state.storyboard, shots: renumbered.shots },
     nextShotNumber: renumbered.next,
     selectedShotIds: renumbered.shots.map((shot) => shot.id),
@@ -223,8 +264,11 @@ export function appendShot(state: SceneVideoState): SceneVideoState {
 export function removeShot(state: SceneVideoState, id: string): SceneVideoState {
   const chosen = { ...state.chosenVersions };
   delete chosen[id];
+  const positions = { ...state.canvas.positions };
+  delete positions[id];
   return {
     ...state,
+    canvas: { ...state.canvas, positions },
     storyboard: {
       ...state.storyboard,
       shots: state.storyboard.shots.filter((shot) => shot.id !== id),
@@ -443,4 +487,92 @@ export function outlineLinkEntry(
       ...videos,
     ].join('\n'),
   };
+}
+
+// ─── 自动化（画布：生成缺少的镜头、自动合成样片） ────────────────────────────
+
+function isActiveTask(task: VideoTask): boolean {
+  return (
+    task.status === 'queued' ||
+    task.status === 'submitted' ||
+    task.status === 'running' ||
+    (task.status === 'succeeded' && !task.outputPath)
+  );
+}
+
+export type ShotProgress =
+  | { kind: 'empty' }
+  | { kind: 'active'; text: string; progress: number | null }
+  | { kind: 'failed'; text: string }
+  | { kind: 'done'; fileName: string; version: number; versions: number };
+
+/** 镜头在画布上的状态：有进行中的任务 → 生成中；有成片 → 已完成（选用的版本）；最近一次失败 → 失败 */
+export function shotProgress(
+  state: SceneVideoState,
+  shot: Shot,
+  files: readonly string[],
+  tasks: readonly VideoTask[]
+): ShotProgress {
+  const number = shotNumber(shot);
+  if (number === null) return { kind: 'empty' };
+  const latest = latestTaskForShot(tasks, number);
+  if (latest && isActiveTask(latest)) {
+    return {
+      kind: 'active',
+      text: describeTaskStatus(latest),
+      progress:
+        latest.status === 'running' && typeof latest.progress === 'number' ? latest.progress : null,
+    };
+  }
+  const chosen = chosenVersionFor(state, shot, files);
+  if (chosen) {
+    const versions = shotVersionsFromFiles(files, number);
+    const version = versions.find((item) => item.fileName === chosen)?.version ?? 0;
+    return { kind: 'done', fileName: chosen, version, versions: versions.length };
+  }
+  if (latest?.status === 'failed') {
+    return { kind: 'failed', text: latest.error?.message || '生成失败' };
+  }
+  return { kind: 'empty' };
+}
+
+/** 「生成视频」要提交的镜头：有画面描述、还没有成片、也没有进行中的任务 */
+export function shotsNeedingGeneration(
+  state: SceneVideoState,
+  files: readonly string[],
+  tasks: readonly VideoTask[]
+): Shot[] {
+  return state.storyboard.shots.filter((shot) => {
+    if (!shot.description.trim()) return false;
+    const progress = shotProgress(state, shot, files, tasks);
+    return progress.kind === 'empty' || progress.kind === 'failed';
+  });
+}
+
+/** 样片签名：每个镜头选用的版本（顺序敏感）；有镜头还没有成片时为 null（不自动合成） */
+export function animaticSignatureFor(
+  state: SceneVideoState,
+  files: readonly string[]
+): string | null {
+  const shots = state.storyboard.shots;
+  if (shots.length === 0) return null;
+  const parts: string[] = [];
+  for (const shot of shots) {
+    const file = chosenVersionFor(state, shot, files);
+    if (!file) return null;
+    parts.push(file);
+  }
+  return parts.join('|');
+}
+
+/** 是否自动合成样片：全部镜头都有成片、没有进行中的任务、选用的版本与上次合成时不同 */
+export function shouldAutoStitch(
+  state: SceneVideoState,
+  files: readonly string[],
+  tasks: readonly VideoTask[]
+): string | null {
+  if (tasks.some(isActiveTask)) return null;
+  const signature = animaticSignatureFor(state, files);
+  if (!signature || signature === state.animaticSignature) return null;
+  return signature;
 }

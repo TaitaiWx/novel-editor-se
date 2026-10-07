@@ -8,8 +8,8 @@ import { PRIMARY_MODIFIER, type Page } from './page';
 
 export const SEL = {
   workspaceTree: '[class*="workspaceTree"]',
-  /** 项目名（项目菜单触发器「示例作品集 ▾」） */
-  workspaceName: '[data-testid="project-menu-trigger"]',
+  /** 项目名（双击或 F2 重命名） */
+  workspaceName: '[data-testid="project-name"]',
   storyNodeTitle: '[class*="storyNodeTitle"]',
   editor: '.cm-content',
   statusBar: '[class*="statusBar"]',
@@ -24,10 +24,11 @@ export const SEL = {
   workList: '[role="listbox"][aria-label="作品"]',
   /** 文件面板顶部（项目名 + 操作按钮） */
   workspaceHeader: '[class*="workspaceHeader"]',
-  /** 项目菜单（单击项目名打开）与其中的「项目说明」分组（根目录说明文档，带数量） */
+  /** 「新建」右侧的「⋯ 更多」按钮与它打开的项目菜单 */
   projectMenuTrigger: '[data-testid="project-menu-trigger"]',
   projectMenu: '[role="menu"][aria-label="项目菜单"]',
-  projectNotes: '[role="group"][aria-label^="项目说明（"]',
+  /** 项目名下方的「项目说明」分区（根目录说明文档，默认折叠） */
+  projectNotes: 'section[aria-label="项目说明"]',
   /** 行内重命名输入框（双击名称 / F2） */
   renameInput: 'input[aria-label^="重命名"]',
 } as const;
@@ -105,16 +106,22 @@ export async function selectWork(page: Page, name: string): Promise<void> {
   );
 }
 
-/** 单击项目名打开项目菜单 */
+/** 点「新建」右侧的「⋯」打开项目菜单 */
 export async function openProjectMenu(page: Page): Promise<void> {
   if (!(await page.exists(SEL.projectMenu))) await page.click(SEL.projectMenuTrigger);
   await page.waitForTarget(SEL.projectMenu);
 }
 
-/** 打开项目菜单并等待「项目说明」分组（根目录说明文档列表） */
+/** 展开项目名下方的「项目说明」分区（默认折叠），等待文档列表出现 */
 export async function openProjectDocs(page: Page): Promise<void> {
-  await openProjectMenu(page);
   await page.waitForTarget(SEL.projectNotes);
+  const header = `${SEL.projectNotes} button[aria-expanded]`;
+  const expanded = await page.evaluate<string | null>(
+    (selector: string) => document.querySelector(selector)?.getAttribute('aria-expanded') ?? null,
+    header
+  );
+  if (expanded !== 'true') await page.click(header);
+  await page.waitForTarget(`${SEL.projectNotes} [role="listitem"]`);
 }
 
 /** 项目菜单 →「刷新」（重新扫描作品目录） */

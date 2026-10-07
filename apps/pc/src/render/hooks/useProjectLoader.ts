@@ -1,9 +1,13 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   DEFAULT_SETTINGS_DRAFT,
   SETTINGS_STORAGE_KEY,
   mergeSettingsDraft,
 } from '@/render/utils/appSettings';
+import {
+  WORKSPACE_FILES_CHANGED_EVENT,
+  WORKSPACE_REFRESH_DEBOUNCE_MS,
+} from '@/render/utils/workspaceFiles';
 import type { WorkspaceState } from './state/useWorkspaceState';
 import type { TabsState } from './state/useTabsState';
 import type { LayoutState } from './state/useLayoutState';
@@ -106,6 +110,34 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
   }, [applyFolderTree, folderPathRef, setIsLoading, toast]);
   // 同步最新引用，供声明顺序靠前的 effect 通过 ref 访问
   refreshCurrentFolderRef.current = refreshCurrentFolder;
+
+  // 后台写入文件（场景视频的成片 / 样片 / 分镜表等）后静默刷新文件树：不显示加载状态，多次通知合并为一次
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refreshQuietly = async () => {
+      const currentFolderPath = folderPathRef.current;
+      const ipc = window.electron?.ipcRenderer;
+      if (!currentFolderPath || !ipc) return;
+      try {
+        const result = await ipc.invoke('refresh-folder', currentFolderPath);
+        if (result && folderPathRef.current === currentFolderPath) applyFolderTree(result);
+      } catch (error) {
+        console.warn('静默刷新文件树失败:', error);
+      }
+    };
+    const onChanged = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void refreshQuietly();
+      }, WORKSPACE_REFRESH_DEBOUNCE_MS);
+    };
+    window.addEventListener(WORKSPACE_FILES_CHANGED_EVENT, onChanged);
+    return () => {
+      window.removeEventListener(WORKSPACE_FILES_CHANGED_EVENT, onChanged);
+      if (timer) clearTimeout(timer);
+    };
+  }, [applyFolderTree, folderPathRef]);
 
   const loadDefaultPath = useCallback(async () => {
     const gen = beginLoad();

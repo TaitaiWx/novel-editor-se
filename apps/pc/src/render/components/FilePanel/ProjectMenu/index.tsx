@@ -1,17 +1,16 @@
 /**
- * 文件面板顶部的项目菜单（工作区菜单，参照 Notion / Linear / Arc）
+ * 文件面板顶部「新建」右侧的「⋯ 更多」菜单（项目级操作）
  *
- * 项目名本身就是下拉触发器「示例作品集 ▾」：单击打开菜单，双击（或 F2）行内重命名。
- * 菜单：项目说明（根目录说明文档，没有时隐藏）｜在访达中显示、重命名项目｜打开其他文件夹…、打开最近使用 ▸、刷新
+ * 菜单：在访达中显示、重命名项目｜打开其他文件夹…、打开最近使用 ▸、刷新
+ * 项目名本身不再是下拉触发器（双击 / F2 重命名，见 WorkspaceHeader）；项目说明是文件面板里的独立分区。
  *
  * 键盘：触发器 Enter / Space / ↓ 打开并聚焦第一项，↑ 聚焦最后一项；菜单内 ↑ / ↓ / Home / End 移动，
  * → 展开「打开最近使用」、← 收起，Esc 关闭并把焦点还给触发器，Tab 关闭。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AiOutlineDown,
   AiOutlineEdit,
-  AiOutlineFileText,
+  AiOutlineEllipsis,
   AiOutlineFolder,
   AiOutlineFolderOpen,
   AiOutlineHistory,
@@ -19,13 +18,11 @@ import {
   AiOutlineRight,
 } from 'react-icons/ai';
 import Popover from '../../Popover';
-import type { ContextMenuEvent } from '../../FileTree';
-import type { FileNode } from '../../../types';
+import Tooltip from '../../Tooltip';
 import { formatShortcutLabel } from '../../../utils/appSettings';
-import { stripStoryFileExtension } from '../../../utils/workspace';
 import styles from './styles.module.scss';
 
-export const PROJECT_DOCS_HINT = '项目根目录下、不属于任何作品的说明文件';
+export const PROJECT_MORE_LABEL = '更多操作';
 
 /** 「在访达中显示」随平台变化 */
 export function getRevealInFileManagerLabel(platform: string): string {
@@ -67,18 +64,10 @@ function defaultReveal(folderPath: string): void {
 }
 
 export interface ProjectMenuProps {
-  label: string;
   folderPath: string;
-  /** 项目根目录的说明文档（欢迎使用.md、README.md …） */
-  docs: FileNode[];
-  selectedFile: string | null;
   /** 切换作品 / 加载中：只禁用重命名 */
   busy?: boolean;
   canRename: boolean;
-  triggerRef: React.RefObject<HTMLButtonElement>;
-  onOpenDoc: (path: string) => void;
-  /** 右键文档：沿用文件右键菜单（重命名、删除等） */
-  onDocContextMenu?: (event: ContextMenuEvent) => void;
   onStartRename: () => void;
   onOpenFolder: () => void;
   onOpenRecentFolder?: (folderPath: string) => void;
@@ -93,15 +82,9 @@ export interface ProjectMenuProps {
 type FocusTarget = 'first' | 'last' | null;
 
 const ProjectMenu: React.FC<ProjectMenuProps> = ({
-  label,
   folderPath,
-  docs,
-  selectedFile,
   busy = false,
   canRename,
-  triggerRef,
-  onOpenDoc,
-  onDocContextMenu,
   onStartRename,
   onOpenFolder,
   onOpenRecentFolder,
@@ -113,6 +96,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   const [open, setOpen] = useState(false);
   const [recentExpanded, setRecentExpanded] = useState(false);
   const [recentFolders, setRecentFolders] = useState<string[] | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const focusOnOpenRef = useRef<FocusTarget>(null);
   const recentToggleRef = useRef<HTMLButtonElement>(null);
@@ -244,15 +228,6 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   };
 
   const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === 'F2') {
-      event.preventDefault();
-      event.stopPropagation();
-      if (canRename) {
-        closeMenu(false);
-        onStartRename();
-      }
-      return;
-    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       openMenu(event.key === 'ArrowDown' ? 'first' : 'last');
@@ -268,42 +243,32 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   };
 
   const revealLabel = getRevealInFileManagerLabel(platform);
-  const docsCount = docs.length;
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`${styles.trigger} ${open ? styles.triggerActive : ''}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`项目 ${label}，打开项目菜单${canRename ? '（双击或按 F2 重命名）' : ''}`}
-        aria-keyshortcuts={canRename ? 'F2' : undefined}
-        title={canRename ? `${label}（单击打开菜单，双击重命名）` : label}
-        data-testid="project-menu-trigger"
-        onClick={(event) => {
-          // 双击的第二次 click 不切换菜单，交给 dblclick 进入重命名
-          if (event.detail > 1) return;
-          if (open) closeMenu(false);
-          else openMenu(null);
-        }}
-        onDoubleClick={(event) => {
-          event.preventDefault();
-          if (!canRename) return;
-          closeMenu(false);
-          onStartRename();
-        }}
-        onKeyDown={handleTriggerKeyDown}
-      >
-        <span className={styles.triggerLabel}>{label}</span>
-        <AiOutlineDown className={styles.triggerChevron} aria-hidden="true" />
-      </button>
+      <Tooltip content={PROJECT_MORE_LABEL} position="bottom">
+        <button
+          ref={triggerRef}
+          type="button"
+          className={`${styles.trigger} ${open ? styles.triggerActive : ''}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label={PROJECT_MORE_LABEL}
+          data-testid="project-menu-trigger"
+          onClick={() => {
+            if (open) closeMenu(false);
+            else openMenu(null);
+          }}
+          onKeyDown={handleTriggerKeyDown}
+        >
+          <AiOutlineEllipsis aria-hidden="true" />
+        </button>
+      </Tooltip>
       <Popover
         open={open}
         anchorRef={triggerRef}
         placement="bottom"
-        align="start"
+        align="end"
         offset={6}
         className={styles.popover}
         role="presentation"
@@ -318,47 +283,6 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
           aria-label="项目菜单"
           onKeyDown={handleMenuKeyDown}
         >
-          {docsCount > 0 && (
-            <>
-              <div className={styles.groupHeader} role="presentation">
-                <span className={styles.groupTitle}>项目说明</span>
-                <span className={styles.groupCount} aria-hidden="true">
-                  {docsCount}
-                </span>
-              </div>
-              <div className={styles.groupHint} role="presentation">
-                {PROJECT_DOCS_HINT}
-              </div>
-              <div
-                role="group"
-                aria-label={`项目说明（${docsCount} 个文件）`}
-                className={styles.docList}
-              >
-                {docs.map((doc) => (
-                  <button
-                    key={doc.path}
-                    type="button"
-                    role="menuitem"
-                    tabIndex={-1}
-                    className={`${styles.item} ${selectedFile === doc.path ? styles.itemActive : ''}`}
-                    title={doc.name}
-                    onClick={() => run(() => onOpenDoc(doc.path))}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      closeMenu(false);
-                      onDocContextMenu?.({ x: event.clientX, y: event.clientY, node: doc });
-                    }}
-                  >
-                    <AiOutlineFileText className={styles.itemIcon} />
-                    <span className={styles.itemLabel}>{stripStoryFileExtension(doc.name)}</span>
-                  </button>
-                ))}
-              </div>
-              <div className={styles.separator} role="separator" />
-            </>
-          )}
-
           <button
             type="button"
             role="menuitem"

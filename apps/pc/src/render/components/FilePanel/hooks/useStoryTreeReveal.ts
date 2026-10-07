@@ -33,6 +33,8 @@ export function useStoryTreeReveal({
 }: UseStoryTreeRevealOptions) {
   const [revealPath, setRevealPath] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSections>({
+    // 项目说明默认折叠：只占一行，需要时再展开
+    projectDocs: true,
     story: false,
     characters: false,
     lore: false,
@@ -122,7 +124,9 @@ export function useStoryTreeReveal({
   useEffect(() => {
     if (!revealFileRequest?.path) return;
     closeSearch();
-    setCollapsedSections((prev) => (prev.story ? { ...prev, story: false } : prev));
+    // 资料里的文件（例如场景视频的成片）展开「资料」分区，其余展开「正文」
+    const section = /[\\/]资料([\\/]|$)/.test(revealFileRequest.path) ? 'materials' : 'story';
+    setCollapsedSections((prev) => (prev[section] ? { ...prev, [section]: false } : prev));
     setExpandedStoryDirs((prev) => {
       const next = new Set(prev);
       findAncestorPaths(storyDisplayNodes, revealFileRequest.path).forEach((path) =>

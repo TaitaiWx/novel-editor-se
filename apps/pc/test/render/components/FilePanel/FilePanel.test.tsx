@@ -330,38 +330,43 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
     expect(screen.getByText('剑与诗')).toBeTruthy();
   });
 
-  it('根目录文档收在项目菜单「项目说明」分组里（带数量），不再占用底部分区，点击打开', () => {
-    const { props } = renderPanel({
+  it('根目录文档在项目名下方的「项目说明」分区（作品切换器之上，默认折叠，带数量），展开后点击打开', () => {
+    const { props, container } = renderPanel({
       files: sampleFiles,
       folderPath: '/s',
       projectLayout,
       workScope: star,
     });
-    expect(screen.queryByRole('region', { name: '项目说明' })).toBeNull();
+    const region = screen.getByRole('region', { name: '项目说明' });
+    // 层级：项目名 → 项目说明 → 作品切换器 → 当前作品的内容
+    const switcher = screen.getByTestId('work-switcher');
+    expect(
+      region.compareDocumentPosition(switcher) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(container.querySelector('[class*="workspaceTree"]')?.contains(region)).toBe(false);
+    // 不在 ⋯ 菜单里
+    fireEvent.click(screen.getByTestId('project-menu-trigger'));
+    expect(screen.queryByRole('group', { name: /^项目说明/ })).toBeNull();
+    fireEvent.click(screen.getByTestId('project-menu-trigger'));
+
     expect(screen.queryByText('欢迎使用')).toBeNull();
-    // 不再有项目名旁的单独「项目说明」按钮
-    expect(screen.queryByLabelText(/^项目说明（/)).toBeNull();
-    const trigger = screen.getByTestId('project-menu-trigger');
-    expect(trigger.closest('section')).toBeNull();
-    fireEvent.click(trigger);
-    const group = screen.getByRole('group', { name: '项目说明（1 个文件）' });
-    expect(group.textContent).toContain('欢迎使用');
-    expect(group.textContent).not.toContain('章');
-    fireEvent.click(within(group).getByRole('menuitem', { name: '欢迎使用' }));
+    const header = within(region).getByRole('button', { name: /项目说明/ });
+    expect(header.textContent).toContain('1');
+    fireEvent.click(header, { detail: 1 });
+    const item = within(region).getByRole('listitem');
+    expect(item.textContent).toBe('欢迎使用');
+    fireEvent.click(item);
     expect(props.onFileSelect).toHaveBeenCalledWith('/s/欢迎使用.md');
-    expect(screen.queryByRole('menu', { name: '项目菜单' })).toBeNull();
   });
 
-  it('没有根目录文档时项目菜单不显示「项目说明」分组', () => {
+  it('没有根目录文档时不显示「项目说明」分区', () => {
     renderPanel({
       files: sampleFiles.slice(1),
       folderPath: '/s',
       projectLayout,
       workScope: star,
     });
-    fireEvent.click(screen.getByTestId('project-menu-trigger'));
-    expect(screen.getByRole('menu', { name: '项目菜单' })).toBeTruthy();
-    expect(screen.queryByRole('group', { name: /^项目说明/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: '项目说明' })).toBeNull();
   });
 
   it('普通文件夹：没有作品切换器；根目录说明文档放进项目说明，不计入未分卷章数', () => {
@@ -373,10 +378,9 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
       folderPath: '/p',
     });
     expect(screen.queryByTestId('work-switcher')).toBeNull();
-    fireEvent.click(screen.getByTestId('project-menu-trigger'));
-    expect(screen.getByRole('group', { name: '项目说明（1 个文件）' }).textContent).toContain(
-      'README'
-    );
+    const region = screen.getByRole('region', { name: '项目说明' });
+    fireEvent.click(within(region).getByRole('button', { name: /项目说明/ }), { detail: 1 });
+    expect(within(region).getByRole('listitem').textContent).toBe('README');
     expect(rowOf('未分卷').textContent).toContain('1章');
   });
 });

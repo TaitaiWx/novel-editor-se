@@ -42,6 +42,7 @@ import WorkspaceHeader, { buildCreateMenuItems } from './WorkspaceHeader';
 import SearchBar from './SearchBar';
 import CharacterGenerationHint from './CharacterGenerationHint';
 import GrowthSection from './GrowthSection';
+import ProjectDocsSection from './ProjectDocsSection';
 import WorkSwitcher from './WorkSwitcher';
 import type { GrowthSheetSummary } from '../../utils/growthIndex';
 import styles from './styles.module.scss';
@@ -161,7 +162,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       [folderPath, projectLayout, storyNodes, storyOrderMap]
     );
     const storyDisplayNodes = storyStructure.displayNodes;
-    // 项目根目录的说明文档（欢迎使用.md 等）：收在项目名旁的「项目说明」按钮里
+    // 项目根目录的说明文档（欢迎使用.md 等）：项目名下方的「项目说明」分区
     const projectDocNodes = storyStructure.projectDocs;
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -336,16 +337,20 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   createMenuOpen={createMenuOpen}
                   onCreateMenuOpenChange={setCreateMenuOpen}
                   onRenameProject={onRenameProject}
-                  projectDocs={projectDocNodes}
-                  selectedFile={selectedFile}
-                  onOpenProjectDoc={handleFileSelectFromSearch}
-                  onProjectDocContextMenu={onContextMenu}
                   onOpenRecentFolder={onOpenRecentFolder}
                   onOpenFolder={onOpenFolder}
                   onToggleSearch={handleToggleSearch}
                   onCollapse={onCollapse}
                   onRefresh={onRefresh}
                   onContextMenu={(event) => emitObjectContextMenu(event, { kind: 'project-root' })}
+                />
+                <ProjectDocsSection
+                  docs={projectDocNodes}
+                  selectedFile={selectedFile}
+                  collapsed={collapsedSections.projectDocs}
+                  onToggle={() => toggleSection('projectDocs')}
+                  onOpen={handleFileSelectFromSearch}
+                  onDocContextMenu={onContextMenu}
                 />
                 {isProjectMode && workScope && (
                   <WorkSwitcher

@@ -1,19 +1,29 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { VscFolderOpened } from 'react-icons/vsc';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { STORYBOARD_MAX_SHOTS, type Shot } from '@novel-editor/video';
+import {
+  notifyWorkspaceFilesChanged,
+  requestRevealInFilePanel,
+} from '@/render/utils/workspaceFiles';
 import { insertBeatIntoChapterOutline } from '../RightPanel/VolumePlanView/volumeSources';
-import InputColumn, { type InputCharacter } from './InputColumn';
-import StoryboardColumn from './StoryboardColumn';
-import type { ShotCardProps } from './StoryboardColumn/ShotCard';
-import PreviewColumn from './PreviewColumn';
+import SceneCanvas from './SceneCanvas';
+import { CharacterNode, OutputNode, SceneNode, ShotNode } from './nodes';
+import { CharacterInspector, OutputInspector, SceneInspector, ShotInspector } from './Inspector';
+import Toolbar from './Toolbar';
+import { layoutSceneCanvas, type CanvasNode } from './canvasLayout';
 import { generateStoryboard, type CharacterBrief } from './storyboardGeneration';
 import {
+  animaticFiles,
+  appendShot,
   chosenVersionFor,
-  describeTaskStatus,
-  latestTaskForShot,
+  estimateSceneCost,
+  moveShot,
   outlineLinkEntry,
+  removeShot,
   replaceStoryboardShots,
-  sceneRelativeDir,
-  shotNumber,
+  shotProgress,
+  shotsNeedingGeneration,
+  shouldAutoStitch,
+  updateShot,
 } from './sceneVideoState';
 import { animaticStoryboard, canStitchAnimatic, stitchAnimatic } from './stitchAnimatic';
 import { useSceneVideoDoc, type SaveStatus } from './useSceneVideoDoc';
@@ -22,7 +32,9 @@ import { useVideoServices } from './useVideoServices';
 import { useResolvedAvatars } from './useResolvedAvatars';
 import styles from './styles.module.scss';
 
-export interface SceneVideoCharacter extends InputCharacter, CharacterBrief {}
+export interface SceneVideoCharacter extends CharacterBrief {
+  avatar?: string;
+}
 
 export interface SceneVideoViewProps {
   /** 标签路径（__workspace__:scene-video:<章>#<场景>） */
@@ -42,13 +54,23 @@ const SAVE_LABELS: Record<SaveStatus, string> = {
   idle: '',
   pending: '有修改，稍后自动保存',
   saving: '保存中…',
-  saved: '已保存到 分镜.json',
+  saved: '已保存到资料',
   error: '保存失败',
 };
 
+function joinPath(dir: string, name: string): string {
+  const separator = dir.includes('\\') && !dir.includes('/') ? '\\' : '/';
+  return `${dir.replace(/[\\/]+$/, '')}${separator}${name}`;
+}
+
 /**
- * 场景视频工作区：输入（左）/ 分镜（中）/ 预览与任务（右）
- * 流程：发起 → 补全输入 → 分镜（先审后生成）→ 生成（异步任务）→ 落盘到 <作品>/资料/视频/<章>/<场景>/
+ * 场景视频画布：人物 → 场景 → 镜头 1…N → 样片，单击节点在右侧检查器编辑。
+ *
+ * 尽量少的手动操作：
+ * - 打开时没有分镜就自动拆分（有 AI 用 AI，否则按段落）
+ * - 每次修改自动保存 分镜.json 与可读的 分镜.md 到 <作品>/资料/视频/<章>/<场景>/，资料面板自动刷新
+ * - 「生成 N 个镜头」只提交还没有成片的镜头；成片下载后自动出现在节点与资料里
+ * - 全部镜头都有成片后自动合成样片；第一个成片出现后自动在本章章纲里记录这一场的视频
  */
 const SceneVideoView: React.FC<SceneVideoViewProps> = ({
   tabPath,
@@ -66,9 +88,16 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     () => (workPath ? { workPath, chapter: doc.chapter, scene } : null),
     [doc.chapter, scene, workPath]
   );
-  const { tasks, submitShots, cancelTask, retryTask } = useSceneVideoTasks(taskRef, refreshFiles);
-  const [generating, setGenerating] = useState(false);
-  const [notes, setNotes] = useState<string[]>([]);
+  const handleTaskFinished = useCallback(() => {
+    void refreshFiles();
+    notifyWorkspaceFilesChanged();
+  }, [refreshFiles]);
+  const { tasks, submitShots, cancelTask, retryTask } = useSceneVideoTasks(
+    taskRef,
+    handleTaskFinished
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [splitting, setSplitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [stitchProgress, setStitchProgress] = useState<number | null>(null);
   const [message, setMessage] = useState<Message>(null);
@@ -78,7 +107,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     services.videoProviders[0] ??
     null;
   const avatars = useResolvedAvatars(characters, workPath);
-  const inputCharacters = useMemo(
+  const sceneCharacters = useMemo(
     () => characters.map((item) => ({ name: item.name, avatar: avatars[item.name] })),
     [avatars, characters]
   );
@@ -99,60 +128,62 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     [doc.chapter, scene, workPath]
   );
 
-  const statusByShot = useMemo(() => {
-    const result: Record<string, ShotCardProps['status']> = {};
-    for (const shot of state?.storyboard.shots ?? []) {
-      const number = shotNumber(shot);
-      const task = number === null ? null : latestTaskForShot(tasks, number);
-      if (!task) continue;
-      const tone =
-        task.status === 'failed'
-          ? 'failed'
-          : task.status === 'cancelled'
-            ? 'muted'
-            : task.status === 'succeeded' && task.outputPath
-              ? 'done'
-              : 'active';
-      result[shot.id] = { text: describeTaskStatus(task), tone };
-    }
-    return result;
-  }, [state?.storyboard.shots, tasks]);
+  // ─── 拆分镜 ─────────────────────────────────────────────────────────
 
-  const handleGenerate = useCallback(async () => {
-    if (!state) return;
-    setGenerating(true);
-    setNotes([]);
-    try {
-      const result = await generateStoryboard(window.electron?.ipcRenderer, {
-        state,
-        textProviderId: services.textProviderId,
-        characters,
-      });
-      if (result.shots.length === 0) {
-        setNotes(['场景正文为空，无法拆分镜头']);
-        return;
-      }
-      updateState((prev) => replaceStoryboardShots(prev, result.shots));
-      setNotes(result.notes);
-      setMessage({
-        tone: 'success',
-        text:
+  const splitStoryboard = useCallback(
+    async (trigger: 'auto' | 'manual') => {
+      const current = state;
+      if (!current) return;
+      setSplitting(true);
+      try {
+        const result = await generateStoryboard(window.electron?.ipcRenderer, {
+          state: current,
+          textProviderId: services.textProviderId,
+          characters,
+        });
+        if (result.shots.length === 0) {
+          if (trigger === 'manual') setMessage({ tone: 'info', text: '场景正文为空，无法拆分镜' });
+          return;
+        }
+        updateState((prev) => replaceStoryboardShots(prev, result.shots));
+        setSelectedId(null);
+        const base =
           result.source === 'ai'
-            ? `AI 拆出 ${result.shots.length} 个镜头，检查后再生成`
-            : `已按段落拆出 ${result.shots.length} 个镜头`,
-      });
-    } finally {
-      setGenerating(false);
-    }
-  }, [characters, services.textProviderId, state, updateState]);
+            ? `AI 拆出 ${result.shots.length} 个镜头`
+            : `已按段落拆出 ${result.shots.length} 个镜头`;
+        setMessage({
+          tone: result.notes.length ? 'info' : 'success',
+          text: [`${base}，单击镜头可以修改`, ...result.notes].join('；'),
+        });
+      } finally {
+        setSplitting(false);
+      }
+    },
+    [characters, services.textProviderId, state, updateState]
+  );
 
-  const handleSubmit = useCallback(
-    async (scope: 'selected' | 'all') => {
-      if (!state || !provider) return;
-      const shots =
-        scope === 'all'
-          ? state.storyboard.shots
-          : state.storyboard.shots.filter((shot) => state.selectedShotIds.includes(shot.id));
+  // 第一次打开、还没有分镜时自动拆分（等服务配置读取完成，以便有 AI 时用 AI）
+  const autoSplitDoneRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!state || !services.loaded || doc.loading) return;
+    if (autoSplitDoneRef.current === tabPath) return;
+    autoSplitDoneRef.current = tabPath;
+    if (state.storyboard.shots.length === 0 && state.sourceText.trim()) {
+      void splitStoryboard('auto');
+    }
+  }, [doc.loading, services.loaded, splitStoryboard, state, tabPath]);
+
+  // ─── 生成 ───────────────────────────────────────────────────────────
+
+  const pendingShots = useMemo(
+    () => (state ? shotsNeedingGeneration(state, files, tasks) : []),
+    [files, state, tasks]
+  );
+  const estimate = estimateSceneCost(pendingShots, provider);
+
+  const submit = useCallback(
+    async (shots: readonly Shot[]) => {
+      if (!state || !provider || shots.length === 0) return;
       setSubmitting(true);
       try {
         const result = await submitShots({
@@ -162,14 +193,14 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           model: state.model ?? provider.model,
           avatars,
         });
-        if (result.errors.length) {
-          setMessage({ tone: 'error', text: result.errors.join('；') });
-        } else {
-          setMessage({
-            tone: 'info',
-            text: `已提交 ${result.submitted} 个镜头，生成完成后自动保存`,
-          });
-        }
+        setMessage(
+          result.errors.length
+            ? { tone: 'error', text: result.errors.join('；') }
+            : {
+                tone: 'info',
+                text: `已提交 ${result.submitted} 个镜头，完成后自动保存到资料`,
+              }
+        );
       } finally {
         setSubmitting(false);
       }
@@ -177,125 +208,311 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     [avatars, provider, state, submitShots]
   );
 
-  const handleExport = useCallback(async () => {
-    const saved = await doc.exportMarkdown();
-    setMessage(
-      saved
-        ? { tone: 'success', text: `已导出分镜表：${sceneRelativeDir(doc.chapter, scene)}/分镜.md` }
-        : { tone: 'error', text: doc.saveError || '导出失败：没有打开项目' }
-    );
-  }, [doc, scene]);
+  // ─── 样片（自动合成） ───────────────────────────────────────────────
 
-  const handleStitch = useCallback(async () => {
-    if (!state || !workPath) return;
-    const storyboard = animaticStoryboard(
-      { ...state.storyboard, aspectRatio: state.aspectRatio },
-      state.selectedShotIds
-    );
-    if (storyboard.shots.length === 0) return;
-    const chosen = new Map<string, string>();
-    storyboard.shots.forEach((shot) => {
-      const file = chosenVersionFor(state, shot, files);
-      if (file) chosen.set(shot.id, file);
-    });
-    setStitchProgress(0);
-    try {
-      const output = await stitchAnimatic({
-        storyboard,
-        files: chosen,
-        readFile,
-        onProgress: setStitchProgress,
+  const stitch = useCallback(
+    async (signature: string | null) => {
+      if (!state || !workPath) return;
+      const storyboard = animaticStoryboard(
+        { ...state.storyboard, aspectRatio: state.aspectRatio },
+        state.storyboard.shots.map((shot) => shot.id)
+      );
+      if (storyboard.shots.length === 0) return;
+      const chosen = new Map<string, string>();
+      storyboard.shots.forEach((shot) => {
+        const file = chosenVersionFor(state, shot, files);
+        if (file) chosen.set(shot.id, file);
       });
-      const ipc = window.electron?.ipcRenderer;
-      if (!ipc) throw new Error('没有打开项目');
-      const result = await ipc.invoke('video-scene-write-animatic', {
-        workPath,
-        chapter: doc.chapter,
-        scene,
-        ext: output.ext,
-        data: output.data,
-      });
-      if (!result.ok) throw new Error(result.error.message);
-      await refreshFiles();
-      setMessage({ tone: 'success', text: `样片已保存：${result.data.fileName}` });
-    } catch (error) {
-      setMessage({
-        tone: 'error',
-        text: `拼接失败：${error instanceof Error ? error.message : String(error)}`,
-      });
-    } finally {
-      setStitchProgress(null);
-    }
-  }, [doc.chapter, files, readFile, refreshFiles, scene, state, workPath]);
+      setStitchProgress(0);
+      try {
+        const output = await stitchAnimatic({
+          storyboard,
+          files: chosen,
+          readFile,
+          onProgress: setStitchProgress,
+        });
+        const ipc = window.electron?.ipcRenderer;
+        if (!ipc) throw new Error('没有打开项目');
+        const result = await ipc.invoke('video-scene-write-animatic', {
+          workPath,
+          chapter: doc.chapter,
+          scene,
+          ext: output.ext,
+          data: output.data,
+        });
+        if (!result.ok) throw new Error(result.error.message);
+        if (signature) updateState((prev) => ({ ...prev, animaticSignature: signature }));
+        await refreshFiles();
+        notifyWorkspaceFilesChanged();
+        setMessage({ tone: 'success', text: `样片已保存到资料：${result.data.fileName}` });
+      } catch (error) {
+        setMessage({
+          tone: 'error',
+          text: `合成样片失败：${error instanceof Error ? error.message : String(error)}`,
+        });
+      } finally {
+        setStitchProgress(null);
+      }
+    },
+    [doc.chapter, files, readFile, refreshFiles, scene, state, updateState, workPath]
+  );
 
-  const handleLinkOutline = useCallback(async () => {
+  const stitchSupported = canStitchAnimatic();
+  const autoStitchTriedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!state || !workPath || !stitchSupported || stitchProgress !== null) return;
+    const signature = shouldAutoStitch(state, files, tasks);
+    if (!signature || autoStitchTriedRef.current === signature) return;
+    // 同一组版本只自动尝试一次（失败后由作者在「样片」节点手动重试）
+    autoStitchTriedRef.current = signature;
+    void stitch(signature);
+  }, [files, state, stitch, stitchProgress, stitchSupported, tasks, workPath]);
+
+  // ─── 章纲（自动记录一次） ───────────────────────────────────────────
+
+  const linkingRef = useRef(false);
+  useEffect(() => {
     const ipc = window.electron?.ipcRenderer;
-    if (!ipc || !workPath || !state) return;
-    await doc.exportMarkdown();
+    if (!ipc || !state || state.outlineLinked || !workPath || !dbReady || linkingRef.current)
+      return;
+    const hasVideo = state.storyboard.shots.some((shot) => chosenVersionFor(state, shot, files));
+    if (!hasVideo) return;
+    linkingRef.current = true;
     const entry = outlineLinkEntry(state, files);
-    try {
-      const result = await insertBeatIntoChapterOutline(ipc, workPath, chapterPath, {
-        title: entry.title,
-        content: entry.content,
+    void insertBeatIntoChapterOutline(ipc, workPath, chapterPath, entry)
+      .then(() => updateState((prev) => ({ ...prev, outlineLinked: true })))
+      .catch(() => undefined)
+      .finally(() => {
+        linkingRef.current = false;
       });
-      setMessage({
-        tone: 'success',
-        text: result === 'inserted' ? '已回链到本章章纲' : '本章章纲里已有这一场的视频记录',
-      });
-    } catch (error) {
-      setMessage({
-        tone: 'error',
-        text: `回链失败：${error instanceof Error ? error.message : String(error)}`,
-      });
-    }
-  }, [chapterPath, doc, files, state, workPath]);
+  }, [chapterPath, dbReady, files, state, updateState, workPath]);
 
-  const openFolder = useCallback(async () => {
-    const ipc = window.electron?.ipcRenderer;
-    if (!ipc || !workPath) return;
-    const loaded = await ipc.invoke('video-scene-load', { workPath, chapter: doc.chapter, scene });
-    if (!loaded.ok) return;
-    try {
-      await ipc.invoke('show-item-in-folder', loaded.data.dir);
-    } catch {
-      setMessage({ tone: 'info', text: '还没有生成任何文件，导出分镜表或生成镜头后再打开' });
+  // ─── 画布 ───────────────────────────────────────────────────────────
+
+  const layout = useMemo(
+    () =>
+      state
+        ? layoutSceneCanvas({
+            characters: state.characters,
+            shots: state.storyboard.shots,
+            canvas: state.canvas,
+          })
+        : { nodes: [], edges: [] },
+    [state]
+  );
+  const avatarOf = useCallback(
+    (name: string) => sceneCharacters.find((item) => item.name === name)?.avatar,
+    [sceneCharacters]
+  );
+  const shotById = useMemo(
+    () => new Map((state?.storyboard.shots ?? []).map((shot, index) => [shot.id, { shot, index }])),
+    [state?.storyboard.shots]
+  );
+  const doneCount = useMemo(
+    () =>
+      state
+        ? state.storyboard.shots.filter((shot) => chosenVersionFor(state, shot, files)).length
+        : 0,
+    [files, state]
+  );
+
+  const revealInMaterials = useCallback(
+    (fileName?: string) => {
+      if (!doc.dir) {
+        setMessage({ tone: 'info', text: '这一场还没有保存任何文件，修改分镜或生成镜头后再查看' });
+        return;
+      }
+      notifyWorkspaceFilesChanged();
+      requestRevealInFilePanel(fileName ? joinPath(doc.dir, fileName) : doc.dir);
+    },
+    [doc.dir]
+  );
+
+  const labelFor = useCallback((node: CanvasNode) => {
+    switch (node.kind) {
+      case 'character':
+        return `人物 ${node.name ?? ''}`;
+      case 'scene':
+        return '场景';
+      case 'shot':
+        return `镜头 ${(node.index ?? 0) + 1}`;
+      default:
+        return '样片';
     }
-  }, [doc.chapter, scene, workPath]);
+  }, []);
+
+  const renderNode = (node: CanvasNode): React.ReactNode => {
+    if (!state) return null;
+    if (node.kind === 'character') {
+      return <CharacterNode name={node.name ?? ''} avatar={avatarOf(node.name ?? '')} />;
+    }
+    if (node.kind === 'scene') {
+      return (
+        <SceneNode
+          chapter={state.chapter}
+          scene={state.scene}
+          sourceText={state.sourceText}
+          location={state.location}
+          splitting={splitting}
+          onResplit={() => void splitStoryboard('manual')}
+        />
+      );
+    }
+    if (node.kind === 'output') {
+      return (
+        <OutputNode
+          aspectRatio={state.aspectRatio}
+          readFile={readFile}
+          animatic={animaticFiles(files)[0] ?? null}
+          doneCount={doneCount}
+          totalCount={state.storyboard.shots.length}
+          stitchProgress={stitchProgress}
+        />
+      );
+    }
+    const entry = shotById.get(node.id);
+    if (!entry) return null;
+    const blocked = !provider
+      ? '先配置视频服务'
+      : !entry.shot.description.trim()
+        ? '先写一句画面描述'
+        : undefined;
+    return (
+      <ShotNode
+        shot={entry.shot}
+        index={entry.index}
+        aspectRatio={state.aspectRatio}
+        progress={shotProgress(state, entry.shot, files, tasks)}
+        canGenerate={!blocked && !submitting}
+        generateBlockedReason={blocked}
+        readFile={readFile}
+        onGenerate={() => void submit([entry.shot])}
+      />
+    );
+  };
 
   if (doc.loading || !state) {
     return <div className={styles.loading}>正在打开场景视频…</div>;
   }
 
+  const selectedNode = layout.nodes.find((node) => node.id === selectedId) ?? null;
+  const closeInspector = () => setSelectedId(null);
+  let inspector: React.ReactNode = null;
+  if (selectedNode?.kind === 'scene') {
+    inspector = (
+      <SceneInspector
+        state={state}
+        onChange={updateState}
+        characters={sceneCharacters}
+        loreTitles={loreTitles}
+        pendingSeed={doc.pendingSeed}
+        onApplySeed={doc.applyPendingSeed}
+        onDismissSeed={doc.dismissPendingSeed}
+        onClose={closeInspector}
+      />
+    );
+  } else if (selectedNode?.kind === 'character') {
+    const name = selectedNode.name ?? '';
+    inspector = (
+      <CharacterInspector
+        name={name}
+        avatar={avatarOf(name)}
+        onClose={closeInspector}
+        onRemove={() => {
+          setSelectedId(null);
+          updateState((prev) => ({
+            ...prev,
+            characters: prev.characters.filter((item) => item !== name),
+          }));
+        }}
+      />
+    );
+  } else if (selectedNode?.kind === 'shot') {
+    const entry = shotById.get(selectedNode.id);
+    if (entry) {
+      const shots = state.storyboard.shots;
+      inspector = (
+        <ShotInspector
+          state={state}
+          shot={entry.shot}
+          index={entry.index}
+          files={files}
+          tasks={tasks}
+          readFile={readFile}
+          onChange={updateState}
+          onUpdateShot={(patch) => updateState((prev) => updateShot(prev, entry.shot.id, patch))}
+          onMove={(offset) => {
+            const neighbor = shots[entry.index + offset];
+            if (!neighbor) return;
+            updateState((prev) => ({
+              ...prev,
+              storyboard: {
+                ...prev.storyboard,
+                shots: moveShot(prev.storyboard.shots, entry.shot.id, neighbor.id),
+              },
+            }));
+          }}
+          onRemove={() => {
+            setSelectedId(null);
+            updateState((prev) => removeShot(prev, entry.shot.id));
+          }}
+          onCancelTask={(id) =>
+            void cancelTask(id).then((error) => error && setMessage({ tone: 'error', text: error }))
+          }
+          onRetryTask={(id) =>
+            void retryTask(id).then((error) => error && setMessage({ tone: 'error', text: error }))
+          }
+          onClose={closeInspector}
+        />
+      );
+    }
+  } else if (selectedNode?.kind === 'output') {
+    inspector = (
+      <OutputInspector
+        files={files}
+        readFile={readFile}
+        stitchSupported={stitchSupported}
+        stitchProgress={stitchProgress}
+        canStitch={Boolean(workPath) && state.storyboard.shots.length > 0}
+        outlineLinked={Boolean(state.outlineLinked)}
+        onStitch={() => void stitch(null)}
+        onRevealFile={(fileName) => revealInMaterials(fileName)}
+        onClose={closeInspector}
+      />
+    );
+  }
+
+  const hasAvatar = state.characters.some((name) => Boolean(avatarOf(name)));
+  const saveText =
+    doc.saveStatus === 'error' && doc.saveError
+      ? `${SAVE_LABELS.error}：${doc.saveError}`
+      : SAVE_LABELS[doc.saveStatus];
+
   return (
     <div className={styles.view} data-testid="scene-video-view">
-      <header className={styles.header}>
-        <div className={styles.heading}>
-          <h1 className={styles.headingTitle}>场景视频</h1>
-          <span className={styles.headingMeta}>
-            {state.chapter} · {state.scene}
-          </span>
-        </div>
-        <div className={styles.headerRight}>
-          {doc.saveStatus !== 'idle' && (
-            <span className={styles.saveStatus} data-status={doc.saveStatus}>
-              {doc.saveStatus === 'error' && doc.saveError
-                ? `${SAVE_LABELS.error}：${doc.saveError}`
-                : SAVE_LABELS[doc.saveStatus]}
-            </span>
-          )}
-          <button
-            type="button"
-            className={styles.headerButton}
-            disabled={!workPath}
-            title={`在文件夹中显示 ${sceneRelativeDir(state.chapter, state.scene)}`}
-            onClick={() => void openFolder()}
-          >
-            <VscFolderOpened aria-hidden="true" />
-            打开文件夹
-          </button>
-        </div>
-      </header>
-
+      <Toolbar
+        state={state}
+        onChange={updateState}
+        videoProviders={services.videoProviders}
+        servicesLoaded={services.loaded}
+        hasAvatar={hasAvatar}
+        saveText={saveText}
+        saveTone={doc.saveStatus === 'saved' ? 'ok' : doc.saveStatus === 'error' ? 'error' : 'idle'}
+        estimateText={estimate.text}
+        pendingCount={pendingShots.length}
+        submitting={submitting}
+        canAddShot={state.storyboard.shots.length < STORYBOARD_MAX_SHOTS}
+        onGenerate={() => void submit(pendingShots)}
+        onAddShot={() => {
+          const id = `shot-${state.nextShotNumber}`;
+          updateState(appendShot);
+          setSelectedId(id);
+        }}
+        onReveal={() => revealInMaterials()}
+        onOpenSettings={() =>
+          window.dispatchEvent(new CustomEvent('open-settings-tab', { detail: 'ai' }))
+        }
+      />
       {!workPath && (
         <p className={styles.notice}>没有打开作品目录：分镜可以编辑，但无法保存与生成。</p>
       )}
@@ -304,54 +521,22 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           {message.text}
         </p>
       )}
-
-      <div className={styles.columns}>
-        <InputColumn
-          state={state}
-          onChange={updateState}
-          characters={inputCharacters}
-          loreTitles={loreTitles}
-          videoProviders={services.videoProviders}
-          servicesLoaded={services.loaded}
-          pendingSeed={doc.pendingSeed}
-          onApplySeed={doc.applyPendingSeed}
-          onDismissSeed={doc.dismissPendingSeed}
-          onOpenSettings={() =>
-            window.dispatchEvent(new CustomEvent('open-settings-tab', { detail: 'ai' }))
+      <div className={styles.workspace}>
+        <SceneCanvas
+          nodes={layout.nodes}
+          edges={layout.edges}
+          selectedId={selectedNode ? selectedNode.id : null}
+          onSelect={setSelectedId}
+          onMoveNode={(id, point) =>
+            updateState((prev) => ({
+              ...prev,
+              canvas: { ...prev.canvas, positions: { ...prev.canvas.positions, [id]: point } },
+            }))
           }
+          renderNode={renderNode}
+          labelFor={labelFor}
         />
-        <StoryboardColumn
-          state={state}
-          onChange={updateState}
-          aiReady={Boolean(services.textProviderId)}
-          generating={generating}
-          notes={notes}
-          statusByShot={statusByShot}
-          onGenerate={() => void handleGenerate()}
-          onExport={() => void handleExport()}
-        />
-        <PreviewColumn
-          state={state}
-          onChange={updateState}
-          files={files}
-          tasks={tasks}
-          provider={provider}
-          settings={services.settings}
-          submitting={submitting}
-          onSubmit={(scope) => void handleSubmit(scope)}
-          onCancelTask={(id) =>
-            void cancelTask(id).then((error) => error && setMessage({ tone: 'error', text: error }))
-          }
-          onRetryTask={(id) =>
-            void retryTask(id).then((error) => error && setMessage({ tone: 'error', text: error }))
-          }
-          readFile={readFile}
-          stitchProgress={stitchProgress}
-          stitchSupported={canStitchAnimatic()}
-          onStitch={() => void handleStitch()}
-          onLinkOutline={() => void handleLinkOutline()}
-          linkDisabled={!workPath || !dbReady}
-        />
+        {inspector}
       </div>
     </div>
   );

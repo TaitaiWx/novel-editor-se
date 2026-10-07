@@ -1,4 +1,8 @@
 import { useCallback } from 'react';
+import {
+  isSceneStoryboardFile,
+  sceneVideoTargetFromStoryboard,
+} from '@/render/components/SceneVideoView/events';
 import type { AssistantScopeTarget } from '@/render/app/types';
 import type { Character, LoreEntry } from '@/render/components/RightPanel/types';
 import type { FileNode } from '@/render/types';
@@ -7,6 +11,7 @@ import {
   WORKSPACE_TAB_LORE,
   createCharacterWorkspaceTab,
   createLoreWorkspaceTab,
+  createSceneVideoWorkspaceTab,
   createVolumeWorkspaceTab,
 } from '@/render/utils/workspace';
 import { areCharactersEqual, areLoreEntriesEqual } from '@/render/app/entityEquality';
@@ -72,6 +77,17 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
 
   const handleFileSelect = useCallback(
     (filePath: string) => {
+      // 资料里的「分镜.json」是场景视频的画布：直接打开画布，而不是显示 JSON
+      if (isSceneStoryboardFile(filePath)) {
+        const ipc = window.electron?.ipcRenderer;
+        void (ipc ? ipc.invoke('read-file', filePath) : Promise.resolve(''))
+          .catch(() => '')
+          .then((raw) => {
+            const target = sceneVideoTargetFromStoryboard(String(raw ?? ''));
+            openFileInTab(target ? createSceneVideoWorkspaceTab(target) : filePath);
+          });
+        return;
+      }
       openFileInTab(filePath);
     },
     [openFileInTab]

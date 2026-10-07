@@ -2,21 +2,25 @@ import React, { useEffect, useRef, useState } from 'react';
 import { loadAvatarSource } from '../../../../utils/characterAvatar';
 import styles from './styles.module.scss';
 
-interface CharacterAvatarPickerProps {
+interface CharacterPortraitProps {
   name: string;
+  /** 人物卡的形象图（attributes.avatar：相对作品目录的路径，或旧数据中的 data URL / 网络地址） */
   avatar?: string;
   color?: string;
-  /** 作品目录：头像保存到 <作品>/资料/人物头像/ */
+  /** 作品目录：图片保存到 <作品>/资料/人物头像/ */
   workPath: string | null;
   /** 保存成功后写回人物卡（相对作品目录的路径） */
   onChange: (avatar: string) => Promise<void> | void;
 }
 
+export const PORTRAIT_HINT = '形象图保存在 资料/人物头像/；正文悬停卡片等处会裁成圆形头像显示';
+
 /**
- * 人物详情标题区的头像：显示头像（或首字圆标），点击从本地选择图片。
+ * 人物详情的形象图（立绘）：以竖版大图完整展示，点击从本地选择图片更换。
+ * 同一张图在悬停卡片、场景视频等「引用人物」的地方裁成小圆头像，这里不裁成头像。
  * 图片交给主进程校验并保存到 <作品>/资料/人物头像/，人物卡只保存相对路径。
  */
-export const CharacterAvatarPicker: React.FC<CharacterAvatarPickerProps> = ({
+export const CharacterPortrait: React.FC<CharacterPortraitProps> = ({
   name,
   avatar,
   color = '#9cdcfe',
@@ -66,20 +70,34 @@ export const CharacterAvatarPicker: React.FC<CharacterAvatarPickerProps> = ({
 
   const initial = Array.from(name.trim())[0] ?? '?';
   return (
-    <div className={styles.picker}>
+    <figure className={styles.portrait} data-testid="character-portrait">
       <button
         type="button"
-        className={styles.avatar}
-        style={{ '--avatar-accent': color } as React.CSSProperties}
+        className={`${styles.frame} ${src ? '' : styles.frameEmpty}`}
+        style={{ '--portrait-accent': color } as React.CSSProperties}
         onClick={() => inputRef.current?.click()}
         disabled={!workPath || busy}
-        aria-label={src ? `更换 ${name} 的头像` : `为 ${name} 设置头像`}
-        title={src ? '更换头像' : '设置头像（保存到 资料/人物头像/）'}
+        aria-label={src ? `更换 ${name} 的形象图` : `为 ${name} 添加形象图`}
+        title={PORTRAIT_HINT}
       >
-        {src ? <img src={src} alt="" draggable={false} /> : <span>{initial}</span>}
-        <span className={styles.overlay} aria-hidden="true">
-          {busy ? '保存中' : src ? '更换' : '头像'}
-        </span>
+        {src ? (
+          <img src={src} alt={`${name} 的形象图`} draggable={false} />
+        ) : (
+          <span className={styles.placeholder}>
+            <span className={styles.initial}>{initial}</span>
+            <span className={styles.placeholderText}>添加形象图</span>
+          </span>
+        )}
+        {src && (
+          <span className={styles.overlay} aria-hidden="true">
+            {busy ? '保存中…' : '更换形象图'}
+          </span>
+        )}
+        {!src && busy && (
+          <span className={styles.overlay} aria-hidden="true">
+            保存中…
+          </span>
+        )}
       </button>
       <input
         ref={inputRef}
@@ -90,12 +108,12 @@ export const CharacterAvatarPicker: React.FC<CharacterAvatarPickerProps> = ({
         data-testid="character-avatar-input"
       />
       {error && (
-        <span className={styles.error} role="alert">
+        <figcaption className={styles.error} role="alert">
           {error}
-        </span>
+        </figcaption>
       )}
-    </div>
+    </figure>
   );
 };
 
-export default CharacterAvatarPicker;
+export default CharacterPortrait;

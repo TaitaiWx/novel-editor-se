@@ -7,6 +7,8 @@ import type {
   VolumeOutline,
 } from '@novel-editor/basic-algorithm';
 import InlineRenameInput from '../../InlineRenameInput';
+import Tooltip from '../../Tooltip';
+import { formatWordCount } from './VolumeOverview';
 import styles from './styles.module.scss';
 
 const BEAT_SOURCE_LABELS: Record<VolumeBeat['source'], string> = {
@@ -16,6 +18,12 @@ const BEAT_SOURCE_LABELS: Record<VolumeBeat['source'], string> = {
   opening: '开篇',
   suggestion: '建议',
 };
+
+/** 节拍行图标按钮的悬停说明（所有图标都必须有 tooltip） */
+export const BEAT_ACTION_TIPS = {
+  insert: '加入本章章纲：把这一条写进章纲，作为本章要写的内容',
+  video: '场景视频：把这一场做成分镜与视频',
+} as const;
 
 export interface OutlineListHandlers {
   onEditBeat: (key: string, text: string) => void;
@@ -106,20 +114,21 @@ const BeatRow: React.FC<{
       }}
     >
       {draggable && (
-        <span
-          className={styles.grip}
-          draggable
-          title="拖动调整顺序"
-          aria-hidden="true"
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', beat.key);
-            setDragKey(beat.key);
-          }}
-          onDragEnd={() => setDragKey(null)}
-        >
-          <VscGripper />
-        </span>
+        <Tooltip content="拖动调整顺序" className={styles.gripSlot}>
+          <span
+            className={styles.grip}
+            draggable
+            aria-hidden="true"
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', beat.key);
+              setDragKey(beat.key);
+            }}
+            onDragEnd={() => setDragKey(null)}
+          >
+            <VscGripper />
+          </span>
+        </Tooltip>
       )}
       <div className={styles.beatBody}>
         {beat.title && (
@@ -144,26 +153,28 @@ const BeatRow: React.FC<{
         <span className={styles.beatSource}>{BEAT_SOURCE_LABELS[beat.source]}</span>
       )}
       {handlers.onInsertBeat && beat.source !== 'outline' && (
-        <button
-          type="button"
-          className={styles.beatAction}
-          title="插入到本章章纲"
-          aria-label={`插入到章纲 ${beat.title || beat.text}`}
-          onClick={() => handlers.onInsertBeat?.(chapter, beat)}
-        >
-          <VscInsert />
-        </button>
+        <Tooltip content={BEAT_ACTION_TIPS.insert}>
+          <button
+            type="button"
+            className={styles.beatAction}
+            aria-label={`插入到章纲 ${beat.title || beat.text}`}
+            onClick={() => handlers.onInsertBeat?.(chapter, beat)}
+          >
+            <VscInsert />
+          </button>
+        </Tooltip>
       )}
       {handlers.onSceneVideo && beat.source === 'scene' && (
-        <button
-          type="button"
-          className={styles.beatAction}
-          title="生成场景视频"
-          aria-label={`生成场景视频 ${beat.title || beat.text}`}
-          onClick={() => handlers.onSceneVideo?.(chapter, beat)}
-        >
-          <VscDeviceCameraVideo />
-        </button>
+        <Tooltip content={BEAT_ACTION_TIPS.video}>
+          <button
+            type="button"
+            className={styles.beatAction}
+            aria-label={`生成场景视频 ${beat.title || beat.text}`}
+            onClick={() => handlers.onSceneVideo?.(chapter, beat)}
+          >
+            <VscDeviceCameraVideo />
+          </button>
+        </Tooltip>
       )}
     </li>
   );
@@ -172,10 +183,11 @@ const BeatRow: React.FC<{
 const ChapterBlock: React.FC<{
   chapter: VolumeChapterPlan;
   characters: string[];
+  words: number;
   dragKey: string | null;
   setDragKey: (key: string | null) => void;
   handlers: OutlineListHandlers;
-}> = ({ chapter, characters, dragKey, setDragKey, handlers }) => {
+}> = ({ chapter, characters, words, dragKey, setDragKey, handlers }) => {
   const segmentKeys = chapter.beats.map((beat) => beat.key);
   return (
     <div className={styles.chapter} data-chapter-path={chapter.path}>
@@ -191,8 +203,13 @@ const ChapterBlock: React.FC<{
           {chapter.continued && <span className={styles.continued}>（续）</span>}
         </button>
         {characters.length > 0 && (
-          <span className={styles.chapterPeople} title={characters.join('、')}>
+          <span className={styles.chapterPeople} title={`出场：${characters.join('、')}`}>
             {characters.slice(0, 3).join(' · ')}
+          </span>
+        )}
+        {words > 0 && !chapter.continued && (
+          <span className={styles.chapterWords} title={`本章 ${words} 字`}>
+            {formatWordCount(words)}
           </span>
         )}
       </div>
@@ -221,11 +238,12 @@ const ActBlock: React.FC<{
   act: VolumeActPlan;
   index: number;
   charactersByChapter: Map<string, string[]>;
+  wordsByChapter: ReadonlyMap<string, number>;
   dragKey: string | null;
   setDragKey: (key: string | null) => void;
   handlers: OutlineListHandlers;
-}> = ({ act, index, charactersByChapter, dragKey, setDragKey, handlers }) => (
-  <section className={styles.act} aria-label={act.title}>
+}> = ({ act, index, charactersByChapter, wordsByChapter, dragKey, setDragKey, handlers }) => (
+  <section className={styles.act} aria-label={act.title} data-act-key={act.key}>
     <div className={styles.actHeader}>
       <span className={styles.actDot} data-tone={index % 4} />
       {act.line && act.chapters[0] ? (
@@ -242,11 +260,12 @@ const ActBlock: React.FC<{
       )}
       <span className={styles.actCount}>{act.chapters.length} 章</span>
     </div>
+    {/* 没有说明时只在悬停 / 聚焦这一幕时显示「＋ 一句话说明」，避免每一幕都重复占位文字 */}
     <EditableText
       value={act.hint}
-      placeholder="一句话说明这一段要完成什么"
+      placeholder="＋ 一句话说明这一段要完成什么"
       ariaLabel={`编辑 ${act.title} 的说明`}
-      className={styles.actNote}
+      className={`${styles.actNote} ${act.hint ? '' : styles.actNoteEmpty}`}
       onCommit={(text) => handlers.onEditActNote(act.key, text)}
     />
     <div className={styles.chapters}>
@@ -255,6 +274,7 @@ const ActBlock: React.FC<{
           key={`${chapter.path}:${chapter.continued ? 'c' : 'h'}`}
           chapter={chapter}
           characters={charactersByChapter.get(chapter.path) ?? []}
+          words={wordsByChapter.get(chapter.path) ?? 0}
           dragKey={dragKey}
           setDragKey={setDragKey}
           handlers={handlers}
@@ -264,12 +284,16 @@ const ActBlock: React.FC<{
   </section>
 );
 
+const EMPTY_WORDS: ReadonlyMap<string, number> = new Map();
+
 /** 列表视图：幕 → 章 → 关键节拍（点击编辑、拖拽排序、插入章纲） */
 export const OutlineList: React.FC<{
   outline: VolumeOutline;
   charactersByChapter: Map<string, string[]>;
+  /** 章节字数（不计空白）；省略时不显示 */
+  wordsByChapter?: ReadonlyMap<string, number>;
   handlers: OutlineListHandlers;
-}> = ({ outline, charactersByChapter, handlers }) => {
+}> = ({ outline, charactersByChapter, wordsByChapter = EMPTY_WORDS, handlers }) => {
   const [dragKey, setDragKeyState] = useState<string | null>(null);
   const setDragKey = useCallback((key: string | null) => setDragKeyState(key), []);
   return (
@@ -280,6 +304,7 @@ export const OutlineList: React.FC<{
           act={act}
           index={index}
           charactersByChapter={charactersByChapter}
+          wordsByChapter={wordsByChapter}
           dragKey={dragKey}
           setDragKey={setDragKey}
           handlers={handlers}

@@ -3164,7 +3164,29 @@
   min-width: 0;
 }
 
-// 人物详情：头像在左，标题占满中间
+// 人物详情：左侧竖版形象图（大图），右侧标题 / 简介 / 标签；窄时换行到图片下方
+.workspaceHeroPortrait {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.workspaceHeroMain {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 260px;
+}
+
+// 人物关系：引用其他人物时显示小圆头像
+.relationTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .workspaceTitleGrow {
   flex: 1;
   min-width: 0;

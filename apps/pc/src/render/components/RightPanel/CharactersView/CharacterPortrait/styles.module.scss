@@ -1,0 +1,98 @@
+// 人物形象图（立绘）：竖版 3:4 大图完整展示，不裁成圆形
+.portrait {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 168px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.frame {
+  --portrait-accent: #9cdcfe;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  font: inherit;
+  cursor: pointer;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 2px;
+  }
+
+  &:hover:not(:disabled) .overlay {
+    opacity: 1;
+  }
+}
+
+.frameEmpty {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--portrait-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--portrait-accent) 6%, transparent);
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--portrait-accent) 10%, transparent);
+  }
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  color: var(--portrait-accent);
+}
+
+.initial {
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.placeholderText {
+  font-size: 12px;
+  color: var(--ui-fg-muted);
+}
+
+.overlay {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.error {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #e8a29a;
+}

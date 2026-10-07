@@ -1,0 +1,210 @@
+@use '../scene-video-ui' as ui;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  flex-shrink: 0;
+  min-height: 0;
+  border-radius: 12px;
+  border: 1px solid ui.$line;
+  background: ui.$surface;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 44px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid ui.$line;
+}
+
+.title {
+  @include ui.column-title;
+  font-size: 13px;
+}
+
+.scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.field {
+  @include ui.field;
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+}
+
+.label {
+  @include ui.label;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.labelMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  color: ui.$disabled;
+}
+
+.input {
+  @include ui.input;
+}
+
+.textarea {
+  @include ui.textarea;
+}
+
+.muted {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: ui.$muted;
+}
+
+.button {
+  @include ui.button;
+  align-self: flex-start;
+}
+
+.iconButton {
+  @include ui.icon-button;
+}
+
+.inlineActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.seedHint {
+  @include ui.soft-hint;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: #9cc3e6;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.linkButtonActive {
+  color: ui.$fg-strong;
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  @include ui.chip;
+}
+
+.chipRemove {
+  @include ui.icon-button;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+}
+
+.characterHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: ui.$fg-strong;
+}
+
+.versionChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.versionChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid ui.$line-strong;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.versionChipActive {
+  border-color: rgba(ui.$accent, 0.55);
+  background: rgba(ui.$accent, 0.12);
+}
+
+.versionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+}
+
+.chosenMark {
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 15px;
+  background: rgba(ui.$success, 0.16);
+  color: #b5dcc6;
+}
+
+.fileList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+}

@@ -38,14 +38,12 @@ describe('首次启动', () => {
     await expandTreePath(app.page, ['第一卷-离乡', '001-启程']);
     const titles = await treeTitles(app.page);
     expect(titles).toEqual(expect.arrayContaining(['第一卷-离乡', '001-启程']));
-    // 欢迎使用.md 是项目文档：收在项目菜单的「项目说明」分组里，不是「未分卷」里的章
+    // 欢迎使用.md 是项目文档：在项目名下方的「项目说明」分区里，不是「未分卷」里的章
     expect(titles).not.toContain('欢迎使用');
     await openProjectDocs(app.page);
     expect(await app.page.exists({ text: '欢迎使用', within: SEL.projectNotes, exact: true })).toBe(
       true
     );
-    await app.page.press('Escape');
-    await app.page.waitForGone(SEL.projectMenu);
     expect(titles).not.toContain('novels');
     expect(titles).not.toContain('未分卷');
     expect(titles).not.toContain('剑与诗');

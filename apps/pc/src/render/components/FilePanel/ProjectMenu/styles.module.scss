@@ -1,58 +1,37 @@
-// 项目名 = 下拉触发器「示例作品集 ▾」
+// 「⋯ 更多」触发器：与头部其他图标按钮一致
 .trigger {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: 100%;
-  height: 24px;
-  padding: 0 6px;
-  margin-left: -6px;
+  justify-content: center;
+  padding: 3px;
   border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ui-fg-primary);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
+  border-radius: 4px;
+  background: none;
+  color: var(--ui-fg-muted);
+  font-size: 15px;
   cursor: pointer;
   transition:
     background-color 0.15s,
     color 0.15s;
 
   &:hover {
-    background: var(--ui-interaction-hover-bg);
+    background-color: var(--ui-interaction-hover-bg);
+    color: var(--ui-fg-primary);
+  }
 
-    .triggerChevron {
-      color: var(--ui-fg-primary);
-    }
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 1px;
   }
 }
 
 .triggerActive {
-  background: var(--ui-interaction-active-bg);
-
-  .triggerChevron {
-    color: var(--ui-fg-primary);
-  }
-}
-
-.triggerLabel {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.triggerChevron {
-  flex-shrink: 0;
-  font-size: 10px;
-  color: var(--ui-fg-muted);
-  transition: color 0.15s;
+  background-color: var(--ui-interaction-accent-soft);
+  color: var(--ui-fg-primary);
 }
 
 .popover {
-  width: 264px;
+  width: 248px;
 }
 
 .menu {
@@ -65,41 +44,6 @@
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
 }
 
-.groupHeader {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px 0;
-}
-
-.groupTitle {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ui-fg-muted);
-}
-
-.groupCount {
-  min-width: 16px;
-  height: 16px;
-  padding: 0 5px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  color: var(--ui-fg-muted);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.groupHint {
-  padding: 2px 8px 4px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--ui-fg-disabled);
-}
-
-.docList,
 .recentList {
   display: flex;
   flex-direction: column;
@@ -138,10 +82,6 @@
     color: var(--ui-fg-disabled);
     cursor: default;
   }
-}
-
-.itemActive {
-  background: var(--ui-interaction-accent-soft);
 }
 
 .subItem {

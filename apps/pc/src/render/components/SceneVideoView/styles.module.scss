@@ -1,76 +1,21 @@
 @use './scene-video-ui' as ui;
 
-// 工作区标签：三栏铺满，宽度不够时（标签区域 < 1080px）改为上下排列，保证每栏都有足够空间
+// 工作区标签：顶部工具栏 + 画布（铺满剩余高度）+ 选中节点时右侧的检查器
 .view {
-  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 100%;
-  padding: 24px 28px 32px;
+  height: 100%;
+  min-height: 560px;
+  padding: 18px 20px 20px;
   color: ui.$fg;
 }
 
 .loading {
   @include ui.empty;
   padding-top: 80px;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.heading {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  min-width: 0;
-}
-
-.headingTitle {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  color: ui.$fg-strong;
-}
-
-.headingMeta {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  color: ui.$muted;
-}
-
-.headerRight {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.saveStatus {
-  font-size: 12px;
-  color: ui.$disabled;
-
-  &[data-status='saved'] {
-    color: ui.$success;
-  }
-
-  &[data-status='error'] {
-    color: ui.$danger;
-  }
-}
-
-.headerButton {
-  @include ui.button;
 }
 
 .notice {
@@ -100,17 +45,9 @@
   }
 }
 
-.columns {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(380px, 1.35fr) minmax(300px, 1.1fr);
-  gap: ui.$gap;
-  align-items: start;
+.workspace {
+  display: flex;
+  gap: 12px;
   flex: 1;
   min-height: 0;
-}
-
-@container (max-width: 1080px) {
-  .columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }

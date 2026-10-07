@@ -38,7 +38,13 @@ export interface StoryDropTarget {
 }
 
 /** 可折叠的对象分区 */
-export type FilePanelSection = 'story' | 'characters' | 'lore' | 'growth' | 'materials';
+export type FilePanelSection =
+  | 'projectDocs'
+  | 'story'
+  | 'characters'
+  | 'lore'
+  | 'growth'
+  | 'materials';
 
 export type CollapsedSections = Record<FilePanelSection, boolean>;
 

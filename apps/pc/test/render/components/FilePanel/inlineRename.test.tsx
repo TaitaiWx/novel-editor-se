@@ -10,12 +10,15 @@ import WorkspaceHeader, {
   buildCreateMenuItems,
 } from '@/render/components/FilePanel/WorkspaceHeader';
 import ProjectMenu, {
-  PROJECT_DOCS_HINT,
+  PROJECT_MORE_LABEL,
   folderBaseName,
   getRevealInFileManagerLabel,
   pickRecentFolders,
 } from '@/render/components/FilePanel/ProjectMenu';
 import FileTree from '@/render/components/FileTree';
+import ProjectDocsSection, {
+  PROJECT_DOCS_HINT,
+} from '@/render/components/FilePanel/ProjectDocsSection';
 
 function makeTree(overrides: Partial<StoryTreeContext> = {}): StoryTreeContext {
   return {
@@ -276,51 +279,56 @@ describe('WorkspaceHeader 布局与项目名重命名', () => {
     return { props, ...view };
   }
 
-  it('头部只保留 项目菜单 | 搜索 / 新建 | 折叠侧边栏（最右侧，与其他操作之间有分隔）', () => {
+  it('头部：项目名 | 搜索 / 新建 / ⋯ 更多 | 折叠侧边栏（最右侧，与其他操作之间有分隔）', () => {
     const { container, props } = renderHeader();
     const buttons = Array.from(container.querySelectorAll('button')).map(
       (button) => button.getAttribute('data-testid') ?? button.getAttribute('aria-label')
     );
     expect(buttons).toEqual([
-      'project-menu-trigger',
       expect.stringMatching(/^搜索文件/),
       '新建',
+      'project-menu-trigger',
       '折叠侧边栏',
     ]);
+    // ⋯ 在 + 后面
+    const more = screen.getByTestId('project-menu-trigger');
+    expect(more.getAttribute('aria-label')).toBe(PROJECT_MORE_LABEL);
+    expect(more.textContent).toBe('');
     const collapse = screen.getByLabelText('折叠侧边栏');
     expect(collapse.parentElement?.previousElementSibling?.getAttribute('aria-hidden')).toBe(
       'true'
     );
     fireEvent.click(collapse);
     expect(props.onCollapse).toHaveBeenCalled();
-    // 不再有铅笔按钮、单独的打开文件夹 / 刷新 / 项目说明按钮
     for (const label of ['修改作品名', '更换文件夹', '重新扫描作品目录']) {
       expect(screen.queryByLabelText(label)).toBeNull();
     }
-    expect(screen.queryByLabelText(/^项目说明（/)).toBeNull();
+    // 项目说明不在头部
+    expect(screen.queryByText('项目说明')).toBeNull();
   });
 
-  it('项目名是下拉触发器：显示名称 + ▾，单击打开菜单', () => {
+  it('项目名是普通标题（不是下拉）；⋯ 单击打开 / 关闭项目菜单', () => {
     renderHeader();
+    const name = screen.getByTestId('project-name');
+    expect(name.tagName).toBe('SPAN');
+    expect(name.textContent).toBe('示例作品集');
+    fireEvent.click(name);
+    expect(screen.queryByRole('menu', { name: '项目菜单' })).toBeNull();
     const trigger = screen.getByTestId('project-menu-trigger');
-    expect(trigger.textContent).toBe('示例作品集');
-    expect(trigger.querySelector('svg')).toBeTruthy();
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    fireEvent.click(trigger, { detail: 1 });
+    fireEvent.click(trigger);
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('menu', { name: '项目菜单' })).toBeTruthy();
-    fireEvent.click(trigger, { detail: 1 });
+    fireEvent.click(trigger);
     expect(screen.queryByRole('menu', { name: '项目菜单' })).toBeNull();
   });
 
-  it('双击项目名进入行内重命名（不打开菜单）：Enter 提交、Esc 取消、失焦提交', async () => {
+  it('双击项目名进入行内重命名：Enter 提交、Esc 取消（焦点回到项目名）、F2、失焦提交', async () => {
     const { props } = renderHeader();
-    const trigger = () => screen.getByTestId('project-menu-trigger');
+    const name = () => screen.getByTestId('project-name');
 
-    fireEvent.click(trigger(), { detail: 1 });
-    fireEvent.click(trigger(), { detail: 2 });
-    fireEvent.doubleClick(trigger());
+    fireEvent.doubleClick(name());
     expect(screen.queryByRole('menu', { name: '项目菜单' })).toBeNull();
     let input = screen.getByLabelText('重命名项目') as HTMLInputElement;
     expect(input.value).toBe('示例作品集');
@@ -329,46 +337,105 @@ describe('WorkspaceHeader 布局与项目名重命名', () => {
     expect(props.onRenameProject).toHaveBeenCalledWith('我的作品集');
     expect(screen.queryByLabelText('重命名项目')).toBeNull();
 
-    fireEvent.doubleClick(trigger());
+    fireEvent.doubleClick(name());
     input = screen.getByLabelText('重命名项目') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '不要' } });
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(props.onRenameProject).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(document.activeElement).toBe(trigger()));
+    await waitFor(() => expect(document.activeElement).toBe(name()));
 
-    // 键盘：聚焦项目名后按 F2
-    fireEvent.keyDown(trigger(), { key: 'F2' });
+    fireEvent.keyDown(name(), { key: 'F2' });
     input = screen.getByLabelText('重命名项目') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '失焦提交' } });
     fireEvent.blur(input);
     expect(props.onRenameProject).toHaveBeenLastCalledWith('失焦提交');
   });
 
-  it('菜单「重命名项目」进入行内编辑；切换作品中不可重命名', () => {
+  it('⋯ →「重命名项目」进入行内编辑；切换作品中不可重命名', () => {
     renderHeader();
-    fireEvent.click(screen.getByTestId('project-menu-trigger'), { detail: 1 });
+    fireEvent.click(screen.getByTestId('project-menu-trigger'));
     fireEvent.click(screen.getByRole('menuitem', { name: '重命名项目' }));
     expect(screen.getByLabelText('重命名项目')).toBeTruthy();
   });
+
+  it('切换作品中：双击 / F2 不进入重命名', () => {
+    renderHeader({ isWorkspaceBusy: true });
+    fireEvent.doubleClick(screen.getByTestId('project-name'));
+    fireEvent.keyDown(screen.getByTestId('project-name'), { key: 'F2' });
+    expect(screen.queryByLabelText('重命名项目')).toBeNull();
+  });
 });
 
-describe('ProjectMenu（项目菜单）', () => {
+describe('ProjectDocsSection（项目说明）', () => {
   const docs: FileNode[] = [
     { name: '欢迎使用.md', path: '/p/欢迎使用.md', type: 'file' },
     { name: '排版示例.md', path: '/p/排版示例.md', type: 'file' },
   ];
 
-  function Harness(props: Partial<React.ComponentProps<typeof ProjectMenu>>) {
-    const triggerRef = React.useRef<HTMLButtonElement>(null);
-    return (
-      <ProjectMenu
-        label="示例作品集"
-        folderPath="/p"
+  it('默认折叠只占一行（带数量与说明）；展开后点击 / Enter 打开，右键走文件菜单', () => {
+    const onOpen = vi.fn();
+    const onToggle = vi.fn();
+    const onDocContextMenu = vi.fn();
+    const { rerender } = render(
+      <ProjectDocsSection
         docs={docs}
         selectedFile="/p/排版示例.md"
+        collapsed
+        onToggle={onToggle}
+        onOpen={onOpen}
+        onDocContextMenu={onDocContextMenu}
+      />
+    );
+    const region = screen.getByRole('region', { name: '项目说明' });
+    const header = within(region).getByRole('button', { name: /项目说明/ });
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+    expect(header.getAttribute('title')).toBe(PROJECT_DOCS_HINT);
+    expect(header.textContent).toContain('2');
+    expect(within(region).queryByRole('listitem')).toBeNull();
+    fireEvent.click(header, { detail: 1 });
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ProjectDocsSection
+        docs={docs}
+        selectedFile="/p/排版示例.md"
+        collapsed={false}
+        onToggle={onToggle}
+        onOpen={onOpen}
+        onDocContextMenu={onDocContextMenu}
+      />
+    );
+    const items = screen.getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual(['欢迎使用', '排版示例']);
+    expect(items[1].className).toContain('rowActive');
+    fireEvent.click(items[0]);
+    expect(onOpen).toHaveBeenCalledWith('/p/欢迎使用.md');
+    fireEvent.keyDown(items[1], { key: 'Enter' });
+    expect(onOpen).toHaveBeenLastCalledWith('/p/排版示例.md');
+    fireEvent.contextMenu(items[1]);
+    expect(onDocContextMenu).toHaveBeenCalledWith(expect.objectContaining({ node: docs[1] }));
+  });
+
+  it('没有根目录文档时不渲染', () => {
+    const { container } = render(
+      <ProjectDocsSection
+        docs={[]}
+        selectedFile={null}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onOpen={vi.fn()}
+      />
+    );
+    expect(container.innerHTML).toBe('');
+  });
+});
+
+describe('ProjectMenu（项目菜单）', () => {
+  function Harness(props: Partial<React.ComponentProps<typeof ProjectMenu>>) {
+    return (
+      <ProjectMenu
+        folderPath="/p"
         canRename
-        triggerRef={triggerRef}
-        onOpenDoc={vi.fn()}
         onStartRename={vi.fn()}
         onOpenFolder={vi.fn()}
         onOpenRecentFolder={vi.fn()}
@@ -382,7 +449,7 @@ describe('ProjectMenu（项目菜单）', () => {
   }
 
   function openMenu() {
-    fireEvent.click(screen.getByTestId('project-menu-trigger'), { detail: 1 });
+    fireEvent.click(screen.getByTestId('project-menu-trigger'));
     return screen.getByRole('menu', { name: '项目菜单' });
   }
 
@@ -396,48 +463,19 @@ describe('ProjectMenu（项目菜单）', () => {
     expect(folderBaseName('C:\\书\\旧稿')).toBe('旧稿');
   });
 
-  it('菜单项顺序：项目说明（带数量与说明）| 在访达中显示、重命名项目 | 打开其他文件夹…、打开最近使用、刷新', () => {
+  it('菜单项顺序：在访达中显示、重命名项目 | 打开其他文件夹…、打开最近使用、刷新（不含项目说明）', () => {
     render(<Harness />);
     const menu = openMenu();
     const names = within(menu)
       .getAllByRole('menuitem')
       .map((item) => item.textContent);
     expect(names).toEqual([
-      '欢迎使用',
-      '排版示例',
       '在访达中显示',
       '重命名项目F2',
       expect.stringMatching(/^打开其他文件夹…/),
       '打开最近使用',
       '刷新',
     ]);
-    expect(within(menu).getByText('项目说明')).toBeTruthy();
-    expect(within(menu).getByText('2')).toBeTruthy();
-    expect(within(menu).getByText(PROJECT_DOCS_HINT)).toBeTruthy();
-    expect(within(menu).getAllByRole('separator')).toHaveLength(2);
-    expect(within(menu).getByRole('menuitem', { name: '排版示例' }).className).toContain(
-      'itemActive'
-    );
-  });
-
-  it('点击文档打开并关闭菜单；右键文档走文件菜单', () => {
-    const onOpenDoc = vi.fn();
-    const onDocContextMenu = vi.fn();
-    render(<Harness onOpenDoc={onOpenDoc} onDocContextMenu={onDocContextMenu} />);
-    let menu = openMenu();
-    fireEvent.contextMenu(within(menu).getByRole('menuitem', { name: '排版示例' }));
-    expect(onDocContextMenu).toHaveBeenCalledWith(expect.objectContaining({ node: docs[1] }));
-    expect(screen.queryByRole('menu')).toBeNull();
-
-    menu = openMenu();
-    fireEvent.click(within(menu).getByRole('menuitem', { name: '欢迎使用' }));
-    expect(onOpenDoc).toHaveBeenCalledWith('/p/欢迎使用.md');
-    expect(screen.queryByRole('menu')).toBeNull();
-  });
-
-  it('没有根目录文档时隐藏项目说明分组', () => {
-    render(<Harness docs={[]} />);
-    const menu = openMenu();
     expect(within(menu).queryByText('项目说明')).toBeNull();
     expect(within(menu).getAllByRole('separator')).toHaveLength(1);
   });
@@ -519,7 +557,7 @@ describe('ProjectMenu（项目菜单）', () => {
     expect(document.activeElement?.textContent).toBe('刷新');
     fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
     fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-    expect(document.activeElement?.textContent).toBe('欢迎使用');
+    expect(document.activeElement?.textContent).toBe('在访达中显示');
     fireEvent.keyDown(document.activeElement as Element, { key: 'Tab' });
     expect(screen.queryByRole('menu')).toBeNull();
 
@@ -536,18 +574,8 @@ describe('ProjectMenu（项目菜单）', () => {
     expect(document.activeElement).toBe(toggle);
   });
 
-  it('F2 在触发器上进入重命名；不可重命名时菜单项禁用、F2 无效', () => {
-    const onStartRename = vi.fn();
-    const { unmount } = render(<Harness onStartRename={onStartRename} />);
-    fireEvent.keyDown(screen.getByTestId('project-menu-trigger'), { key: 'F2' });
-    expect(onStartRename).toHaveBeenCalledTimes(1);
-    unmount();
-
-    render(<Harness onStartRename={onStartRename} canRename={false} />);
-    const trigger = screen.getByTestId('project-menu-trigger');
-    fireEvent.keyDown(trigger, { key: 'F2' });
-    fireEvent.doubleClick(trigger);
-    expect(onStartRename).toHaveBeenCalledTimes(1);
+  it('不可重命名时「重命名项目」禁用', () => {
+    render(<Harness canRename={false} />);
     const rename = within(openMenu()).getByRole('menuitem', { name: '重命名项目' });
     expect((rename as HTMLButtonElement).disabled).toBe(true);
   });

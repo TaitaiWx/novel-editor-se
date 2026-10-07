@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { WORKSPACE_FILES_CHANGED_EVENT } from '@/render/utils/workspaceFiles';
 import SceneVideoView from '@/render/components/SceneVideoView';
 import { setSceneVideoSeed } from '@/render/components/SceneVideoView/events';
 import type { VideoTask } from '@novel-editor/video';
@@ -109,6 +110,10 @@ function setup(options: MockOptions = {}) {
         return { ok: true, data: { maxConcurrent: 2, dailyLimit: 20 } };
       case 'video-task-list':
         return { ok: true, data: [] };
+      case 'video-scene-read-file':
+        return { ok: true, data: new Uint8Array([0, 0, 0, 24]) };
+      case 'db-outline-list-by-folder':
+        return [];
       case 'ai-complete':
         return { ok: true, data: { text: `好的：\n${AI_STORYBOARD}` } };
       case 'video-scene-save':
@@ -154,63 +159,80 @@ function setup(options: MockOptions = {}) {
 const calls = (electron: ReturnType<typeof installElectronMock>, channel: string) =>
   electron.invoke.mock.calls.filter(([name]) => name === channel);
 
-const shotCards = () => screen.getAllByRole('listitem', { name: /^镜头 \d+$/ });
+/** 画布上的镜头节点 */
+const shotNodes = () => screen.queryAllByRole('group', { name: /^镜头 \d+$/ });
+const node = (label: string) => screen.getByRole('group', { name: label });
+
+/** 单击画布节点（按下 + 松开，不移动）→ 右侧检查器 */
+function selectNode(label: string) {
+  const target = node(label);
+  fireEvent.pointerDown(target, { button: 0, pointerId: 1, clientX: 10, clientY: 10 });
+  fireEvent.pointerUp(target, { button: 0, pointerId: 1, clientX: 10, clientY: 10 });
+  return screen.getByTestId('scene-inspector');
+}
+
+function lastSavedState(electron: ReturnType<typeof installElectronMock>) {
+  return (calls(electron, 'video-scene-save').at(-1)?.[1] as { state: Record<string, unknown> })
+    ?.state;
+}
 
 afterEach(() => {
   cleanup();
   uninstallElectronMock();
 });
 
-describe('场景视频工作区', () => {
-  it('没有配置视频服务：友好提示，仍可按段落拆分镜并导出分镜表', async () => {
+describe('场景视频画布', () => {
+  it('打开即自动拆分镜（没有 AI 时按段落）：人物 → 场景 → 镜头 → 样片；分镜.md 自动写入资料并通知刷新', async () => {
+    const changed = vi.fn();
+    window.addEventListener(WORKSPACE_FILES_CHANGED_EVENT, changed);
     const { electron } = setup();
     await screen.findByTestId('scene-video-view');
-    // 左栏预填：场景正文来自章节里的「第一场」，人物从正文识别，地点来自设定
-    const source = screen.getByLabelText(/场景正文/) as HTMLTextAreaElement;
-    expect(source.value.startsWith('石板路还湿着')).toBe(true);
-    expect(screen.getByLabelText('地点')).toHaveProperty('value', '青石镇');
-    expect(screen.getByLabelText('移除人物 林舟')).toBeTruthy();
-    expect(screen.getByLabelText('移除人物 小石头')).toBeTruthy();
-    expect(screen.queryByLabelText('移除人物 苏晴')).toBeNull();
-    expect(await screen.findByText('先在设置中心配置视频服务')).toBeTruthy();
-    // 缺头像只做浅色提示，不阻止
-    expect(screen.getByText(/补一张林舟的形象图效果更好/)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'AI 生成分镜' }));
-    await waitFor(() => expect(shotCards()).toHaveLength(3));
+    // 自动拆分：不用点任何按钮
+    await waitFor(() => expect(shotNodes()).toHaveLength(3));
     expect(calls(electron, 'ai-complete')).toHaveLength(0);
     expect(screen.getByText(/已按段落拆出 3 个镜头/)).toBeTruthy();
-    expect(
-      (screen.getByRole('button', { name: '生成选中镜头' }) as HTMLButtonElement).disabled
-    ).toBe(true);
+    // 节点：正文识别出的人物、场景、镜头、样片；连线 = 人物→场景 ×2 + 场景→镜头1 + 镜头链 ×2 + 镜头3→样片
+    expect(node('人物 林舟')).toBeTruthy();
+    expect(node('人物 小石头')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: '人物 苏晴' })).toBeNull();
+    expect(node('场景').textContent).toContain('石板路还湿着');
+    expect(node('场景').textContent).toContain('青石镇');
+    expect(node('样片').textContent).toContain('0 / 3 个镜头');
+    const canvas = screen.getByTestId('scene-canvas');
+    expect(canvas.querySelectorAll('path[data-edge]')).toHaveLength(6);
+    expect(canvas.querySelectorAll('path[data-edge][class*="edgeDashed"]')).toHaveLength(2);
+
+    // 没有视频服务：工具栏给出配置入口，生成按钮不可用
+    expect(await screen.findByTestId('scene-video-no-provider')).toBeTruthy();
+    const generate = screen.getByRole('button', { name: '生成 3 个镜头' }) as HTMLButtonElement;
+    expect(generate.disabled).toBe(true);
     expect(screen.getByTestId('scene-video-estimate').textContent).toBe(
       '3 个镜头 · 共 18 秒 · 未填写单价，无法预估费用'
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '导出分镜表' }));
-    await waitFor(() =>
-      expect(
-        calls(electron, 'video-scene-save').some(
-          ([, payload]) => typeof (payload as { markdown?: string }).markdown === 'string'
-        )
-      ).toBe(true)
-    );
-    const exported = calls(electron, 'video-scene-save').find(
-      ([, payload]) => (payload as { markdown?: string }).markdown
-    )?.[1] as { markdown: string; chapter: string; scene: string; workPath: string };
-    expect(exported).toMatchObject({ workPath: WORK, chapter: '001-启程', scene: SCENE });
-    expect(exported.markdown).toContain('| 1 | 全景 | 6s |');
-    expect(
-      await screen.findByText(/已导出分镜表：资料\/视频\/001-启程\/第一场 清晨的青石镇\/分镜.md/)
-    ).toBeTruthy();
+    // 修改自动保存：分镜.json 与 分镜.md 一起写入（不再需要「导出分镜表」）
+    expect(screen.queryByRole('button', { name: '导出分镜表' })).toBeNull();
+    await waitFor(() => expect(calls(electron, 'video-scene-save').length).toBeGreaterThan(0), {
+      timeout: 3000,
+    });
+    const saved = calls(electron, 'video-scene-save')[0][1] as {
+      markdown: string;
+      chapter: string;
+      scene: string;
+      workPath: string;
+    };
+    expect(saved).toMatchObject({ workPath: WORK, chapter: '001-启程', scene: SCENE });
+    expect(saved.markdown).toContain('| 1 | 全景 | 6s |');
+    // 第一次保存新建了目录：通知文件面板刷新，资料里马上能看到
+    await waitFor(() => expect(changed).toHaveBeenCalled());
+    window.removeEventListener(WORKSPACE_FILES_CHANGED_EVENT, changed);
   });
 
-  it('AI 生成分镜：用分镜提示词请求文本服务，结果校验后成为可编辑镜头；显示费用预估', async () => {
+  it('有 AI 时自动用 AI 拆分镜；单击镜头在检查器里编辑；费用只计还没有成片的镜头', async () => {
     const { electron } = setup({ textReady: true, videoReady: true });
     await screen.findByTestId('scene-video-view');
-    await screen.findByLabelText('视频服务');
-    fireEvent.click(screen.getByRole('button', { name: 'AI 生成分镜' }));
-    await waitFor(() => expect(shotCards()).toHaveLength(4));
+    await waitFor(() => expect(shotNodes()).toHaveLength(4));
+    expect(calls(electron, 'ai-complete')).toHaveLength(1);
     const [, request] = calls(electron, 'ai-complete')[0] as [
       string,
       { providerId: string; messages: Array<{ role: string; content: string }> },
@@ -219,71 +241,85 @@ describe('场景视频工作区', () => {
     expect(request.messages[1].content).toContain('石板路还湿着');
     expect(request.messages[1].content).toContain('【地点】青石镇');
     expect(screen.getByText(/AI 拆出 4 个镜头/)).toBeTruthy();
-    expect(screen.getByLabelText('镜头 2 画面描述')).toHaveProperty('value', '林舟回头');
-    // 默认全部选中：6 + 4 + 5 + 3 = 18 秒 × ¥0.5
+    expect(node('镜头 2').textContent).toContain('中景 · 4s');
+    expect(node('镜头 2').textContent).toContain('林舟回头');
+    await screen.findByLabelText('视频服务');
     expect(screen.getByTestId('scene-video-estimate').textContent).toBe(
       '预计 ¥9.00 · 4 个镜头 · 共 18 秒'
     );
-    fireEvent.click(screen.getByLabelText('选择镜头 4'));
-    expect(screen.getByTestId('scene-video-estimate').textContent).toBe(
-      '预计 ¥7.50 · 3 个镜头 · 共 15 秒'
-    );
-    expect(screen.getByText('每日上限 ¥20.00')).toBeTruthy();
+
+    const inspector = selectNode('镜头 2');
+    expect(within(inspector).getByLabelText('镜头 2 画面描述')).toHaveProperty('value', '林舟回头');
+    expect(node('镜头 2').getAttribute('aria-current')).toBe('true');
+    // 单击画布空白处取消选中
+    const canvas = screen.getByTestId('scene-canvas');
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 1, clientY: 1 });
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 2, clientX: 1, clientY: 1 });
+    expect(screen.queryByTestId('scene-inspector')).toBeNull();
   });
 
-  it('编辑、排序、删除、添加镜头，修改自动写回 分镜.json', async () => {
+  it('检查器：编辑、前后移、删除、添加镜头；拖动节点保存位置；修改都写回 分镜.json', async () => {
     const { electron } = setup({ textReady: true });
     await screen.findByTestId('scene-video-view');
-    fireEvent.click(await screen.findByRole('button', { name: 'AI 生成分镜' }));
-    await waitFor(() => expect(shotCards()).toHaveLength(4));
+    await waitFor(() => expect(shotNodes()).toHaveLength(4));
 
-    fireEvent.change(screen.getByLabelText('镜头 1 画面描述'), {
+    let inspector = selectNode('镜头 1');
+    fireEvent.change(within(inspector).getByLabelText('镜头 1 画面描述'), {
       target: { value: '晨雾里的镇口老槐树' },
     });
-    fireEvent.change(screen.getByLabelText('镜头 1 景别'), { target: { value: '大远景' } });
-    fireEvent.click(screen.getByLabelText('下移镜头 1'));
-    expect(screen.getByLabelText('镜头 2 画面描述')).toHaveProperty('value', '晨雾里的镇口老槐树');
-    expect(screen.getByLabelText('镜头 1 画面描述')).toHaveProperty('value', '林舟回头');
-    fireEvent.click(screen.getByLabelText('删除镜头 4'));
-    expect(shotCards()).toHaveLength(3);
+    fireEvent.change(within(inspector).getByLabelText('镜头 1 景别'), {
+      target: { value: '大远景' },
+    });
+    expect(node('镜头 1').textContent).toContain('晨雾里的镇口老槐树');
+    fireEvent.click(within(inspector).getByLabelText('后移镜头 1'));
+    expect(node('镜头 2').textContent).toContain('晨雾里的镇口老槐树');
+    expect(node('镜头 1').textContent).toContain('林舟回头');
+
+    inspector = selectNode('镜头 4');
+    fireEvent.click(within(inspector).getByLabelText('删除镜头 4'));
+    expect(shotNodes()).toHaveLength(3);
+    expect(screen.queryByTestId('scene-inspector')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '添加镜头' }));
-    expect(shotCards()).toHaveLength(4);
-    expect(screen.getByText('写一句画面描述后才能生成')).toBeTruthy();
+    expect(shotNodes()).toHaveLength(4);
+    // 新镜头自动选中，等待补充画面描述
+    expect(screen.getByTestId('scene-inspector').getAttribute('aria-label')).toBe('检查器：镜头 4');
+    expect(node('镜头 4').textContent).toContain('写一句画面描述后才能生成');
+
+    // 拖动「样片」节点：位置保存到 canvas.positions
+    const output = node('样片');
+    fireEvent.pointerDown(output, { button: 0, pointerId: 3, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(output, { pointerId: 3, clientX: 160, clientY: 140 });
+    fireEvent.pointerUp(output, { pointerId: 3, clientX: 160, clientY: 140 });
 
     await waitFor(
       () => {
-        const saves = calls(electron, 'video-scene-save');
-        const last = saves.at(-1)?.[1] as {
-          state: {
-            storyboard: { shots: Array<{ id: string; description: string; shotSize: string }> };
-          };
+        const last = lastSavedState(electron) as {
+          storyboard: { shots: Array<{ id: string; description: string; shotSize: string }> };
+          canvas: { positions: Record<string, { x: number; y: number }> };
         };
-        expect(last.state.storyboard.shots.map((shot) => shot.id)).toEqual([
+        expect(last.storyboard.shots.map((shot) => shot.id)).toEqual([
           'shot-2',
           'shot-1',
           'shot-3',
           'shot-5',
         ]);
-        expect(last.state.storyboard.shots[1]).toMatchObject({
+        expect(last.storyboard.shots[1]).toMatchObject({
           description: '晨雾里的镇口老槐树',
           shotSize: '大远景',
         });
+        expect(last.canvas.positions.output).toBeDefined();
       },
       { timeout: 3000 }
     );
   });
 
-  it('生成选中镜头 → 任务列表随 video-task-updated 实时更新；失败显示原因并可重试，进行中可取消', async () => {
+  it('「生成 N 个镜头」只提交没有成片的镜头；节点实时显示进度 / 失败；检查器里重试与取消', async () => {
     const { electron } = setup({ textReady: true, videoReady: true });
     await screen.findByTestId('scene-video-view');
+    await waitFor(() => expect(shotNodes()).toHaveLength(4));
     await screen.findByLabelText('视频服务');
-    fireEvent.click(screen.getByRole('button', { name: 'AI 生成分镜' }));
-    await waitFor(() => expect(shotCards()).toHaveLength(4));
-    fireEvent.click(screen.getByLabelText('选择镜头 3'));
-    fireEvent.click(screen.getByLabelText('选择镜头 4'));
-    fireEvent.click(screen.getByRole('button', { name: '生成选中镜头' }));
-
-    await waitFor(() => expect(calls(electron, 'video-task-submit')).toHaveLength(2));
+    fireEvent.click(screen.getByRole('button', { name: '生成 4 个镜头' }));
+    await waitFor(() => expect(calls(electron, 'video-task-submit')).toHaveLength(4));
     const submitted = calls(electron, 'video-task-submit').map(
       ([, payload]) => payload as Record<string, unknown>
     );
@@ -298,21 +334,15 @@ describe('场景视频工作区', () => {
       aspectRatio: '16:9',
     });
     expect(String(submitted[0].prompt)).toContain('晨雾中的青石镇');
-    expect(submitted[1]).toMatchObject({ shotIndex: 2 });
-    const taskList = await screen.findByRole('list', { name: '生成任务' });
-    await waitFor(() => expect(within(taskList).getAllByRole('listitem')).toHaveLength(2));
+    // 已提交的镜头不再计入「生成」
+    await waitFor(() => expect(screen.getByRole('button', { name: '镜头都已生成' })).toBeTruthy());
 
-    const [first, second] = calls(electron, 'video-task-submit').map(
-      ([, payload]) => payload as Record<string, unknown>
+    const [first, second] = submitted;
+    electron.emit(
+      'video-task-updated',
+      makeTask(first, { id: 'task-1', status: 'running', progress: 42 })
     );
-    const firstTask = makeTask(first, { id: 'task-1', status: 'running', progress: 42 });
-    electron.emit('video-task-updated', firstTask);
-    expect(await within(taskList).findByText('生成中 42%')).toBeTruthy();
-    // 镜头卡片同步显示状态
-    expect(
-      within(screen.getByRole('listitem', { name: '镜头 1' })).getByText('生成中 42%')
-    ).toBeTruthy();
-
+    expect(await within(node('镜头 1')).findByText('生成中 42%')).toBeTruthy();
     electron.emit(
       'video-task-updated',
       makeTask(second, {
@@ -321,23 +351,28 @@ describe('场景视频工作区', () => {
         error: { code: 'content-safety', message: '内容未通过安全审核', retryable: false },
       })
     );
-    expect(await within(taskList).findByText(/内容未通过安全审核/)).toBeTruthy();
-    expect(within(taskList).getByText(/可以把画面描述写得更含蓄/)).toBeTruthy();
+    expect(await within(node('镜头 2')).findByText(/生成失败：内容未通过安全审核/)).toBeTruthy();
+    // 失败的镜头重新计入「生成」，节点上可以直接重新生成
+    expect(await screen.findByRole('button', { name: '生成 1 个镜头' })).toBeTruthy();
+    expect(within(node('镜头 2')).getByRole('button', { name: '重新生成镜头 2' })).toBeTruthy();
 
+    let inspector = selectNode('镜头 2');
+    const taskList = within(inspector).getByRole('list', { name: '生成任务' });
+    expect(within(taskList).getByText(/可以把画面描述写得更含蓄/)).toBeTruthy();
     fireEvent.click(within(taskList).getByRole('button', { name: '重试 镜头 2 v1' }));
     await waitFor(() => expect(electron.invoke).toHaveBeenCalledWith('video-task-retry', 'task-2'));
-    fireEvent.click(within(taskList).getByRole('button', { name: '取消 镜头 1 v1' }));
+
+    inspector = selectNode('镜头 1');
+    fireEvent.click(within(inspector).getByRole('button', { name: '取消 镜头 1 v1' }));
     await waitFor(() =>
       expect(electron.invoke).toHaveBeenCalledWith('video-task-cancel', 'task-1')
     );
-    expect(await within(taskList).findByText('已取消')).toBeTruthy();
-
     // 其他场景的任务不显示
     electron.emit('video-task-updated', makeTask({ ...first, scene: '别的场' }, { id: 'x' }));
-    expect(within(taskList).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(screen.getByTestId('scene-inspector')).getAllByRole('listitem')).toHaveLength(1);
   });
 
-  it('重新打开：从 分镜.json 恢复；带入的选段与保存的不同时只提示，不覆盖', async () => {
+  it('重新打开：从 分镜.json 恢复（不再自动拆分）；成片显示在节点上；第一个成片后自动记录到章纲', async () => {
     setSceneVideoSeed(TAB, { sourceText: '这次选中的另一段文字', origin: 'selection' });
     const savedState = {
       schemaVersion: 1,
@@ -360,20 +395,65 @@ describe('场景视频工作区', () => {
       nextShotNumber: 4,
       selectedShotIds: ['shot-3'],
       chosenVersions: {},
+      canvas: { positions: { scene: { x: 400, y: 300 } } },
       updatedAt: '2026-10-07T00:00:00.000Z',
     };
     const { electron } = setup({ savedState, files: ['镜头3-v1.mp4', '镜头3-v2.mp4'] });
     await screen.findByTestId('scene-video-view');
-    expect(screen.getByLabelText(/场景正文/)).toHaveProperty('value', '保存过的场景正文');
-    expect(screen.getByLabelText('镜头 1 画面描述')).toHaveProperty('value', '保存的镜头');
-    expect(screen.getByRole('radio', { name: '水墨' }).getAttribute('aria-checked')).toBe('true');
+    expect(node('场景').textContent).toContain('保存过的场景正文');
+    expect(node('场景').style.left).toBe('400px');
+    expect(shotNodes()).toHaveLength(1);
+    expect(node('镜头 1').textContent).toContain('v2 / 2');
     expect(calls(electron, 'read-file')).toHaveLength(0);
-    // 已有成片版本：可预览 / 选用 / 对比
-    expect(screen.getByRole('button', { name: '预览 镜头 1 v2' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '选用 镜头 1 v1' })).toBeTruthy();
+    expect(calls(electron, 'ai-complete')).toHaveLength(0);
+    expect((screen.getByLabelText('风格') as HTMLSelectElement).value).toBe('水墨');
 
-    expect(screen.getByText(/这次选中的文字与保存的场景正文不同/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '用选中的文字替换' }));
-    expect(screen.getByLabelText(/场景正文/)).toHaveProperty('value', '这次选中的另一段文字');
+    // 已有成片：自动在本章章纲里记录一次（分镜表 + 成片路径），并记下已记录
+    await waitFor(() =>
+      expect(electron.invoke).toHaveBeenCalledWith(
+        'db-outline-list-by-folder',
+        WORK,
+        expect.objectContaining({ kind: 'chapter', path: CHAPTER_PATH })
+      )
+    );
+    await waitFor(() => expect(lastSavedState(electron)?.outlineLinked).toBe(true), {
+      timeout: 3000,
+    });
+
+    // 版本：检查器里预览 / 选用
+    let inspector = selectNode('镜头 1');
+    expect(within(inspector).getByRole('button', { name: '预览 镜头 1 v2' })).toBeTruthy();
+    fireEvent.click(within(inspector).getByRole('button', { name: '选用 镜头 1 v1' }));
+    expect(node('镜头 1').textContent).toContain('v1 / 2');
+
+    // 带入的选段与保存的不同：场景检查器里提示，不覆盖
+    inspector = selectNode('场景');
+    expect(within(inspector).getByText(/这次选中的文字与保存的场景正文不同/)).toBeTruthy();
+    fireEvent.click(within(inspector).getByRole('button', { name: '用选中的文字替换' }));
+    expect(within(inspector).getByLabelText(/场景正文/)).toHaveProperty(
+      'value',
+      '这次选中的另一段文字'
+    );
+  });
+
+  it('画布缩放按钮与「适应画布」；所有图标按钮都有 tooltip', async () => {
+    setup({ textReady: true });
+    await screen.findByTestId('scene-video-view');
+    await waitFor(() => expect(shotNodes()).toHaveLength(4));
+    const zoom = screen.getByRole('toolbar', { name: '画布缩放' });
+    const value = () => zoom.textContent?.match(/\d+%/)?.[0];
+    const before = value();
+    fireEvent.click(within(zoom).getByRole('button', { name: '放大' }));
+    expect(value()).not.toBe(before);
+    fireEvent.click(within(zoom).getByRole('button', { name: '适应画布' }));
+    expect(value()).toBe(before);
+
+    for (const label of ['放大', '缩小', '适应画布', '添加镜头', '在资料中查看', '重新拆分镜']) {
+      const button = screen.getByRole('button', { name: label });
+      fireEvent.mouseEnter(button.parentElement as HTMLElement);
+      expect((await screen.findByRole('tooltip')).textContent).toBeTruthy();
+      fireEvent.mouseLeave(button.parentElement as HTMLElement);
+      await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
+    }
   });
 });

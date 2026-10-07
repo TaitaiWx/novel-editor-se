@@ -312,6 +312,30 @@ describe('成长档案：首次使用', () => {
     await page.waitForGone(SEL.dialog);
     // 新建人物后自动打开人物详情
     await page.waitForTarget('[aria-label="为 莉娜 新建成长档案"]', 15_000);
+    // 人物资料展示竖版大图（形象图），不是小圆头像；没有图时显示「添加形象图」占位
+    const portrait = await page.evaluate<{
+      width: number;
+      height: number;
+      radius: string;
+      text: string;
+    } | null>(() => {
+      const frame = document.querySelector<HTMLElement>(
+        '[data-testid="character-portrait"] button'
+      );
+      if (!frame) return null;
+      const rect = frame.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height,
+        radius: getComputedStyle(frame).borderRadius,
+        text: frame.textContent ?? '',
+      };
+    });
+    expect(portrait, '人物详情有形象图区域').not.toBeNull();
+    expect(portrait!.width).toBeGreaterThanOrEqual(150);
+    expect(portrait!.height).toBeGreaterThan(portrait!.width);
+    expect(portrait!.radius).not.toBe('50%');
+    expect(portrait!.text).toContain('添加形象图');
     await captureForReview(page, 'growth-entry-character-detail');
     await page.click('[aria-label="为 莉娜 新建成长档案"]');
 

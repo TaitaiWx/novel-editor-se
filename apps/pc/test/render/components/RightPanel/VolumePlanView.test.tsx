@@ -21,6 +21,9 @@ vi.mock('@/render/components/RightPanel/useAiConfig', () => ({
 }));
 
 const { VolumePlanView } = await import('@/render/components/RightPanel/VolumePlanView');
+const { BEAT_ACTION_TIPS } = await import(
+  '@/render/components/RightPanel/VolumePlanView/OutlineList'
+);
 
 const WORK = '/w';
 const VOLUME = '/w/第一卷';
@@ -128,7 +131,8 @@ describe('VolumePlanView（卷纲）', () => {
     expect(await screen.findByRole('region', { name: '第一幕 离乡' })).toBeTruthy();
     expect(screen.getByRole('region', { name: '第二幕 迷雾' })).toBeTruthy();
     expect(screen.getByText('第一卷')).toBeTruthy();
-    expect(screen.getByText('3 章')).toBeTruthy();
+    // 头部汇总：段数 · 章数 · 字数
+    expect(screen.getByText(/^2 段 · 3 章 · \d+ 字$/)).toBeTruthy();
     expect(screen.getByText('第一场 清晨的青石镇')).toBeTruthy();
     expect(screen.getByText('石板路还湿着。')).toBeTruthy();
     // 没有场景标记的章节用开篇句兜底，并标出来源
@@ -137,19 +141,45 @@ describe('VolumePlanView（卷纲）', () => {
     expect(within(act2).getByText('开篇')).toBeTruthy();
     // 每章出场人物来自人物库
     expect(screen.getAllByText('林舟').length).toBeGreaterThan(0);
-    expect(screen.getByText('结构：', { exact: false }).textContent).toContain('按正文幕标记');
+    expect(screen.getByRole('button', { name: '卷纲结构：按正文幕标记' })).toBeTruthy();
+    // 总览条：每一幕一段，宽度按章数
+    const overview = screen.getByRole('list', { name: '卷纲结构总览' });
+    const segments = within(overview).getAllByRole('listitem');
+    expect(segments.map((item) => item.getAttribute('aria-label'))).toEqual([
+      '第一幕 离乡，1 章',
+      '第二幕 迷雾，2 章',
+    ]);
+    expect((segments[1].parentElement as HTMLElement).style.flexGrow).toBe('2');
+    // 章节字数（不计空白）
+    const act1 = screen.getByRole('region', { name: '第一幕 离乡' });
+    expect(within(act1).getByTitle(/^本章 \d+ 字$/)).toBeTruthy();
+    // 没有说明的幕：说明输入只在悬停时出现（类名控制），不再每一幕都显示占位文字
+    expect(
+      within(act1).getByRole('button', { name: '编辑 第一幕 离乡 的说明' }).className
+    ).toContain('actNoteEmpty');
     expect(screen.queryByText('README')).toBeNull();
   });
 
-  it('换一种结构：在模板之间切换并记住选择', async () => {
+  it('结构菜单：列出全部结构（带说明），选择后切换并记住', async () => {
     const mock = mockIpc();
     renderView();
     await screen.findByRole('region', { name: '第一幕 离乡' });
-    fireEvent.click(screen.getByRole('button', { name: '换一种结构' }));
+    fireEvent.click(screen.getByRole('button', { name: '卷纲结构：按正文幕标记' }));
+    const menu = screen.getByRole('menu', { name: '卷纲结构' });
+    const options = within(menu).getAllByRole('menuitemradio');
+    expect(options.map((item) => item.getAttribute('aria-checked'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false',
+    ]);
+    expect(options[1].textContent).toContain('第一幕 · 建置 → 第二幕 · 对抗 → 第三幕 · 解决');
+    fireEvent.click(within(menu).getByRole('menuitemradio', { name: /^三幕式/ }));
+    expect(screen.queryByRole('menu', { name: '卷纲结构' })).toBeNull();
     expect(await screen.findByRole('region', { name: '第一幕 · 建置' })).toBeTruthy();
     expect(screen.getByText('交代人物处境，抛出打破平静的事件')).toBeTruthy();
     await waitFor(() => expect(savedPlan(mock).structure).toBe('three-act'), { timeout: 2000 });
-    fireEvent.click(screen.getByRole('button', { name: '更多' }));
+    fireEvent.click(screen.getByRole('button', { name: '卷纲更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: '恢复自动结构' }));
     expect(await screen.findByRole('region', { name: '第一幕 离乡' })).toBeTruthy();
   });
@@ -263,9 +293,48 @@ describe('VolumePlanView（卷纲）', () => {
     fireEvent.blur(note);
     expect(await screen.findByText('离开家乡')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '更多' }));
+    fireEvent.click(screen.getByRole('button', { name: '卷纲更多操作' }));
     fireEvent.click(screen.getByRole('button', { name: '撤销所有改写与排序' }));
     expect(await screen.findByText('石板路还湿着。')).toBeTruthy();
+  });
+
+  it('节拍行的图标都有悬停说明（tooltip）：拖动、加入章纲、场景视频', async () => {
+    mockIpc();
+    renderView();
+    const act1 = await screen.findByRole('region', { name: '第一幕 离乡' });
+    const insert = within(act1).getByRole('button', {
+      name: '插入到章纲 第一场 清晨的青石镇',
+    });
+    fireEvent.mouseEnter(insert.parentElement as HTMLElement);
+    expect((await screen.findByRole('tooltip')).textContent).toBe(BEAT_ACTION_TIPS.insert);
+    fireEvent.mouseLeave(insert.parentElement as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
+
+    const video = within(act1).getByRole('button', { name: '生成场景视频 第一场 清晨的青石镇' });
+    fireEvent.mouseEnter(video.parentElement as HTMLElement);
+    expect((await screen.findByRole('tooltip')).textContent).toBe(BEAT_ACTION_TIPS.video);
+    fireEvent.mouseLeave(video.parentElement as HTMLElement);
+
+    const grip = act1.querySelector('[draggable="true"]') as HTMLElement;
+    fireEvent.mouseEnter(grip.parentElement as HTMLElement);
+    expect((await screen.findByRole('tooltip')).textContent).toBe('拖动调整顺序');
+    fireEvent.mouseLeave(grip.parentElement as HTMLElement);
+
+    // 结构与「⋯」也有说明
+    fireEvent.mouseEnter(
+      screen.getByRole('button', { name: '卷纲更多操作' }).parentElement as HTMLElement
+    );
+    expect((await screen.findByRole('tooltip')).textContent).toBe('更多操作');
+  });
+
+  it('点击总览条的某一段滚动到那一幕', async () => {
+    mockIpc();
+    renderView();
+    const act2 = await screen.findByRole('region', { name: '第二幕 迷雾' });
+    const scroll = vi.fn();
+    act2.scrollIntoView = scroll;
+    fireEvent.click(screen.getByRole('listitem', { name: '第二幕 迷雾，2 章' }));
+    expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
   });
 
   it('拖拽调整同一章内节拍的顺序', async () => {

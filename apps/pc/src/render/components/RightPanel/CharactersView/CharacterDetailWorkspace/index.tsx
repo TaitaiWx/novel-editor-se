@@ -13,7 +13,8 @@ import { CAMP_LABELS } from '../../constants';
 import { CharacterCurrentStateSection } from '../CharacterCurrentStateSection';
 import { CharacterTimelineSection } from '../CharacterTimelineSection';
 import { CharacterGrowthButton } from '../CharacterGrowthButton';
-import { CharacterAvatarPicker } from '../CharacterAvatarPicker';
+import { CharacterPortrait } from '../CharacterPortrait';
+import CharacterAvatar from '../../../CharacterAvatar';
 import type { CharacterCurrentStateController } from '../useCharacterCurrentState';
 import type { CharacterTimelineController } from '../useCharacterTimeline';
 
@@ -75,49 +76,51 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
     <div className={styles.objectWorkspace}>
       {focusedCharacter ? (
         <>
-          <section className={styles.workspaceHero}>
-            <div className={styles.workspaceEyebrow}>人物资料</div>
-            <div className={styles.workspaceTitleRow}>
-              <CharacterAvatarPicker
-                name={focusedCharacter.name}
-                avatar={focusedCharacter.avatar}
-                color={focusedCharacter.highlightColor}
-                workPath={workPath}
-                onChange={(avatar) =>
-                  handleUpdateCharacterAttributes(focusedCharacter.id, { avatar })
-                }
-              />
-              <h2 className={`${styles.workspaceTitle} ${styles.workspaceTitleGrow}`}>
-                {focusedCharacter.name}
-              </h2>
-              {onOpenGrowthSheet && (
-                <CharacterGrowthButton
-                  characterName={focusedCharacter.name}
-                  level={growthLevel}
-                  onOpen={onOpenGrowthSheet}
-                />
-              )}
-            </div>
-            <p className={styles.workspaceDesc}>
-              {focusedTimeline.length > 0
-                ? `已从整个作品目录中按章节整理出 ${focusedTimeline.length} 段关键经历，覆盖前期到后期的主要推进。`
-                : focusedCharacter.description || '这个人物还没有补充详细描述。'}
-            </p>
-            <div className={styles.workspaceMetaRow}>
-              <span className={styles.workspaceChip}>
-                分类 {CHARACTER_CATEGORY_LABELS[focusedCharacter.category]}
-              </span>
-              <span className={styles.workspaceChip}>
-                角色定位 {focusedCharacter.role || '未填写'}
-              </span>
-              <span className={styles.workspaceChip}>
-                阵营 {CAMP_LABELS[focusedCamp ?? 'support']}
-              </span>
-              <span className={styles.workspaceChip}>正文热度 {focusedHeat}</span>
-              <span className={styles.workspaceChip}>关系 {selectedRelations.length}</span>
-              <span className={styles.workspaceChip}>经历节点 {focusedTimeline.length}</span>
-              <span className={styles.workspaceChip}>手工修订 {focusedTimelineEditedCount}</span>
-              <span className={styles.workspaceChip}>作品正文 {novelCorpusFileCount}</span>
+          <section className={`${styles.workspaceHero} ${styles.workspaceHeroPortrait}`}>
+            <CharacterPortrait
+              name={focusedCharacter.name}
+              avatar={focusedCharacter.avatar}
+              color={focusedCharacter.highlightColor}
+              workPath={workPath}
+              onChange={(avatar) =>
+                handleUpdateCharacterAttributes(focusedCharacter.id, { avatar })
+              }
+            />
+            <div className={styles.workspaceHeroMain}>
+              <div className={styles.workspaceEyebrow}>人物资料</div>
+              <div className={styles.workspaceTitleRow}>
+                <h2 className={`${styles.workspaceTitle} ${styles.workspaceTitleGrow}`}>
+                  {focusedCharacter.name}
+                </h2>
+                {onOpenGrowthSheet && (
+                  <CharacterGrowthButton
+                    characterName={focusedCharacter.name}
+                    level={growthLevel}
+                    onOpen={onOpenGrowthSheet}
+                  />
+                )}
+              </div>
+              <p className={styles.workspaceDesc}>
+                {focusedTimeline.length > 0
+                  ? `已从整个作品目录中按章节整理出 ${focusedTimeline.length} 段关键经历，覆盖前期到后期的主要推进。`
+                  : focusedCharacter.description || '这个人物还没有补充详细描述。'}
+              </p>
+              <div className={styles.workspaceMetaRow}>
+                <span className={styles.workspaceChip}>
+                  分类 {CHARACTER_CATEGORY_LABELS[focusedCharacter.category]}
+                </span>
+                <span className={styles.workspaceChip}>
+                  角色定位 {focusedCharacter.role || '未填写'}
+                </span>
+                <span className={styles.workspaceChip}>
+                  阵营 {CAMP_LABELS[focusedCamp ?? 'support']}
+                </span>
+                <span className={styles.workspaceChip}>正文热度 {focusedHeat}</span>
+                <span className={styles.workspaceChip}>关系 {selectedRelations.length}</span>
+                <span className={styles.workspaceChip}>经历节点 {focusedTimeline.length}</span>
+                <span className={styles.workspaceChip}>手工修订 {focusedTimelineEditedCount}</span>
+                <span className={styles.workspaceChip}>作品正文 {novelCorpusFileCount}</span>
+              </div>
             </div>
           </section>
 
@@ -216,7 +219,16 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
                   const otherCharacter = characters.find((item) => item.id === otherId);
                   return (
                     <div key={relation.id} className={styles.workspaceListItem}>
-                      <div className={styles.workspaceListTitle}>
+                      <div className={`${styles.workspaceListTitle} ${styles.relationTitle}`}>
+                        {otherCharacter && (
+                          <CharacterAvatar
+                            name={otherCharacter.name}
+                            avatar={otherCharacter.avatar}
+                            color={otherCharacter.highlightColor}
+                            workPath={workPath}
+                            size={22}
+                          />
+                        )}
                         {otherCharacter?.name || '未匹配人物'}
                       </div>
                       <div className={styles.workspaceListDesc}>

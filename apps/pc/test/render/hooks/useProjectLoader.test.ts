@@ -8,6 +8,10 @@ import {
   type SettingsDraft,
 } from '@/render/utils/appSettings';
 import type { FileNode } from '@/render/types';
+import {
+  WORKSPACE_REFRESH_DEBOUNCE_MS,
+  notifyWorkspaceFilesChanged,
+} from '@/render/utils/workspaceFiles';
 import { installElectronMock, uninstallElectronMock, type InvokeHandler } from './electronMock';
 import { deferred, makeToast, ref } from './hookCtx';
 
@@ -397,5 +401,45 @@ describe('useProjectLoader · 打开文件夹', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(toast.error).toHaveBeenCalledWith('打开文件夹失败: bad path');
+  });
+});
+
+describe('useProjectLoader · 后台写入文件后静默刷新', () => {
+  it('收到 WORKSPACE_FILES_CHANGED_EVENT：防抖合并为一次 refresh-folder，不显示加载状态', async () => {
+    const { ctx, electron } = setup({
+      folder: '/p',
+      handler: (channel) =>
+        channel === 'refresh-folder' ? { path: '/p', files: FILES } : undefined,
+    });
+    await flushStartup();
+    electron?.invoke.mockClear();
+    ctx.setIsLoading.mockClear();
+    ctx.applyFolderTree.mockClear();
+    act(() => {
+      notifyWorkspaceFilesChanged();
+      notifyWorkspaceFilesChanged();
+      notifyWorkspaceFilesChanged();
+    });
+    expect(electron?.invoke).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WORKSPACE_REFRESH_DEBOUNCE_MS + 10);
+    });
+    const refreshes = electron?.invoke.mock.calls.filter(
+      ([channel]) => channel === 'refresh-folder'
+    );
+    expect(refreshes).toEqual([['refresh-folder', '/p']]);
+    expect(ctx.applyFolderTree).toHaveBeenCalledWith({ path: '/p', files: FILES });
+    expect(ctx.setIsLoading).not.toHaveBeenCalled();
+  });
+
+  it('没有打开文件夹时忽略', async () => {
+    const { electron } = setup({ folder: null });
+    await flushStartup();
+    electron?.invoke.mockClear();
+    act(() => notifyWorkspaceFilesChanged());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WORKSPACE_REFRESH_DEBOUNCE_MS + 10);
+    });
+    expect(electron?.invoke).not.toHaveBeenCalledWith('refresh-folder', expect.anything());
   });
 });

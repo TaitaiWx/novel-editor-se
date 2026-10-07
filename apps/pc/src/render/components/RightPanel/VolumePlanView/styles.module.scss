@@ -134,34 +134,119 @@ $line: rgba(255, 255, 255, 0.07);
 .structureRow {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 6px;
+  min-width: 0;
   color: $muted;
   font-size: 11px;
+}
 
-  strong {
-    color: $soft;
-    font-weight: 600;
+.structureLabel {
+  flex-shrink: 0;
+}
+
+.structureChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: $soft;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+
+  svg {
+    font-size: 9px;
+    color: $muted;
+  }
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.86);
   }
 }
 
-.linkButton {
-  padding: 0;
+.toolbarSpacer {
+  flex: 1;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   border: none;
-  background: none;
-  color: var(--rp-accent-text);
-  font-size: 11px;
+  border-radius: 4px;
+  background: transparent;
+  color: $muted;
+  font-size: 14px;
   cursor: pointer;
 
-  &:hover {
-    text-decoration: underline;
+  &:hover,
+  &[aria-expanded='true'] {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.86);
   }
+}
+
+// 结构菜单 / 更多操作弹层
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 220px;
+  max-width: 280px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-border-strong);
+  background: #262626;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.menuItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--ui-interaction-hover-bg);
+    outline: none;
+  }
+}
+
+.menuItemActive {
+  background: var(--ui-interaction-accent-soft);
+}
+
+.menuItemTitle {
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.menuItemHint {
+  color: $muted;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .morePanel {
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid $line;
+  gap: 0;
+  padding: 10px;
   color: $muted;
   font-size: 11px;
   line-height: 1.6;
@@ -169,6 +254,61 @@ $line: rgba(255, 255, 255, 0.07);
   p {
     margin: 0 0 6px;
   }
+}
+
+// 总览条：每一幕一段，宽度按章数
+.overview {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  height: 20px;
+}
+
+.overviewSlot {
+  display: flex;
+  flex-basis: 0;
+  min-width: 0;
+}
+
+.overviewSegment {
+  flex: 1;
+  min-width: 0;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(var(--rp-accent-rgb), 0.22);
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+
+  &[data-tone='1'] {
+    background: rgba(var(--rp-info-rgb), 0.22);
+  }
+
+  &[data-tone='2'] {
+    background: rgba(143, 179, 165, 0.24);
+  }
+
+  &[data-tone='3'] {
+    background: rgba(169, 155, 192, 0.24);
+  }
+
+  &[data-empty='true'] {
+    opacity: 0.55;
+  }
+
+  &:hover {
+    filter: brightness(1.25);
+  }
+}
+
+.overviewLabel {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .moreActions {
@@ -301,6 +441,25 @@ button.actTitle {
   font-size: 11px;
 }
 
+// 没有说明时默认隐藏，悬停 / 聚焦这一幕时才出现「＋ 一句话说明」
+.actNoteEmpty {
+  opacity: 0;
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  transition: opacity 0.12s ease;
+
+  .act:hover &,
+  .act:focus-within &,
+  &:focus-visible {
+    opacity: 1;
+    height: auto;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+}
+
 .chapters {
   display: flex;
   flex-direction: column;
@@ -352,6 +511,13 @@ button.actTitle {
   color: $muted;
 }
 
+.chapterWords {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
 .chapterPeople {
   margin-left: auto;
   flex-shrink: 1;
@@ -395,10 +561,14 @@ button.actTitle {
   font-style: italic;
 }
 
-.grip {
+// 拖动手柄的 Tooltip 包裹层负责绝对定位
+.gripSlot {
   position: absolute;
   left: -16px;
   top: 3px;
+}
+
+.grip {
   display: inline-flex;
   color: rgba(255, 255, 255, 0.3);
   opacity: 0;
@@ -425,7 +595,12 @@ button.actTitle {
   }
 }
 
+// 节拍内容最多两行，点击编辑时显示全文
 .beatText {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   color: rgba(255, 255, 255, 0.7);
   font-size: 11.5px;
 }

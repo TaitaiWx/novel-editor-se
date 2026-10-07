@@ -1,0 +1,111 @@
+@use '../scene-video-ui' as ui;
+
+// 第一行：标题 + 费用 / 生成；第二行：全局设置（窄窗口下也不会挤成多行乱排）
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'heading actions'
+    'settings settings';
+  align-items: center;
+  gap: 10px 18px;
+}
+
+.heading {
+  grid-area: heading;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: ui.$fg-strong;
+  white-space: nowrap;
+}
+
+.meta {
+  min-width: 0;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: ui.$muted;
+}
+
+.save {
+  font-size: 11px;
+  color: ui.$disabled;
+  white-space: nowrap;
+
+  &[data-tone='ok'] {
+    color: ui.$success;
+  }
+
+  &[data-tone='error'] {
+    color: ui.$danger;
+  }
+}
+
+.settings {
+  grid-area: settings;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.select {
+  @include ui.input;
+  width: auto;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ui.$muted;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.estimate {
+  margin-right: 6px;
+  font-size: 12px;
+  color: ui.$muted;
+  white-space: nowrap;
+}
+
+.iconButton {
+  @include ui.icon-button;
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+}
+
+.button {
+  @include ui.button;
+  height: 30px;
+  font-size: 12px;
+}
+
+.primary {
+  @include ui.button-primary;
+}
