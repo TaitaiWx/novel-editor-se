@@ -23,6 +23,7 @@ const DOC = [
   '::image[没有地址]',
   '`::video` 只是说明文字',
   '![说明文档](./说明.md)',
+  '::audio[海港配乐]{src="novels/星河旅人/资料/音乐/海港.m4a" loop}',
 ].join('\n');
 
 function auto(path: string, group: ReferenceItem['group']): ReferenceItem {
@@ -47,6 +48,12 @@ describe('extractDocumentMediaRefs', () => {
         src: 'novels/星河旅人/资料/视频/示例/离港.mp4',
         caption: '离港',
         kind: 'video',
+        syntax: 'directive',
+      },
+      {
+        src: 'novels/星河旅人/资料/音乐/海港.m4a',
+        caption: '海港配乐',
+        kind: 'audio',
         syntax: 'directive',
       },
     ]);

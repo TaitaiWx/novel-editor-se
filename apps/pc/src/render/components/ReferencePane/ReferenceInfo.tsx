@@ -8,7 +8,7 @@ import Tooltip from '../Tooltip';
 import ContextMenu from '../ContextMenu';
 import { useOptionalToast } from '../Toast';
 import { formatTime } from '@novel-editor/media-player';
-import type { ReferenceItem } from '../../utils/referencePane';
+import { REFERENCE_KIND_LABELS, type ReferenceItem } from '../../utils/referencePane';
 import { requestRevealInFilePanel } from '../../utils/workspaceFiles';
 import { exportChoicesFor, exportMediaWithToast } from '../../utils/mediaExport';
 import { getActiveEditor } from '../TextEditor/active-editor';
@@ -18,7 +18,7 @@ import styles from './styles.module.scss';
 /** 信息行文字：类型、文件名、尺寸、时长（已知时） */
 export function describeReference(item: ReferenceItem, info: MediaInfo | null): string[] {
   const name = item.path.split(/[\\/]/).pop() ?? item.path;
-  const parts = [item.kind === 'video' ? '视频' : '图片', name];
+  const parts = [REFERENCE_KIND_LABELS[item.kind], name];
   if (info && info.path === item.path) {
     if (info.width > 0 && info.height > 0) parts.push(`${info.width}×${info.height}`);
     if (info.duration !== undefined && Number.isFinite(info.duration) && info.duration > 0) {
@@ -38,7 +38,7 @@ const ReferenceInfo: React.FC<{
   item: ReferenceItem;
   info: MediaInfo | null;
   onRemove: () => void;
-  /** 插入正文的指令（::image / ::video，路径相对作品目录） */
+  /** 插入正文的指令（::image / ::video / ::audio，路径相对作品目录） */
   directive: string;
 }> = ({ item, info, onRemove, directive }) => {
   const [kind, ...rest] = describeReference(item, info);
@@ -64,7 +64,7 @@ const ReferenceInfo: React.FC<{
         <span className={styles.metaText}>{rest.join(' · ')}</span>
       </div>
       <div className={styles.infoActions}>
-        <Tooltip content={`插入到正文（${item.kind === 'video' ? '::video' : '::image'}）`}>
+        <Tooltip content={`插入到正文（::${item.kind}）`}>
           <button
             type="button"
             className={styles.iconButton}
@@ -78,7 +78,7 @@ const ReferenceInfo: React.FC<{
         {choices.length > 0 && (
           <Tooltip
             content={
-              item.kind === 'video' ? `导出 ${choices[0].label}…` : '导出为 PNG / JPEG / WebP…'
+              item.kind === 'image' ? '导出为 PNG / JPEG / WebP…' : `导出 ${choices[0].label}…`
             }
           >
             <button
@@ -87,7 +87,7 @@ const ReferenceInfo: React.FC<{
               aria-label="导出"
               aria-haspopup={item.kind === 'image' ? 'menu' : undefined}
               onClick={(event) => {
-                if (item.kind === 'video') {
+                if (item.kind !== 'image') {
                   runExport(choices[0].format);
                   return;
                 }

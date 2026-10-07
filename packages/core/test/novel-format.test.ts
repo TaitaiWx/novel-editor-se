@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  audioDirectiveSource,
   classifyStructureLine,
   extractNovelScenes,
   imageDirectiveSource,
@@ -292,5 +293,46 @@ describe('imageDirectiveSource', () => {
     });
     expect(imageDirectiveSource('::video[x]{src=a.mp4}')).toBeNull();
     expect(imageDirectiveSource('::image[x]')).toBeNull();
+  });
+});
+
+describe('audioDirectiveSource', () => {
+  it('::audio 的地址、说明、循环与音量', () => {
+    expect(
+      audioDirectiveSource('::audio[海港配乐]{src="资料/音乐/海港.m4a" loop volume=0.6}')
+    ).toEqual({ src: '资料/音乐/海港.m4a', caption: '海港配乐', loop: true, volume: 0.6 });
+    expect(audioDirectiveSource('::audio{src=a.m4a}')).toEqual({
+      src: 'a.m4a',
+      caption: '',
+      loop: false,
+    });
+    expect(audioDirectiveSource('::audio[x]{src=a.m4a .loop volume=40}')).toMatchObject({
+      loop: true,
+      volume: 0.4,
+    });
+    expect(audioDirectiveSource('::audio[x]{src=a.m4a loop=false volume=abc}')).toEqual({
+      src: 'a.m4a',
+      caption: 'x',
+      loop: false,
+    });
+    // 引号里的 loop 字样不算循环标记
+    expect(audioDirectiveSource('::audio[x]{src="loop.m4a"}')?.loop).toBe(false);
+  });
+
+  it('不是音频指令或没有 src 时为 null', () => {
+    expect(audioDirectiveSource('::video[x]{src=a.mp4}')).toBeNull();
+    expect(audioDirectiveSource('::audio[x]')).toBeNull();
+    expect(audioDirectiveSource(':::audio{src=a.m4a}')).toBeNull();
+    expect(audioDirectiveSource('普通正文 12:30')).toBeNull();
+  });
+
+  it('字数统计去掉 ::audio 行；ne lint 提示缺少 src 的媒体指令', () => {
+    expect(stripNovelMarkup('正文\n::audio[配乐]{src=a.m4a}\n后文')).toBe('正文\n\n后文');
+    expect(lintNovelMarkup('::audio[配乐]{src=a.m4a}')).toEqual([]);
+    const issues = lintNovelMarkup('::audio[配乐]\n::image{alt=x}\n::note[备注]');
+    expect(issues.map((issue) => [issue.line, issue.message.slice(0, 8)])).toEqual([
+      [1, '::audio '],
+      [2, '::image '],
+    ]);
   });
 });

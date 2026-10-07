@@ -117,7 +117,7 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
           <p>写作时在这里对照图片和视频。</p>
           <ul>
             <li>把资料里的图片 / 视频拖到这里，或右键「在编辑器旁边打开」</li>
-            <li>正文里的 ::image / ::video 会自动出现在这里</li>
+            <li>正文里的 ::image / ::video / ::audio 会自动出现在这里</li>
             <li>人物、设定的图集：右键图片「在编辑器旁边打开」</li>
             <li>场景视频：本章的成片与样片会自动出现</li>
           </ul>

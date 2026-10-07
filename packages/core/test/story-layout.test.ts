@@ -88,15 +88,15 @@ describe('项目结构与写作日志', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('readProjectLayout：普通文件夹为 null，示例作品集列出两部作品', async () => {
+  it('readProjectLayout：普通文件夹为 null，示例作品集列出三部作品（含英文的 Starbound）', async () => {
     expect(await readProjectLayout(dir)).toBeNull();
     const layout = await readProjectLayout(SAMPLE_DATA_DIR);
     expect(layout).toMatchObject({ name: '示例作品集', novelsDir: 'novels' });
     expect(layout?.novelsPath).toBe(path.join(SAMPLE_DATA_DIR, 'novels'));
-    expect(layout?.novels).toEqual(['剑与诗', '星河旅人']);
+    expect(layout?.novels).toEqual(['剑与诗', '星河旅人', 'Starbound']);
   });
 
-  it('示例作品集：欢迎使用.md 不是章节，星河旅人 2 卷 6 章、剑与诗 2 章', async () => {
+  it('示例作品集：欢迎使用.md 不是章节，星河旅人 2 卷 6 章、剑与诗 2 章、Starbound 2 章', async () => {
     const layout = await readProjectLayout(SAMPLE_DATA_DIR);
     expect(layout).not.toBeNull();
     const project = await loadProjectFromConfig(getConfigPath(SAMPLE_DATA_DIR));
@@ -104,6 +104,7 @@ describe('项目结构与写作日志', () => {
     expect(novels.map((novel) => [novel.name, novel.chapterCount])).toEqual([
       ['剑与诗', 2],
       ['星河旅人', 6],
+      ['Starbound', 2],
     ]);
     const chapters = await listChapters(project, '星河旅人');
     expect(new Set(chapters.map((chapter) => chapter.volume))).toEqual(

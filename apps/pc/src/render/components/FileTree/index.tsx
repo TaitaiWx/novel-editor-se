@@ -137,7 +137,9 @@ const FileTreeItem: React.FC<{
       () => (isFile ? describeFileName(node.name) : null),
       [isFile, node.name]
     );
-    const { icon, className } = getFileIcon(node.name, node.type, display?.kind);
+    const { icon, className } = getFileIcon(node.name, node.type, display?.kind, {
+      sceneVideo: isSceneVideo,
+    });
     const tooltip = useMemo(
       () => buildFileTooltip(node.name, display ? display.kindLabel : null, fileInfo),
       [display, fileInfo, node.name]

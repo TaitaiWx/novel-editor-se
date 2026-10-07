@@ -3,7 +3,8 @@
  *
  * 设计与调研见 docs/novel-format.md、docs/novel-format-research.md。仍是 .md：
  * - front-matter：文件开头 `---` … `---` 之间的 `key: value`（只支持本章元数据需要的最小 YAML 子集）
- * - 叶子指令（独占一行）：`::video[说明]{src="资料/视频/…mp4" poster=…}`
+ * - 叶子指令（独占一行）：`::video[说明]{src="资料/视频/…mp4" poster=…}`、`::image[说明]{src=…}`、
+ *   `::audio[说明]{src="资料/音乐/…m4a" loop volume=0.6}`（纯音频：配乐 / 环境音 / 音效 / 对白）
  * - 容器指令（场景）：`:::scene{#s-1-1 title=港口 pov=林舟}` … `:::`，平铺、不嵌套；
  *   未闭合时在下一个 `:::scene` 或 ≤2 级标题处结束，绝不吞掉后文
  * - 行内指令：`:char[阿舟]{id=linzhou}`（统计字数时保留方括号里的文字）
@@ -223,10 +224,59 @@ function isChapterOrActLine(line: string, rules: StructureRuleSet): boolean {
 
 /** `::image[说明]{src=…}` 的图片地址；不是图片指令时为 null */
 export function imageDirectiveSource(line: string): { src: string; caption: string } | null {
+  return mediaDirectiveSource(line, 'image');
+}
+
+/** 媒体指令名（就地显示的图片 / 视频 / 音频） */
+export const MEDIA_DIRECTIVE_NAMES = ['image', 'video', 'audio'] as const;
+export type MediaDirectiveName = (typeof MEDIA_DIRECTIVE_NAMES)[number];
+
+function mediaDirectiveSource(
+  line: string,
+  name: MediaDirectiveName
+): { src: string; caption: string } | null {
   const directive = parseDirectiveLine(line);
-  if (directive?.kind !== 'leaf' || directive.name !== 'image') return null;
+  if (directive?.kind !== 'leaf' || directive.name !== name) return null;
   const src = directive.attributes.values.src?.trim();
   return src ? { src, caption: directive.label } : null;
+}
+
+export interface AudioDirective {
+  src: string;
+  caption: string;
+  /** 循环播放（写 `loop`、`.loop`、`loop=true` 都算） */
+  loop: boolean;
+  /** 初始音量 0–1（写成 60 视为 60%）；没写或无效时省略 */
+  volume?: number;
+}
+
+/** 不带值的布尔属性（`{src=a.m4a loop}`）：parseDirectiveAttributes 不收裸词，这里单独识别 */
+function hasBareFlag(line: string, flag: string): boolean {
+  const body = /\{([^}\n]*)\}\s*$/.exec(line.trim())?.[1] ?? '';
+  // 先去掉引号里的值，避免把 src="loop.m4a" 里的字样当成标记
+  const unquoted = body.replace(/"[^"]*"|'[^']*'/g, '');
+  return unquoted.split(/\s+/).some((token) => token === flag);
+}
+
+/** `::audio[说明]{src=… loop volume=0.6}` 的音频地址（相对作品目录）；不是音频指令时为 null */
+export function audioDirectiveSource(line: string): AudioDirective | null {
+  const base = mediaDirectiveSource(line, 'audio');
+  if (!base) return null;
+  const directive = parseDirectiveLine(line) as DirectiveLine;
+  const { values, classes } = directive.attributes;
+  const loopValue = values.loop?.trim().toLowerCase();
+  const loop =
+    classes.includes('loop') ||
+    (loopValue !== undefined
+      ? loopValue !== 'false' && loopValue !== '0'
+      : hasBareFlag(line, 'loop'));
+  const result: AudioDirective = { ...base, loop };
+  const raw = Number(values.volume);
+  if (values.volume !== undefined && Number.isFinite(raw) && raw >= 0) {
+    const ratio = raw > 1 ? raw / 100 : raw;
+    result.volume = Math.min(1, Math.max(0, Math.round(ratio * 100) / 100));
+  }
+  return result;
 }
 
 export interface NovelMarkupIssue {
@@ -234,7 +284,7 @@ export interface NovelMarkupIssue {
   message: string;
 }
 
-/** 结构检查（ne lint / 编辑器错误标记）：未闭合的场景、多余的 `:::`、重复的场景 id */
+/** 结构检查（ne lint / 编辑器错误标记）：未闭合的场景、多余的 `:::`、重复的场景 id、媒体指令缺少 src */
 export function lintNovelMarkup(
   text: string,
   rules: StructureRuleSet = DEFAULT_STRUCTURE_RULES
@@ -266,8 +316,19 @@ export function lintNovelMarkup(
     if (!scene.unclosed) covered.add(scene.endLine);
   }
   text.split(/\r?\n/).forEach((line, index) => {
-    if (parseDirectiveLine(line)?.kind === 'container-close' && !covered.has(index + 1)) {
+    const directive = parseDirectiveLine(line);
+    if (directive?.kind === 'container-close' && !covered.has(index + 1)) {
       issues.push({ line: index + 1, message: '多余的 :::（前面没有对应的场景开始）' });
+    }
+    if (
+      directive?.kind === 'leaf' &&
+      (MEDIA_DIRECTIVE_NAMES as readonly string[]).includes(directive.name) &&
+      !directive.attributes.values.src?.trim()
+    ) {
+      issues.push({
+        line: index + 1,
+        message: `::${directive.name} 缺少 src（例如 {src="资料/…"}）`,
+      });
     }
   });
   return issues.sort((a, b) => a.line - b.line);
@@ -275,8 +336,5 @@ export function lintNovelMarkup(
 
 /** `::video[说明]{src=…}` 的视频地址（相对作品目录）；不是视频指令时为 null */
 export function videoDirectiveSource(line: string): { src: string; caption: string } | null {
-  const directive = parseDirectiveLine(line);
-  if (directive?.kind !== 'leaf' || directive.name !== 'video') return null;
-  const src = directive.attributes.values.src?.trim();
-  return src ? { src, caption: directive.label } : null;
+  return mediaDirectiveSource(line, 'video');
 }

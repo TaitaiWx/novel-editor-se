@@ -18,6 +18,9 @@ describe('referencePane 纯函数', () => {
     expect(referenceKindOf('/p/a.svg')).toBe('image');
     expect(referenceKindOf('/p/镜头1-v1.mp4')).toBe('video');
     expect(referenceKindOf('C:\\p\\a.MOV')).toBe('video');
+    expect(referenceKindOf('/p/资料/音乐/海港.m4a')).toBe('audio');
+    expect(referenceKindOf('/p/音效/钟.WAV')).toBe('audio');
+    expect(referenceKindOf('/p/a.mp3')).toBe('audio');
     expect(referenceKindOf('/p/a.md')).toBeNull();
     expect(referenceKindOf('/p/png')).toBeNull();
     expect(isReferenceMedia('/p/a.webm')).toBe(true);

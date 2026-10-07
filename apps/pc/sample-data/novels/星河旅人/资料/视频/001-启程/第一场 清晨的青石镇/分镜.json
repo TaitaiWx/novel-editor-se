@@ -1,0 +1,391 @@
+{
+  "schemaVersion": 1,
+  "chapterPath": "第一卷-离乡/001-启程.md",
+  "chapter": "001-启程",
+  "scene": "第一场 清晨的青石镇",
+  "sourceText": "石板路还湿着，昨夜的雨把镇口那棵老槐树洗得发亮。林舟回头看了一眼，铁匠铺的烟囱还没冒烟，秦伯大概又喝多了。\n\n“舟哥！”小石头光着脚从巷子里跑出来，手里攥着一块烤得焦黄的饼，“秦伯让我给你的，他说你肯定忘了吃早饭。”\n\n林舟接过饼，揉了揉小石头乱糟糟的头发：“替我看好铁匠铺，等我回来。”\n\n“你一定要回来。”小石头仰着头，认真得像在立誓。",
+  "location": "青石镇",
+  "characters": [
+    "林舟",
+    "小石头"
+  ],
+  "style": "国漫",
+  "aspectRatio": "16:9",
+  "shotDurationSec": 4,
+  "providerId": null,
+  "useAvatarReference": true,
+  "withAudio": true,
+  "audio": {
+    "language": "zh-CN",
+    "ducking": true,
+    "bgm": {
+      "source": "file",
+      "volume": 0.45,
+      "fadeInSec": 1,
+      "fadeOutSec": 2,
+      "path": "资料/音乐/青石镇的清晨.m4a",
+      "prompt": "五声音阶的轻柔旋律，清晨、离别、带一点希望"
+    },
+    "ambience": {
+      "volume": 0.3,
+      "prompt": "雨后清晨：微风、鸟鸣、屋檐滴水",
+      "path": "资料/音乐/清晨小镇环境音.m4a"
+    }
+  },
+  "storyboard": {
+    "version": 1,
+    "aspectRatio": "16:9",
+    "shots": [
+      {
+        "id": "shot-1",
+        "shotSize": "远景",
+        "durationSec": 5,
+        "description": "雨后清晨，青石镇镇口，老槐树湿漉漉地发亮，石板路反着光；林舟背着行囊从镇里走出来",
+        "camera": "缓慢推近",
+        "characters": [
+          "林舟"
+        ],
+        "location": "青石镇镇口",
+        "dialogue": [
+          {
+            "id": "l1",
+            "speaker": "narrator",
+            "text": "那天清晨，雨刚停。",
+            "emotion": "calm",
+            "startSec": 0.5
+          }
+        ],
+        "sfx": [
+          {
+            "id": "s1",
+            "atSec": 2,
+            "volume": 0.6,
+            "prompt": "踩过湿石板的脚步声",
+            "path": "资料/音效/木板脚步.m4a"
+          }
+        ]
+      },
+      {
+        "id": "shot-2",
+        "shotSize": "中景",
+        "durationSec": 3,
+        "description": "小石头光着脚从巷子里跑出来，手里攥着一块烤得焦黄的饼，朝林舟挥手",
+        "camera": "跟拍",
+        "characters": [
+          "小石头",
+          "林舟"
+        ],
+        "dialogue": [
+          {
+            "id": "l1",
+            "speaker": "小石头",
+            "text": "舟哥！",
+            "emotion": "happy",
+            "startSec": 0.4,
+            "audioFile": "镜头2-台词-l1.m4a",
+            "audioDurationSec": 1.1
+          }
+        ],
+        "sfx": [
+          {
+            "id": "s1",
+            "atSec": 0,
+            "volume": 0.5,
+            "prompt": "光脚跑过石板",
+            "path": "资料/音效/木板脚步.m4a"
+          }
+        ]
+      },
+      {
+        "id": "shot-3",
+        "shotSize": "近景",
+        "durationSec": 4,
+        "description": "林舟接过饼，揉了揉小石头乱糟糟的头发，眼神温柔",
+        "camera": "固定",
+        "characters": [
+          "林舟",
+          "小石头"
+        ],
+        "dialogue": [
+          {
+            "id": "l1",
+            "speaker": "林舟",
+            "text": "替我看好铁匠铺，等我回来。",
+            "emotion": "calm",
+            "startSec": 0.8,
+            "audioFile": "镜头3-台词-l1.m4a",
+            "audioDurationSec": 2.4
+          }
+        ]
+      },
+      {
+        "id": "shot-4",
+        "shotSize": "特写",
+        "durationSec": 3,
+        "description": "小石头仰着头，眼睛亮亮的，认真得像在立誓",
+        "camera": "缓慢推近",
+        "characters": [
+          "小石头"
+        ],
+        "dialogue": [
+          {
+            "id": "l1",
+            "speaker": "小石头",
+            "text": "你一定要回来。",
+            "emotion": "sad",
+            "startSec": 0.6,
+            "audioFile": "镜头4-台词-l1.m4a",
+            "audioDurationSec": 1.6
+          }
+        ],
+        "sfx": [
+          {
+            "id": "s1",
+            "atSec": 1.8,
+            "volume": 0.4,
+            "prompt": "远处镇上的钟声",
+            "path": "资料/音效/钟声.m4a"
+          }
+        ]
+      },
+      {
+        "id": "shot-5",
+        "shotSize": "大远景",
+        "durationSec": 4,
+        "description": "林舟走上出镇的山路，回头望了一眼笼罩在晨雾里的小镇，远山层层叠叠",
+        "camera": "缓慢拉远",
+        "characters": [
+          "林舟"
+        ],
+        "location": "出镇的山路"
+      }
+    ],
+    "style": "国漫"
+  },
+  "nextShotNumber": 6,
+  "selectedShotIds": [
+    "shot-1",
+    "shot-2",
+    "shot-3",
+    "shot-4",
+    "shot-5"
+  ],
+  "chosenVersions": {
+    "shot-1": "镜头1-v1.mp4",
+    "shot-2": "镜头2-v1.mp4"
+  },
+  "canvas": {
+    "positions": {}
+  },
+  "keyframes": {
+    "shot-1": "资料/视频/001-启程/第一场 清晨的青石镇/镜头1-首帧-20261001-080000.webp",
+    "shot-2": "资料/视频/001-启程/第一场 清晨的青石镇/镜头2-首帧-20261001-080000.webp",
+    "shot-3": "资料/视频/001-启程/第一场 清晨的青石镇/镜头3-首帧-20261001-080000.webp",
+    "shot-4": "资料/视频/001-启程/第一场 清晨的青石镇/镜头4-首帧-20261001-080000.webp",
+    "shot-5": "资料/视频/001-启程/第一场 清晨的青石镇/镜头5-首帧-20261001-080000.webp"
+  },
+  "previz": {
+    "shot-1": "资料/视频/001-启程/第一场 清晨的青石镇/镜头1-预演.png"
+  },
+  "previzVideo": {
+    "shot-1": "资料/视频/001-启程/第一场 清晨的青石镇/镜头1-预演.mp4"
+  },
+  "previzScripts": {
+    "shot-1": {
+      "version": 2,
+      "durationSec": 5,
+      "mood": "day",
+      "figures": [
+        {
+          "id": "f1",
+          "name": "林舟",
+          "color": "#c9a27a",
+          "keys": [
+            {
+              "t": 0,
+              "x": 0,
+              "z": -4,
+              "facing": 0,
+              "pose": "walk"
+            },
+            {
+              "t": 2,
+              "x": 0.2,
+              "z": -1.6,
+              "facing": 0,
+              "pose": "stand",
+              "ease": "ease-in-out",
+              "motion": {
+                "tracks": {
+                  "head": [
+                    [
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    [
+                      0.6,
+                      -5,
+                      40,
+                      0
+                    ],
+                    [
+                      1.4,
+                      -5,
+                      45,
+                      0
+                    ],
+                    [
+                      1.9,
+                      0,
+                      0,
+                      0
+                    ]
+                  ],
+                  "chest": [
+                    [
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    [
+                      0.6,
+                      0,
+                      18,
+                      0
+                    ],
+                    [
+                      1.4,
+                      0,
+                      20,
+                      0
+                    ],
+                    [
+                      1.9,
+                      0,
+                      0,
+                      0
+                    ]
+                  ],
+                  "rightUpperArm": [
+                    [
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    [
+                      0.5,
+                      -60,
+                      0,
+                      -20
+                    ],
+                    [
+                      1.9,
+                      -60,
+                      0,
+                      -20
+                    ]
+                  ],
+                  "rightForearm": [
+                    [
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    [
+                      0.5,
+                      -70,
+                      0,
+                      0
+                    ],
+                    [
+                      1.9,
+                      -70,
+                      0,
+                      0
+                    ]
+                  ]
+                },
+                "rootBob": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    0.4,
+                    -0.03
+                  ],
+                  [
+                    1,
+                    0
+                  ]
+                ],
+                "generate": "停下脚步，回头望一眼小镇，右手扶住肩上的行囊"
+              }
+            },
+            {
+              "t": 4,
+              "x": 0.2,
+              "z": -1.6,
+              "facing": 0,
+              "pose": "walk"
+            },
+            {
+              "t": 5,
+              "x": 0.3,
+              "z": -0.2,
+              "facing": 0,
+              "pose": "walk"
+            }
+          ]
+        }
+      ],
+      "camera": [
+        {
+          "t": 0,
+          "shotSize": "wide",
+          "lens": 24,
+          "angle": "eye",
+          "yaw": 0,
+          "pitch": 0,
+          "height": 0,
+          "ease": "ease-in-out"
+        },
+        {
+          "t": 5,
+          "shotSize": "full",
+          "lens": 24,
+          "angle": "eye",
+          "yaw": 0,
+          "pitch": 0,
+          "height": 0
+        }
+      ],
+      "props": [
+        {
+          "id": "p1",
+          "kind": "tree",
+          "x": -2.4,
+          "z": -3,
+          "facing": 0,
+          "name": "老槐树"
+        },
+        {
+          "id": "p2",
+          "kind": "wall",
+          "x": 2.6,
+          "z": -4.5,
+          "facing": -20,
+          "name": "镇口的院墙"
+        }
+      ],
+      "summary": "林舟背着行囊走出镇口，走到一半回头望了一眼小镇"
+    }
+  },
+  "outlineLinked": true,
+  "updatedAt": "2026-10-01T08:00:00.000Z"
+}

@@ -156,7 +156,7 @@ describe('小说编辑器 GUI', () => {
 
   it('2. 示例作品集开箱即用：欢迎使用、成长档案、人物与设定、幕剧与大纲都已预置', async () => {
     await ensureSidebarOpen();
-    // 作品切换器：两部作品（星河旅人两卷六章、剑与诗两章），新建作品入口
+    // 作品切换器：三部作品（星河旅人两卷六章、剑与诗两章、英文的 Starbound 两章），新建作品入口
     await page.click(SEL.workSwitcher);
     await page.waitForTarget(SEL.workList);
     const workOptions = await page.evaluate<string[]>(
@@ -166,7 +166,7 @@ describe('小说编辑器 GUI', () => {
         ),
       SEL.workList
     );
-    expect(workOptions).toEqual(['剑与诗2章', '星河旅人6章']);
+    expect(workOptions).toEqual(['剑与诗2章', '星河旅人6章', 'Starbound2章']);
     expect(await page.exists({ text: '新建作品', exact: true })).toBe(true);
     await captureForReview('sample-work-switcher');
     await page.press('Escape');

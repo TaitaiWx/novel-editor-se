@@ -1,8 +1,8 @@
 /**
- * 单个图片 / 视频导出（参考窗格、图集、资料右键菜单、场景视频版本列表共用）。
+ * 单个图片 / 视频 / 音频导出（参考窗格、图集、资料右键菜单、场景视频版本列表共用）。
  *
  * - 图片可导出为 PNG / JPEG / WebP：目标格式与源文件相同时原样复制，不同时在渲染进程用 canvas 转换后交给主进程写入
- * - 视频只按原容器导出（mp4 / webm / mov 原样复制，绝不转码）
+ * - 视频 / 音频只按原容器导出（mp4 / webm / mov / m4a / wav … 原样复制，绝不转码）
  * 主进程 `media-export` 负责另存为对话框与校验（见 main/handlers/media-export.ts）。
  */
 import { referenceKindOf } from './referencePane';
@@ -43,13 +43,13 @@ function canonical(ext: string): string {
   return ext === 'jpg' ? 'jpeg' : ext;
 }
 
-/** 某个文件可选的导出格式：图片 PNG / JPEG / WebP，视频只有原格式 */
+/** 某个文件可选的导出格式：图片 PNG / JPEG / WebP，视频 / 音频只有原格式 */
 export function exportChoicesFor(filePath: string): MediaExportChoice[] {
   const kind = referenceKindOf(filePath);
   if (kind === 'image') {
     return IMAGE_EXPORT_FORMATS.map(({ format, label }) => ({ format, label }));
   }
-  if (kind === 'video') {
+  if (kind === 'video' || kind === 'audio') {
     const ext = extensionOf(filePath);
     return [{ format: ext, label: ext.toUpperCase() }];
   }
@@ -61,14 +61,14 @@ export type MediaExportPlan =
   | { mode: 'convert'; format: ImageExportFormat; mime: string };
 
 /**
- * 导出方式：视频与「同格式」图片原样复制；图片换格式时转换。
- * 不是图片 / 视频，或视频要求换格式时返回 null（不支持）。
+ * 导出方式：视频 / 音频与「同格式」图片原样复制；图片换格式时转换。
+ * 不是图片 / 视频 / 音频，或视频 / 音频要求换格式时返回 null（不支持）。
  */
 export function planMediaExport(sourcePath: string, target?: string): MediaExportPlan | null {
   const kind = referenceKindOf(sourcePath);
   const sourceExt = extensionOf(sourcePath);
   const wanted = target ? canonical(target.toLowerCase().replace(/^\./, '')) : canonical(sourceExt);
-  if (kind === 'video') {
+  if (kind === 'video' || kind === 'audio') {
     return wanted === canonical(sourceExt) ? { mode: 'copy', format: sourceExt } : null;
   }
   if (kind !== 'image') return null;
@@ -133,7 +133,7 @@ export async function convertImage(
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-/** 导出一个图片 / 视频：弹出另存为对话框；作者取消时 saved 为 false */
+/** 导出一个图片 / 视频 / 音频：弹出另存为对话框；作者取消时 saved 为 false */
 export async function exportMediaFile(input: {
   sourcePath: string;
   format?: string;

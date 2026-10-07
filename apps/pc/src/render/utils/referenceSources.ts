@@ -1,14 +1,18 @@
 /**
  * 参考窗格「自动模式」的内容来源与列表操作（纯函数，便于测试）：
  *
- * 1. 本章：当前文档引用的媒体（`::image` / `::video` 指令与 Markdown 图片），路径解析与编辑器实时渲染一致
+ * 1. 本章：当前文档引用的媒体（`::image` / `::video` / `::audio` 指令与 Markdown 图片），路径解析与编辑器实时渲染一致
  * 2. 场景视频：`<作品>/资料/视频/<章>/…` 下每个镜头的最新成片与最新样片（从已加载的文件树查找，不读磁盘）
  * 3. 人物：当前作品人物的三视图 / 形象图
  *
  * 另有：自动内容变化时与作者的排序 / 添加合并（reconcileAutoItems）、拖动排序（moveReferenceItem）、
  * 把参考插入正文时生成指令（buildMediaDirective）。
  */
-import { imageDirectiveSource, videoDirectiveSource } from '@novel-editor/core/novel-format';
+import {
+  audioDirectiveSource,
+  imageDirectiveSource,
+  videoDirectiveSource,
+} from '@novel-editor/core/novel-format';
 import {
   VIDEO_MATERIAL_SEGMENTS,
   isAnimaticFileName,
@@ -44,7 +48,7 @@ export interface DocumentMediaRef {
 const MARKDOWN_IMAGE_RE = /!\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+["'][^"'\n]*["'])?\s*\)/g;
 const DIRECT_URL_RE = /^(https?:|data:|blob:)/i;
 
-/** 文档里引用的图片 / 视频（按出现顺序，同一地址只取一次） */
+/** 文档里引用的图片 / 视频 / 音频（按出现顺序，同一地址只取一次） */
 export function extractDocumentMediaRefs(text: string): DocumentMediaRef[] {
   const refs: DocumentMediaRef[] = [];
   const seen = new Set<string>();
@@ -64,6 +68,11 @@ export function extractDocumentMediaRefs(text: string): DocumentMediaRef[] {
       const video = videoDirectiveSource(line);
       if (video) {
         push({ src: video.src, caption: video.caption, kind: 'video', syntax: 'directive' });
+        continue;
+      }
+      const audio = audioDirectiveSource(line);
+      if (audio) {
+        push({ src: audio.src, caption: audio.caption, kind: 'audio', syntax: 'directive' });
         continue;
       }
     }
@@ -407,7 +416,7 @@ export function relativeToDir(absolute: string, baseDir: string): string | null 
 }
 
 /**
- * 插入正文的指令：`::image[标题]{src="相对路径"}` / `::video[…]{…}`。
+ * 插入正文的指令：`::image[标题]{src="相对路径"}` / `::video[…]{…}` / `::audio[…]{…}`。
  * 路径优先相对作品目录（文档在作品内时），否则相对文档所在目录，都不行时用绝对路径。
  */
 export function buildMediaDirective(

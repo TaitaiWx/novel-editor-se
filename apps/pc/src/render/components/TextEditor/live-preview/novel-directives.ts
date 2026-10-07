@@ -1,8 +1,9 @@
 /**
  * 小说格式（Novel Markdown）指令的实时预览：
  * - `:::scene{title=港口 pov=林舟}` 显示为场景条（标题 · 视角 · 地点 · 时间），`:::` 显示为细分隔线
- * - `::video[说明]{src=资料/视频/…mp4}` 就地显示播放器，`::image[说明]{src=…}` 就地显示图片；
- *   都可以「在旁边看」（编辑器右侧的参考窗格）
+ * - `::video[说明]{src=资料/视频/…mp4}` 就地显示播放器，`::image[说明]{src=…}` 就地显示图片，
+ *   `::audio[说明]{src=资料/音乐/…m4a loop volume=0.6}` 就地显示音频播放条（播放器的音频界面）；
+ *   都可以「在旁边看 / 听」（编辑器右侧的参考窗格）
  * - 不用 Markdown 语法的结构行（「第一章 离港」「第一幕 离乡」「第一场 清晨」）显示为章 / 幕 / 场标题样式
  * 光标所在行显示源码（与其他实时预览一致）；只处理可见范围。
  */
@@ -16,6 +17,7 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 import {
+  audioDirectiveSource,
   imageDirectiveSource,
   parseDirectiveAttributes,
   parseDirectiveLine,
@@ -63,7 +65,15 @@ class SceneWidget extends WidgetType {
   }
 }
 
-type MediaKind = 'video' | 'image';
+type MediaKind = 'video' | 'image' | 'audio';
+
+const MEDIA_KIND_NAMES: Record<MediaKind, string> = { video: '视频', image: '图片', audio: '音频' };
+
+/** 音频指令的播放选项（循环 / 初始音量） */
+export interface AudioOptions {
+  loop: boolean;
+  volume?: number;
+}
 
 /** widget DOM → 挂载状态（destroy 时卸载 React root；加载完成前被销毁则不再挂载） */
 const mountedMedia = new WeakMap<HTMLElement, { disposed: boolean; unmount?: () => void }>();
@@ -74,7 +84,8 @@ class MediaWidget extends WidgetType {
     readonly kind: MediaKind,
     readonly src: string,
     readonly caption: string,
-    readonly filePath: string | null
+    readonly filePath: string | null,
+    readonly audio: AudioOptions | null = null
   ) {
     super();
   }
@@ -83,15 +94,18 @@ class MediaWidget extends WidgetType {
       other.kind === this.kind &&
       other.src === this.src &&
       other.caption === this.caption &&
-      other.filePath === this.filePath
+      other.filePath === this.filePath &&
+      other.audio?.loop === this.audio?.loop &&
+      other.audio?.volume === this.audio?.volume
     );
   }
   get estimatedHeight() {
+    if (this.kind === 'audio') return 96;
     return this.kind === 'video' ? 320 : 280;
   }
   toDOM(view: EditorView) {
     const label = this.caption || this.src.split(/[\\/]/).pop() || this.src;
-    const kindName = this.kind === 'video' ? '视频' : '图片';
+    const kindName = MEDIA_KIND_NAMES[this.kind];
     const figure = document.createElement('span');
     figure.className = `cm-lp-media cm-lp-${this.kind} cm-lp-pending`;
     figure.setAttribute('role', 'figure');
@@ -116,6 +130,7 @@ class MediaWidget extends WidgetType {
           path,
           url,
           label,
+          ...(this.audio ? { loop: this.audio.loop, volume: this.audio.volume } : {}),
           onLayoutChange: () => view.requestMeasure(),
         });
         view.requestMeasure();
@@ -200,6 +215,7 @@ function buildDecorations(view: EditorView, filePath: string | null): Decoration
         const directive = parseDirectiveLine(line.text);
         const video = directive ? videoDirectiveSource(line.text) : null;
         const image = directive && !video ? imageDirectiveSource(line.text) : null;
+        const audio = directive && !video && !image ? audioDirectiveSource(line.text) : null;
         let widget: WidgetType | null = null;
         if (directive?.kind === 'container-open' && directive.name === 'scene') {
           widget = new SceneWidget(describeSceneDirective(directive), false);
@@ -209,6 +225,11 @@ function buildDecorations(view: EditorView, filePath: string | null): Decoration
           widget = new MediaWidget('video', video.src, video.caption, filePath);
         } else if (image) {
           widget = new MediaWidget('image', image.src, image.caption, filePath);
+        } else if (audio) {
+          widget = new MediaWidget('audio', audio.src, audio.caption, filePath, {
+            loop: audio.loop,
+            volume: audio.volume,
+          });
         }
         if (widget && line.length > 0) {
           builder.add(line.from, line.to, Decoration.replace({ widget }));
@@ -263,6 +284,9 @@ const theme = EditorView.baseTheme({
     background: 'rgba(255, 255, 255, 0.03)',
     color: '#8b8b8b',
     fontSize: '0.85em',
+  },
+  '.cm-lp-audio .cm-lp-media-frame': {
+    width: 'min(100%, 520px)',
   },
   '.cm-lp-video .cm-lp-media-frame': {
     aspectRatio: '16 / 9',

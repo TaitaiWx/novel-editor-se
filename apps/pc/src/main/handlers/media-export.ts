@@ -3,7 +3,7 @@
  *
  * 参考窗格、图集、资料右键菜单、场景视频版本列表的「导出…」都走这里：
  * - 弹出系统「另存为」对话框（按目标格式过滤），作者取消时不写任何文件
- * - 没有传入字节时原样复制源文件（视频永远不转码：mp4 / webm / mov 保持原容器）
+ * - 没有传入字节时原样复制源文件（视频 / 音频永远不转码：mp4 / webm / mov / m4a / wav … 保持原容器）
  * - 传入字节时（渲染进程用 canvas 转好的 PNG / JPEG / WebP）按文件头校验后写入
  *
  * 不信任渲染进程：源文件必须是存在的绝对路径、普通文件、扩展名在白名单内，
@@ -24,6 +24,17 @@ export const MAX_MEDIA_EXPORT_BYTES = 50 * 1024 * 1024;
 
 export const EXPORT_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] as const;
 export const EXPORT_VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'm4v'] as const;
+export const EXPORT_AUDIO_EXTENSIONS = [
+  'mp3',
+  'wav',
+  'ogg',
+  'oga',
+  'opus',
+  'flac',
+  'm4a',
+  'aac',
+  'weba',
+] as const;
 /** 渲染进程转换后可写入的图片格式 */
 export const CONVERTED_IMAGE_FORMATS = ['png', 'jpeg', 'webp'] as const;
 
@@ -65,6 +76,10 @@ function isVideoExt(ext: string): boolean {
   return (EXPORT_VIDEO_EXTENSIONS as readonly string[]).includes(ext);
 }
 
+function isAudioExt(ext: string): boolean {
+  return (EXPORT_AUDIO_EXTENSIONS as readonly string[]).includes(ext);
+}
+
 function toBytes(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
@@ -91,7 +106,9 @@ export async function assertExportSource(raw: unknown, workspaceRoot: string | n
   if (!workspaceRoot) throw new Error('没有打开项目');
   const resolved = path.resolve(raw);
   const ext = extensionOf(resolved);
-  if (!isImageExt(ext) && !isVideoExt(ext)) throw new Error('只能导出图片或视频文件');
+  if (!isImageExt(ext) && !isVideoExt(ext) && !isAudioExt(ext)) {
+    throw new Error('只能导出图片、视频或音频文件');
+  }
   const info = await stat(resolved).catch(() => null);
   if (!info?.isFile()) throw new Error('文件不存在');
   const [realSource, realRoot] = await Promise.all([
@@ -116,7 +133,7 @@ export function planExport(
     const bytes = toBytes(dataRaw);
     if (!bytes || bytes.length === 0) throw new Error('没有读取到图片内容');
     if (bytes.length > MAX_MEDIA_EXPORT_BYTES) throw new Error('文件不能超过 50MB');
-    if (!isImageExt(sourceExt)) throw new Error('视频只能按原格式导出');
+    if (!isImageExt(sourceExt)) throw new Error('视频 / 音频只能按原格式导出');
     const target = canonicalFormat(format);
     if (!(CONVERTED_IMAGE_FORMATS as readonly string[]).includes(target)) {
       throw new Error('只支持导出为 PNG / JPEG / WebP');
@@ -126,7 +143,11 @@ export function planExport(
     return { ext: target === 'jpeg' ? 'jpg' : target, bytes };
   }
   if (canonicalFormat(format) !== canonicalFormat(sourceExt)) {
-    throw new Error(isVideoExt(sourceExt) ? '视频只能按原格式导出' : '需要先转换图片格式');
+    throw new Error(
+      isVideoExt(sourceExt) || isAudioExt(sourceExt)
+        ? '视频 / 音频只能按原格式导出'
+        : '需要先转换图片格式'
+    );
   }
   return { ext: sourceExt, bytes: null };
 }
@@ -143,6 +164,15 @@ const FILTER_NAMES: Record<string, string> = {
   webm: 'WebM 视频',
   mov: 'QuickTime 视频',
   m4v: 'M4V 视频',
+  mp3: 'MP3 音频',
+  wav: 'WAV 音频',
+  ogg: 'Ogg 音频',
+  oga: 'Ogg 音频',
+  opus: 'Opus 音频',
+  flac: 'FLAC 音频',
+  m4a: 'M4A 音频',
+  aac: 'AAC 音频',
+  weba: 'WebM 音频',
 };
 
 export interface ExportMediaDeps {

@@ -51,7 +51,9 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  flex: 1;
+  // 名字按内容宽度占位（过长时省略），说明文字紧跟在名字后面而不是被推到最右
+  flex: 0 1 auto;
+  max-width: 70%;
 }
 
 .objectNodeBadge {
@@ -67,13 +69,15 @@
 }
 
 .objectNodeMetaInline {
-  flex-shrink: 0;
+  // 靠左跟在名字后面，占满剩余宽度，放不下时省略
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: left;
   font-size: 11px;
   color: #8a8a8a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 38%;
 }
 
 .objectNodeMarker {

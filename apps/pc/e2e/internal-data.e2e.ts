@@ -111,6 +111,14 @@ describe('内部数据不对用户展示', () => {
     );
     expect(badge).toContain(SCENE);
     expect(badge).toContain('场景视频');
+    // 场景目录的图标是视频图标（不是普通文件夹）
+    expect(
+      await page.evaluate<string>(
+        (selector: string) =>
+          document.querySelector(`${selector} [class*="fileIcon"]`)?.className ?? '',
+        sceneRow
+      )
+    ).toMatch(/video/);
     expect(await page.exists({ text: '分镜.json', within: SECTION_MATERIALS, exact: true })).toBe(
       false
     );

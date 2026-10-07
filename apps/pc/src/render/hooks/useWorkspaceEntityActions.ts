@@ -102,7 +102,7 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
       void (ipc ? ipc.invoke('read-file', target.stateFile) : Promise.resolve(''))
         .catch(() => '')
         .then((raw) => {
-          const scene = sceneVideoTargetFromStoryboard(String(raw ?? ''));
+          const scene = sceneVideoTargetFromStoryboard(String(raw ?? ''), target.stateFile);
           if (scene) openFileInTab(createSceneVideoWorkspaceTab(scene));
           else toast.error('这一场的场景视频记录不完整，无法打开画布');
         });

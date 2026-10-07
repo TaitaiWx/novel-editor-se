@@ -3,8 +3,11 @@
  * - 人物：novels/星河旅人/资料/图集/人物/<名>/形象图.webp、三视图.webp
  * - 设定：novels/星河旅人/资料/图集/设定/<标题>/图片.webp
  * - 视频：novels/星河旅人/资料/视频/示例/离港.mp4（WebCodecs H.264 + mp4-muxer）
+ * - 声音：novels/星河旅人/资料/音乐/（配乐、环境音）、资料/音效/（钟声、脚步、风帆），AAC（M4A）
+ * - 场景视频「第一场 清晨的青石镇」：首帧、预演、成片、配音占位音、带声音的样片（见 sample-media/scene-media.mjs）
  *
- * 用法（在 apps/pc 下）：pnpm exec electron scripts/generate-sample-media.mjs
+ * 用法（在 apps/pc 下）：pnpm exec electron scripts/generate-sample-media.mjs [--only=images,video,audio,scene]
+ * 只重新生成某几类时用 --only（其余文件保持不变，避免无关的二进制改动）。
  * 之后运行 generate-sample-data.mts 刷新 seed.json，再用 sample-content-hash.mts --bump 递增示例版本。
  */
 import { app, BrowserWindow } from 'electron';
@@ -14,6 +17,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SAMPLE_CHARACTER_ART, SAMPLE_LORE_ART } from './sample-media/characters.mjs';
+import { generateSampleAudio, generateSceneMedia } from './sample-media/scene-media.mjs';
+
+const ALL_PARTS = ['images', 'video', 'audio', 'scene'];
+const onlyArg = process.argv.find((arg) => arg.startsWith('--only='));
+const parts = new Set(onlyArg ? onlyArg.slice('--only='.length).split(',') : ALL_PARTS);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workDir = path.join(here, '..', 'sample-data', 'novels', '星河旅人');
@@ -46,9 +54,14 @@ async function main() {
   const page = path.join(os.tmpdir(), 'novel-editor-sample-media.html');
   await writeFile(page, '<!doctype html><html><body></body></html>');
   await win.loadFile(page);
-  const art = await readFile(path.join(here, 'sample-media', 'art.js'), 'utf-8');
+  const scripts = await Promise.all(
+    ['art.js', 'scene-art.js', 'audio.js', 'encode.js'].map((name) =>
+      readFile(path.join(here, 'sample-media', name), 'utf-8')
+    )
+  );
   const muxer = await readFile(require.resolve('mp4-muxer'), 'utf-8');
-  await win.webContents.executeJavaScript(`${art}\n;${muxer}\n;window.Mp4Muxer = Mp4Muxer; true`);
+  await win.webContents.executeJavaScript(`${muxer}\n;window.Mp4Muxer = Mp4Muxer; true`);
+  for (const script of scripts) await win.webContents.executeJavaScript(`${script}\n;true`);
 
   const render = (fn, width, height, spec, quality) =>
     win.webContents.executeJavaScript(`(() => {
@@ -59,6 +72,15 @@ async function main() {
       return canvas.toDataURL('image/webp', ${quality}).split(',')[1];
     })()`);
 
+  if (parts.has('audio')) await generateSampleAudio(win, save);
+  if (parts.has('scene')) await generateSceneMedia(win, save);
+  if (parts.has('images')) await generateImages(render);
+  if (parts.has('video')) await generateVideo(win);
+  win.destroy();
+  app.quit();
+}
+
+async function generateImages(render) {
   for (const spec of SAMPLE_CHARACTER_ART) {
     await save(SAMPLE_MEDIA_PATHS.portrait(spec.name), await render('renderPortrait', 600, 800, spec, 0.86));
     await save(SAMPLE_MEDIA_PATHS.turnaround(spec.name), await render('renderTurnaround', 1280, 720, spec, 0.86));
@@ -66,7 +88,9 @@ async function main() {
   for (const lore of SAMPLE_LORE_ART) {
     await save(SAMPLE_MEDIA_PATHS.lore(lore.title), await render(lore.render, 1280, 720, null, 0.84));
   }
+}
 
+async function generateVideo(win) {
   const hero = SAMPLE_CHARACTER_ART.find((item) => item.name === '林舟');
   const video = await win.webContents.executeJavaScript(`(async () => {
     const width = 640;
@@ -112,8 +136,6 @@ async function main() {
     return btoa(binary);
   })()`);
   await save(SAMPLE_MEDIA_PATHS.video, video);
-  win.destroy();
-  app.quit();
 }
 
 main().catch((error) => {

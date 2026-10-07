@@ -1,6 +1,6 @@
 /**
- * 示例作品《星河旅人》人物的外观参数（程序化插画用）与人物设计文字（写进 seed.json）。
- * 两者描述同一个人，改一处时记得同步另一处。
+ * 示例作品《星河旅人》人物的外观参数（程序化插画用）、人物设计文字与声音（写进 seed.json 的 attributes.design /
+ * attributes.voice，场景视频配音时使用）。几处描述同一个人，改一处时记得同步另一处。
  */
 
 /** @typedef {{ appearance: string; outfit: string; personality: string }} SampleDesign */
@@ -21,6 +21,7 @@ export const SAMPLE_CHARACTER_ART = [
     bandage: true,
     stern: true,
     theme: { top: '#2b3a4a', bottom: '#8aa1b5', glow: '#dfe8f0', mountains: '#24303d', seed: 3 },
+    voice: { gender: 'male', age: '少年', timbre: '清亮、略带沙哑，说话短促' },
     design: {
       appearance: '十七岁，身形清瘦，黑发束成发髻，眉眼倔强；左臂有一道旧伤，常缠着绷带',
       outfit: '灰蓝色交领短打、深色长裤、旧皮靴；背后斜挎秦伯打的旧剑「青石」',
@@ -41,6 +42,7 @@ export const SAMPLE_CHARACTER_ART = [
     basket: true,
     blush: true,
     theme: { top: '#1f3328', bottom: '#7f9d82', glow: '#e3efdc', mountains: '#1b2a22', seed: 5 },
+    voice: { gender: 'female', age: '青年', timbre: '明快、带点调侃，语速偏快' },
     design: {
       appearance: '深棕长发编成一条发辫搭在肩前，眼睛很亮，笑起来有点坏',
       outfit: '草绿色长袍、米色交领、橙褐腰封；背一只竹编药篓，装着驱狼草和止血草',
@@ -61,6 +63,7 @@ export const SAMPLE_CHARACTER_ART = [
     earring: true,
     stern: true,
     theme: { top: '#0e1426', bottom: '#2f3d5c', glow: '#b9c6e0', stars: true, seed: 7 },
+    voice: { gender: 'male', age: '青年', timbre: '低沉、平稳，几乎没有起伏' },
     design: {
       appearance: '高个，银白色及颌短发，眼神很淡；左耳挂一枚银色罗盘耳坠',
       outfit: '黑色及踝长外套、银色滚边与纽扣、浅灰衬衣、黑长靴',
@@ -83,6 +86,7 @@ export const SAMPLE_CHARACTER_ART = [
     hammer: true,
     stern: true,
     theme: { top: '#2a1a12', bottom: '#8a4a26', glow: '#ffc58a', sparks: true, seed: 9 },
+    voice: { gender: 'male', age: '老年', timbre: '粗哑、中气足，带酒气' },
     design: {
       appearance: '五十多岁，灰白短发和短须，手臂粗壮，满是烫伤的旧疤',
       outfit: '褐色粗布衣挽起袖子，系一条厚皮围裙，手里常拎着铁锤',
@@ -103,6 +107,7 @@ export const SAMPLE_CHARACTER_ART = [
     barefoot: true,
     blush: true,
     theme: { top: '#5a4632', bottom: '#d9b88a', glow: '#fff0d0', mountains: '#6d5a44', seed: 13 },
+    voice: { gender: 'male', age: '儿童', timbre: '稚嫩、尖亮，激动时会破音' },
     design: {
       appearance: '八岁，头发乱糟糟地翘着，脸蛋晒得黑红，总是光着脚',
       outfit: '打着补丁的土黄短衫、短裤',

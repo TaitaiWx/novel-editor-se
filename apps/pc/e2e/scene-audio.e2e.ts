@@ -24,7 +24,13 @@ import { chooseSelectOption, comboboxSelector } from './support/select';
 const BGM_SOURCE = path.join(os.tmpdir(), `scene-audio-bgm-${process.pid}.wav`);
 process.env.NOVEL_EDITOR_E2E_OPEN_PATH = BGM_SOURCE;
 
-const suite = setupAppSuite({ fixture: { prefix: 'novel-editor-e2e-scene-audio-' } });
+// 示例作品集里已经预先做好了这一场的场景视频：去掉它，从零走一遍「拆分镜 → 生成」
+const suite = setupAppSuite({
+  fixture: {
+    prefix: 'novel-editor-e2e-scene-audio-',
+    exclude: ['novels/星河旅人/资料/视频/001-启程'],
+  },
+});
 
 const API_KEY = 'e2e-scene-audio-key';
 const SCENE = '第一场 清晨的青石镇';

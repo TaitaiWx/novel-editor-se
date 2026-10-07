@@ -5,6 +5,7 @@
 import React from 'react';
 import { AiFillFolder } from 'react-icons/ai';
 import {
+  BsCameraReelsFill,
   BsFileEarmark,
   BsFileEarmarkCode,
   BsFileEarmarkExcel,
@@ -40,14 +41,21 @@ const KIND_ICONS: Record<FileKind, React.ReactElement> = {
 };
 
 const FOLDER_ICON = <AiFillFolder />;
+/** 场景视频目录（里面是这一场的分镜状态、成片与样片）：用视频图标，和普通文件夹区分 */
+const SCENE_VIDEO_ICON = <BsCameraReelsFill />;
 const JSON_ICON = <BsFiletypeJson />;
 
 export function getFileIcon(
   name: string,
   type: 'file' | 'directory',
-  kind: FileKind = getFileKind(name)
+  kind: FileKind = getFileKind(name),
+  options: { sceneVideo?: boolean } = {}
 ): { icon: React.ReactElement; className: FileIconClass } {
-  if (type === 'directory') return { icon: FOLDER_ICON, className: 'folder' };
+  if (type === 'directory') {
+    return options.sceneVideo
+      ? { icon: SCENE_VIDEO_ICON, className: 'video' }
+      : { icon: FOLDER_ICON, className: 'folder' };
+  }
   if (kind === 'code' && splitFileName(name).ext.toLowerCase() === '.json') {
     return { icon: JSON_ICON, className: kind };
   }

@@ -123,6 +123,12 @@ describe('getFileKind / getFileIcon', () => {
     expect(getFileIcon(name, 'file').className).toBe(kind);
   });
 
+  it('场景视频目录用视频图标（和普通文件夹区分）', () => {
+    const scene = getFileIcon('全章', 'directory', undefined, { sceneVideo: true });
+    expect(scene.className).toBe('video');
+    expect(scene.icon).not.toBe(getFileIcon('全章', 'directory').icon);
+  });
+
   it('目录始终使用文件夹图标；同类图标元素复用', () => {
     expect(getFileIcon('archive.zip', 'directory').className).toBe('folder');
     expect(getFileIcon('a.png', 'file').icon).toBe(getFileIcon('b.jpg', 'file').icon);

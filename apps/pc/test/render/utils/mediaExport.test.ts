@@ -45,6 +45,12 @@ describe('导出方式（planMediaExport）', () => {
     expect(planMediaExport('/p/a.md')).toBeNull();
   });
 
+  it('音频：同样只按原格式导出', () => {
+    expect(planMediaExport('/p/资料/音乐/海港.m4a')).toEqual({ mode: 'copy', format: 'm4a' });
+    expect(planMediaExport('/p/a.wav', 'mp3')).toBeNull();
+    expect(exportChoicesFor('/p/a.WAV')).toEqual([{ format: 'wav', label: 'WAV' }]);
+  });
+
   it('可选格式：图片三种，视频只有原格式，其他没有', () => {
     expect(exportChoicesFor('/p/a.webp').map((choice) => choice.label)).toEqual([
       'PNG',

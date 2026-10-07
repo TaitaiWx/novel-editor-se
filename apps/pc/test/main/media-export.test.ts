@@ -83,6 +83,22 @@ describe('media-export', () => {
     expect(options.filters[0].extensions).toEqual(['mp4']);
   });
 
+  it('音频（配乐 / 音效）同样原样复制，只能按原格式导出', async () => {
+    const audio = path.join(root, 'novels', '星河旅人', '资料', '视频', '海港.m4a');
+    await writeFile(audio, Buffer.from('fake-m4a-bytes'));
+    dialogResult.value = { canceled: false, filePath: path.join(out, '海港.m4a') };
+    const result = await run({ sourcePath: audio, defaultName: '海港' });
+    expect(result).toEqual({ saved: true, filePath: path.join(out, '海港.m4a') });
+    expect(await readFile(path.join(out, '海港.m4a'), 'utf8')).toBe('fake-m4a-bytes');
+    const options = showSaveDialog.mock.calls[0][0] as {
+      filters: Array<{ name: string; extensions: string[] }>;
+    };
+    expect(options.filters[0]).toEqual({ name: 'M4A 音频', extensions: ['m4a'] });
+    expect((await run({ sourcePath: audio, format: 'mp3' })).error).toBe(
+      '视频 / 音频只能按原格式导出'
+    );
+  });
+
   it('作者取消时不写任何文件', async () => {
     dialogResult.value = { canceled: true };
     await expect(run({ sourcePath: video })).resolves.toEqual({ saved: false });
@@ -107,7 +123,7 @@ describe('media-export', () => {
     expect((await run({ sourcePath: dirLike })).error).toBe('文件不存在');
     const text = path.join(root, '说明.md');
     await writeFile(text, '# x');
-    expect((await run({ sourcePath: text })).error).toBe('只能导出图片或视频文件');
+    expect((await run({ sourcePath: text })).error).toBe('只能导出图片、视频或音频文件');
     expect((await run(null)).error).toBe('无效的导出请求');
     workspaceRoot.value = null;
     expect((await run({ sourcePath: image })).error).toBe('没有打开项目');
@@ -135,9 +151,11 @@ describe('media-export', () => {
         })
       ).error
     ).toBe('文件不能超过 50MB');
-    expect((await run({ sourcePath: video, format: 'webm' })).error).toBe('视频只能按原格式导出');
+    expect((await run({ sourcePath: video, format: 'webm' })).error).toBe(
+      '视频 / 音频只能按原格式导出'
+    );
     expect((await run({ sourcePath: video, format: 'png', data: PNG })).error).toBe(
-      '视频只能按原格式导出'
+      '视频 / 音频只能按原格式导出'
     );
     expect((await run({ sourcePath: image, format: 'png' })).error).toBe('需要先转换图片格式');
     expect((await run({ sourcePath: image, format: 'gif', data: PNG })).error).toBe(

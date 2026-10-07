@@ -2,6 +2,7 @@
  * 参考窗格的主画面：贴在顶部、按比例适应宽度（不留大块空白）。
  * - 图片：单击在「适应宽度 ↔ 原始大小」之间切换，原始大小时可滚动 / 拖动查看
  * - 视频：自定义播放器（静音循环自动播放，可开声音 / 关循环）
+ * - 音频：同一个播放器的音频界面（不自动播放）
  * - 多张时左右两侧浮现上一张 / 下一张
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -118,6 +119,22 @@ export const ReferenceMedia: React.FC<{
   }
   if (!url) {
     return <div className={styles.placeholder}>{error ? `无法读取：${error}` : '读取中…'}</div>;
+  }
+  if (item.kind === 'audio') {
+    // 纯音频：播放器的音频界面（波形 + 进度），不自动播放（参考窗格里突然出声会打扰写作）
+    return (
+      <VideoPlayer
+        key={`${item.path}#${version}`}
+        src={{ src: url, audioOnly: true }}
+        title={item.title}
+        variant={compact ? 'compact' : 'full'}
+        showLoopToggle
+        showTitle={!compact}
+        className={compact ? styles.miniPlayer : styles.player}
+        videoTestId="reference-audio"
+        onMetadata={({ duration }) => onInfo?.({ path: item.path, width: 0, height: 0, duration })}
+      />
+    );
   }
   if (item.kind === 'video') {
     return (

@@ -1,12 +1,12 @@
 /**
- * 参考列表：缩略图网格（图片显示缩略图，视频显示播放图标 + 标题），选中的高亮；填满窗格剩余空间，可滚动。
+ * 参考列表：缩略图网格（图片显示缩略图，视频显示播放图标、音频显示喇叭图标 + 标题），选中的高亮；填满窗格剩余空间，可滚动。
  *
  * - 来源分组：本章 / 场景视频 / 人物 / 添加的，来源变化处显示小标题
- * - 拖动缩略图排序（键盘：Alt + ← / → 移动选中的参考）；拖到编辑器里插入 ::image / ::video 指令
+ * - 拖动缩略图排序（键盘：Alt + ← / → 移动选中的参考）；拖到编辑器里插入 ::image / ::video / ::audio 指令
  * - 资料树或系统文件管理器里的文件拖到某张缩略图上，插到它前 / 后
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { VscPlay } from 'react-icons/vsc';
+import { VscPlay, VscUnmute } from 'react-icons/vsc';
 import {
   NOVEL_EDITOR_PATH_MIME,
   REFERENCE_GROUP_LABELS,
@@ -28,10 +28,14 @@ const Thumb: React.FC<{ item: ReferenceItem; version: number }> = ({ item, versi
       </span>
     );
   }
-  if (item.kind === 'video') {
+  if (item.kind === 'video' || item.kind === 'audio') {
     return (
-      <span className={`${styles.thumbMedia} ${styles.thumbVideo}`} aria-hidden="true">
-        <VscPlay />
+      <span
+        className={`${styles.thumbMedia} ${styles.thumbVideo}`}
+        aria-hidden="true"
+        data-kind={item.kind}
+      >
+        {item.kind === 'audio' ? <VscUnmute /> : <VscPlay />}
       </span>
     );
   }

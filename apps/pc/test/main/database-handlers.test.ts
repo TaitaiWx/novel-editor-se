@@ -170,7 +170,8 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
       await call('db-close');
       await call('db-init', metaDir);
       expect(await call<Row[]>('db-character-list', novel.id)).toHaveLength(names.length - 1);
-      expect(store.novelOps.getAll()).toHaveLength(2);
+      // 种子里有三部作品（星河旅人、剑与诗、Starbound），这里只建了前两部的目录
+      expect(store.novelOps.getAll()).toHaveLength(3);
     });
 
     it('db-init 迁移旧版项目级人物：只有一部作品时移入该作品，多部作品时保留为未归属', async () => {

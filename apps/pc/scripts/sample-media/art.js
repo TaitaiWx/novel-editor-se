@@ -1349,5 +1349,13 @@
     renderHarbor,
     drawDepartureFrame,
     drawCharacter,
+    // 场景视频示例（scene-art.js）复用的绘制工具
+    drawMountains,
+    groundShadow,
+    vignette,
+    ellipse,
+    seeded,
+    mix,
+    rgba,
   };
 })();

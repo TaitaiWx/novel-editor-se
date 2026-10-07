@@ -1,5 +1,5 @@
 /**
- * 参考窗格：写作时在编辑器旁边看图片 / 视频（资料、图集、场景视频的成片与样片）。
+ * 参考窗格：写作时在编辑器旁边看图片 / 视频 / 听音频（资料、图集、场景视频的成片与样片、配乐与音效）。
  *
  * 任何地方都通过 requestOpenReference 派发窗口事件，由 hooks/useReferencePane 统一接收并显示；
  * 路径是绝对路径（资料文件）或「作品目录 + 相对路径」（图集），由窗格按需读取。
@@ -8,7 +8,7 @@ import type { FileNode } from '../types';
 
 export const REFERENCE_OPEN_EVENT = 'novel-editor:open-reference';
 
-export type ReferenceMediaKind = 'image' | 'video';
+export type ReferenceMediaKind = 'image' | 'video' | 'audio';
 
 /** 参考的来源：本章正文引用 / 本章场景视频 / 人物图 / 作者自己加入 */
 export type ReferenceGroup = 'chapter' | 'scene-video' | 'character' | 'added';
@@ -44,12 +44,21 @@ export function isPendingReference(item: Pick<ReferenceItem, 'pending'> | null |
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
 const VIDEO_RE = /\.(mp4|webm|mov|m4v)$/i;
+const AUDIO_RE = /\.(mp3|wav|ogg|oga|opus|flac|m4a|aac|weba)$/i;
 
 export function referenceKindOf(filePath: string): ReferenceMediaKind | null {
   if (IMAGE_RE.test(filePath)) return 'image';
   if (VIDEO_RE.test(filePath)) return 'video';
+  if (AUDIO_RE.test(filePath)) return 'audio';
   return null;
 }
+
+/** 类型的中文名（信息行、aria-label） */
+export const REFERENCE_KIND_LABELS: Record<ReferenceMediaKind, string> = {
+  image: '图片',
+  video: '视频',
+  audio: '音频',
+};
 
 export function isReferenceMedia(filePath: string): boolean {
   return referenceKindOf(filePath) !== null;

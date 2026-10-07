@@ -285,7 +285,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
             // 单独导出：图片可转 PNG / JPEG / WebP，视频按原格式
             ...exportChoicesFor(node.path).map((choice) =>
               menuItem(
-                reference.kind === 'video' ? `导出 ${choice.label}…` : `导出为 ${choice.label}…`,
+                reference.kind === 'image' ? `导出为 ${choice.label}…` : `导出 ${choice.label}…`,
                 () =>
                   void exportMediaWithToast(
                     { sourcePath: node.path, format: choice.format },

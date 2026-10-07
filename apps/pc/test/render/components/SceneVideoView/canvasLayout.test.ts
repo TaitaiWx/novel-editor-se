@@ -257,5 +257,22 @@ describe('画布状态与自动化', () => {
     ).toEqual({ chapterPath: '/w/001.md', scene: '第一场' });
     expect(sceneVideoTargetFromStoryboard('{"scene":"第一场"}')).toBeNull();
     expect(sceneVideoTargetFromStoryboard('not json')).toBeNull();
+    // 示例作品集分发的分镜：章节路径相对作品目录，按分镜文件所在的作品解析
+    const stateFile = '/w/novels/星河旅人/资料/视频/001-启程/第一场/分镜.json';
+    expect(
+      sceneVideoTargetFromStoryboard(
+        JSON.stringify({ chapterPath: '第一卷-离乡/001-启程.md', scene: '第一场' }),
+        stateFile
+      )
+    ).toEqual({ chapterPath: '/w/novels/星河旅人/第一卷-离乡/001-启程.md', scene: '第一场' });
+    expect(
+      sceneVideoTargetFromStoryboard(
+        JSON.stringify({ chapterPath: '../外面.md', scene: '第一场' }),
+        stateFile
+      )
+    ).toBeNull();
+    expect(
+      sceneVideoTargetFromStoryboard(JSON.stringify({ chapterPath: 'a.md', scene: '第一场' }))
+    ).toBeNull();
   });
 });

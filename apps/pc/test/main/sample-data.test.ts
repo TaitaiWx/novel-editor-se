@@ -23,7 +23,9 @@ import {
   type Project,
 } from '@novel-editor/core';
 import { validateProjectSeed } from '@novel-editor/store';
+import { parseCharacterVoice } from '@novel-editor/video';
 import {
+  ENGLISH_WORK_DIR,
   POEM_WORK_DIR,
   SAMPLE_DATA_DIR,
   STAR_WORK_DIR,
@@ -76,9 +78,18 @@ describe('示例作品集 sample-data', () => {
       chapterExtension: '.md',
     });
     const novels = await listNovels(project);
-    expect(novels.map((novel) => [novel.name, novel.chapterCount])).toEqual([
+    expect(
+      novels.map((novel) => [novel.name, novel.chapterCount]).sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    ).toEqual([
+      ['Starbound', 2],
       ['剑与诗', 2],
       ['星河旅人', 6],
+    ]);
+    // 英文作品：章节按序号排列，资料/ 不是卷
+    const english = await listChapters(project, 'Starbound');
+    expect(english.map((chapter) => chapter.file)).toEqual([
+      '001-The Harbor.md',
+      '002-Night Crossing.md',
     ]);
     const chapters = await listChapters(project, '星河旅人');
     expect(chapters.map((chapter) => [chapter.volume, chapter.order])).toEqual([
@@ -93,7 +104,8 @@ describe('示例作品集 sample-data', () => {
 
   it('带版本文件，旧版本机副本会在启动时被升级（改动示例内容时请递增 sampleVersion）', async () => {
     // v3：资料、成长档案、人物 / 设定改为跟随作品；v4：修复停留在 v3 中间态（根目录 资料/）的本机副本；
-    // v5：新增根目录 公式示例.md（复杂 LaTeX），排版示例.md 不再提「源码 / 实时预览」切换
+    // v5：新增根目录 公式示例.md（复杂 LaTeX），排版示例.md 不再提「源码 / 实时预览」切换；
+    // v9：声音示例.md（::audio）、预先做好的场景视频、人物声音、英文作品 Starbound
     expect(await readSeedVersion(ROOT)).toBeGreaterThanOrEqual(5);
   });
 
@@ -151,6 +163,7 @@ describe('示例作品集 sample-data', () => {
         (file) =>
           file.startsWith(`${STAR_WORK_DIR}/资料/记忆/`) ||
           file.startsWith(`${POEM_WORK_DIR}/资料/记忆/`) ||
+          /\/(分镜\.json|分镜\.md)$/.test(file) ||
           file === '.novel-editor/seed.json'
       );
       expect(committed).toEqual(generated);
@@ -223,6 +236,14 @@ describe('示例作品集 sample-data', () => {
     expect(raw).toEqual(buildSampleSeed());
     const names = seed.characters.filter((row) => row.novel_id === 1).map((row) => row.name);
     for (const sheet of memory.sheets) expect(names).toContain(sheet.name);
+    // 《星河旅人》每个人物都填了声音（性别 / 年龄 / 音色），GUI 按 parseCharacterVoice 读取
+    for (const row of seed.characters.filter((item) => item.novel_id === 1)) {
+      const voice = parseCharacterVoice(
+        (JSON.parse(String(row.attributes)) as { voice?: unknown }).voice
+      );
+      expect(voice?.gender, String(row.name)).toBeDefined();
+      expect(voice?.timbre, String(row.name)).toBeTruthy();
+    }
     expect(seed.world_settings?.length).toBeGreaterThan(0);
     expect(seed.outlines?.length).toBeGreaterThan(0);
     // 大纲里引用的章节 / 卷都真实存在
@@ -239,11 +260,13 @@ describe('示例作品集 sample-data', () => {
   it('资料、成长档案、人物 / 设定按作品隔离（v3 布局）', async () => {
     // 项目根没有旧版的 资料/：所有资料都属于某部作品
     expect(files.some((file) => file.startsWith('资料/'))).toBe(false);
-    for (const work of [STAR_WORK_DIR, POEM_WORK_DIR]) {
+    for (const work of [STAR_WORK_DIR, POEM_WORK_DIR, ENGLISH_WORK_DIR]) {
       expect(
         files.some((file) => file.startsWith(`${work}/资料/`) && !file.includes('/记忆/')),
         `${work} 应有自己的资料笔记`
       ).toBe(true);
+    }
+    for (const work of [STAR_WORK_DIR, POEM_WORK_DIR]) {
       expect(files).toContain(`${work}/资料/记忆/规则.json`);
     }
     // 作品的 资料/ 不是卷：章节列表只有正文
@@ -263,6 +286,7 @@ describe('示例作品集 sample-data', () => {
     expect(seed.novels.map((row) => [row.id, row.name, row.folder_path])).toEqual([
       [1, '星河旅人', STAR_WORK_DIR],
       [2, '剑与诗', POEM_WORK_DIR],
+      [3, 'Starbound', ENGLISH_WORK_DIR],
     ]);
     for (const row of seed.novels) {
       expect((await stat(path.join(ROOT, String(row.folder_path)))).isDirectory()).toBe(true);
@@ -274,6 +298,8 @@ describe('示例作品集 sample-data', () => {
     expect(byNovel(seed.world_settings, 'title', 2)).toEqual(['听雨楼', '剑在匣中鸣']);
     expect(byNovel(seed.world_settings, 'title', 1)).not.toContain('听雨楼');
     expect(byNovel(seed.outlines, 'title', 2)).toEqual(['001 少年', '002 听雨楼']);
+    expect(byNovel(seed.characters, 'name', 3)).toEqual(['Mara Quill', 'Captain Ives']);
+    expect(byNovel(seed.world_settings, 'title', 3)).toEqual(['Port Lumen']);
   });
 
   it('欢迎使用.md 中提到的每个路径都存在', async () => {
@@ -305,7 +331,9 @@ describe('示例作品集 sample-data', () => {
     }
     let total = 0;
     for (const file of files) total += (await stat(path.join(ROOT, file))).size;
-    expect(total).toBeLessThan(2 * 1024 * 1024);
+    // 上限 3MB：示例除了图片、短片，还带了一场完整的场景视频（首帧、预演、两段成片、带声音的样片）
+    // 与配乐 / 环境音 / 音效 / 对白占位音（约 0.65MB，都已压到很低的分辨率与码率）；再大就要拆出示例了
+    expect(total).toBeLessThan(3 * 1024 * 1024);
   });
 
   it('打包配置排除示例目录中的数据库与系统文件', async () => {

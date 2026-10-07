@@ -242,6 +242,48 @@ describe('novelDirectivePreview（编辑器）', () => {
     window.removeEventListener(REFERENCE_OPEN_EVENT, listener);
   });
 
+  it('::audio 就地显示音频播放条（循环 / 音量取自指令），「在旁边听」打开参考窗格', async () => {
+    installElectronMock((channel, arg) => {
+      if (channel === 'get-file-info-batch') {
+        return (arg as unknown as string[]).map((path) => ({
+          path,
+          info: { size: 1, isFile: true },
+        }));
+      }
+      if (channel === 'read-file-binary') return { base64Content: 'AAAA', mimeType: 'audio/mp4' };
+      return null;
+    });
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    view = new EditorView({
+      state: EditorState.create({
+        doc: '开头\n::audio[海港配乐]{src="资料/音乐/海港.m4a" loop volume=0.5}',
+        extensions: [novelDirectivePreview('/p/novels/星河/001.md')],
+      }),
+      parent,
+    });
+    const group = await vi.waitFor(() => {
+      const element = view?.dom.querySelector('.cm-lp-audio [role="group"]') as HTMLElement;
+      expect(element).toBeTruthy();
+      return element;
+    });
+    expect(group.getAttribute('aria-label')).toBe('音频 海港配乐');
+    expect(group.getAttribute('data-media')).toBe('audio');
+    const audio = view?.dom.querySelector('video.cm-lp-audio-player') as HTMLVideoElement;
+    expect(audio.loop).toBe(true);
+    expect(audio.volume).toBeCloseTo(0.5);
+    const beside = view?.dom.querySelector('.cm-lp-audio .cm-lp-media-beside') as HTMLElement;
+    expect(beside.getAttribute('aria-label')).toBe('在旁边听 海港配乐');
+    const listener = vi.fn();
+    window.addEventListener(REFERENCE_OPEN_EVENT, listener);
+    beside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    const detail = (listener.mock.calls[0][0] as CustomEvent<OpenReferenceDetail>).detail;
+    expect(detail.items).toEqual([
+      { path: '/p/novels/星河/资料/音乐/海港.m4a', title: '海港配乐', kind: 'audio' },
+    ]);
+    window.removeEventListener(REFERENCE_OPEN_EVENT, listener);
+  });
+
   it('视图销毁时卸载播放器；加载完成前被销毁则不再挂载', async () => {
     let resolveRead: (value: unknown) => void = () => undefined;
     installElectronMock((channel, arg) => {
