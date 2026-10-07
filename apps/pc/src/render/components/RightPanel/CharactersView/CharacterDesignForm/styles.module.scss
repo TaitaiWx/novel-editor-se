@@ -1,0 +1,56 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 760px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ui-fg-muted);
+}
+
+.saved {
+  margin-left: 8px;
+  color: #7ab896;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.label {
+  padding-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--ui-fg-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+
+  &:focus {
+    border-color: rgba(86, 156, 214, 0.6);
+  }
+
+  &::placeholder {
+    color: var(--ui-fg-disabled);
+  }
+}

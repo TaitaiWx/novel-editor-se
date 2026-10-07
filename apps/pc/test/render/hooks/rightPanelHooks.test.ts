@@ -277,7 +277,8 @@ describe('useLoreEntries', () => {
       'term',
       'B',
       'sb',
-      '["x"]'
+      '["x"]',
+      '{}'
     );
     expect(result.current.entries.map((e) => e.title)).toEqual(['A', 'B']);
   });

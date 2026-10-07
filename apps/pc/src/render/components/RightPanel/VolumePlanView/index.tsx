@@ -9,6 +9,7 @@ import {
   findForeshadowing,
   hasActMarkers,
   type VolumeBeat,
+  type VolumeStructureId,
   type VolumeChapterPlan,
 } from '@novel-editor/basic-algorithm';
 import type { PersistedOutlineScopeInput } from '@/render/types/electron-api';
@@ -19,7 +20,8 @@ import { PlanToolbar } from './PlanToolbar';
 import { VolumeOverview, buildActSegments, countWords, formatWordCount } from './VolumeOverview';
 import { CURRENT_DOCUMENT_PATH, useVolumeSources } from './useVolumeSources';
 import { useVolumePlanState } from './useVolumePlanState';
-import { useVolumePlanGenerate } from './useVolumePlanGenerate';
+import { describeVariant, useVolumePlanGenerate } from './useVolumePlanGenerate';
+import PlanVariantPicker from '../PlanVariants';
 import { insertBeatIntoChapterOutline } from './volumeSources';
 import { requestOpenSceneVideo } from '../../SceneVideoView/events';
 import { EMPTY_VOLUME_PLAN, mergeBeatOrder, resolveVolumeTarget } from './volumePlanState';
@@ -119,13 +121,16 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
       target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }, []);
 
-    const { generate, generating } = useVolumePlanGenerate({
-      outline: baseOutline,
+    const variantsApi = useVolumePlanGenerate({
+      chapters,
+      currentStructure: baseOutline.structure,
+      hasMarkers: baseOutline.hasMarkers,
       intent: state.intent,
       characters: laneNames,
       aiReady: aiConfig.ready,
       update,
     });
+    const { generate, generating } = variantsApi;
 
     const activePath = target?.activePath ?? null;
     const handleOpenChapter = useCallback(
@@ -236,6 +241,23 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
             {generating ? '生成中…' : '生成卷纲'}
           </button>
         </form>
+
+        {variantsApi.variants.length > 0 && (
+          <PlanVariantPicker
+            heading="选一个卷纲方案"
+            variants={variantsApi.variants.map((variant) => ({
+              id: variant.structure,
+              title: variant.label,
+              subtitle: `${variant.by === 'ai' ? 'AI' : '模板'} · ${variant.outline.acts.length} 段`,
+              lines: describeVariant(variant),
+            }))}
+            onApply={(id) => {
+              setMode('list');
+              setStatus(variantsApi.apply(id as VolumeStructureId));
+            }}
+            onDismiss={variantsApi.dismiss}
+          />
+        )}
 
         <div className={styles.modeSwitch} role="tablist" aria-label="卷纲视图">
           {VOLUME_PLAN_MODES.map((item) => (

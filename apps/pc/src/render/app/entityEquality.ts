@@ -3,6 +3,11 @@
  */
 import type { Character, LoreEntry } from '@/render/components/RightPanel/types';
 
+/** 设计 / 图集等嵌套字段：按序列化结果比较（数量小，开销可忽略） */
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
 export function areCharactersEqual(left: Character[], right: Character[]): boolean {
   if (left === right) return true;
   if (left.length !== right.length) return false;
@@ -17,7 +22,9 @@ export function areCharactersEqual(left: Character[], right: Character[]): boole
       item.avatar === next.avatar &&
       item.highlightColor === next.highlightColor &&
       item.highlightFirstMentionOnly === next.highlightFirstMentionOnly &&
-      (item.aliases || []).join('\u0000') === (next.aliases || []).join('\u0000')
+      (item.aliases || []).join('\u0000') === (next.aliases || []).join('\u0000') &&
+      sameJson(item.design, next.design) &&
+      sameJson(item.media, next.media)
     );
   });
 }
@@ -35,7 +42,10 @@ export function areLoreEntriesEqual(left: LoreEntry[], right: LoreEntry[]): bool
       item.createdAt === next.createdAt &&
       item.updatedAt === next.updatedAt &&
       item.tags.length === next.tags.length &&
-      item.tags.every((tag, tagIndex) => tag === next.tags[tagIndex])
+      item.tags.every((tag, tagIndex) => tag === next.tags[tagIndex]) &&
+      item.folder === next.folder &&
+      item.cover === next.cover &&
+      sameJson(item.media, next.media)
     );
   });
 }

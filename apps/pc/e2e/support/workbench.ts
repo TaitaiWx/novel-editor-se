@@ -27,8 +27,9 @@ export const SEL = {
   /** 「新建」右侧的「⋯ 更多」按钮与它打开的项目菜单 */
   projectMenuTrigger: '[data-testid="project-menu-trigger"]',
   projectMenu: '[role="menu"][aria-label="项目菜单"]',
-  /** 项目名下方的「项目说明」分区（根目录说明文档，默认折叠） */
-  projectNotes: 'section[aria-label="项目说明"]',
+  /** 「搜索」左侧的「项目说明」图标与它弹出的文档列表（根目录说明文档） */
+  projectNotesTrigger: '[data-testid="project-docs-trigger"]',
+  projectNotes: '[role="dialog"] [aria-label="项目说明"]',
   /** 行内重命名输入框（双击名称 / F2） */
   renameInput: 'input[aria-label^="重命名"]',
 } as const;
@@ -112,16 +113,10 @@ export async function openProjectMenu(page: Page): Promise<void> {
   await page.waitForTarget(SEL.projectMenu);
 }
 
-/** 展开项目名下方的「项目说明」分区（默认折叠），等待文档列表出现 */
+/** 点「搜索」左侧的「项目说明」图标，等待文档列表弹出 */
 export async function openProjectDocs(page: Page): Promise<void> {
-  await page.waitForTarget(SEL.projectNotes);
-  const header = `${SEL.projectNotes} button[aria-expanded]`;
-  const expanded = await page.evaluate<string | null>(
-    (selector: string) => document.querySelector(selector)?.getAttribute('aria-expanded') ?? null,
-    header
-  );
-  if (expanded !== 'true') await page.click(header);
-  await page.waitForTarget(`${SEL.projectNotes} [role="listitem"]`);
+  if (!(await page.exists(SEL.projectNotes))) await page.click(SEL.projectNotesTrigger);
+  await page.waitForTarget(`${SEL.projectNotes} li`);
 }
 
 /** 项目菜单 →「刷新」（重新扫描作品目录） */

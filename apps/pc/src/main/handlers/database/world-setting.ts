@@ -13,12 +13,27 @@ export function registerWorldSettingHandlers(): void {
 
   ipcMain.handle(
     'db-world-setting-create-by-folder',
-    (_event, folderPath: string, category: string, title: string, content = '', tags = '[]') => {
+    (
+      _event,
+      folderPath: string,
+      category: string,
+      title: string,
+      content = '',
+      tags = '[]',
+      attributes = '{}'
+    ) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
       if (!novel) {
         throw new Error('项目不存在，无法创建设定条目');
       }
-      return worldSettingOps.create(novel.id, category, title, content, tags);
+      return worldSettingOps.create(
+        novel.id,
+        category,
+        title,
+        content,
+        tags,
+        typeof attributes === 'string' ? attributes : '{}'
+      );
     }
   );
 
@@ -42,7 +57,13 @@ export function registerWorldSettingHandlers(): void {
     (
       _event,
       id: number,
-      fields: { category?: string; title?: string; content?: string; tags?: string }
+      fields: {
+        category?: string;
+        title?: string;
+        content?: string;
+        tags?: string;
+        attributes?: string;
+      }
     ) => worldSettingOps.update(id, fields)
   );
 

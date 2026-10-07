@@ -489,6 +489,42 @@ describe('useOutlineEntries: 导入 / 重建 / AI 生成 / 清空', () => {
     expect(result.current.statusMessage).toBe('AI 生成大纲失败');
   });
 
+  it('generateAiOutlineVariants：并行生成多种风格，丢弃空结果，不写库；applyOutlineTree 写入并存版本', async () => {
+    setup();
+    buildMocks.ai.mockImplementation(
+      async (_content: string, _ready: boolean, options?: { style: string }) =>
+        options?.style === 'suspense' ? [] : TREE
+    );
+    const { result } = await renderReady();
+    let variants: Awaited<ReturnType<typeof result.current.generateAiOutlineVariants>> = [];
+    await act(async () => {
+      variants = await result.current.generateAiOutlineVariants([
+        { style: 'balanced', granularity: 'medium', maxDepth: 3 },
+        { style: 'suspense', granularity: 'medium', maxDepth: 3 },
+        { style: 'cinematic', granularity: 'medium', maxDepth: 3 },
+      ]);
+    });
+    expect(variants.map((item) => item.options.style)).toEqual(['balanced', 'cinematic']);
+    expect(result.current.statusMessage).toBe('AI 给出 2 种章纲，选一个采用');
+    expect(result.current.hasPersistedOutline).toBe(false);
+
+    await act(async () => {
+      await result.current.applyOutlineTree(variants[1].tree, variants[1].options);
+    });
+    expect(result.current.statusMessage).toBe(
+      '已通过 AI 生成 2 个大纲节点（电影感 / 中 / 3 层），并保存为大纲版本'
+    );
+
+    buildMocks.ai.mockResolvedValue([]);
+    await act(async () => {
+      variants = await result.current.generateAiOutlineVariants([
+        { style: 'balanced', granularity: 'medium', maxDepth: 3 },
+      ]);
+    });
+    expect(variants).toEqual([]);
+    expect(result.current.statusMessage).toContain('AI 未生成可用的大纲结构');
+  });
+
   it('generateAiOutline 版本保存失败时不带版本后缀', async () => {
     setup({
       'db-outline-version-create-by-folder': () => {

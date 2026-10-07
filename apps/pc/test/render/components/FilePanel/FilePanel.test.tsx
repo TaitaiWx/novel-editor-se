@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import FilePanel from '@/render/components/FilePanel';
 import type { FileNode } from '@/render/types';
 import type { Character, LoreEntry } from '@/render/components/RightPanel/types';
@@ -53,7 +53,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof FilePanel>> 
     onCreateChapter: noop,
     onCreateDraftFolder: noop,
     onCreateDraft: noop,
-    onCreateCharacter: noop,
+    onCreateCharacter: vi.fn(),
     onCreateLoreEntry: noop,
     onCreateMaterialDirectory: noop,
     onRefresh: noop,
@@ -79,7 +79,8 @@ describe('FilePanel', () => {
     expect(screen.getByText('主要角色')).toBeTruthy();
     expect(screen.getByText('次要角色 · 未填写角色定位')).toBeTruthy();
     expect(screen.getByText('灵气体系')).toBeTruthy();
-    expect(screen.getByText('暂无说明')).toBeTruthy();
+    // 设定行：没有标签 / 摘要时显示分类
+    expect(screen.getByText('世界观')).toBeTruthy();
     expect(screen.getByText('导入的图片、文档和其他素材会出现在这里')).toBeTruthy();
   });
 
@@ -119,38 +120,89 @@ describe('FilePanel', () => {
     expect(screen.queryByText('林舟')).toBeNull();
   });
 
-  it('提供 onOpenGrowth 时显示「成长档案」分区，未提供时不显示', () => {
+  it('角色与成长档案合为一体：人物行带等级徽章；只有成长卡的条目单独列出；头部有成长总览', () => {
     const onOpenGrowth = vi.fn();
-    const onCreateGrowthSheet = vi.fn();
-    const { unmount } = renderPanel({
-      growthIndex: {
-        initialized: true,
-        sheets: [
-          {
-            name: '白芷',
-            aliases: [],
-            level: 3,
-            exp: 900,
-            latestChapter: 0,
-            errorCount: 0,
-            warningCount: 0,
-          },
-        ],
-      },
-      onOpenGrowth,
-      onCreateGrowthSheet,
-      activeWorkspaceTab: '__workspace__:growth:白芷',
+    const sheet = (name: string, level: number) => ({
+      name,
+      aliases: [],
+      level,
+      exp: 900,
+      latestChapter: 0,
+      errorCount: 0,
+      warningCount: 0,
     });
-    expect(screen.getByText('成长档案')).toBeTruthy();
-    expect(screen.getByText('Lv.3')).toBeTruthy();
-    fireEvent.click(screen.getByText('Lv.3'));
-    expect(onOpenGrowth).toHaveBeenCalledWith('白芷');
-    fireEvent.click(screen.getByLabelText('新建成长卡'));
-    expect(onCreateGrowthSheet).toHaveBeenCalledTimes(1);
+    const { props, unmount } = renderPanel({
+      growthIndex: { initialized: true, sheets: [sheet('白芷', 3), sheet('沈砚', 2)] },
+      onOpenGrowth,
+    });
+    // 不再有单独的「成长档案」分区
+    expect(screen.queryByRole('region', { name: '成长档案' })).toBeNull();
+    const section = screen.getByRole('region', { name: '角色' });
+    // 白芷是人物：行内显示 Lv.3，单击打开人物（人物详情里有「成长档案」分页）
+    fireEvent.click(within(section).getByText('Lv.3'));
+    expect(props.onOpenCharacterNode).toHaveBeenCalledWith(2);
+    // 沈砚只有成长卡：列在「只有成长档案」里，单击打开成长卡
+    expect(within(section).getByText('只有成长档案')).toBeTruthy();
+    fireEvent.click(within(section).getByText('沈砚'));
+    expect(onOpenGrowth).toHaveBeenCalledWith('沈砚');
+    fireEvent.click(within(section).getByLabelText('打开成长档案总览'));
+    expect(onOpenGrowth).toHaveBeenLastCalledWith(null);
+    // 新建人物
+    fireEvent.click(within(section).getByLabelText('新建人物'));
+    expect(props.onCreateCharacter).toHaveBeenCalled();
     unmount();
 
+    // 未提供 onOpenGrowth：没有成长相关入口
     renderPanel();
-    expect(screen.queryByText('成长档案')).toBeNull();
+    expect(screen.queryByLabelText('打开成长档案总览')).toBeNull();
+    expect(screen.queryByText('只有成长档案')).toBeNull();
+  });
+
+  it('人物与设定行显示封面头像（图集中的形象图 / 概念图），没有图时显示首字', async () => {
+    renderPanel({
+      characters: [
+        {
+          ...characters[0],
+          media: [
+            {
+              id: 'm1',
+              path: 'data:image/png;base64,AAAA',
+              kind: 'portrait',
+              source: 'upload',
+              createdAt: '',
+            },
+          ],
+        },
+        characters[1],
+      ] as Character[],
+    });
+    const section = screen.getByRole('region', { name: '角色' });
+    // 林舟用图集里的形象图；白芷没有图，显示首字
+    await waitFor(() => expect(section.querySelector('img')).toBeTruthy());
+    expect(within(section).getByText('白')).toBeTruthy();
+    const lore = screen.getByRole('region', { name: '设定' });
+    expect(within(lore).getByText('灵')).toBeTruthy();
+  });
+
+  it('设定按分类目录显示为树，可折叠；行内显示标签', () => {
+    renderPanel({
+      loreEntries: [
+        { ...loreEntries[0], folder: '地理/北境', tags: ['禁地', '雪原'], media: [] },
+        { ...loreEntries[0], id: 8, title: '王都', folder: '地理', tags: [], media: [] },
+        { ...loreEntries[0], id: 9, title: '未分类条目', folder: '', tags: [], media: [] },
+      ] as LoreEntry[],
+    });
+    const lore = screen.getByRole('region', { name: '设定' });
+    const geo = within(lore).getByRole('group', { name: '设定目录 地理' });
+    expect(within(geo).getByText('王都')).toBeTruthy();
+    expect(within(geo).getByRole('group', { name: '设定目录 地理/北境' })).toBeTruthy();
+    expect(within(lore).getByText('#禁地 #雪原')).toBeTruthy();
+    expect(within(lore).getByText('未分类条目')).toBeTruthy();
+    const folderButton = within(geo).getAllByRole('button', { name: /地理/ })[0];
+    expect(folderButton.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(folderButton);
+    expect(within(lore).queryByText('王都')).toBeNull();
+    expect(within(lore).getByText('未分类条目')).toBeTruthy();
   });
 });
 
@@ -330,43 +382,40 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
     expect(screen.getByText('剑与诗')).toBeTruthy();
   });
 
-  it('根目录文档在项目名下方的「项目说明」分区（作品切换器之上，默认折叠，带数量），展开后点击打开', () => {
-    const { props, container } = renderPanel({
+  it('根目录文档在「搜索」左侧的「项目说明」图标里（悬停有提示、未看过有提示点），点击弹出列表打开', async () => {
+    localStorage.clear();
+    const { props } = renderPanel({
       files: sampleFiles,
       folderPath: '/s',
       projectLayout,
       workScope: star,
     });
-    const region = screen.getByRole('region', { name: '项目说明' });
-    // 层级：项目名 → 项目说明 → 作品切换器 → 当前作品的内容
-    const switcher = screen.getByTestId('work-switcher');
-    expect(
-      region.compareDocumentPosition(switcher) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-    expect(container.querySelector('[class*="workspaceTree"]')?.contains(region)).toBe(false);
-    // 不在 ⋯ 菜单里
-    fireEvent.click(screen.getByTestId('project-menu-trigger'));
-    expect(screen.queryByRole('group', { name: /^项目说明/ })).toBeNull();
-    fireEvent.click(screen.getByTestId('project-menu-trigger'));
-
+    const trigger = screen.getByTestId('project-docs-trigger');
+    expect(trigger.getAttribute('aria-label')).toBe('项目说明（1 篇）');
+    // 位置：在搜索按钮之前
+    const search = screen.getByLabelText(/搜索文件/);
+    expect(trigger.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 不在 ⋯ 菜单里，也不在文件树里
     expect(screen.queryByText('欢迎使用')).toBeNull();
-    const header = within(region).getByRole('button', { name: /项目说明/ });
-    expect(header.textContent).toContain('1');
-    fireEvent.click(header, { detail: 1 });
-    const item = within(region).getByRole('listitem');
-    expect(item.textContent).toBe('欢迎使用');
-    fireEvent.click(item);
+    expect(screen.getByTestId('project-docs-unseen')).toBeTruthy();
+    fireEvent.mouseEnter(trigger.parentElement as HTMLElement);
+    expect((await screen.findByRole('tooltip')).textContent).toContain('有新的项目说明：欢迎使用');
+    fireEvent.click(trigger);
+    expect(screen.queryByTestId('project-docs-unseen')).toBeNull();
+    const panel = screen.getByRole('dialog');
+    fireEvent.click(within(panel).getByText('欢迎使用'));
     expect(props.onFileSelect).toHaveBeenCalledWith('/s/欢迎使用.md');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('没有根目录文档时不显示「项目说明」分区', () => {
+  it('没有根目录文档时不显示「项目说明」图标', () => {
     renderPanel({
       files: sampleFiles.slice(1),
       folderPath: '/s',
       projectLayout,
       workScope: star,
     });
-    expect(screen.queryByRole('region', { name: '项目说明' })).toBeNull();
+    expect(screen.queryByTestId('project-docs-trigger')).toBeNull();
   });
 
   it('普通文件夹：没有作品切换器；根目录说明文档放进项目说明，不计入未分卷章数', () => {
@@ -378,9 +427,8 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
       folderPath: '/p',
     });
     expect(screen.queryByTestId('work-switcher')).toBeNull();
-    const region = screen.getByRole('region', { name: '项目说明' });
-    fireEvent.click(within(region).getByRole('button', { name: /项目说明/ }), { detail: 1 });
-    expect(within(region).getByRole('listitem').textContent).toBe('README');
+    fireEvent.click(screen.getByTestId('project-docs-trigger'));
+    expect(within(screen.getByRole('dialog')).getByText('README')).toBeTruthy();
     expect(rowOf('未分卷').textContent).toContain('1章');
   });
 });

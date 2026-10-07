@@ -14,6 +14,7 @@ import {
   GROWTH_HELP,
   GROWTH_SECTION,
   GROWTH_TITLE,
+  openCharacterGrowth,
   GROWTH_WORKSPACE,
   answerChainedPrompt,
   captureForReview,
@@ -201,7 +202,7 @@ describe('成长档案：首次使用', () => {
   it('2. 「⋯」菜单同步人物卡 / 设定到记忆文件夹', async () => {
     const { page, fixture } = suite;
     await ensureSidebarOpen(page);
-    await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
+    await page.click({ text: '成长 · 林舟', within: '[class*="tabBar"]', exact: true });
     await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
     await page.click(`${GROWTH_WORKSPACE} [aria-label="更多操作"]`);
     await captureForReview(page, 'growth-v2-more-menu');
@@ -231,13 +232,15 @@ describe('成长档案：首次使用', () => {
 
   it('3. 成长档案一级入口：文件面板新建 → 记一笔写入 JSON → 提醒 → 总览 → 右侧摘要', async () => {
     const { page } = suite;
-    // 用例 1 已创建记忆库并为林舟建卡：分区中应列出林舟及其等级
+    // 用例 1 已创建记忆库并为林舟建卡：「角色」分区里林舟这一行带等级徽章（成长档案与人物合一）
     await ensureSidebarOpen(page);
-    await page.waitForTarget({ text: '成长档案', within: SEL.workspaceTree, exact: true });
     await page.waitForTarget({ text: '林舟', within: GROWTH_SECTION, exact: true });
     await page.waitForTarget({ text: 'Lv.2', within: GROWTH_SECTION, exact: true });
+    expect(await page.exists(`${SEL.workspaceTree} section[aria-label="成长档案"]`)).toBe(false);
 
-    await page.click('[aria-label="新建成长卡"]');
+    // 新建成长卡：从成长总览
+    await page.click('[aria-label="打开成长档案总览"]');
+    await page.click({ text: '+ 新建成长卡', within: GROWTH_WORKSPACE, exact: true });
     await answerChainedPrompt(page, '新建成长卡', '白芷');
     await page.waitForTarget({ text: '成长 · 白芷', exact: true });
     await page.waitForTarget({ text: '白芷', within: GROWTH_TITLE, exact: true });
@@ -289,10 +292,9 @@ describe('成长档案：首次使用', () => {
     await page.waitForTarget({ text: '连升 3 级', within: GROWTH_WORKSPACE });
     await captureForReview(page, 'growth-v2-warnings');
 
-    // 点击已有档案：切换到对应角色的标签
-    await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
-    await page.waitForTarget({ text: '成长 · 林舟', exact: true });
-    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
+    // 点「角色」里的林舟：打开人物详情，成长档案是其中一个分页
+    await openCharacterGrowth(page, '林舟');
+    await captureForReview(page, 'character-growth-tab');
 
     // 总览：卡片网格 + 提醒圆点
     await page.click('[aria-label="打开成长档案总览"]');
@@ -310,8 +312,9 @@ describe('成长档案：首次使用', () => {
     await answerChainedPrompt(page, '人物定位', '法师');
     await answerChainedPrompt(page, '人物分类', '次要角色');
     await page.waitForGone(SEL.dialog);
-    // 新建人物后自动打开人物详情
-    await page.waitForTarget('[aria-label="为 莉娜 新建成长档案"]', 15_000);
+    // 新建人物后自动打开人物详情：人物设计 / 图集 / 成长档案 / 经历与状态 / 关系与高亮
+    const TABS = '[role="tablist"][aria-label="人物详情"]';
+    await page.waitForTarget(TABS, 15_000);
     // 人物资料展示竖版大图（形象图），不是小圆头像；没有图时显示「添加形象图」占位
     const portrait = await page.evaluate<{
       width: number;
@@ -337,9 +340,27 @@ describe('成长档案：首次使用', () => {
     expect(portrait!.radius).not.toBe('50%');
     expect(portrait!.text).toContain('添加形象图');
     await captureForReview(page, 'growth-entry-character-detail');
-    await page.click('[aria-label="为 莉娜 新建成长档案"]');
 
-    await page.waitForTarget({ text: '成长 · 莉娜', exact: true });
+    // 人物设计：失焦即保存，AI 出图 / 续写 / 场景视频都会读取
+    await page.click('textarea[aria-label="人物外貌"]');
+    await page.type('银发，戴单片眼镜');
+    await page.click('textarea[aria-label="人物性格"]');
+    await page.waitForTarget({ text: '已保存', within: '[data-testid="character-design"]' });
+
+    // 图集：本地上传 / AI 生成（没有配置图片服务时 AI 按钮打开设置）
+    await page.click({ text: '图集', within: TABS });
+    await page.waitForTarget('[data-testid="entity-gallery"]');
+    await page.waitForTarget({ text: '本地上传', within: '[data-testid="entity-gallery"]' });
+    await page.waitForTarget({
+      text: '建议先生成一张「三视图」',
+      within: '[data-testid="entity-gallery"]',
+    });
+    await captureForReview(page, 'character-gallery-empty');
+
+    // 成长档案属于人物：在人物详情里直接建卡
+    await page.click({ text: '成长档案', within: TABS });
+    await page.waitForTarget({ text: '当前作品还没有「莉娜」的成长卡', exact: true });
+    await page.click({ text: '为「莉娜」新建成长卡', exact: true });
     await page.waitForTarget({ text: '莉娜', within: GROWTH_TITLE, exact: true });
     const sheet = await waitForSheet<{ exp: number; level: number; name: string }>(
       suite,
@@ -348,11 +369,23 @@ describe('成长档案：首次使用', () => {
       '莉娜 成长卡已创建'
     );
     expect(sheet).toMatchObject({ name: '莉娜', level: 1, exp: 0 });
-    await page.waitForTarget({ text: '莉娜', within: GROWTH_SECTION, exact: true });
-
-    // 回到人物详情：按钮显示等级
-    await page.click({ text: '莉娜', within: '[class*="tabBar"]', exact: true });
-    await page.waitForTarget('[aria-label="打开 莉娜 的成长档案"]');
+    // 分页与文件面板「角色」里的莉娜都显示等级
+    await page.waitForTarget({ text: 'Lv.1', within: TABS });
+    await page.waitFor(
+      (selector: string) =>
+        Array.from(document.querySelectorAll(`${selector} [role="button"]`)).some(
+          (row) => row.textContent?.includes('莉娜') && row.textContent.includes('Lv.1')
+        ),
+      { args: [GROWTH_SECTION], message: '角色分区里莉娜带 Lv.1 徽章' }
+    );
+    // 设计内容已保存：切回「人物设计」仍在
+    await page.click({ text: '人物设计', within: TABS });
+    await page.waitFor(
+      () =>
+        (document.querySelector('textarea[aria-label="人物外貌"]') as HTMLTextAreaElement | null)
+          ?.value === '银发，戴单片眼镜',
+      { message: '人物外貌已保存' }
+    );
     await captureForReview(page, 'growth-entry-filepanel');
   });
 });

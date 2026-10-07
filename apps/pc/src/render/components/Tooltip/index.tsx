@@ -114,6 +114,8 @@ const Tooltip: React.FC<TooltipProps> = ({
       style={style}
       onMouseEnter={show}
       onMouseLeave={hide}
+      // 点击后隐藏：触发器打开的弹层 / 菜单不会被提示遮住
+      onMouseDown={hide}
     >
       {children}
       {visible &&

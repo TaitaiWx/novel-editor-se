@@ -308,13 +308,21 @@ describe('grok', () => {
 });
 
 describe('注册表', () => {
-  it('内置四个 Provider，按类型列出', () => {
+  it('内置 Provider（文本 / 视频 / 图片），按类型列出', () => {
     const registry = createDefaultRegistry();
     expect(registry.list().map((item) => item.id)).toEqual([
       'openai-compatible',
       'grok',
       'minimax-video',
       'seedance-video',
+      'seedream-image',
+      'minimax-image',
+      'grok-image',
+    ]);
+    expect(registry.list('image').map((item) => item.id)).toEqual([
+      'seedream-image',
+      'minimax-image',
+      'grok-image',
     ]);
     expect(registry.list('video').map((item) => item.id)).toEqual([
       'minimax-video',

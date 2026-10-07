@@ -5,6 +5,9 @@ import Tooltip from '../../Tooltip';
 import InlineRenameInput, { isRenameShortcut } from '../../InlineRenameInput';
 import { formatShortcutLabel } from '../../../utils/appSettings';
 import ProjectMenu from '../ProjectMenu';
+import ProjectDocsButton from '../ProjectDocsButton';
+import type { ContextMenuEvent } from '../../FileTree';
+import type { FileNode } from '../../../types';
 import styles from './styles.module.scss';
 
 export interface CreateMenuItem {
@@ -55,6 +58,11 @@ interface WorkspaceHeaderProps {
   onCreateMenuOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
   /** 双击项目名（或聚焦后按 F2、「⋯ → 重命名项目」）行内重命名，提交新名称；未提供时不可重命名 */
   onRenameProject?: (nextName: string) => void;
+  /** 项目根目录的说明文档：「搜索」左侧的「项目说明」图标 */
+  projectDocs?: FileNode[];
+  selectedFile?: string | null;
+  onOpenProjectDoc?: (path: string) => void;
+  onProjectDocContextMenu?: (event: ContextMenuEvent) => void;
   onOpenRecentFolder?: (folderPath: string) => void;
   /** 测试注入（默认走 IPC） */
   projectMenuOverrides?: Pick<
@@ -69,7 +77,7 @@ interface WorkspaceHeaderProps {
 }
 
 /**
- * 文件面板顶部：项目名（双击或 F2 重命名）| 搜索 / 新建 / ⋯ 更多（在访达中显示、重命名项目、
+ * 文件面板顶部：项目名（双击或 F2 重命名）| 项目说明 / 搜索 / 新建 / ⋯ 更多（在访达中显示、重命名项目、
  * 打开其他文件夹、打开最近使用、刷新）| 折叠侧边栏（最右侧）
  */
 const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
@@ -83,6 +91,10 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   createMenuOpen,
   onCreateMenuOpenChange: setCreateMenuOpen,
   onRenameProject,
+  projectDocs = [],
+  selectedFile = null,
+  onOpenProjectDoc,
+  onProjectDocContextMenu,
   onOpenRecentFolder,
   projectMenuOverrides,
   onOpenFolder,
@@ -174,6 +186,13 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         )}
       </div>
       <div className={styles.workspaceActions}>
+        <ProjectDocsButton
+          folderPath={folderPath}
+          docs={projectDocs}
+          selectedFile={selectedFile}
+          onOpen={(path) => onOpenProjectDoc?.(path)}
+          onDocContextMenu={onProjectDocContextMenu}
+        />
         <Tooltip content={searchLabel} position="bottom">
           <button
             className={`${styles.workspaceAction} ${showSearch ? styles.workspaceActionActive : ''}`}

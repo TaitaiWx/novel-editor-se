@@ -215,6 +215,10 @@ contextBridge.exposeInMainWorld('electron', {
         'ai-stream-cancel',
         // 人物头像（保存到 <作品>/资料/人物头像/）
         'character-avatar-save',
+        // 人物 / 设定图集（资料/图集/）与 AI 出图（main/handlers/entity-media.ts）
+        'entity-image-save',
+        'entity-image-delete',
+        'ai-image-generate',
         // 场景视频任务
         'video-task-submit',
         'video-task-list',

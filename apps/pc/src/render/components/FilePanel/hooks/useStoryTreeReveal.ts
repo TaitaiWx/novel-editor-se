@@ -33,8 +33,6 @@ export function useStoryTreeReveal({
 }: UseStoryTreeRevealOptions) {
   const [revealPath, setRevealPath] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSections>({
-    // 项目说明默认折叠：只占一行，需要时再展开
-    projectDocs: true,
     story: false,
     characters: false,
     lore: false,

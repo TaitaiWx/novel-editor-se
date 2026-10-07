@@ -453,6 +453,8 @@ describe('character category & attributes', () => {
     const attrs = parseCharacterAttributes('', '主角');
     expect(attrs).toEqual({
       avatar: undefined,
+      design: { appearance: '', personality: '', background: '', speech: '', outfit: '' },
+      media: [],
       aliases: [],
       category: 'major',
       highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
@@ -467,12 +469,48 @@ describe('character category & attributes', () => {
 
   it('returns safe defaults for malformed JSON', () => {
     expect(parseCharacterAttributes('{oops', '女主')).toEqual({
+      design: { appearance: '', personality: '', background: '', speech: '', outfit: '' },
+      media: [],
       aliases: [],
       category: 'major',
       highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
       highlightFirstMentionOnly: true,
       currentState: [],
     });
+  });
+
+  it('人物设计与图集：stringify -> parse 保留；空设计 / 空图集不写入；其他写入方展开旧属性时不丢失', () => {
+    const media = [
+      {
+        id: 'm1',
+        path: '资料/图集/人物/林舟/a.png',
+        kind: 'turnaround' as const,
+        source: 'ai' as const,
+        prompt: '三视图',
+        createdAt: '2026-10-07T00:00:00.000Z',
+      },
+    ];
+    const design = {
+      appearance: '黑发',
+      personality: '倔强',
+      background: '',
+      speech: '',
+      outfit: '短打',
+    };
+    const json = stringifyCharacterAttributes({ avatar: media[0].path, design, media }, '主角');
+    const parsed = parseCharacterAttributes(json, '主角');
+    expect(parsed.design).toEqual(design);
+    expect(parsed.media).toEqual(media);
+    expect(parsed.avatar).toBe(media[0].path);
+    // 例如 AI 补全人物别名：展开旧属性再写回，设计与图集仍在
+    const rewritten = parseCharacterAttributes(
+      stringifyCharacterAttributes({ ...parsed, aliases: ['阿舟'] }, '主角'),
+      '主角'
+    );
+    expect(rewritten.design).toEqual(design);
+    expect(rewritten.media).toHaveLength(1);
+    expect(JSON.parse(stringifyCharacterAttributes({}, ''))).not.toHaveProperty('design');
+    expect(JSON.parse(stringifyCharacterAttributes({}, ''))).not.toHaveProperty('media');
   });
 
   it('stringify -> parse round-trips', () => {

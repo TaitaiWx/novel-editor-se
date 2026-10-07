@@ -26,7 +26,10 @@ import {
   type GrowthSheetSummary,
 } from '@/render/utils/growthIndex';
 import { useGrowthEntry, type UseGrowthEntryContext } from '@/render/hooks/useGrowthEntry';
-import GrowthSection from '@/render/components/FilePanel/GrowthSection';
+import CharacterSection, {
+  splitGrowthSheets,
+} from '@/render/components/FilePanel/CharacterSection';
+import type { Character } from '@/render/components/RightPanel/types';
 import { filterGrowthSheets, shouldShowGrowthSection } from '@/render/components/FilePanel/utils';
 import { CharacterGrowthButton } from '@/render/components/RightPanel/CharactersView/CharacterGrowthButton';
 import { GrowthView } from '@/render/components/RightPanel/GrowthView';
@@ -235,35 +238,63 @@ describe('章节号推断与本章角色', () => {
   });
 });
 
-describe('GrowthSection', () => {
-  function renderSection(overrides: Partial<React.ComponentProps<typeof GrowthSection>> = {}) {
-    const props: React.ComponentProps<typeof GrowthSection> = {
-      sheets: [SUMMARY],
-      initialized: true,
+describe('CharacterSection（角色与成长档案合一）', () => {
+  const linZhou = {
+    id: 1,
+    name: '林舟',
+    role: '主角',
+    category: 'major',
+    description: '',
+    currentState: [],
+    aliases: ['阿舟'],
+  } as Character;
+
+  function renderSection(overrides: Partial<React.ComponentProps<typeof CharacterSection>> = {}) {
+    const props: React.ComponentProps<typeof CharacterSection> = {
+      groups: [{ key: 'major', label: '主要角色', items: [linZhou] }],
+      characters: [linZhou],
+      growthSheets: [SUMMARY],
+      workPath: '/w',
       filtering: false,
       collapsed: false,
       activeWorkspaceTab: null,
       onToggle: vi.fn(),
-      onOpen: vi.fn(),
-      onCreate: vi.fn(),
+      onOpenCharacter: vi.fn(),
+      onRenameCharacter: vi.fn(),
+      onDeleteCharacter: vi.fn(),
+      onCreateCharacter: vi.fn(),
+      onOpenGrowth: vi.fn(),
       onContextMenu: vi.fn(),
       ...overrides,
     };
-    render(<GrowthSection {...props} />);
+    render(<CharacterSection {...props} />);
     return props;
   }
 
-  it('列出成长卡（等级徽章），点击打开、总览与新建', () => {
-    const props = renderSection();
-    expect(screen.getByText('成长档案')).toBeTruthy();
-    expect(screen.getByText('Lv.2')).toBeTruthy();
+  it('成长卡按人物名 / 别名匹配到人物，匹配不到的单独列出', () => {
+    const sheets = [
+      { ...SUMMARY, name: '阿舟' },
+      { ...SUMMARY, name: '路人甲' },
+    ];
+    const { byCharacter, orphans } = splitGrowthSheets([linZhou], sheets);
+    expect(byCharacter.get('林舟')?.name).toBe('阿舟');
+    expect(orphans.map((sheet) => sheet.name)).toEqual(['路人甲']);
+  });
+
+  it('人物行带等级徽章；只有成长卡的条目点击打开成长卡；头部总览 / 新建人物', () => {
+    const props = renderSection({ growthSheets: [{ ...SUMMARY, name: '林舟' }, SUMMARY] });
+    // 林舟（人物）与阿尔（只有成长卡）都显示等级徽章
+    expect(screen.getAllByText('Lv.2')).toHaveLength(2);
+    fireEvent.click(screen.getByText('林舟'));
+    expect(props.onOpenCharacter).toHaveBeenCalledWith(1);
+    expect(screen.getByText('只有成长档案')).toBeTruthy();
     expect(screen.getByText('经验 400 · 第 3 章')).toBeTruthy();
     fireEvent.click(screen.getByText('阿尔'));
-    expect(props.onOpen).toHaveBeenCalledWith('阿尔');
+    expect(props.onOpenGrowth).toHaveBeenCalledWith('阿尔');
     fireEvent.click(screen.getByLabelText('打开成长档案总览'));
-    expect(props.onOpen).toHaveBeenCalledWith(null);
-    fireEvent.click(screen.getByLabelText('新建成长卡'));
-    expect(props.onCreate).toHaveBeenCalledTimes(1);
+    expect(props.onOpenGrowth).toHaveBeenCalledWith(null);
+    fireEvent.click(screen.getByLabelText('新建人物'));
+    expect(props.onCreateCharacter).toHaveBeenCalledTimes(1);
     fireEvent.contextMenu(screen.getByText('阿尔'));
     expect(props.onContextMenu).toHaveBeenCalledWith(expect.anything(), {
       kind: 'growth-item',
@@ -271,38 +302,36 @@ describe('GrowthSection', () => {
     });
   });
 
-  it('没有成长卡时显示用途说明与新建按钮；筛选时显示简短提示', () => {
-    const props = renderSection({ sheets: [], initialized: false });
-    expect(screen.getByRole('note').textContent).toContain('战力崩溃');
-    expect(screen.getByRole('note').textContent).toContain('首次使用会先选择规则模板');
-    fireEvent.click(screen.getByText('新建成长卡'));
-    expect(props.onCreate).toHaveBeenCalledTimes(1);
-  });
-
-  it('标题行与空状态都能打开使用说明', () => {
-    renderSection({ sheets: [] });
-    fireEvent.click(screen.getByLabelText('成长档案使用说明'));
+  it('没有人物时显示用途说明与新建人物；头部与空状态都能打开使用说明', () => {
+    const props = renderSection({ groups: [], characters: [], growthSheets: [] });
+    expect(screen.getByRole('note').textContent).toContain('成长档案');
+    fireEvent.click(screen.getAllByText('新建人物').at(-1) as HTMLElement);
+    expect(props.onCreateCharacter).toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('角色与成长档案使用说明'));
     expect(screen.getByRole('dialog', { name: '成长档案使用说明' })).toBeTruthy();
     fireEvent.click(screen.getByLabelText('关闭使用说明'));
-    expect(screen.queryByRole('dialog', { name: '成长档案使用说明' })).toBeNull();
     fireEvent.click(screen.getByText('怎么用？'));
     expect(screen.getByRole('dialog', { name: '成长档案使用说明' })).toBeTruthy();
   });
 
   it('筛选无结果与折叠', () => {
     const { unmount } = render(
-      <GrowthSection
-        sheets={[]}
-        initialized
+      <CharacterSection
+        groups={[]}
+        characters={[]}
+        growthSheets={[]}
+        workPath={null}
         filtering
         collapsed={false}
         onToggle={vi.fn()}
-        onOpen={vi.fn()}
-        onCreate={vi.fn()}
+        onOpenCharacter={vi.fn()}
+        onRenameCharacter={vi.fn()}
+        onDeleteCharacter={vi.fn()}
+        onCreateCharacter={vi.fn()}
         onContextMenu={vi.fn()}
       />
     );
-    expect(screen.getByText('当前筛选条件下没有成长档案')).toBeTruthy();
+    expect(screen.getByText('当前筛选条件下没有人物')).toBeTruthy();
     unmount();
     renderSection({ collapsed: true });
     expect(screen.queryByText('阿尔')).toBeNull();

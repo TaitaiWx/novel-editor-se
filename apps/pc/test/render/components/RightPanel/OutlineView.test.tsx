@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import type { OutlineEntry } from '@/render/components/RightPanel/types';
 
 // ─── 受控的 hook 状态（每个用例在 beforeEach 中重置） ─────────────────────
@@ -123,6 +123,16 @@ beforeEach(() => {
     updateOutlineVersion: vi.fn(),
     deleteOutlineVersion: vi.fn(),
     generateAiOutline: vi.fn(async () => undefined),
+    generateAiOutlineVariants: vi.fn(async (variants: Array<{ style: string }>) =>
+      variants.map((options, index) => ({
+        options,
+        tree: [
+          { title: `${options.style}-开场`, content: '', children: [] },
+          { title: `${options.style}-转折${index}`, content: '', children: [] },
+        ],
+      }))
+    ),
+    applyOutlineTree: vi.fn(async () => undefined),
     reorderEntries: vi.fn(async () => undefined),
   };
   h.titles = {
@@ -300,22 +310,24 @@ describe('OutlineView', () => {
     expect(screen.getByText('没有可导入内容')).toBeTruthy();
     expect(screen.getByTestId('versions-panel').textContent).toBe('versions:1');
 
-    fireEvent.click(screen.getByRole('button', { name: '导入大纲' }));
+    // 只有一个主按钮；其余收在「⋯」
+    expect(screen.getByRole('button', { name: '生成章纲' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '导入大纲' })).toBeNull();
+    const openMore = () => fireEvent.click(screen.getByLabelText('章纲更多操作'));
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: '导入大纲文件…' }));
     expect(h.outline.importOutline).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '从正文重建' }));
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: '从正文整理（不用 AI）' }));
     expect(h.outline.rebuildFromContent).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'AI 生成大纲' }));
-    expect(h.outline.generateAiOutline).toHaveBeenCalledWith({
-      style: 'balanced',
-      granularity: 'medium',
-      maxDepth: 3,
-    });
+    openMore();
     expect(
-      (screen.getByRole('button', { name: '保存为大纲版本' }) as HTMLButtonElement).disabled
+      (screen.getByRole('menuitem', { name: '保存为大纲版本' }) as HTMLButtonElement).disabled
     ).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'AI 预设' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '生成设置（粒度 / 层数）' }));
     expect(screen.getByTestId('ai-preset-panel')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '收起预设' }));
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: '收起生成设置' }));
     expect(screen.queryByTestId('ai-preset-panel')).toBeNull();
     unmount();
 
@@ -331,7 +343,7 @@ describe('OutlineView', () => {
     );
     expect(screen.getByText(/暂无入库章纲/)).toBeTruthy();
     expect(screen.getByText('可为「第一章」导入、生成或重建独立章纲')).toBeTruthy();
-    expect((screen.getByRole('button', { name: '导入大纲' }) as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByRole('button', { name: '生成章纲' }) as HTMLButtonElement).disabled).toBe(
       true
     );
   });
@@ -349,7 +361,6 @@ describe('OutlineView', () => {
     );
     expect(screen.getByText('2 节点')).toBeTruthy();
     expect(screen.getByText('已入库作品大纲')).toBeTruthy();
-    expect(screen.getByText(/^AI 生成：.+ \/ .+ \/ 3 层$/)).toBeTruthy();
     expect(screen.getByTestId('versions-panel')).toBeTruthy();
 
     fireEvent.click(screen.getByText('序幕'));
@@ -358,24 +369,57 @@ describe('OutlineView', () => {
     fireEvent.click(screen.getByText('高潮'));
     expect(onScrollToLine).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: '导入大纲' }));
-    fireEvent.click(screen.getByRole('button', { name: '从正文重建' }));
-    fireEvent.click(screen.getByRole('button', { name: 'AI 生成大纲' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存为大纲版本' }));
-    fireEvent.click(screen.getByRole('button', { name: '清空入库' }));
-    fireEvent.click(screen.getByRole('button', { name: 'AI 预设' }));
-    expect(h.outline.importOutline).toHaveBeenCalled();
-    expect(h.outline.rebuildFromContent).toHaveBeenCalled();
-    expect(h.outline.generateAiOutline).toHaveBeenCalled();
+    const openMore = () => fireEvent.click(screen.getByLabelText('章纲更多操作'));
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: '保存为大纲版本' }));
     expect(h.versionCenter.handleSaveVersion).toHaveBeenCalled();
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: '清空章纲' }));
     expect(h.outline.clearPersisted).toHaveBeenCalled();
-    expect(screen.getByTestId('ai-preset-panel')).toBeTruthy();
 
     // 数据库条目悬停不请求 AI 摘要，popover 使用库内摘要
     const node = screen.getByText('序幕').closest('[class*="outlineNode"]') as HTMLElement;
     fireEvent.mouseEnter(node);
     expect(h.summaries.requestAiSummary).not.toHaveBeenCalled();
     expect(screen.getByTestId('popover').textContent).toBe('序幕|库内摘要|idle');
+  });
+
+  it('生成章纲：一次给出 均衡 / 悬疑钩子 / 电影感 三种方案，挑一个采用；都不要可关闭', async () => {
+    render(<OutlineView mode="outline" content="正文" folderPath="/novel" dbReady />);
+    fireEvent.click(screen.getByRole('button', { name: '生成章纲' }));
+    const picker = await screen.findByTestId('plan-variants');
+    expect(h.outline.generateAiOutlineVariants).toHaveBeenCalledWith([
+      { style: 'balanced', granularity: 'medium', maxDepth: 3 },
+      { style: 'suspense', granularity: 'medium', maxDepth: 3 },
+      { style: 'cinematic', granularity: 'medium', maxDepth: 3 },
+    ]);
+    const cards = within(picker).getAllByRole('listitem', { name: /^方案 / });
+    expect(cards.map((card) => card.getAttribute('aria-label'))).toEqual([
+      '方案 均衡',
+      '方案 悬疑钩子',
+      '方案 电影感',
+    ]);
+    expect(cards[1].textContent).toContain('suspense-开场');
+    fireEvent.click(within(cards[1]).getByRole('button', { name: '采用这个' }));
+    expect(h.outline.applyOutlineTree).toHaveBeenCalledWith(
+      [
+        { title: 'suspense-开场', content: '', children: [] },
+        { title: 'suspense-转折1', content: '', children: [] },
+      ],
+      { style: 'suspense', granularity: 'medium', maxDepth: 3 }
+    );
+    expect(screen.queryByTestId('plan-variants')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '生成章纲' }));
+    fireEvent.click(within(await screen.findByTestId('plan-variants')).getByLabelText('关闭方案'));
+    expect(screen.queryByTestId('plan-variants')).toBeNull();
+  });
+
+  it('未开启 AI：主按钮是「从正文整理」', () => {
+    h.aiConfig = { loaded: true, ready: false };
+    render(<OutlineView mode="outline" content="正文" folderPath="/novel" dbReady />);
+    fireEvent.click(screen.getByRole('button', { name: '从正文整理' }));
+    expect(h.outline.rebuildFromContent).toHaveBeenCalled();
   });
 
   it('大纲模式：拖拽排序调用 reorderEntries', () => {

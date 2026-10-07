@@ -360,7 +360,13 @@ export interface ElectronAPI {
       invoke(
         channel: 'db-world-setting-update',
         id: number,
-        fields: { category?: string; title?: string; content?: string; tags?: string }
+        fields: {
+          category?: string;
+          title?: string;
+          content?: string;
+          tags?: string;
+          attributes?: string;
+        }
       ): Promise<unknown>;
       invoke(channel: 'db-world-setting-delete', id: number): Promise<unknown>;
       /** 人物头像：保存到 <作品>/资料/人物头像/，返回相对作品目录的路径 */
@@ -372,6 +378,46 @@ export interface ElectronAPI {
       ): Promise<
         | { ok: true; data: { relativePath: string; absolutePath: string } }
         | { ok: false; error: string }
+      >;
+      /** 人物 / 设定图集：保存到 <作品>/资料/图集/人物|设定/<名称>/，返回相对作品目录的路径 */
+      invoke(
+        channel: 'entity-image-save',
+        workPath: string,
+        payload: {
+          entity: 'character' | 'lore';
+          name: string;
+          data: Uint8Array;
+          prompt?: string;
+          providerId?: string;
+          model?: string;
+        }
+      ): Promise<{ ok: true; data: { relativePath: string } } | { ok: false; error: string }>;
+      invoke(
+        channel: 'entity-image-delete',
+        workPath: string,
+        relativePath: string
+      ): Promise<{ ok: true; data: null } | { ok: false; error: string }>;
+      /** AI 出图：返回 1–4 张候选图（data URL，不落盘） */
+      invoke(
+        channel: 'ai-image-generate',
+        payload: {
+          workPath?: string;
+          providerId?: string;
+          prompt: string;
+          aspectRatio?: string;
+          count?: number;
+          references?: string[];
+        }
+      ): Promise<
+        | {
+            ok: true;
+            data: {
+              images: Array<{ dataUrl: string; mimeType: string }>;
+              providerId: string;
+              model: string;
+            };
+          }
+        | { ok: false; error: { kind: string; message: string } }
       >;
       invoke(channel: 'import-structured-file'): Promise<{
         previews: Array<{ fileName: string; content: string; sourcePath: string }>;

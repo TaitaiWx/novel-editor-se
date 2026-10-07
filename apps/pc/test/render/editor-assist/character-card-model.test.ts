@@ -139,6 +139,20 @@ describe('续写资料', () => {
         status: '伤势：左臂旧伤未愈；随身：旧剑「青石」',
       },
     ]);
+    // 人物设计一并带上（续写不跑偏人设）
+    const designed = charactersForContext([
+      {
+        ...LIN,
+        design: {
+          appearance: '黑发',
+          personality: '嘴硬心软',
+          background: '',
+          speech: '',
+          outfit: '',
+        },
+      },
+    ]);
+    expect(designed[0].summary).toBe(`主角 · 旅人；${LIN.description}；外貌：黑发；性格：嘴硬心软`);
   });
 
   it('成长档案与核心规则；未初始化时为空', () => {

@@ -1,14 +1,25 @@
 import { getDatabase } from './connection';
 import { buildAllowedUpdate } from './sql-helpers';
 
-/** 设定资料库 */
+/**
+ * 设定资料库
+ *
+ * attributes（JSON）：分类目录 folder、图集 media、封面 cover 等扩展字段（渲染进程 lore-data 解析）
+ */
 export const worldSettingOps = {
-  create(novelId: number, category: string, title: string, content = '', tags = '[]') {
+  create(
+    novelId: number,
+    category: string,
+    title: string,
+    content = '',
+    tags = '[]',
+    attributes = '{}'
+  ) {
     return getDatabase()
       .prepare(
-        'INSERT INTO world_settings (novel_id, category, title, content, tags) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO world_settings (novel_id, category, title, content, tags, attributes) VALUES (?, ?, ?, ?, ?, ?)'
       )
-      .run(novelId, category, title, content, tags);
+      .run(novelId, category, title, content, tags, attributes);
   },
 
   getByNovel(novelId: number) {
@@ -21,11 +32,17 @@ export const worldSettingOps = {
 
   update(
     id: number,
-    fields: { category?: string; title?: string; content?: string; tags?: string }
+    fields: {
+      category?: string;
+      title?: string;
+      content?: string;
+      tags?: string;
+      attributes?: string;
+    }
   ) {
     const { updates, values } = buildAllowedUpdate(
       fields,
-      new Set(['category', 'title', 'content', 'tags'])
+      new Set(['category', 'title', 'content', 'tags', 'attributes'])
     );
     updates.push("updated_at = datetime('now')");
     values.push(id);
@@ -44,17 +61,30 @@ export const worldSettingOps = {
 
   bulkCreate(
     novelId: number,
-    entries: Array<{ category: string; title: string; content?: string; tags?: string }>
+    entries: Array<{
+      category: string;
+      title: string;
+      content?: string;
+      tags?: string;
+      attributes?: string;
+    }>
   ) {
     if (entries.length === 0) {
       return { changes: 0 };
     }
     const stmt = getDatabase().prepare(
-      'INSERT INTO world_settings (novel_id, category, title, content, tags) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO world_settings (novel_id, category, title, content, tags, attributes) VALUES (?, ?, ?, ?, ?, ?)'
     );
     const transaction = getDatabase().transaction(() => {
       for (const entry of entries) {
-        stmt.run(novelId, entry.category, entry.title, entry.content || '', entry.tags || '[]');
+        stmt.run(
+          novelId,
+          entry.category,
+          entry.title,
+          entry.content || '',
+          entry.tags || '[]',
+          entry.attributes || '{}'
+        );
       }
     });
     transaction();

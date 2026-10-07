@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { LoreView } from '@/render/components/RightPanel/LoreView';
 import {
   installElectronMock,
@@ -15,6 +15,7 @@ interface Row {
   title: string;
   content: string;
   tags: string;
+  attributes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -73,13 +74,21 @@ function installDb(opts: DbOpts = {}): { mock: ElectronMock; rows: Row[] } {
       case 'db-world-setting-update': {
         const [id, patch] = args as [
           number,
-          { category?: string; title?: string; content?: string },
+          {
+            category?: string;
+            title?: string;
+            content?: string;
+            tags?: string;
+            attributes?: string;
+          },
         ];
         const row = rows.find((r) => r.id === id);
         if (row) {
           if (patch.category) row.category = patch.category;
           if (patch.title) row.title = patch.title;
           if (patch.content !== undefined) row.content = patch.content;
+          if (patch.tags !== undefined) row.tags = patch.tags;
+          if (patch.attributes !== undefined) row.attributes = patch.attributes;
         }
         return true;
       }
@@ -196,7 +205,8 @@ describe('LoreView', () => {
       'world',
       '昆仑',
       '万山之祖',
-      '[]'
+      '[]',
+      '{}'
     );
     expect((screen.getByPlaceholderText('新增世界观条目标题') as HTMLInputElement).value).toBe('');
   });
@@ -350,36 +360,79 @@ describe('LoreView', () => {
     expect(await screen.findByText('AI 未返回诊断结果')).toBeTruthy();
   });
 
-  it('详情模式：展示条目、编辑保存、同类条目跳转、删除', async () => {
-    const { mock } = installDb({ rows: seed });
+  it('详情模式：标题 / 内容编辑保存，分类、目录、标签即时保存，相关设定跳转、删除', async () => {
+    const { mock, rows } = installDb({ rows: seed });
     render(<LoreView folderPath="/novel" content="" initialEntryId={3} />);
-    expect(await screen.findByRole('heading', { name: '九州' })).toBeTruthy();
-    expect(screen.getByText('这个设定条目还没有详细说明。')).toBeTruthy();
-    expect(screen.getByText('分类 世界观')).toBeTruthy();
-    expect((screen.getByPlaceholderText('设定条目标题') as HTMLInputElement).value).toBe('九州');
+    const detail = await screen.findByTestId('lore-detail');
+    const title = within(detail).getByLabelText('设定标题') as HTMLInputElement;
+    expect(title.value).toBe('九州');
+    // 没有图时封面显示首字 +「添加图片」
+    expect(within(detail).getByRole('button', { name: '为 九州 添加图片' })).toBeTruthy();
 
-    fireEvent.change(screen.getByPlaceholderText('设定条目标题'), { target: { value: '神州' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    // 内容：改完点「保存」
+    fireEvent.change(within(detail).getByLabelText('设定内容'), { target: { value: '天下九分' } });
+    fireEvent.click(within(detail).getByRole('button', { name: '保存' }));
     await waitFor(() =>
       expect(mock.invoke).toHaveBeenCalledWith(
         'db-world-setting-update',
         3,
-        expect.objectContaining({ title: '神州' })
+        expect.objectContaining({ title: '九州', content: '天下九分' })
       )
     );
 
-    // 同类条目
-    fireEvent.click(screen.getByRole('button', { name: /东海/ }));
-    expect(await screen.findByRole('heading', { name: '东海' })).toBeTruthy();
+    // 标题：失焦保存
+    fireEvent.change(title, { target: { value: '神州' } });
+    fireEvent.blur(title);
+    await waitFor(() => expect(rows.find((row) => row.id === 3)?.title).toBe('神州'));
 
-    fireEvent.click(screen.getByRole('button', { name: '删除条目' }));
+    // 目录（多级分类）：失焦时规范化并写入 attributes
+    const folder = within(detail).getByLabelText('设定目录') as HTMLInputElement;
+    fireEvent.change(folder, { target: { value: ' 地理 / 中原 /' } });
+    fireEvent.blur(folder);
+    await waitFor(() =>
+      expect(JSON.parse(rows.find((row) => row.id === 3)?.attributes ?? '{}')).toEqual({
+        folder: '地理/中原',
+      })
+    );
+
+    // 标签：回车添加，× 移除
+    const tagInput = within(detail).getByLabelText('添加标签');
+    fireEvent.change(tagInput, { target: { value: '#古国，大陆' } });
+    fireEvent.keyDown(tagInput, { key: 'Enter' });
+    await waitFor(() =>
+      expect(JSON.parse(rows.find((row) => row.id === 3)?.tags ?? '[]')).toEqual(['古国', '大陆'])
+    );
+    fireEvent.click(await within(detail).findByLabelText('移除标签 古国'));
+    await waitFor(() =>
+      expect(JSON.parse(rows.find((row) => row.id === 3)?.tags ?? '[]')).toEqual(['大陆'])
+    );
+
+    // 图集分页
+    fireEvent.click(within(detail).getByRole('tab', { name: /图集/ }));
+    expect(within(detail).getByTestId('entity-gallery')).toBeTruthy();
+
+    // 相关设定（同目录 / 同标签 / 同分类）→ 跳转到「东海」
+    fireEvent.click(within(detail).getByRole('tab', { name: '相关设定' }));
+    fireEvent.click(within(detail).getByText('东海'));
+    await waitFor(() =>
+      expect((within(detail).getByLabelText('设定标题') as HTMLInputElement).value).toBe('东海')
+    );
+
+    // 分类即时保存
+    fireEvent.change(within(detail).getByLabelText('设定分类'), { target: { value: 'faction' } });
+    await waitFor(() => expect(rows.find((row) => row.id === 4)?.category).toBe('faction'));
+
+    fireEvent.click(within(detail).getByRole('tab', { name: '内容' }));
+    fireEvent.click(within(detail).getByRole('button', { name: '删除条目' }));
     await waitFor(() => expect(mock.invoke).toHaveBeenCalledWith('db-world-setting-delete', 4));
   });
 
-  it('详情模式：条目不存在 / 无同类', async () => {
+  it('详情模式：条目不存在 / 没有相关设定', async () => {
     installDb({ rows: [{ id: 9, title: '孤条', category: 'term', content: '唯一' }] });
     const { unmount } = render(<LoreView folderPath="/novel" content="" initialEntryId={9} />);
-    expect(await screen.findByText('这个分类里暂时没有其他条目。')).toBeTruthy();
+    const detail = await screen.findByTestId('lore-detail');
+    fireEvent.click(within(detail).getByRole('tab', { name: '相关设定' }));
+    expect(within(detail).getByText('还没有同目录、同标签或同分类的设定。')).toBeTruthy();
     unmount();
 
     installDb({ rows: seed });

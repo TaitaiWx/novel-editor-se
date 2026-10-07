@@ -37,6 +37,8 @@ export const CharactersView: React.FC<{
   /** 角色名 → 成长卡等级（来自 资料/记忆/），用于人物详情中的「成长档案」入口 */
   growthLevels?: Record<string, number>;
   onOpenGrowthSheet?: (characterName: string) => void;
+  /** 人物详情「成长档案」分页：嵌入该人物的成长档案 */
+  renderGrowth?: (characterName: string) => React.ReactNode;
 }> = React.memo(
   ({
     folderPath,
@@ -46,6 +48,7 @@ export const CharactersView: React.FC<{
     onOpenSourceLocation,
     growthLevels,
     onOpenGrowthSheet,
+    renderGrowth,
   }) => {
     const debouncedContent = useDebounce(content, 300);
     const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(null);
@@ -220,6 +223,7 @@ export const CharactersView: React.FC<{
           graphView={graphView}
           growthLevel={resolveGrowthLevel(growthLevels, focusedCharacter)}
           onOpenGrowthSheet={onOpenGrowthSheet}
+          renderGrowth={renderGrowth}
           workPath={folderPath}
         />
       );

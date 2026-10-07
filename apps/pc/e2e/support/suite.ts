@@ -83,10 +83,18 @@ export function setupAppSuite(options: SuiteOptions = {}): AppSuite {
 // ─── 通用高层操作 ───────────────────────────────────────────────────────────
 
 /** 文件面板「成长档案」分区 / 成长档案工作区标签 / 成长卡标题 / 使用说明弹窗 */
-export const GROWTH_SECTION = `${SEL.workspaceTree} section:has([aria-label="新建成长卡"])`;
+/** 文件面板「角色」分区：人物与成长档案合为一体（人物行带等级徽章，只有成长卡的单独列出） */
+export const GROWTH_SECTION = `${SEL.workspaceTree} section[aria-label="角色"]`;
 export const GROWTH_WORKSPACE = '[class*="growthWorkspace"]';
 export const GROWTH_TITLE = `${GROWTH_WORKSPACE} header`;
 export const GROWTH_HELP = '[role="dialog"][aria-label="成长档案使用说明"]';
+/** 从文件面板「角色」打开人物详情，切到「成长档案」分页（成长档案属于人物） */
+export async function openCharacterGrowth(page: Page, name: string): Promise<void> {
+  await page.click({ text: name, within: GROWTH_SECTION, exact: true });
+  await page.waitForTarget('[role="tablist"][aria-label="人物详情"]');
+  await page.click({ text: '成长档案', within: '[role="tablist"][aria-label="人物详情"]' });
+  await page.waitForTarget({ text: name, within: GROWTH_TITLE, exact: true });
+}
 
 /**
  * 截图供人工检查样式：设置 NOVEL_EDITOR_E2E_SCREENSHOT_DIR 时额外复制一份到该目录

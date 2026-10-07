@@ -14,6 +14,7 @@ import {
   type ProviderRegistry,
   type StreamChunk,
   type TextProvider,
+  type ImageProvider,
   type VideoProvider,
 } from '@novel-editor/ai';
 import type { AICompletePayload, AIProviderInfo, AIProviderUpdate } from '../../shared/ai';
@@ -320,6 +321,54 @@ export class AIService {
     });
   }
 
+  /** 已配置且启用的图片服务（设置中心「更多 AI 服务」里的 Seedream / MiniMax / Grok 图片） */
+  listReadyImageProviders(): AIProviderInfo[] {
+    return this.registry
+      .list('image')
+      .map((descriptor) => this.getProviderInfo(descriptor.id))
+      .filter((info) => info.configured && info.enabled);
+  }
+
+  getImageProvider(providerId?: string): ImageProvider {
+    const id = providerId ?? this.listReadyImageProviders()[0]?.id;
+    if (!id) {
+      throw new AIError({
+        kind: 'not-configured',
+        message:
+          '还没有配置图片服务，请先在设置中心「AI → 更多 AI 服务」里填写 Seedream / MiniMax / Grok 图片的 Key',
+      });
+    }
+    const descriptor = this.descriptor(id);
+    if (descriptor.kind !== 'image') {
+      throw new AIError({
+        kind: 'bad-request',
+        message: `${descriptor.label} 不是图片服务`,
+        providerId: id,
+      });
+    }
+    const stored = this.deps.configs.get(descriptor.id);
+    const apiKey = this.deps.credentials.get(descriptor.id);
+    if (stored.enabled === false) {
+      throw new AIError({
+        kind: 'not-configured',
+        message: `${descriptor.label} 未启用`,
+        providerId: id,
+      });
+    }
+    if (!apiKey) {
+      throw new AIError({
+        kind: 'not-configured',
+        message: `未配置 ${descriptor.label} 的 API Key，请先在设置中心填写`,
+        providerId: id,
+      });
+    }
+    return this.registry.createImage(descriptor.id, {
+      apiKey,
+      baseUrl: stored.baseUrl,
+      model: stored.model,
+    });
+  }
+
   /** 测试连接：使用已保存的 Key；未启用的服务也允许测试 */
   async testProvider(providerId: string, signal?: AbortSignal): Promise<void> {
     const descriptor = this.descriptor(providerId);
@@ -339,9 +388,12 @@ export class AIService {
       return;
     }
     const stored = this.deps.configs.get(descriptor.id);
-    await this.registry
-      .createVideo(descriptor.id, { apiKey, baseUrl: stored.baseUrl, model: stored.model })
-      .testConnection({ signal });
+    const config = { apiKey, baseUrl: stored.baseUrl, model: stored.model };
+    if (descriptor.kind === 'image') {
+      await this.registry.createImage(descriptor.id, config).testConnection({ signal });
+      return;
+    }
+    await this.registry.createVideo(descriptor.id, config).testConnection({ signal });
   }
 
   async complete(payload: AICompletePayload, signal?: AbortSignal) {

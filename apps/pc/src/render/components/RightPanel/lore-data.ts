@@ -1,3 +1,8 @@
+import {
+  normalizeLoreFolder,
+  parseMediaItems,
+  type MediaItem,
+} from '@novel-editor/core/entity-media';
 import type { LoreCategory, LoreEntry } from './types';
 
 export interface LoreAuditSection {
@@ -13,6 +18,7 @@ interface LoreRow {
   title: string;
   content: string;
   tags: string;
+  attributes?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +28,45 @@ export interface LoreDraft {
   title: string;
   summary: string;
   tags?: string[];
+  /** 分类目录（例如「地理/北境」） */
+  folder?: string;
+  cover?: string;
+  media?: MediaItem[];
+}
+
+export interface LoreAttributes {
+  folder: string;
+  cover?: string;
+  media: MediaItem[];
+}
+
+/** 设定扩展字段（world_settings.attributes JSON）：分类目录、封面、图集 */
+export function parseLoreAttributes(raw: string | null | undefined): LoreAttributes {
+  let parsed: Record<string, unknown> = {};
+  try {
+    const value = JSON.parse(raw || '{}') as unknown;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      parsed = value as Record<string, unknown>;
+    }
+  } catch {
+    parsed = {};
+  }
+  const cover = typeof parsed.cover === 'string' && parsed.cover.trim() ? parsed.cover.trim() : '';
+  return {
+    folder: normalizeLoreFolder(parsed.folder),
+    ...(cover ? { cover } : {}),
+    media: parseMediaItems(parsed.media),
+  };
+}
+
+export function stringifyLoreAttributes(attributes: Partial<LoreAttributes>): string {
+  const folder = normalizeLoreFolder(attributes.folder);
+  const media = parseMediaItems(attributes.media);
+  return JSON.stringify({
+    ...(folder ? { folder } : {}),
+    ...(attributes.cover ? { cover: attributes.cover } : {}),
+    ...(media.length ? { media } : {}),
+  });
 }
 
 const LORE_AUDIT_CATEGORY_KEYWORDS: Array<{ category: LoreCategory; keywords: string[] }> = [
@@ -60,6 +105,7 @@ export function mapLoreRow(row: LoreRow): LoreEntry {
     title: row.title || '',
     summary: row.content || '',
     tags,
+    ...parseLoreAttributes(row.attributes),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

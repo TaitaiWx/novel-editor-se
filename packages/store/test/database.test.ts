@@ -126,6 +126,48 @@ describe.skipIf(!sqliteAvailable)('store/database（node:sqlite shim）', () => 
     ).toBe('故乡');
   });
 
+  it('worldSettingOps：attributes（分类目录 / 图集 / 封面）随创建、批量创建与更新保存', () => {
+    const attrs = JSON.stringify({ folder: '地理/北境', cover: '资料/图集/设定/雪原/a.png' });
+    const created = worldSettingOps.create(novelId, 'world', '雪原', '', '[]', attrs);
+    worldSettingOps.bulkCreate(novelId, [{ category: 'term', title: '无属性' }]);
+    const rows = worldSettingOps.getByNovel(novelId) as Row[];
+    expect(rows.find((r) => r.id === Number(created.lastInsertRowid))?.attributes).toBe(attrs);
+    expect(rows.find((r) => r.title === '无属性')?.attributes).toBe('{}');
+    worldSettingOps.update(Number(created.lastInsertRowid), { attributes: '{"folder":"地理"}' });
+    expect(
+      (worldSettingOps.getByNovel(novelId) as Row[]).find(
+        (r) => r.id === Number(created.lastInsertRowid)
+      )?.attributes
+    ).toBe('{"folder":"地理"}');
+  });
+
+  it('迁移会为旧版 world_settings 表补 attributes 列', () => {
+    closeDatabase();
+    const legacyDir = mkdtempSync(join(tmpdir(), 'ne-store-legacy-lore-'));
+    try {
+      const legacy = initDatabase(legacyDir, 'legacy.db');
+      legacy.exec('DROP TABLE world_settings;');
+      legacy.exec(`CREATE TABLE world_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        novel_id INTEGER NOT NULL,
+        category TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT DEFAULT '',
+        tags TEXT DEFAULT '[]',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );`);
+      expect(hasColumn(legacy, 'world_settings', 'attributes')).toBe(false);
+      closeDatabase();
+      const migrated = initDatabase(legacyDir, 'legacy.db');
+      expect(hasColumn(migrated, 'world_settings', 'attributes')).toBe(true);
+    } finally {
+      closeDatabase();
+      rmSync(legacyDir, { recursive: true, force: true });
+      initDatabase(dir, 'test.db');
+    }
+  });
+
   it('outlineOps：按作用域整树替换', () => {
     outlineOps.replaceTree(novelId, [
       { title: '第一卷', children: [{ title: '第一章', lineHint: 3 }, { title: '第二章' }] },

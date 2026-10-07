@@ -1,3 +1,8 @@
+import {
+  collectLoreFolders,
+  relatedLoreEntries,
+} from '@/render/components/RightPanel/LoreEntryDetail';
+import type { LoreCategory, LoreEntry } from '@/render/components/RightPanel/types';
 import { parseLoreDraftsFromImport } from '@/render/components/RightPanel/lore-import';
 import {
   buildLoreDedupKey,
@@ -5,6 +10,8 @@ import {
   mapLoreRow,
   parseLoreAuditSections,
   parseLoreDraftFromAuditItem,
+  parseLoreAttributes,
+  stringifyLoreAttributes,
 } from '@/render/components/RightPanel/lore-data';
 
 afterEach(() => {
@@ -132,8 +139,33 @@ describe('mapLoreRow', () => {
       title: '青云宗',
       summary: '正道魁首',
       tags: ['正道', '宗门'],
+      folder: '',
+      media: [],
       createdAt: '2026-01-01',
       updatedAt: '2026-01-02',
+    });
+  });
+
+  it('解析扩展字段：分类目录、封面与图集；无效 JSON 回退空值；序列化只保留有值的字段', () => {
+    const entry = mapLoreRow({
+      ...base,
+      attributes: JSON.stringify({
+        folder: ' 地理 / 北境 / ',
+        cover: '资料/图集/设定/青云宗/a.png',
+        media: [
+          { id: 'x', path: '资料/图集/设定/青云宗/a.png', kind: 'concept', source: 'ai' },
+          { id: 'bad', path: '../escape.png', kind: 'concept' },
+        ],
+      }),
+    });
+    expect(entry.folder).toBe('地理/北境');
+    expect(entry.cover).toBe('资料/图集/设定/青云宗/a.png');
+    expect(entry.media.map((item) => item.path)).toEqual(['资料/图集/设定/青云宗/a.png']);
+    expect(parseLoreAttributes('{oops')).toEqual({ folder: '', media: [] });
+    expect(stringifyLoreAttributes({ folder: '', media: [] })).toBe('{}');
+    expect(JSON.parse(stringifyLoreAttributes({ folder: 'a//b', cover: 'c.png' }))).toEqual({
+      folder: 'a/b',
+      cover: 'c.png',
     });
   });
 
@@ -183,6 +215,8 @@ describe('loadLoreEntriesByFolder', () => {
         title: '玄铁令',
         summary: '掌门信物',
         tags: [],
+        folder: '',
+        media: [],
         createdAt: 'c',
         updatedAt: 'u',
       },
@@ -280,5 +314,47 @@ describe('parseLoreDraftFromAuditItem', () => {
   it('returns null for empty or colon-only items', () => {
     expect(parseLoreDraftFromAuditItem('-  ', 'world')).toBeNull();
     expect(parseLoreDraftFromAuditItem('：:', 'world')).toBeNull();
+  });
+});
+
+describe('设定详情：目录候选与相关设定', () => {
+  const entry = (
+    id: number,
+    title: string,
+    folder: string,
+    tags: string[],
+    category: LoreCategory = 'world'
+  ): LoreEntry => ({
+    id,
+    title,
+    summary: '',
+    category,
+    tags,
+    folder,
+    media: [],
+    createdAt: '',
+    updatedAt: '',
+  });
+
+  it('目录候选包含各级父目录并排序', () => {
+    expect(
+      collectLoreFolders([entry(1, 'a', '地理/北境/雪原', []), entry(2, 'b', '势力', [])])
+    ).toEqual(['地理', '地理/北境', '地理/北境/雪原', '势力']);
+  });
+
+  it('相关设定：同目录 > 共享标签 > 同分类，排除自身与毫不相关的条目', () => {
+    const self = entry(1, '雪原', '地理/北境', ['禁地']);
+    const list = [
+      self,
+      entry(2, '寒潭', '地理/北境', []),
+      entry(3, '古战场', '', ['禁地', '遗迹'], 'term'),
+      entry(4, '王都', '地理', []),
+      entry(5, '无关', '', [], 'system'),
+    ];
+    expect(relatedLoreEntries(self, list).map((item) => item.title)).toEqual([
+      '寒潭',
+      '古战场',
+      '王都',
+    ]);
   });
 });

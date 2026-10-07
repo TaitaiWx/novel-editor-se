@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LoreCategory, LoreEntry } from './types';
 import { createLoreStorageKey } from './utils';
-import { buildLoreDedupKey, loadLoreEntriesByFolder, type LoreDraft } from './lore-data';
+import {
+  buildLoreDedupKey,
+  loadLoreEntriesByFolder,
+  stringifyLoreAttributes,
+  type LoreDraft,
+} from './lore-data';
 
 interface LegacyLoreEntry {
   category?: LoreCategory;
@@ -93,7 +98,8 @@ export function useLoreEntries(folderPath: string | null) {
         draft.category,
         draft.title,
         draft.summary,
-        JSON.stringify(draft.tags || [])
+        JSON.stringify(draft.tags || []),
+        stringifyLoreAttributes({ folder: draft.folder, cover: draft.cover, media: draft.media })
       );
       await reload();
     },
@@ -104,15 +110,25 @@ export function useLoreEntries(folderPath: string | null) {
     async (id: number, patch: Partial<LoreDraft>) => {
       const ipc = window.electron?.ipcRenderer;
       if (!ipc) return;
+      const current = entries.find((entry) => entry.id === id);
+      const touchesAttributes =
+        patch.folder !== undefined || patch.cover !== undefined || patch.media !== undefined;
       await ipc.invoke('db-world-setting-update', id, {
         category: patch.category,
         title: patch.title,
         content: patch.summary,
         tags: patch.tags ? JSON.stringify(patch.tags) : undefined,
+        attributes: touchesAttributes
+          ? stringifyLoreAttributes({
+              folder: patch.folder ?? current?.folder,
+              cover: patch.cover ?? current?.cover,
+              media: patch.media ?? current?.media,
+            })
+          : undefined,
       });
       await reload();
     },
-    [reload]
+    [entries, reload]
   );
 
   const deleteEntry = useCallback(

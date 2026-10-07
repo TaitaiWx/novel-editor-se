@@ -18,3 +18,4 @@ export * from './export';
 export * from './growth';
 export * from './growth/storage';
 export * from './work-scope';
+export * from './entity-media';

@@ -23,6 +23,8 @@ export interface GrowthViewProps {
   onSheetDeleted?: (name: string) => void;
   /** 当前打开的正文章节号：「记一笔」默认填入 */
   currentChapter?: number | null;
+  /** 嵌入人物详情的「成长档案」分页（去掉外层留白） */
+  embedded?: boolean;
 }
 
 /**
@@ -40,6 +42,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({
   onCreateSheet,
   onSheetDeleted,
   currentChapter = null,
+  embedded = false,
 }) => {
   const growth = useGrowthMemory({ folderPath, dbReady });
   const toast = useOptionalToast();
@@ -97,7 +100,9 @@ export const GrowthView: React.FC<GrowthViewProps> = ({
       onStartTour={pinnedSheet ? tour.start : undefined}
     />
   );
-  const shellClass = styles.growthWorkspace;
+  const shellClass = embedded
+    ? `${styles.growthWorkspace} ${styles.growthEmbedded}`
+    : styles.growthWorkspace;
 
   if (!folderPath) {
     return <div className={styles.placeholder}>打开作品后即可记录角色成长。</div>;

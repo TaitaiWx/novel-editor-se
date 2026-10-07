@@ -11,6 +11,8 @@ interface CharacterPortraitProps {
   workPath: string | null;
   /** 保存成功后写回人物卡（相对作品目录的路径） */
   onChange: (avatar: string) => Promise<void> | void;
+  /** 提供时点击形象图打开图集（在图集里上传 / AI 生成 / 选封面），而不是直接选本地文件 */
+  onOpenGallery?: () => void;
 }
 
 export const PORTRAIT_HINT = '形象图保存在 资料/人物头像/；正文悬停卡片等处会裁成圆形头像显示';
@@ -26,6 +28,7 @@ export const CharacterPortrait: React.FC<CharacterPortraitProps> = ({
   color = '#9cdcfe',
   workPath,
   onChange,
+  onOpenGallery,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [src, setSrc] = useState<string | null>(null);
@@ -75,10 +78,10 @@ export const CharacterPortrait: React.FC<CharacterPortraitProps> = ({
         type="button"
         className={`${styles.frame} ${src ? '' : styles.frameEmpty}`}
         style={{ '--portrait-accent': color } as React.CSSProperties}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => (onOpenGallery ? onOpenGallery() : inputRef.current?.click())}
         disabled={!workPath || busy}
         aria-label={src ? `更换 ${name} 的形象图` : `为 ${name} 添加形象图`}
-        title={PORTRAIT_HINT}
+        title={onOpenGallery ? '打开图集：上传、AI 生成或从图集中选一张作形象图' : PORTRAIT_HINT}
       >
         {src ? (
           <img src={src} alt={`${name} 的形象图`} draggable={false} />

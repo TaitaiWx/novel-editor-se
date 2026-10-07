@@ -145,6 +145,7 @@ export function createTables(database: Database.Database): void {
       title TEXT NOT NULL,
       content TEXT DEFAULT '',
       tags TEXT DEFAULT '[]',
+      attributes TEXT DEFAULT '{}',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
@@ -255,6 +256,10 @@ function createVideoTaskTable(database: Database.Database): void {
 
 function migrateTables(database: Database.Database): void {
   createVideoTaskTable(database);
+  // 设定扩展字段（分类目录、图集、封面）
+  if (!hasColumn(database, 'world_settings', 'attributes')) {
+    database.exec(`ALTER TABLE world_settings ADD COLUMN attributes TEXT DEFAULT '{}';`);
+  }
   if (!hasColumn(database, 'outlines', 'scope_kind')) {
     database.exec(`ALTER TABLE outlines ADD COLUMN scope_kind TEXT DEFAULT 'project';`);
   }

@@ -16,9 +16,10 @@ import ProjectMenu, {
   pickRecentFolders,
 } from '@/render/components/FilePanel/ProjectMenu';
 import FileTree from '@/render/components/FileTree';
-import ProjectDocsSection, {
-  PROJECT_DOCS_HINT,
-} from '@/render/components/FilePanel/ProjectDocsSection';
+import ProjectDocsButton, {
+  projectDocsSignature,
+  projectDocsTooltip,
+} from '@/render/components/FilePanel/ProjectDocsButton';
 
 function makeTree(overrides: Partial<StoryTreeContext> = {}): StoryTreeContext {
   return {
@@ -366,65 +367,67 @@ describe('WorkspaceHeader 布局与项目名重命名', () => {
   });
 });
 
-describe('ProjectDocsSection（项目说明）', () => {
+describe('ProjectDocsButton（项目说明）', () => {
   const docs: FileNode[] = [
     { name: '欢迎使用.md', path: '/p/欢迎使用.md', type: 'file' },
     { name: '排版示例.md', path: '/p/排版示例.md', type: 'file' },
   ];
 
-  it('默认折叠只占一行（带数量与说明）；展开后点击 / Enter 打开，右键走文件菜单', () => {
-    const onOpen = vi.fn();
-    const onToggle = vi.fn();
-    const onDocContextMenu = vi.fn();
-    const { rerender } = render(
-      <ProjectDocsSection
-        docs={docs}
-        selectedFile="/p/排版示例.md"
-        collapsed
-        onToggle={onToggle}
-        onOpen={onOpen}
-        onDocContextMenu={onDocContextMenu}
-      />
-    );
-    const region = screen.getByRole('region', { name: '项目说明' });
-    const header = within(region).getByRole('button', { name: /项目说明/ });
-    expect(header.getAttribute('aria-expanded')).toBe('false');
-    expect(header.getAttribute('title')).toBe(PROJECT_DOCS_HINT);
-    expect(header.textContent).toContain('2');
-    expect(within(region).queryByRole('listitem')).toBeNull();
-    fireEvent.click(header, { detail: 1 });
-    expect(onToggle).toHaveBeenCalledTimes(1);
+  it('纯函数：提示文案像公告一样列出文档；签名不受顺序影响', () => {
+    expect(projectDocsTooltip(docs, true)).toBe('有新的项目说明：欢迎使用、排版示例\n点击查看');
+    const many = ['a', 'b', 'c', 'd'].map((name) => ({
+      name: `${name}.md`,
+      path: name,
+      type: 'file' as const,
+    }));
+    expect(projectDocsTooltip(many, false)).toBe('项目说明：a、b、c 等 4 篇\n点击查看');
+    expect(projectDocsSignature(docs)).toBe(projectDocsSignature([...docs].reverse()));
+  });
 
-    rerender(
-      <ProjectDocsSection
+  it('未看过时显示提示点；点击后弹出列表并记住已看过；单击打开、右键走文件菜单', () => {
+    localStorage.clear();
+    const onOpen = vi.fn();
+    const onDocContextMenu = vi.fn();
+    const { unmount } = render(
+      <ProjectDocsButton
+        folderPath="/p"
         docs={docs}
         selectedFile="/p/排版示例.md"
-        collapsed={false}
-        onToggle={onToggle}
         onOpen={onOpen}
         onDocContextMenu={onDocContextMenu}
       />
     );
-    const items = screen.getAllByRole('listitem');
-    expect(items.map((item) => item.textContent)).toEqual(['欢迎使用', '排版示例']);
-    expect(items[1].className).toContain('rowActive');
-    fireEvent.click(items[0]);
-    expect(onOpen).toHaveBeenCalledWith('/p/欢迎使用.md');
-    fireEvent.keyDown(items[1], { key: 'Enter' });
-    expect(onOpen).toHaveBeenLastCalledWith('/p/排版示例.md');
-    fireEvent.contextMenu(items[1]);
+    expect(screen.getByTestId('project-docs-unseen')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('project-docs-trigger'));
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).getByText('排版示例').closest('button')?.className).toContain('rowActive');
+    fireEvent.contextMenu(within(panel).getByText('排版示例'));
     expect(onDocContextMenu).toHaveBeenCalledWith(expect.objectContaining({ node: docs[1] }));
+    fireEvent.click(screen.getByTestId('project-docs-trigger'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByText('欢迎使用'));
+    expect(onOpen).toHaveBeenCalledWith('/p/欢迎使用.md');
+    unmount();
+
+    // 再次打开项目：已看过，不显示提示点；新增文档后再次提示
+    const { unmount: unmount2 } = render(
+      <ProjectDocsButton folderPath="/p" docs={docs} selectedFile={null} onOpen={vi.fn()} />
+    );
+    expect(screen.queryByTestId('project-docs-unseen')).toBeNull();
+    unmount2();
+    render(
+      <ProjectDocsButton
+        folderPath="/p"
+        docs={[...docs, { name: '更新说明.md', path: '/p/更新说明.md', type: 'file' }]}
+        selectedFile={null}
+        onOpen={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('project-docs-unseen')).toBeTruthy();
   });
 
   it('没有根目录文档时不渲染', () => {
     const { container } = render(
-      <ProjectDocsSection
-        docs={[]}
-        selectedFile={null}
-        collapsed={false}
-        onToggle={vi.fn()}
-        onOpen={vi.fn()}
-      />
+      <ProjectDocsButton folderPath="/p" docs={[]} selectedFile={null} onOpen={vi.fn()} />
     );
     expect(container.innerHTML).toBe('');
   });

@@ -38,13 +38,7 @@ export interface StoryDropTarget {
 }
 
 /** 可折叠的对象分区 */
-export type FilePanelSection =
-  | 'projectDocs'
-  | 'story'
-  | 'characters'
-  | 'lore'
-  | 'growth'
-  | 'materials';
+export type FilePanelSection = 'story' | 'characters' | 'lore' | 'growth' | 'materials';
 
 export type CollapsedSections = Record<FilePanelSection, boolean>;
 
@@ -76,6 +70,8 @@ export interface FilePanelProps {
   onFileSelect: (filePath: string) => void;
   onOpenCharacterNode: (characterId: number) => void;
   onOpenLoreNode: (entryId: number) => void;
+  /** 打开设定总览（工作区标签「设定」） */
+  onOpenLore?: () => void;
   onDeleteCharacterNode: (characterId: number) => void;
   onDeleteLoreNode: (entryId: number) => void;
   /** 行内重命名（双击名称 / F2）：传入新名称；右键菜单「重命名」仍走对话框 */

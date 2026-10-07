@@ -215,6 +215,8 @@ export function useCharacterListEditor({
               attributes: stringifyCharacterAttributes(
                 {
                   avatar: character.avatar,
+                  design: character.design,
+                  media: character.media,
                   aliases: character.aliases,
                   category: nextCategory,
                   highlightColor: character.highlightColor,

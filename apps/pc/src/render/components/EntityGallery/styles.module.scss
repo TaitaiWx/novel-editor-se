@@ -1,0 +1,407 @@
+// 图集：工具栏 + 按类型分组的网格；AI 面板与候选图；大图查看
+$muted: var(--ui-fg-muted);
+$line: rgba(255, 255, 255, 0.08);
+$accent: #569cd6;
+$hint: #d7ba7d;
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.count {
+  font-size: 12px;
+  color: $muted;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.muted {
+  font-size: 12px;
+  color: $muted;
+}
+
+@mixin control {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--ui-fg-primary);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+
+  &:focus {
+    border-color: rgba($accent, 0.6);
+  }
+}
+
+.select {
+  @include control;
+}
+
+.input {
+  @include control;
+  flex: 1;
+  min-width: 160px;
+}
+
+@mixin button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.8);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.button {
+  @include button;
+}
+
+.primary {
+  @include button;
+  border-color: rgba($accent, 0.4);
+  background: rgba($accent, 0.18);
+  color: #d6e6f5;
+
+  &:hover:not(:disabled) {
+    background: rgba($accent, 0.28);
+  }
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.75);
+  }
+
+  &[aria-pressed='true'] {
+    color: $hint;
+  }
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: #e8a29a;
+}
+
+.empty {
+  padding: 24px 16px;
+  border: 1px dashed $line;
+  border-radius: 10px;
+  text-align: center;
+
+  p {
+    margin: 0 0 6px;
+    font-size: 13px;
+  }
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.groupTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid $line;
+  background: rgba(255, 255, 255, 0.03);
+  aspect-ratio: 3 / 4;
+
+  &[data-kind='turnaround'],
+  &[data-kind='background'],
+  &[data-kind='concept'] {
+    grid-column: span 2;
+    aspect-ratio: 16 / 9;
+  }
+
+  &:hover .tileActions,
+  &:focus-within .tileActions {
+    opacity: 1;
+  }
+}
+
+.tileImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+  }
+}
+
+.tilePlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 11px;
+  color: $muted;
+}
+
+.coverBadge,
+.aiBadge {
+  position: absolute;
+  top: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.coverBadge {
+  left: 6px;
+  color: $hint;
+}
+
+.aiBadge {
+  right: 6px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.tileActions {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+// ─── AI 面板 ─────────────────────────────────────────────
+
+.aiPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba($accent, 0.22);
+  background: rgba($accent, 0.05);
+}
+
+.kindRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.kind,
+.kindActive {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kindActive {
+  border-color: rgba($accent, 0.55);
+  background: rgba($accent, 0.2);
+  color: #e6f0fa;
+}
+
+.aiOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.promptPreview {
+  font-size: 12px;
+  color: $muted;
+
+  summary {
+    cursor: pointer;
+  }
+
+  p {
+    margin: 6px 0 0;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+.candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.candidate {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+
+  img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+}
+
+.candidateSelected {
+  border-color: $accent;
+}
+
+.check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: $accent;
+  color: #fff;
+}
+
+.aiFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ─── 大图 ────────────────────────────────────────────────
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10040;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  background: rgba(0, 0, 0, 0.82);
+  outline: none;
+}
+
+.lightboxImage {
+  max-width: 100%;
+  max-height: calc(100% - 60px);
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.lightboxPrompt {
+  max-width: 720px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.lightboxClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+}

@@ -10,7 +10,7 @@
 import type { SerializedAIError } from './errors';
 import type { FetchLike, RetryPolicy } from './http';
 
-export type ProviderKind = 'text' | 'video';
+export type ProviderKind = 'text' | 'video' | 'image';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 
@@ -105,7 +105,42 @@ export interface VideoProvider {
   testConnection(options?: CallOptions): Promise<void>;
 }
 
-export type AnyProvider = TextProvider | VideoProvider;
+/** 图片生成（人物形象 / 三视图 / 服装 / 设定图）的请求 */
+export interface ImageGenerationRequest {
+  prompt: string;
+  model?: string;
+  /** 画面比例，例如 1:1 / 3:4 / 16:9 */
+  aspectRatio?: string;
+  /** 一次生成的张数（1–4，作者从中挑选） */
+  count?: number;
+  /** 参考图（data URL 或 http(s) 地址）：保持人物 / 画风一致 */
+  referenceImages?: readonly string[];
+  seed?: number;
+}
+
+export interface GeneratedImage {
+  /** base64（不含 data: 前缀）；厂商只返回地址时为空 */
+  base64?: string;
+  url?: string;
+  mimeType: string;
+}
+
+export interface ImageGenerationResult {
+  images: GeneratedImage[];
+  model: string;
+}
+
+export interface ImageProvider {
+  readonly id: string;
+  readonly kind: 'image';
+  /** 同步生成（通常 10–60 秒）。默认不重试，避免重复扣费 */
+  generate(request: ImageGenerationRequest, options?: CallOptions): Promise<ImageGenerationResult>;
+  /** 是否支持参考图（不支持时调用方只用文字描述） */
+  readonly supportsReferences: boolean;
+  testConnection(options?: CallOptions): Promise<void>;
+}
+
+export type AnyProvider = TextProvider | VideoProvider | ImageProvider;
 
 /** 创建 Provider 所需的配置（密钥由主进程 / CLI 注入） */
 export interface ProviderConfig {

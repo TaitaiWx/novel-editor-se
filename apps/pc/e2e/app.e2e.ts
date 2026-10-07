@@ -34,6 +34,7 @@ import { PRIMARY_MODIFIER, type Page } from './support/page';
 import {
   GROWTH_SECTION,
   GROWTH_TITLE,
+  openCharacterGrowth,
   GROWTH_WORKSPACE,
   captureForReview as captureShot,
   ensureSidebarOpen as ensureSidebarOpenIn,
@@ -125,31 +126,16 @@ describe('小说编辑器 GUI', () => {
     expect(titles).not.toContain('novels');
     expect(titles).not.toContain('未分卷');
     expect(titles).not.toContain('剑与诗');
-    // 根目录说明文档在项目名下方的「项目说明」分区（默认折叠），不在正文树中
+    // 根目录说明文档在「搜索」左侧的「项目说明」图标里（不在正文树中）
     expect(titles).not.toContain('欢迎使用');
-    expect(await page.exists(SEL.projectNotes)).toBe(true);
-    expect(
-      await page.evaluate<boolean>(
-        (notes: string, switcher: string) => {
-          const section = document.querySelector(notes);
-          const work = document.querySelector(switcher);
-          return Boolean(
-            section &&
-              work &&
-              section.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING
-          );
-        },
-        SEL.projectNotes,
-        SEL.workSwitcher
-      ),
-      '项目说明在作品切换器之上（属于项目，不属于某部作品）'
-    ).toBe(true);
+    expect(await page.exists(SEL.projectNotes)).toBe(false);
 
-    // 顶部：项目名 | 搜索 / 新建 / ⋯ 更多 | 折叠侧边栏（最右侧）；
+    // 顶部：项目名 | 项目说明 / 搜索 / 新建 / ⋯ 更多 | 折叠侧边栏（最右侧）；
     // 打开文件夹 / 刷新等收进「⋯」，没有铅笔按钮（双击项目名重命名）
     const headerButtons = await workspaceHeaderButtons(page);
-    expect(headerButtons[0]).toMatch(/^搜索文件/);
-    expect(headerButtons.slice(1)).toEqual(['新建', 'project-menu-trigger', '折叠侧边栏']);
+    expect(headerButtons[0]).toBe('project-docs-trigger');
+    expect(headerButtons[1]).toMatch(/^搜索文件/);
+    expect(headerButtons.slice(2)).toEqual(['新建', 'project-menu-trigger', '折叠侧边栏']);
     for (const gone of ['修改作品名', '更换文件夹', '重新扫描作品目录']) {
       expect(headerButtons).not.toContain(gone);
     }
@@ -231,7 +217,16 @@ describe('小说编辑器 GUI', () => {
     await page.press('Escape');
     await page.waitForGone(SEL.projectMenu);
 
-    // 欢迎使用.md 是项目文档，不是「章」：在「项目说明」分区里
+    // 欢迎使用.md 是项目文档，不是「章」：在「项目说明」图标的列表里（悬停像公告一样提示）
+    await page.evaluate((sel: string) => {
+      document
+        .querySelector(sel)
+        ?.parentElement?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    }, SEL.projectNotesTrigger);
+    await page.waitFor(
+      () => (document.querySelector('[role="tooltip"]')?.textContent ?? '').includes('欢迎使用'),
+      { message: '项目说明图标的悬停提示列出文档' }
+    );
     await openProjectDocs(page);
     expect(await page.exists({ text: '欢迎使用', within: SEL.projectNotes, exact: true })).toBe(
       true
@@ -240,6 +235,8 @@ describe('小说编辑器 GUI', () => {
       true
     );
     await captureForReview('project-docs');
+    await page.press('Escape');
+    await page.waitForGone(SEL.projectNotes);
 
     // 长卷名：默认侧边栏宽度下省略显示，完整名称在悬停提示中；双击名称进入行内重命名
     const longVolume = '第三卷-群星尽头的漫长归途与未竟之约';
@@ -283,7 +280,7 @@ describe('小说编辑器 GUI', () => {
       await page.waitForGone({ text: longVolume, within: SEL.workspaceTree, exact: true });
     }
 
-    // 欢迎使用.md：功能导览（从「项目说明」分区打开）
+    // 欢迎使用.md：功能导览（从「项目说明」列表打开）
     await openProjectDocs(page);
     await page.click({ text: '欢迎使用', within: SEL.projectNotes, exact: true });
     await waitForEditorText(page, '欢迎使用小说编辑器');
@@ -299,8 +296,8 @@ describe('小说编辑器 GUI', () => {
     }, GROWTH_SECTION);
     await captureForReview('sample-growth-list');
 
-    await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
-    await page.waitForTarget({ text: '林舟', within: GROWTH_TITLE, exact: true });
+    // 成长档案属于人物：点人物 → 人物详情 →「成长档案」分页
+    await openCharacterGrowth(page, '林舟');
     // 本实例第一次打开成长卡会显示引导，跳过即可（引导本身在 growth.e2e.ts 中验证）
     await page.waitForTarget('[role="dialog"][aria-label^="引导 1/"]');
     await page.click({ text: '跳过', exact: true });
@@ -805,6 +802,13 @@ describe('小说编辑器 GUI', () => {
         (document.querySelector('[role="tooltip"]')?.textContent ?? '').startsWith('加入本章章纲'),
       { message: '节拍「加入章纲」图标的悬停说明' }
     );
+    await page.evaluate((sel: string) => {
+      const button = document.querySelector(
+        `${sel} button[aria-label="插入到章纲 第一场 清晨的青石镇"]`
+      );
+      button?.parentElement?.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    }, SEL.storyline);
+    await page.waitForGone('[role="tooltip"]');
     // 结构菜单：直接列出全部结构（不再盲目轮换）
     await page.click(`${SEL.storyline} button[aria-label^="卷纲结构："]`);
     await page.waitForTarget('[role="menu"][aria-label="卷纲结构"]');
@@ -822,6 +826,26 @@ describe('小说编辑器 GUI', () => {
     await page.waitForGone('[role="menu"][aria-label="卷纲结构"]');
     await captureForReview('volume-plan-list');
 
+    // 生成卷纲：一次给出 3 种结构的方案（没有 AI 时按结构模板），挑一个采用
+    await page.click({ text: '生成卷纲', within: SEL.storyline, exact: true });
+    await page.waitForTarget(`${SEL.storyline} [data-testid="plan-variants"]`);
+    expect(
+      await page.evaluate<string[]>(
+        (sel: string) =>
+          Array.from(
+            document.querySelectorAll(
+              `${sel} [data-testid="plan-variants"] li[aria-label^="方案 "]`
+            )
+          ).map((item) => item.getAttribute('aria-label') ?? ''),
+        SEL.storyline
+      )
+    ).toEqual(['方案 按正文幕标记', '方案 三幕式', '方案 起承转合']);
+    await captureForReview('volume-plan-variants');
+    // 都不要：关闭后结构不变
+    await page.click(`${SEL.storyline} [aria-label="关闭方案"]`);
+    await page.waitForGone(`${SEL.storyline} [data-testid="plan-variants"]`);
+    await page.waitForTarget(`${SEL.storyline} section[aria-label="第一幕 离乡"]`);
+
     // 同一份数据派生人物线：林舟（种子人物）出现在泳道里
     await page.click({ text: '人物线', within: SEL.storyline, exact: true });
     await page.waitForTarget(`${SEL.storyline} [role="row"][aria-label="人物线 林舟"]`);
@@ -832,6 +856,49 @@ describe('小说编辑器 GUI', () => {
 
     await page.click({ text: '列表', within: SEL.storyline, exact: true });
     await switchStorylineMode(page, '目录');
+  });
+
+  it('6.3 设定：多级目录、标签、图集；文件面板按目录分组显示', async () => {
+    await ensureSidebarOpen();
+    await selectWork(page, FIXTURE_WORK);
+    await page.click({ text: '青石', within: SECTION_LORE, exact: true });
+    const detail = '[data-testid="lore-detail"]';
+    await page.waitForTarget(detail);
+    await page.waitFor(
+      (sel: string) =>
+        (document.querySelector(`${sel} input[aria-label="设定标题"]`) as HTMLInputElement | null)
+          ?.value === '青石',
+      { args: [detail], message: '设定详情显示「青石」' }
+    );
+    // 目录：失焦保存，文件面板出现「物品 / 兵器」目录
+    await page.click(`${detail} input[aria-label="设定目录"]`);
+    await page.type('物品/兵器');
+    await page.click(`${detail} textarea[aria-label="设定内容"]`);
+    await page.waitForTarget(`${SECTION_LORE} [role="group"][aria-label="设定目录 物品/兵器"]`);
+    // 标签：回车添加，行内显示 #标签
+    await page.click(`${detail} input[aria-label="添加标签"]`);
+    await page.type('旧剑');
+    await page.press('Enter');
+    await page.waitForTarget({ text: '#旧剑', within: SECTION_LORE });
+    // 图集分页：上传 / AI 生成入口
+    await page.click({ text: '图集', within: `${detail} [role="tablist"]` });
+    await page.waitForTarget(`${detail} [data-testid="entity-gallery"]`);
+    await captureForReview('lore-detail-gallery');
+
+    // 还原：清空目录、移除标签
+    await page.click({ text: '内容', within: `${detail} [role="tablist"]`, exact: true });
+    await page.evaluate((sel: string) => {
+      const input = document.querySelector(
+        `${sel} input[aria-label="设定目录"]`
+      ) as HTMLInputElement;
+      input.focus();
+      input.select();
+    }, detail);
+    await page.press('Backspace');
+    await page.click(`${detail} textarea[aria-label="设定内容"]`);
+    await page.waitForGone(`${SECTION_LORE} [role="group"][aria-label="设定目录 物品"]`);
+    await page.click(`${detail} [aria-label="移除标签 旧剑"]`);
+    await page.waitForGone({ text: '#旧剑', within: SECTION_LORE });
   });
 
   it('7. GUI 与 CLI 共享：保存计入写作日志，会话文件反映打开 / 未保存的文件', async () => {
@@ -1157,7 +1224,7 @@ describe('小说编辑器 GUI', () => {
 
   it('10. Markdown 实时渲染：标题、表格、公式就地渲染，坏公式只影响自身，光标处显示源码', async () => {
     await ensureSidebarOpen();
-    // 排版示例.md 在项目根目录：从「项目说明」分区打开
+    // 排版示例.md 在项目根目录：从「项目说明」列表打开
     await openProjectDocs(page);
     await page.click({ text: '排版示例', within: SEL.projectNotes, exact: true });
     await waitForEditorText(page, '角色属性表');

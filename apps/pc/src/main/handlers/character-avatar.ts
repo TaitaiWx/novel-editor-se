@@ -56,7 +56,7 @@ function toBytes(value: unknown): Uint8Array | null {
   return null;
 }
 
-async function assertWorkDir(raw: unknown, workspaceRoot: string | null): Promise<string> {
+export async function assertWorkDir(raw: unknown, workspaceRoot: string | null): Promise<string> {
   if (typeof raw !== 'string' || !raw.trim() || !path.isAbsolute(raw)) {
     throw new Error('无效的作品目录');
   }

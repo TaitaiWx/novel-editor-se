@@ -1,3 +1,4 @@
+import type { CharacterDesign, MediaItem } from '@novel-editor/core/entity-media';
 import type { PersistedOutlineScopeInput } from '../../types/electron-api';
 
 export type TabType = 'storyline' | 'characters' | 'lore';
@@ -12,6 +13,12 @@ export interface LoreEntry {
   summary: string;
   category: LoreCategory;
   tags: string[];
+  /** 分类目录（例如「地理/北境」，空字符串表示未分类） */
+  folder: string;
+  /** 封面（图集中选中的图片路径） */
+  cover?: string;
+  /** 图集：概念图、场景、细节 */
+  media: MediaItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -112,7 +119,12 @@ export interface Character {
   category: CharacterCategory;
   description: string;
   currentState: CharacterCurrentStateItem[];
+  /** 形象图（图集中选为封面的图片路径；旧数据可能是 资料/人物头像/ 下的文件或 data URL） */
   avatar?: string;
+  /** 人物设计（外貌、服装、性格、背景、说话方式） */
+  design?: CharacterDesign;
+  /** 图集 */
+  media?: MediaItem[];
   aliases?: string[];
   highlightColor?: string;
   highlightFirstMentionOnly?: boolean;

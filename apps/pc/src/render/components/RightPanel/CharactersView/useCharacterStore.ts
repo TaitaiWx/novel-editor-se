@@ -1,3 +1,4 @@
+import type { CharacterDesign, MediaItem } from '@novel-editor/core/entity-media';
 import { useCallback, useEffect, useState } from 'react';
 import type { Character, CharacterCategory, CharacterCurrentStateItem } from '../types';
 import { mapCharacterRows, stringifyCharacterAttributes } from '../utils';
@@ -89,8 +90,10 @@ export function useCharacterStore({
         highlightColor?: string;
         highlightFirstMentionOnly?: boolean;
         currentState?: CharacterCurrentStateItem[];
-        /** 头像（相对作品目录的路径或 data URL） */
+        /** 形象图（相对作品目录的路径或 data URL） */
         avatar?: string;
+        design?: CharacterDesign;
+        media?: MediaItem[];
       }
     ) => {
       const ipc = window.electron?.ipcRenderer;
@@ -103,6 +106,8 @@ export function useCharacterStore({
         attributes: stringifyCharacterAttributes(
           {
             avatar: patch.avatar ?? target.avatar,
+            design: patch.design ?? target.design,
+            media: patch.media ?? target.media,
             aliases: target.aliases,
             category: patch.category ?? target.category,
             highlightColor: patch.highlightColor ?? target.highlightColor,

@@ -34,5 +34,6 @@ export { registerLogUploadHandlers } from './log-upload';
 export { registerAIProviderHandlers } from './ai-providers';
 export { registerVideoHandlers } from './video';
 export { registerCharacterAvatarHandlers } from './character-avatar';
+export { registerEntityMediaHandlers } from './entity-media';
 
 export type { FileNode } from './file-system';

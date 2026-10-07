@@ -1,3 +1,4 @@
+import { parseCharacterDesign, resolveCover } from '@novel-editor/core/entity-media';
 import React, { useMemo, lazy } from 'react';
 import { DEFAULT_CHARACTER_HIGHLIGHT_COLOR } from '@/render/components/RightPanel/utils';
 import {
@@ -155,12 +156,17 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
   // 场景视频：人物（名字 / 别名 / 头像 / 简介）与设定标题用于预填与提示
   const sceneVideoCharacters = useMemo(
     () =>
-      workspaceCharacters.map((item) => ({
-        name: item.name,
-        aliases: item.aliases,
-        avatar: item.avatar,
-        appearance: item.description,
-      })),
+      workspaceCharacters.map((item) => {
+        // 人物设计里的外貌 / 服装优先（保持各镜头人物一致），没有时用简介；参考图用图集封面
+        const design = parseCharacterDesign(item.design);
+        const look = [design.appearance, design.outfit].filter(Boolean).join('；');
+        return {
+          name: item.name,
+          aliases: item.aliases,
+          avatar: resolveCover(item.media, item.avatar),
+          appearance: look || item.description,
+        };
+      }),
     [workspaceCharacters]
   );
   const sceneVideoLoreTitles = useMemo(
@@ -213,6 +219,22 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
                 onOpenSourceLocation={handleOpenSourceLocation}
                 growthLevels={growthLevels}
                 onOpenGrowthSheet={handleOpenGrowth}
+                renderGrowth={(name) => (
+                  <GrowthView
+                    key={`growth-embedded-${name}-${scopePath ?? ''}`}
+                    folderPath={scopePath}
+                    dbReady={dbReady}
+                    initialCharacter={name}
+                    currentChapter={growthChapter}
+                    embedded
+                    onNavigateCharacter={handleOpenGrowth}
+                    onCreateSheet={
+                      handleCreateGrowthSheet
+                        ? (options) => void handleCreateGrowthSheet(options)
+                        : undefined
+                    }
+                  />
+                )}
               />
             ),
           }

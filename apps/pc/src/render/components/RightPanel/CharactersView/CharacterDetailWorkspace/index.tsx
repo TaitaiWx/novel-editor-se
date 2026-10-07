@@ -1,5 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
+import {
+  CHARACTER_MEDIA_KINDS,
+  buildCharacterImagePrompt,
+  parseCharacterDesign,
+  resolveCover,
+  type CharacterDesign,
+  type MediaItem,
+} from '@novel-editor/core/entity-media';
+import EntityGallery from '../../../EntityGallery';
 import styles from '../../styles.module.scss';
+import tabStyles from './styles.module.scss';
 import type {
   Character,
   CharacterCamp,
@@ -14,6 +24,7 @@ import { CharacterCurrentStateSection } from '../CharacterCurrentStateSection';
 import { CharacterTimelineSection } from '../CharacterTimelineSection';
 import { CharacterGrowthButton } from '../CharacterGrowthButton';
 import { CharacterPortrait } from '../CharacterPortrait';
+import { CharacterDesignForm } from '../CharacterDesignForm';
 import CharacterAvatar from '../../../CharacterAvatar';
 import type { CharacterCurrentStateController } from '../useCharacterCurrentState';
 import type { CharacterTimelineController } from '../useCharacterTimeline';
@@ -39,6 +50,8 @@ interface CharacterDetailWorkspaceProps {
       highlightFirstMentionOnly?: boolean;
       currentState?: CharacterCurrentStateItem[];
       avatar?: string;
+      design?: CharacterDesign;
+      media?: MediaItem[];
     }
   ) => Promise<void>;
   graphView: React.ReactNode;
@@ -46,22 +59,33 @@ interface CharacterDetailWorkspaceProps {
   growthLevel?: number | null;
   /** 打开（或新建）该人物的成长档案；未提供时不显示入口 */
   onOpenGrowthSheet?: (characterName: string) => void;
-  /** 作品目录：头像保存到 <作品>/资料/人物头像/ */
+  /** 作品目录：图集保存到 <作品>/资料/图集/人物/<名>/ */
   workPath?: string | null;
+  /** 「成长」分页：嵌入该人物的成长档案（GrowthView）；未提供时只显示跳转按钮 */
+  renderGrowth?: (characterName: string) => React.ReactNode;
 }
 
+export type CharacterDetailTab = 'design' | 'gallery' | 'growth' | 'story' | 'relations';
+
+export const CHARACTER_DETAIL_TABS: ReadonlyArray<{ id: CharacterDetailTab; label: string }> = [
+  { id: 'design', label: '人物设计' },
+  { id: 'gallery', label: '图集' },
+  { id: 'growth', label: '成长档案' },
+  { id: 'story', label: '经历与状态' },
+  { id: 'relations', label: '关系与高亮' },
+];
+
 /**
- * 人物详情模式：单个人物的资料、当前状态、经历时间线、高亮配置与关系网络。
+ * 人物详情：左侧形象图（封面）+ 名称与概况；下方分页
+ * 人物设计 / 图集（多视图、服装、背景，AI 生成或本地上传）/ 成长档案（与人物一体）/ 经历与状态 / 关系与高亮
  */
 export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> = ({
   focusedCharacter,
   focusedCamp,
   focusedHeat,
   focusedTimeline,
-  focusedTimelineEditedCount,
   selectedRelations,
   characters,
-  novelCorpusFileCount,
   novelCorpusLoading,
   novelCorpusError,
   timeline,
@@ -71,7 +95,9 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
   growthLevel = null,
   onOpenGrowthSheet,
   workPath = null,
+  renderGrowth,
 }) => {
+  const [tab, setTab] = useState<CharacterDetailTab>('design');
   return (
     <div className={styles.objectWorkspace}>
       {focusedCharacter ? (
@@ -79,12 +105,13 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
           <section className={`${styles.workspaceHero} ${styles.workspaceHeroPortrait}`}>
             <CharacterPortrait
               name={focusedCharacter.name}
-              avatar={focusedCharacter.avatar}
+              avatar={resolveCover(focusedCharacter.media ?? [], focusedCharacter.avatar)}
               color={focusedCharacter.highlightColor}
               workPath={workPath}
               onChange={(avatar) =>
                 handleUpdateCharacterAttributes(focusedCharacter.id, { avatar })
               }
+              onOpenGallery={() => setTab('gallery')}
             />
             <div className={styles.workspaceHeroMain}>
               <div className={styles.workspaceEyebrow}>人物资料</div>
@@ -92,11 +119,16 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
                 <h2 className={`${styles.workspaceTitle} ${styles.workspaceTitleGrow}`}>
                   {focusedCharacter.name}
                 </h2>
-                {onOpenGrowthSheet && (
+                {(onOpenGrowthSheet || renderGrowth) && (
                   <CharacterGrowthButton
                     characterName={focusedCharacter.name}
                     level={growthLevel}
-                    onOpen={onOpenGrowthSheet}
+                    // 成长档案嵌在本页时切到「成长档案」分页，否则打开成长档案标签
+                    onOpen={
+                      renderGrowth
+                        ? () => setTab('growth')
+                        : (onOpenGrowthSheet ?? (() => undefined))
+                    }
                   />
                 )}
               </div>
@@ -117,140 +149,219 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
                 </span>
                 <span className={styles.workspaceChip}>正文热度 {focusedHeat}</span>
                 <span className={styles.workspaceChip}>关系 {selectedRelations.length}</span>
-                <span className={styles.workspaceChip}>经历节点 {focusedTimeline.length}</span>
-                <span className={styles.workspaceChip}>手工修订 {focusedTimelineEditedCount}</span>
-                <span className={styles.workspaceChip}>作品正文 {novelCorpusFileCount}</span>
               </div>
             </div>
           </section>
 
-          <CharacterCurrentStateSection
-            focusedCharacter={focusedCharacter}
-            controller={currentState}
-          />
+          <div className={tabStyles.tabs} role="tablist" aria-label="人物详情">
+            {CHARACTER_DETAIL_TABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                className={tab === item.id ? tabStyles.tabActive : tabStyles.tab}
+                onClick={() => setTab(item.id)}
+              >
+                {item.label}
+                {item.id === 'gallery' && (focusedCharacter.media?.length ?? 0) > 0 && (
+                  <span className={tabStyles.tabCount}>{focusedCharacter.media?.length}</span>
+                )}
+                {item.id === 'growth' && growthLevel !== null && (
+                  <span className={tabStyles.tabCount}>Lv.{growthLevel}</span>
+                )}
+              </button>
+            ))}
+          </div>
 
-          <CharacterTimelineSection
-            focusedTimeline={focusedTimeline}
-            novelCorpusLoading={novelCorpusLoading}
-            novelCorpusError={novelCorpusError}
-            controller={timeline}
-          />
-
-          {focusedCharacter.description && (
-            <section className={styles.workspaceCardShell}>
-              <div className={styles.workspaceCardHeader}>
-                <span className={styles.workspaceSectionTitle}>资料摘要</span>
-                <span className={styles.workspaceListHint}>
-                  保留资料库中的原始描述，便于后续手工修订
-                </span>
-              </div>
-              <div className={styles.workspaceBodyCopy}>{focusedCharacter.description}</div>
-            </section>
+          {tab === 'design' && (
+            <div className={tabStyles.panel} role="tabpanel" aria-label="人物设计">
+              <CharacterDesignForm
+                design={focusedCharacter.design}
+                onSave={(design) =>
+                  handleUpdateCharacterAttributes(focusedCharacter.id, { design })
+                }
+              />
+              {focusedCharacter.description && (
+                <section className={styles.workspaceCardShell}>
+                  <div className={styles.workspaceCardHeader}>
+                    <span className={styles.workspaceSectionTitle}>资料摘要</span>
+                    <span className={styles.workspaceListHint}>
+                      保留资料库中的原始描述，便于后续手工修订
+                    </span>
+                  </div>
+                  <div className={styles.workspaceBodyCopy}>{focusedCharacter.description}</div>
+                </section>
+              )}
+            </div>
           )}
 
-          <section className={styles.workspaceCardShell}>
-            <div className={styles.workspaceCardHeader}>
-              <span className={styles.workspaceSectionTitle}>正文高亮</span>
-              <span className={styles.workspaceListHint}>控制角色名在正文中的强调方式</span>
+          {tab === 'gallery' && (
+            <div className={tabStyles.panel} role="tabpanel" aria-label="图集">
+              <EntityGallery
+                entity="character"
+                name={focusedCharacter.name}
+                workPath={workPath}
+                items={focusedCharacter.media ?? []}
+                cover={focusedCharacter.avatar}
+                legacyCover={focusedCharacter.avatar}
+                kinds={CHARACTER_MEDIA_KINDS}
+                buildPrompt={({ kind, style, extra }) =>
+                  buildCharacterImagePrompt({
+                    name: focusedCharacter.name,
+                    design: parseCharacterDesign(focusedCharacter.design),
+                    description: focusedCharacter.description,
+                    kind,
+                    style,
+                    extra,
+                  })
+                }
+                onChange={({ media, cover }) =>
+                  handleUpdateCharacterAttributes(focusedCharacter.id, { media, avatar: cover })
+                }
+              />
             </div>
-            <div className={styles.highlightConfigPanel}>
-              <label className={styles.categoryField}>
-                <span className={styles.highlightFieldLabel}>人物分类</span>
-                <select
-                  value={focusedCharacter.category}
-                  onChange={(event) =>
-                    void handleUpdateCharacterAttributes(focusedCharacter.id, {
-                      category: event.target.value as CharacterCategory,
-                    })
-                  }
-                  className={styles.formInput}
-                >
-                  <option value="major">主要角色</option>
-                  <option value="secondary">次要角色</option>
-                </select>
-              </label>
-              <label className={styles.highlightColorField}>
-                <span className={styles.highlightFieldLabel}>高亮颜色</span>
-                <div className={styles.highlightColorControl}>
-                  <input
-                    type="color"
-                    value={focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR}
-                    onChange={(event) =>
-                      void handleUpdateCharacterAttributes(focusedCharacter.id, {
-                        highlightColor: event.target.value,
-                      })
-                    }
-                    className={styles.colorInput}
-                  />
-                  <span className={styles.highlightColorValue}>
-                    {(
-                      focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR
-                    ).toUpperCase()}
-                  </span>
-                </div>
-              </label>
-              <label className={styles.highlightToggle}>
-                <input
-                  type="checkbox"
-                  checked={focusedCharacter.highlightFirstMentionOnly !== false}
-                  onChange={(event) =>
-                    void handleUpdateCharacterAttributes(focusedCharacter.id, {
-                      highlightFirstMentionOnly: event.target.checked,
-                    })
-                  }
+          )}
+
+          {tab === 'growth' && (
+            <div className={tabStyles.panel} role="tabpanel" aria-label="成长档案">
+              {renderGrowth ? (
+                renderGrowth(focusedCharacter.name)
+              ) : onOpenGrowthSheet ? (
+                <CharacterGrowthButton
+                  characterName={focusedCharacter.name}
+                  level={growthLevel}
+                  onOpen={onOpenGrowthSheet}
                 />
-                <span>仅在每章第一次出现时高亮</span>
-              </label>
+              ) : (
+                <div className={styles.emptyHint}>打开作品后即可记录人物成长。</div>
+              )}
             </div>
-          </section>
+          )}
 
-          <section className={styles.workspaceCardShell}>
-            <div className={styles.workspaceCardHeader}>
-              <span className={styles.workspaceSectionTitle}>人物关系</span>
-              <span className={styles.workspaceListHint}>围绕当前人物的出场关系</span>
+          {tab === 'story' && (
+            <div className={tabStyles.panel} role="tabpanel" aria-label="经历与状态">
+              <CharacterCurrentStateSection
+                focusedCharacter={focusedCharacter}
+                controller={currentState}
+              />
+
+              <CharacterTimelineSection
+                focusedTimeline={focusedTimeline}
+                novelCorpusLoading={novelCorpusLoading}
+                novelCorpusError={novelCorpusError}
+                controller={timeline}
+              />
             </div>
-            {selectedRelations.length > 0 ? (
-              <div className={styles.workspaceList}>
-                {selectedRelations.map((relation) => {
-                  const otherId =
-                    relation.sourceId === focusedCharacter.id
-                      ? relation.targetId
-                      : relation.sourceId;
-                  const otherCharacter = characters.find((item) => item.id === otherId);
-                  return (
-                    <div key={relation.id} className={styles.workspaceListItem}>
-                      <div className={`${styles.workspaceListTitle} ${styles.relationTitle}`}>
-                        {otherCharacter && (
-                          <CharacterAvatar
-                            name={otherCharacter.name}
-                            avatar={otherCharacter.avatar}
-                            color={otherCharacter.highlightColor}
-                            workPath={workPath}
-                            size={22}
-                          />
-                        )}
-                        {otherCharacter?.name || '未匹配人物'}
-                      </div>
-                      <div className={styles.workspaceListDesc}>
-                        {relation.label}
-                        {relation.note ? ` · ${relation.note}` : ''}
-                      </div>
+          )}
+
+          {tab === 'relations' && (
+            <div className={tabStyles.panel} role="tabpanel" aria-label="关系与高亮">
+              <section className={styles.workspaceCardShell}>
+                <div className={styles.workspaceCardHeader}>
+                  <span className={styles.workspaceSectionTitle}>正文高亮</span>
+                  <span className={styles.workspaceListHint}>控制角色名在正文中的强调方式</span>
+                </div>
+                <div className={styles.highlightConfigPanel}>
+                  <label className={styles.categoryField}>
+                    <span className={styles.highlightFieldLabel}>人物分类</span>
+                    <select
+                      value={focusedCharacter.category}
+                      onChange={(event) =>
+                        void handleUpdateCharacterAttributes(focusedCharacter.id, {
+                          category: event.target.value as CharacterCategory,
+                        })
+                      }
+                      className={styles.formInput}
+                    >
+                      <option value="major">主要角色</option>
+                      <option value="secondary">次要角色</option>
+                    </select>
+                  </label>
+                  <label className={styles.highlightColorField}>
+                    <span className={styles.highlightFieldLabel}>高亮颜色</span>
+                    <div className={styles.highlightColorControl}>
+                      <input
+                        type="color"
+                        value={focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR}
+                        onChange={(event) =>
+                          void handleUpdateCharacterAttributes(focusedCharacter.id, {
+                            highlightColor: event.target.value,
+                          })
+                        }
+                        className={styles.colorInput}
+                      />
+                      <span className={styles.highlightColorValue}>
+                        {(
+                          focusedCharacter.highlightColor || DEFAULT_CHARACTER_HIGHLIGHT_COLOR
+                        ).toUpperCase()}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className={styles.emptyHint}>这个人物还没有整理关系。</div>
-            )}
-          </section>
+                  </label>
+                  <label className={styles.highlightToggle}>
+                    <input
+                      type="checkbox"
+                      checked={focusedCharacter.highlightFirstMentionOnly !== false}
+                      onChange={(event) =>
+                        void handleUpdateCharacterAttributes(focusedCharacter.id, {
+                          highlightFirstMentionOnly: event.target.checked,
+                        })
+                      }
+                    />
+                    <span>仅在每章第一次出现时高亮</span>
+                  </label>
+                </div>
+              </section>
 
-          <section className={styles.workspaceCardShell}>
-            <div className={styles.workspaceCardHeader}>
-              <span className={styles.workspaceSectionTitle}>人物网络</span>
-              <span className={styles.workspaceListHint}>保留当前人物的关系编辑能力</span>
+              <section className={styles.workspaceCardShell}>
+                <div className={styles.workspaceCardHeader}>
+                  <span className={styles.workspaceSectionTitle}>人物关系</span>
+                  <span className={styles.workspaceListHint}>围绕当前人物的出场关系</span>
+                </div>
+                {selectedRelations.length > 0 ? (
+                  <div className={styles.workspaceList}>
+                    {selectedRelations.map((relation) => {
+                      const otherId =
+                        relation.sourceId === focusedCharacter.id
+                          ? relation.targetId
+                          : relation.sourceId;
+                      const otherCharacter = characters.find((item) => item.id === otherId);
+                      return (
+                        <div key={relation.id} className={styles.workspaceListItem}>
+                          <div className={`${styles.workspaceListTitle} ${styles.relationTitle}`}>
+                            {otherCharacter && (
+                              <CharacterAvatar
+                                name={otherCharacter.name}
+                                avatar={otherCharacter.avatar}
+                                color={otherCharacter.highlightColor}
+                                workPath={workPath}
+                                size={22}
+                              />
+                            )}
+                            {otherCharacter?.name || '未匹配人物'}
+                          </div>
+                          <div className={styles.workspaceListDesc}>
+                            {relation.label}
+                            {relation.note ? ` · ${relation.note}` : ''}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className={styles.emptyHint}>这个人物还没有整理关系。</div>
+                )}
+              </section>
+
+              <section className={styles.workspaceCardShell}>
+                <div className={styles.workspaceCardHeader}>
+                  <span className={styles.workspaceSectionTitle}>人物网络</span>
+                  <span className={styles.workspaceListHint}>保留当前人物的关系编辑能力</span>
+                </div>
+                {graphView}
+              </section>
             </div>
-            {graphView}
-          </section>
+          )}
         </>
       ) : (
         <div className={styles.emptyHint}>没有找到对应人物，可能已经被删除。</div>

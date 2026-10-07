@@ -159,6 +159,7 @@ const App: React.FC = () => {
     handleFileSelect,
     handleOpenCharacterNode,
     handleOpenLoreNode,
+    handleOpenLore,
     handleRenameProject,
     handleDeleteCharacterNode,
     handleRenameCharacterNode,
@@ -265,6 +266,7 @@ const App: React.FC = () => {
                 onFileSelect={handleFileSelect}
                 onOpenCharacterNode={handleOpenCharacterNode}
                 onOpenLoreNode={handleOpenLoreNode}
+                onOpenLore={handleOpenLore}
                 onDeleteCharacterNode={handleDeleteCharacterNode}
                 onDeleteLoreNode={handleDeleteLoreNode}
                 onRenameCharacterNode={handleRenameCharacterNode}

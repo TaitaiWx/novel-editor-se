@@ -13,6 +13,14 @@
   box-sizing: border-box;
 }
 
+// 嵌入人物详情「成长档案」分页：不再额外留白与限宽（外层页面已有）
+.growthEmbedded {
+  padding: 0;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+}
+
 .placeholder {
   display: flex;
   flex-direction: column;

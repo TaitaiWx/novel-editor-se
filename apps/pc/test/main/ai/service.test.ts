@@ -170,6 +170,9 @@ describe('Provider 配置', () => {
       'grok',
       'minimax-video',
       'seedance-video',
+      'seedream-image',
+      'minimax-image',
+      'grok-image',
     ]);
     expect(JSON.stringify(list)).not.toContain('xai-secret');
     expect(list.find((item) => item.id === 'grok')).toMatchObject({

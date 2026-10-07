@@ -1,8 +1,20 @@
+import {
+  isDesignEmpty,
+  parseCharacterDesign,
+  parseMediaItems,
+  type CharacterDesign,
+  type MediaItem,
+} from '@novel-editor/core/entity-media';
 import type { Character, CharacterCategory, CharacterCurrentStateItem } from '../types';
 import { fnv1a32 } from './hash';
 
 export interface CharacterAttributesPayload {
+  /** 形象图（封面）：图集里选中的图片，或旧版单张头像（资料/人物头像/ 或 data URL） */
   avatar?: string;
+  /** 人物设计：外貌、服装、性格、背景、说话方式（AI 出图 / 续写 / 场景视频读取） */
+  design?: CharacterDesign;
+  /** 图集：形象图、三视图、服装、表情、背景 */
+  media?: MediaItem[];
   aliases?: string[];
   category?: CharacterCategory;
   highlightColor?: string;
@@ -89,6 +101,8 @@ export function parseCharacterAttributes(
   role: string = ''
 ): {
   avatar?: string;
+  design: CharacterDesign;
+  media: MediaItem[];
   aliases: string[];
   category: CharacterCategory;
   highlightColor: string;
@@ -99,6 +113,8 @@ export function parseCharacterAttributes(
     const parsed = JSON.parse(attributes || '{}') as CharacterAttributesPayload;
     return {
       avatar: typeof parsed?.avatar === 'string' ? parsed.avatar : undefined,
+      design: parseCharacterDesign(parsed?.design),
+      media: parseMediaItems(parsed?.media),
       aliases: normalizeCharacterAliases(parsed?.aliases),
       category: normalizeCharacterCategory(parsed?.category, role),
       highlightColor: normalizeCharacterHighlightColor(parsed?.highlightColor),
@@ -110,6 +126,8 @@ export function parseCharacterAttributes(
     };
   } catch {
     return {
+      design: parseCharacterDesign(null),
+      media: [],
       aliases: [],
       category: inferCharacterCategoryFromRole(role),
       highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
@@ -123,8 +141,12 @@ export function stringifyCharacterAttributes(
   attributes: CharacterAttributesPayload,
   role: string = ''
 ): string {
+  const design = parseCharacterDesign(attributes.design);
+  const media = parseMediaItems(attributes.media);
   return JSON.stringify({
     ...(attributes.avatar ? { avatar: attributes.avatar } : {}),
+    ...(isDesignEmpty(design) ? {} : { design }),
+    ...(media.length ? { media } : {}),
     aliases: normalizeCharacterAliases(attributes.aliases),
     category: normalizeCharacterCategory(attributes.category, role),
     highlightColor: normalizeCharacterHighlightColor(attributes.highlightColor),
@@ -155,6 +177,8 @@ export function mapCharacterRows(
       description: row.description || '',
       currentState: attrs.currentState,
       avatar: attrs.avatar || undefined,
+      design: attrs.design,
+      media: attrs.media,
       aliases: attrs.aliases,
       highlightColor: attrs.highlightColor,
       highlightFirstMentionOnly: attrs.highlightFirstMentionOnly,

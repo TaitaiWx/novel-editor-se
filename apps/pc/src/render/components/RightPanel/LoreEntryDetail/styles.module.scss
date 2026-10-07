@@ -1,0 +1,320 @@
+$muted: var(--ui-fg-muted);
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 28px 32px;
+  box-sizing: border-box;
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cover {
+  width: 240px;
+  aspect-ratio: 16 / 9;
+  flex-shrink: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(201, 179, 138, 0.06);
+  cursor: pointer;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.coverEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  font-size: 12px;
+  color: $muted;
+}
+
+.coverInitial {
+  font-size: 32px;
+  font-weight: 600;
+  color: #c9b38a;
+}
+
+.heroMain {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.titleInput {
+  padding: 2px 6px;
+  margin: 0 -6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  font-size: 22px;
+  font-weight: 600;
+  outline: none;
+
+  &:hover,
+  &:focus {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.metaField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: $muted;
+}
+
+@mixin control {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--ui-fg-primary);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+
+  &:focus {
+    border-color: rgba(86, 156, 214, 0.6);
+  }
+}
+
+.select {
+  @include control;
+}
+
+.input {
+  @include control;
+  width: 220px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 4px 0 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  background: rgba(201, 179, 138, 0.12);
+  color: #d9c18d;
+}
+
+.tagRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 10px;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.tagInput {
+  width: 120px;
+  height: 22px;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: var(--ui-fg-primary);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.saved {
+  font-size: 11px;
+  color: #7ab896;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  align-self: flex-start;
+}
+
+.tab,
+.tabActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: $muted;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.tabActive {
+  background: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
+}
+
+.tabCount {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+  background: rgba(215, 186, 125, 0.14);
+  color: #d9c18d;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--ui-fg-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.75;
+  resize: vertical;
+  outline: none;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+@mixin button {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.8);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.primary {
+  @include button;
+  border-color: rgba(86, 156, 214, 0.4);
+  background: rgba(86, 156, 214, 0.18);
+  color: #d6e6f5;
+}
+
+.danger {
+  @include button;
+  color: #e8a29a;
+}
+
+.muted {
+  margin: 0;
+  font-size: 12px;
+  color: $muted;
+}
+
+.related {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  button {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--ui-fg-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    strong {
+      font-size: 13px;
+    }
+
+    span {
+      font-size: 11.5px;
+      color: $muted;
+    }
+  }
+}

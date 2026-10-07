@@ -6,6 +6,7 @@
  */
 import type { ContextCharacter } from '@novel-editor/ai/context';
 import { coreRuleTexts, summarizeSheetForContext } from '@novel-editor/core/growth';
+import { CHARACTER_DESIGN_FIELDS, parseCharacterDesign } from '@novel-editor/core/entity-media';
 import type { Character } from '../components/RightPanel/types';
 import type { GrowthIpcResult, GrowthSnapshot } from '../types/growth-api';
 import type { PersistedOutlineRow, PersistedOutlineScopeInput } from '../types/electron-api';
@@ -17,7 +18,12 @@ export function charactersForContext(characters: readonly Character[]): ContextC
   return characters
     .filter((item) => item.name.trim())
     .map((item) => {
-      const summary = [item.role.trim(), item.description.replace(/\s+/g, ' ').trim()]
+      // 人物设计（外貌 / 服装 / 性格 / 背景 / 说话方式）让续写不跑偏人设
+      const design = parseCharacterDesign(item.design);
+      const designText = CHARACTER_DESIGN_FIELDS.filter(({ key }) => design[key])
+        .map(({ key, label }) => `${label}：${design[key].replace(/\s+/g, ' ')}`)
+        .join('；');
+      const summary = [item.role.trim(), item.description.replace(/\s+/g, ' ').trim(), designText]
         .filter(Boolean)
         .join('；');
       const status = item.currentState

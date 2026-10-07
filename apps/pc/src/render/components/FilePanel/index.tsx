@@ -1,16 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { AiOutlineFolderOpen, AiOutlineUser, AiOutlineFolder } from 'react-icons/ai';
+import { AiOutlineFolderOpen } from 'react-icons/ai';
 import LoadingSpinner from '../LoadingSpinner';
 import EmptyState from '../EmptyState';
 import FileTree from '../FileTree';
 import { isImeComposing } from '../../utils/ime';
 import {
-  createCharacterWorkspaceTab,
-  createLoreWorkspaceTab,
   parseVolumeWorkspaceTab,
   splitWorkspaceFiles,
-  WORKSPACE_TAB_CHARACTERS,
-  WORKSPACE_TAB_LORE,
   type StoryOrderMap,
 } from '../../utils/workspace';
 import { buildStoryStructure, getSplitWorkspaceOptions } from '../../utils/storyStructure';
@@ -21,7 +17,6 @@ import {
   filterGrowthSheets,
   filterLoreEntries,
   filterTree,
-  getCharacterCategoryLabel,
   getFolderName,
   groupCharacters,
   handleRowActivationKey,
@@ -37,12 +32,10 @@ import { useStoryTreeReveal } from './hooks/useStoryTreeReveal';
 import { useWorkScopedNodes } from './hooks/useWorkScopedNodes';
 import StoryTreeNode, { type StoryTreeContext } from './StoryTreeNode';
 import SectionHeader from './SectionHeader';
-import ObjectItemRow from './ObjectItemRow';
 import WorkspaceHeader, { buildCreateMenuItems } from './WorkspaceHeader';
 import SearchBar from './SearchBar';
-import CharacterGenerationHint from './CharacterGenerationHint';
-import GrowthSection from './GrowthSection';
-import ProjectDocsSection from './ProjectDocsSection';
+import CharacterSection from './CharacterSection';
+import LoreSection from './LoreSection';
 import WorkSwitcher from './WorkSwitcher';
 import type { GrowthSheetSummary } from '../../utils/growthIndex';
 import styles from './styles.module.scss';
@@ -79,6 +72,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onFileSelect,
     onOpenCharacterNode,
     onOpenLoreNode,
+    onOpenLore,
     onDeleteCharacterNode,
     onDeleteLoreNode,
     onRenameCharacterNode,
@@ -94,7 +88,6 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onCreateMaterialDirectory,
     growthIndex = null,
     onOpenGrowth,
-    onCreateGrowthSheet,
     onRefresh,
     onOpenFolder,
     onOpenRecentFolder,
@@ -162,7 +155,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       [folderPath, projectLayout, storyNodes, storyOrderMap]
     );
     const storyDisplayNodes = storyStructure.displayNodes;
-    // 项目根目录的说明文档（欢迎使用.md 等）：项目名下方的「项目说明」分区
+    // 项目根目录的说明文档（欢迎使用.md 等）：头部「搜索」左侧的「项目说明」图标
     const projectDocNodes = storyStructure.projectDocs;
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -337,20 +330,16 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   createMenuOpen={createMenuOpen}
                   onCreateMenuOpenChange={setCreateMenuOpen}
                   onRenameProject={onRenameProject}
+                  projectDocs={projectDocNodes}
+                  selectedFile={selectedFile}
+                  onOpenProjectDoc={handleFileSelectFromSearch}
+                  onProjectDocContextMenu={onContextMenu}
                   onOpenRecentFolder={onOpenRecentFolder}
                   onOpenFolder={onOpenFolder}
                   onToggleSearch={handleToggleSearch}
                   onCollapse={onCollapse}
                   onRefresh={onRefresh}
                   onContextMenu={(event) => emitObjectContextMenu(event, { kind: 'project-root' })}
-                />
-                <ProjectDocsSection
-                  docs={projectDocNodes}
-                  selectedFile={selectedFile}
-                  collapsed={collapsedSections.projectDocs}
-                  onToggle={() => toggleSection('projectDocs')}
-                  onOpen={handleFileSelectFromSearch}
-                  onDocContextMenu={onContextMenu}
                 />
                 {isProjectMode && workScope && (
                   <WorkSwitcher
@@ -400,116 +389,39 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       ))}
                   </section>
 
-                  {showCharactersSection && (
-                    <section className={styles.objectSection} aria-label="角色">
-                      <SectionHeader
-                        title="角色"
-                        icon={<AiOutlineUser />}
-                        count={filteredCharacters.length}
-                        active={activeWorkspaceTab === WORKSPACE_TAB_CHARACTERS}
-                        singleClickOnly
-                        onToggle={() => toggleSection('characters')}
-                        onContextMenu={(event) =>
-                          emitObjectContextMenu(event, { kind: 'characters-root' })
-                        }
-                      />
-                      {characterGenerationStatus && (
-                        <CharacterGenerationHint status={characterGenerationStatus} />
-                      )}
-                      {!collapsedSections.characters && (
-                        <div className={styles.supportNodeChildren}>
-                          {filteredCharacters.length === 0 ? (
-                            <div className={styles.objectEmpty}>当前筛选条件下没有人物</div>
-                          ) : (
-                            groupedCharacters.map((group) => {
-                              if (group.items.length === 0) return null;
-                              return (
-                                <div key={group.key} className={styles.objectSubgroup}>
-                                  <div className={styles.objectSubgroupLabel}>
-                                    <span>{group.label}</span>
-                                    <span className={styles.objectSubgroupCount}>
-                                      {group.items.length}
-                                    </span>
-                                  </div>
-                                  {group.items.map((item) => (
-                                    <ObjectItemRow
-                                      key={item.id}
-                                      kindLabel="人物"
-                                      title={item.name}
-                                      meta={`${getCharacterCategoryLabel(item.category)} · ${item.role || '未填写角色定位'}`}
-                                      icon={<AiOutlineUser />}
-                                      active={
-                                        activeWorkspaceTab === createCharacterWorkspaceTab(item)
-                                      }
-                                      onOpen={() => onOpenCharacterNode(item.id)}
-                                      onRename={(name) => onRenameCharacterNode(item.id, name)}
-                                      onDelete={() => onDeleteCharacterNode(item.id)}
-                                      onContextMenu={(event) =>
-                                        emitObjectContextMenu(event, {
-                                          kind: 'character-item',
-                                          characterId: item.id,
-                                        })
-                                      }
-                                    />
-                                  ))}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
-                    </section>
+                  {(showCharactersSection || showGrowthSection) && (
+                    <CharacterSection
+                      groups={groupedCharacters}
+                      characters={filteredCharacters}
+                      growthSheets={filteredGrowthSheets}
+                      workPath={workScope?.path ?? folderPath}
+                      filtering={normalizedQuery.length > 0}
+                      collapsed={collapsedSections.characters}
+                      activeWorkspaceTab={activeWorkspaceTab}
+                      generationStatus={characterGenerationStatus}
+                      onToggle={() => toggleSection('characters')}
+                      onOpenCharacter={onOpenCharacterNode}
+                      onRenameCharacter={onRenameCharacterNode}
+                      onDeleteCharacter={onDeleteCharacterNode}
+                      onCreateCharacter={onCreateCharacter}
+                      onOpenGrowth={onOpenGrowth}
+                      onContextMenu={emitObjectContextMenu}
+                    />
                   )}
 
                   {showLoreSection && (
-                    <section className={styles.objectSection} aria-label="设定">
-                      <SectionHeader
-                        title="设定"
-                        icon={<AiOutlineFolder />}
-                        count={filteredLoreEntries.length}
-                        active={activeWorkspaceTab === WORKSPACE_TAB_LORE}
-                        singleClickOnly
-                        onToggle={() => toggleSection('lore')}
-                        onContextMenu={(event) =>
-                          emitObjectContextMenu(event, { kind: 'lore-root' })
-                        }
-                      />
-                      {!collapsedSections.lore && (
-                        <div className={styles.supportNodeChildren}>
-                          {filteredLoreEntries.map((item) => (
-                            <ObjectItemRow
-                              key={item.id}
-                              kindLabel="设定"
-                              title={item.title}
-                              meta={item.summary || '暂无说明'}
-                              icon={<AiOutlineFolder />}
-                              active={activeWorkspaceTab === createLoreWorkspaceTab(item)}
-                              onOpen={() => onOpenLoreNode(item.id)}
-                              onRename={(name) => onRenameLoreNode(item.id, name)}
-                              onDelete={() => onDeleteLoreNode(item.id)}
-                              onContextMenu={(event) =>
-                                emitObjectContextMenu(event, {
-                                  kind: 'lore-item',
-                                  entryId: item.id,
-                                })
-                              }
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
-
-                  {showGrowthSection && onOpenGrowth && (
-                    <GrowthSection
-                      sheets={filteredGrowthSheets}
-                      initialized={growthIndex?.initialized ?? false}
+                    <LoreSection
+                      entries={filteredLoreEntries}
+                      workPath={workScope?.path ?? folderPath}
                       filtering={normalizedQuery.length > 0}
-                      collapsed={collapsedSections.growth}
+                      collapsed={collapsedSections.lore}
                       activeWorkspaceTab={activeWorkspaceTab}
-                      onToggle={() => toggleSection('growth')}
-                      onOpen={onOpenGrowth}
-                      onCreate={() => onCreateGrowthSheet?.()}
+                      onToggle={() => toggleSection('lore')}
+                      onOpenAll={() => onOpenLore?.()}
+                      onOpen={onOpenLoreNode}
+                      onRename={onRenameLoreNode}
+                      onDelete={onDeleteLoreNode}
+                      onCreate={onCreateLoreEntry}
                       onContextMenu={emitObjectContextMenu}
                     />
                   )}

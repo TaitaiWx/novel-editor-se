@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
+  PersistedOutlineNodeInput,
   PersistedOutlineScopeInput,
   PersistedOutlineRow,
   PersistedOutlineVersionRow,
@@ -321,25 +322,12 @@ export function useOutlineEntries(
     [loadVersions]
   );
 
-  const generateAiOutline = useCallback(
-    async (options?: OutlineAiGenerationOptions) => {
-      if (!folderPath || !dbReady) {
-        setStatusMessage('项目数据库尚未就绪，无法生成 AI 大纲');
-        return;
-      }
-      if (!aiReady) {
-        setStatusMessage('请先配置并开启 AI，再使用 AI 生成大纲');
-        return;
-      }
-
+  /** 把一份生成好的大纲写入数据库并保存为版本（AI 单个生成 / 多方案采用共用） */
+  const applyOutlineTree = useCallback(
+    async (tree: PersistedOutlineNodeInput[], options?: OutlineAiGenerationOptions) => {
+      if (!folderPath || !dbReady) return;
       setImporting(true);
       try {
-        const tree = await buildOutlineTreeFromAi(content, aiReady, options);
-        if (tree.length === 0) {
-          setStatusMessage('AI 未生成可用的大纲结构，请调整正文内容后重试');
-          return;
-        }
-
         await writeOutlineTree(folderPath, tree, outlineScope);
         await loadPersisted();
         let versionSaved = false;
@@ -361,12 +349,79 @@ export function useOutlineEntries(
           `已通过 AI 生成 ${tree.length} 个大纲节点（${optionsSummary}）${versionSaved ? '，并保存为大纲版本' : ''}`
         );
       } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : 'AI 生成大纲失败');
+        setStatusMessage(error instanceof Error ? error.message : '写入大纲失败');
       } finally {
         setImporting(false);
       }
     },
-    [aiReady, content, dbReady, folderPath, loadPersisted, saveOutlineVersion, outlineScope]
+    [dbReady, folderPath, loadPersisted, outlineScope, saveOutlineVersion]
+  );
+
+  const ensureAiReady = useCallback((): boolean => {
+    if (!folderPath || !dbReady) {
+      setStatusMessage('项目数据库尚未就绪，无法生成 AI 大纲');
+      return false;
+    }
+    if (!aiReady) {
+      setStatusMessage('请先配置并开启 AI，再使用 AI 生成大纲');
+      return false;
+    }
+    return true;
+  }, [aiReady, dbReady, folderPath]);
+
+  const generateAiOutline = useCallback(
+    async (options?: OutlineAiGenerationOptions) => {
+      if (!ensureAiReady()) return;
+      setImporting(true);
+      let tree: PersistedOutlineNodeInput[] = [];
+      try {
+        tree = await buildOutlineTreeFromAi(content, aiReady, options);
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'AI 生成大纲失败');
+        setImporting(false);
+        return;
+      }
+      setImporting(false);
+      if (tree.length === 0) {
+        setStatusMessage('AI 未生成可用的大纲结构，请调整正文内容后重试');
+        return;
+      }
+      await applyOutlineTree(tree, options);
+    },
+    [aiReady, applyOutlineTree, content, ensureAiReady]
+  );
+
+  /** 一次生成几种风格的大纲方案（并行），不写入数据库，由作者挑一个 applyOutlineTree */
+  const generateAiOutlineVariants = useCallback(
+    async (
+      variants: OutlineAiGenerationOptions[]
+    ): Promise<
+      Array<{ options: OutlineAiGenerationOptions; tree: PersistedOutlineNodeInput[] }>
+    > => {
+      if (!ensureAiReady()) return [];
+      setImporting(true);
+      try {
+        const trees = await Promise.all(
+          variants.map((options) =>
+            buildOutlineTreeFromAi(content, aiReady, options).catch(
+              () => [] as PersistedOutlineNodeInput[]
+            )
+          )
+        );
+        const result = variants
+          .map((options, index) => ({ options, tree: trees[index] }))
+          .filter((item) => item.tree.length > 0);
+        setStatusMessage(
+          result.length > 0
+            ? `AI 给出 ${result.length} 种章纲，选一个采用`
+            : 'AI 未生成可用的大纲结构，请调整正文内容后重试'
+        );
+        return result;
+      } finally {
+        setImporting(false);
+      }
+    },
+    [aiReady, content, ensureAiReady]
   );
 
   const reorderEntries = useCallback(
@@ -423,6 +478,8 @@ export function useOutlineEntries(
     updateOutlineVersion,
     deleteOutlineVersion,
     generateAiOutline,
+    generateAiOutlineVariants,
+    applyOutlineTree,
     reorderEntries,
   };
 }

@@ -20,6 +20,17 @@ import { getOutlineScopeLabel, OUTLINE_VERSION_SOURCE_LABELS } from './helpers';
 import { useOutlineVersionCenter } from './useOutlineVersionCenter';
 import { OutlineVersionsPanel } from './OutlineVersionsPanel';
 import { OutlineAiPresetPanel } from './OutlineAiPresetPanel';
+import OutlineToolbar from './OutlineToolbar';
+import PlanVariantPicker from '../PlanVariants';
+import type { PersistedOutlineNodeInput } from '@/render/types/electron-api';
+import type { OutlineAiStyle } from '../outline-import';
+
+/** 「生成章纲」一次给出的三种风格 */
+export const OUTLINE_VARIANT_STYLES: readonly OutlineAiStyle[] = [
+  'balanced',
+  'suspense',
+  'cinematic',
+];
 
 export const OutlineView: React.FC<{
   mode: Extract<StorylineViewMode, 'catalog' | 'outline'>;
@@ -52,6 +63,9 @@ export const OutlineView: React.FC<{
       DEFAULT_OUTLINE_AI_OPTIONS
     );
     const [showAiPresetPanel, setShowAiPresetPanel] = useState(false);
+    const [outlineVariants, setOutlineVariants] = useState<
+      Array<{ options: OutlineAiGenerationOptions; tree: PersistedOutlineNodeInput[] }>
+    >([]);
 
     const entryNodeRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const visibleLinesRef = useRef<Set<number>>(new Set());
@@ -72,7 +86,8 @@ export const OutlineView: React.FC<{
       applyOutlineVersion,
       updateOutlineVersion,
       deleteOutlineVersion,
-      generateAiOutline,
+      generateAiOutlineVariants,
+      applyOutlineTree,
       reorderEntries,
     } = useOutlineEntries(folderPath, content, dbReady, aiConfig.ready, scope);
 
@@ -252,9 +267,12 @@ export const OutlineView: React.FC<{
       deleteOutlineVersion,
     });
 
-    const handleGenerateAiOutline = useCallback(async () => {
-      await generateAiOutline(aiOutlineOptions);
-    }, [aiOutlineOptions, generateAiOutline]);
+    const handleGenerateVariants = useCallback(async () => {
+      const variants = await generateAiOutlineVariants(
+        OUTLINE_VARIANT_STYLES.map((style) => ({ ...aiOutlineOptions, style }))
+      );
+      setOutlineVariants(variants);
+    }, [aiOutlineOptions, generateAiOutlineVariants]);
 
     const aiOptionsLabel = useMemo(
       () =>
@@ -306,6 +324,42 @@ export const OutlineView: React.FC<{
       [aiOptionsLabel, aiOutlineOptions, importing]
     );
 
+    const toolbar = (
+      <OutlineToolbar
+        aiReady={aiConfig.ready}
+        canGenerate={Boolean(folderPath && dbReady && content.trim())}
+        busy={importing}
+        hasPersisted={hasPersistedOutline}
+        presetOpen={showAiPresetPanel}
+        onGenerateVariants={() => void handleGenerateVariants()}
+        onRebuild={rebuildFromContent}
+        onImport={importOutline}
+        onTogglePreset={() => setShowAiPresetPanel((current) => !current)}
+        onSaveVersion={() => void handleSaveVersion()}
+        onClear={clearPersisted}
+      />
+    );
+    const variantPicker =
+      outlineVariants.length > 0 ? (
+        <PlanVariantPicker
+          heading="选一个章纲方案"
+          busy={importing}
+          variants={outlineVariants.map((variant) => ({
+            id: variant.options.style,
+            title: OUTLINE_AI_STYLE_LABELS[variant.options.style],
+            subtitle: `${variant.tree.length} 个节点`,
+            lines: variant.tree.map((node) => node.title),
+          }))}
+          onApply={(id) => {
+            const picked = outlineVariants.find((variant) => variant.options.style === id);
+            if (!picked) return;
+            setOutlineVariants([]);
+            void applyOutlineTree(picked.tree, picked.options);
+          }}
+          onDismiss={() => setOutlineVariants([])}
+        />
+      ) : null;
+
     if (!content && !isOutlineMode) {
       return <div className={styles.emptyHint}>打开文件后查看目录</div>;
     }
@@ -321,45 +375,8 @@ export const OutlineView: React.FC<{
                 ? `可为「${scopeLabel}」导入、生成或重建独立章纲`
                 : `可为「${scopeLabel}」导入、生成或重建独立${outlineScopeText}`}
             </span>
-            <div className={styles.outlineToolbar} style={{ marginTop: 10 }}>
-              <button
-                className={styles.outlineActionButton}
-                onClick={importOutline}
-                disabled={!folderPath || !dbReady || importing}
-              >
-                导入大纲
-              </button>
-              <button
-                className={styles.outlineActionButton}
-                onClick={() => void handleGenerateAiOutline()}
-                disabled={
-                  !folderPath || !dbReady || importing || !content.trim() || !aiConfig.ready
-                }
-              >
-                AI 生成大纲
-              </button>
-              <button
-                className={styles.outlineSecondaryButton}
-                onClick={() => setShowAiPresetPanel((current) => !current)}
-                disabled={importing || !aiConfig.ready}
-              >
-                {showAiPresetPanel ? '收起预设' : 'AI 预设'}
-              </button>
-              <button
-                className={styles.outlineSecondaryButton}
-                onClick={handleSaveVersion}
-                disabled={!hasPersistedOutline || importing}
-              >
-                保存为大纲版本
-              </button>
-              <button
-                className={styles.outlineActionButton}
-                onClick={rebuildFromContent}
-                disabled={!folderPath || !dbReady || importing || !content.trim()}
-              >
-                从正文重建
-              </button>
-            </div>
+            <div style={{ marginTop: 10 }}>{toolbar}</div>
+            {variantPicker}
             {showAiPresetPanel && aiConfig.ready && renderAiPresetPanel()}
             {statusMessage && <div className={styles.outlineImportStatus}>{statusMessage}</div>}
             {versions.length > 0 && renderVersions()}
@@ -401,9 +418,6 @@ export const OutlineView: React.FC<{
               AI {completedCount}/{needsAiCount}
             </span>
           )}
-          {isOutlineMode && aiConfig.ready && (
-            <span className={styles.outlineStatChip}>AI 生成：{aiOptionsLabel}</span>
-          )}
           {isOutlineMode && hasPersistedOutline && (
             <span className={styles.outlineImportChip}>已入库{outlineScopeText}</span>
           )}
@@ -429,54 +443,8 @@ export const OutlineView: React.FC<{
             </button>
           </div>
         )}
-        {isOutlineMode && (
-          <div className={styles.outlineToolbar}>
-            <button
-              className={styles.outlineActionButton}
-              onClick={importOutline}
-              disabled={!folderPath || !dbReady || importing}
-            >
-              导入大纲
-            </button>
-            <button
-              className={styles.outlineActionButton}
-              onClick={rebuildFromContent}
-              disabled={!folderPath || !dbReady || importing || !content.trim()}
-            >
-              从正文重建
-            </button>
-            <button
-              className={styles.outlineActionButton}
-              onClick={() => void handleGenerateAiOutline()}
-              disabled={!folderPath || !dbReady || importing || !content.trim() || !aiConfig.ready}
-            >
-              AI 生成大纲
-            </button>
-            <button
-              className={styles.outlineSecondaryButton}
-              onClick={() => setShowAiPresetPanel((current) => !current)}
-              disabled={importing || !aiConfig.ready}
-            >
-              {showAiPresetPanel ? '收起预设' : 'AI 预设'}
-            </button>
-            <button
-              className={styles.outlineSecondaryButton}
-              onClick={() => void handleSaveVersion()}
-              disabled={!hasPersistedOutline || importing}
-            >
-              保存为大纲版本
-            </button>
-            {hasPersistedOutline && (
-              <button
-                className={styles.outlineSecondaryButton}
-                onClick={clearPersisted}
-                disabled={importing}
-              >
-                清空入库
-              </button>
-            )}
-          </div>
-        )}
+        {isOutlineMode && toolbar}
+        {isOutlineMode && variantPicker}
         {isOutlineMode && showAiPresetPanel && aiConfig.ready && renderAiPresetPanel()}
         {statusMessage && <div className={styles.outlineImportStatus}>{statusMessage}</div>}
         {isOutlineMode && renderVersions()}

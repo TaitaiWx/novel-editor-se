@@ -77,8 +77,9 @@
 }
 
 .objectNodeMarker {
-  width: 14px;
-  height: 14px;
+  // 人物 / 设定的封面头像（18px 圆）与默认图标共用这个位置
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

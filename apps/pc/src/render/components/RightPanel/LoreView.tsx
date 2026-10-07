@@ -5,6 +5,7 @@ import { LORE_CATEGORY_LABELS } from './constants';
 import { parseLoreAuditSections, parseLoreDraftFromAuditItem } from './lore-data';
 import { useLoreEntries } from './useLoreEntries';
 import { parseLoreDraftsFromImport } from './lore-import';
+import { LoreEntryDetail } from './LoreEntryDetail';
 
 export const LoreView: React.FC<{
   folderPath: string | null;
@@ -124,10 +125,13 @@ export const LoreView: React.FC<{
 
     // 详情模式的表单必须与标题在同一次提交中就绪：用 layout effect 在绘制前回填，
     // 否则条目加载后的第一帧标题已显示、编辑框却是空的（被动 effect 延迟时尤其明显）
+    // 每个 initialEntryId 只回填一次：保存后重新加载条目时不把作者跳转到的相关设定改回初始条目
+    const appliedInitialRef = useRef<number | null>(null);
     useLayoutEffect(() => {
-      if (!initialEntryId) return;
+      if (!initialEntryId || appliedInitialRef.current === initialEntryId) return;
       const target = entries.find((entry) => entry.id === initialEntryId);
       if (!target) return;
+      appliedInitialRef.current = initialEntryId;
       setEditingEntryId(target.id);
       setCategory(target.category);
       setTitle(target.title);
@@ -386,6 +390,13 @@ export const LoreView: React.FC<{
                     </button>
                   </div>
                 </div>
+                {(entry.folder || entry.tags.length > 0) && (
+                  <div className={styles.loreEntrySummary}>
+                    {[entry.folder, ...entry.tags.map((tag) => `#${tag}`)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
+                )}
                 <div className={styles.loreEntrySummary}>{entry.summary || '暂无详细说明'}</div>
               </div>
             ))
@@ -395,98 +406,18 @@ export const LoreView: React.FC<{
     );
 
     if (detailMode) {
-      const siblingEntries = focusedEntry
-        ? entries
-            .filter(
-              (entry) => entry.category === focusedEntry.category && entry.id !== focusedEntry.id
-            )
-            .slice(0, 8)
-        : [];
-
-      return (
+      return focusedEntry ? (
+        <LoreEntryDetail
+          entry={focusedEntry}
+          entries={entries}
+          workPath={folderPath}
+          onUpdate={(patch) => updateEntry(focusedEntry.id, patch)}
+          onDelete={() => void handleDelete(focusedEntry)}
+          onOpenEntry={handleStartEdit}
+        />
+      ) : (
         <div className={styles.objectWorkspace}>
-          {focusedEntry ? (
-            <>
-              <section className={styles.workspaceHero}>
-                <div className={styles.workspaceEyebrow}>设定资料</div>
-                <h2 className={styles.workspaceTitle}>{focusedEntry.title}</h2>
-                <p className={styles.workspaceDesc}>
-                  {focusedEntry.summary || '这个设定条目还没有详细说明。'}
-                </p>
-                <div className={styles.workspaceMetaRow}>
-                  <span className={styles.workspaceChip}>
-                    分类 {LORE_CATEGORY_LABELS[focusedEntry.category]}
-                  </span>
-                  <span className={styles.workspaceChip}>
-                    更新时间 {new Date(focusedEntry.updatedAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </section>
-
-              <div className={styles.workspaceGrid}>
-                <section className={styles.workspaceCardShell}>
-                  <div className={styles.workspaceCardHeader}>
-                    <span className={styles.workspaceSectionTitle}>编辑条目</span>
-                    <span className={styles.workspaceListHint}>直接维护当前设定</span>
-                  </div>
-                  <input
-                    className={styles.formInput}
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="设定条目标题"
-                  />
-                  <textarea
-                    className={styles.formTextarea}
-                    value={summary}
-                    onChange={(e) => setSummary(e.target.value)}
-                    rows={8}
-                    placeholder="记录规则、背景、约束、历史脉络、关键词等"
-                  />
-                  <div className={styles.inlineActions}>
-                    <button className={styles.submitButton} onClick={handleSave}>
-                      保存修改
-                    </button>
-                    <button
-                      className={styles.deleteInlineButton}
-                      onClick={() => void handleDelete(focusedEntry)}
-                    >
-                      删除条目
-                    </button>
-                  </div>
-                </section>
-
-                <section className={styles.workspaceCardShell}>
-                  <div className={styles.workspaceCardHeader}>
-                    <span className={styles.workspaceSectionTitle}>同类设定</span>
-                    <span className={styles.workspaceListHint}>
-                      {LORE_CATEGORY_LABELS[focusedEntry.category]}中的其他条目
-                    </span>
-                  </div>
-                  {siblingEntries.length > 0 ? (
-                    <div className={styles.workspaceList}>
-                      {siblingEntries.map((entry) => (
-                        <button
-                          key={entry.id}
-                          type="button"
-                          className={styles.workspaceListButton}
-                          onClick={() => handleStartEdit(entry)}
-                        >
-                          <div className={styles.workspaceListTitle}>{entry.title}</div>
-                          <div className={styles.workspaceListDesc}>
-                            {entry.summary || '暂无说明'}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className={styles.emptyHint}>这个分类里暂时没有其他条目。</div>
-                  )}
-                </section>
-              </div>
-            </>
-          ) : (
-            <div className={styles.emptyHint}>没有找到对应设定，可能已经被删除。</div>
-          )}
+          <div className={styles.emptyHint}>没有找到对应设定，可能已经被删除。</div>
         </div>
       );
     }

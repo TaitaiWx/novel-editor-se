@@ -23,6 +23,7 @@
     "./growth": "./src/growth/index.ts",
     "./material": "./src/material.ts",
     "./story-layout": "./src/story-layout.ts",
-    "./gui-session": "./src/gui-session.ts"
+    "./gui-session": "./src/gui-session.ts",
+    "./entity-media": "./src/entity-media.ts"
   }
 }

@@ -267,6 +267,8 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
             stringifyCharacterAttributes(
               {
                 avatar: target.avatar,
+                design: target.design,
+                media: target.media,
                 aliases: target.aliases,
                 category: target.category,
                 highlightColor: target.highlightColor,

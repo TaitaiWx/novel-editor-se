@@ -45,7 +45,7 @@ type Row = Record<string, unknown>;
 type SqlValue = string | number | null;
 
 const CHARACTER_COLUMNS = ['name', 'role', 'description', 'attributes', 'sort_order'] as const;
-const WORLD_SETTING_COLUMNS = ['category', 'title', 'content', 'tags'] as const;
+const WORLD_SETTING_COLUMNS = ['category', 'title', 'content', 'tags', 'attributes'] as const;
 const OUTLINE_COLUMNS = [
   'scope_kind',
   'title',

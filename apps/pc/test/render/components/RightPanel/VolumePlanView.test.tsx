@@ -184,7 +184,7 @@ describe('VolumePlanView（卷纲）', () => {
     expect(await screen.findByRole('region', { name: '第一幕 离乡' })).toBeTruthy();
   });
 
-  it('一句话意图 + 生成卷纲（未开启 AI）：按结构模板生成说明与建议', async () => {
+  it('一句话意图 + 生成卷纲（未开启 AI）：一次给出 3 种结构的方案，挑一个采用', async () => {
     const mock = mockIpc();
     renderView();
     await screen.findByRole('region', { name: '第一幕 离乡' });
@@ -192,19 +192,35 @@ describe('VolumePlanView（卷纲）', () => {
       target: { value: '林舟离开小镇' },
     });
     fireEvent.click(screen.getByRole('button', { name: '生成卷纲' }));
-    expect(await screen.findByText(/^起点：林舟离开小镇。/)).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toContain('按「按正文幕标记」生成卷纲');
-    // 只有开篇句的章节得到建议节拍
-    expect(screen.getByText('建议')).toBeTruthy();
+    const picker = await screen.findByTestId('plan-variants');
+    const cards = within(picker).getAllByRole('listitem', { name: /^方案 / });
+    // 当前结构（按正文幕标记）在前，另外两种结构补足
+    expect(cards.map((card) => card.getAttribute('aria-label'))).toEqual([
+      '方案 按正文幕标记',
+      '方案 三幕式',
+      '方案 起承转合',
+    ]);
+    expect(cards[0].textContent).toContain('起点：林舟离开小镇');
+    expect(screen.getByRole('status').textContent).toBe('给出 3 个方案，选一个采用');
     expect(mock.invoke).not.toHaveBeenCalledWith('ai-request', expect.anything());
+    // 采用「三幕式」：结构切换，说明写入
+    fireEvent.click(within(cards[1]).getByRole('button', { name: '采用这个' }));
+    expect(await screen.findByRole('region', { name: '第一幕 · 建置' })).toBeTruthy();
+    expect(screen.getByText(/^起点：林舟离开小镇。/)).toBeTruthy();
+    expect(screen.queryByTestId('plan-variants')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('已采用「三幕式」方案');
     await waitFor(
       () =>
-        expect(savedPlan(mock)).toMatchObject({ intent: '林舟离开小镇', generatedBy: 'template' }),
+        expect(savedPlan(mock)).toMatchObject({
+          intent: '林舟离开小镇',
+          structure: 'three-act',
+          generatedBy: 'template',
+        }),
       { timeout: 2000 }
     );
   });
 
-  it('开启 AI 时走 ai-request，解析 JSON 写入说明与建议；失败时回退模板', async () => {
+  it('开启 AI 时每个方案并行走 ai-request，解析 JSON；失败的方案回退模板；都不要可关闭', async () => {
     aiState.ready = true;
     const actKey = 'markers:0:第一幕 离乡';
     const mock = mockIpc({
@@ -219,22 +235,29 @@ describe('VolumePlanView（卷纲）', () => {
     renderView();
     await screen.findByRole('region', { name: '第一幕 离乡' });
     fireEvent.click(screen.getByRole('button', { name: '生成卷纲' }));
-    expect(await screen.findByText('离开家乡，踏上旅程')).toBeTruthy();
-    expect(screen.getByText('狼王现身')).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toBe('已用 AI 生成卷纲');
+    const picker = await screen.findByTestId('plan-variants');
+    expect(mock.invoke.mock.calls.filter((call) => call[0] === 'ai-request')).toHaveLength(3);
     const request = mock.invoke.mock.calls.find((c) => c[0] === 'ai-request')?.[1] as {
       prompt: string;
       context: string;
     };
     expect(request.context).toContain('001-启程.md');
     expect(request.context).toContain('主要人物：林舟');
+    const first = within(picker).getByRole('listitem', { name: '方案 按正文幕标记' });
+    expect(first.textContent).toContain('AI');
+    expect(first.textContent).toContain('离开家乡，踏上旅程');
+    fireEvent.click(within(first).getByRole('button', { name: '采用这个' }));
+    expect(await screen.findByText('离开家乡，踏上旅程')).toBeTruthy();
+    expect(screen.getByText('狼王现身')).toBeTruthy();
 
     uninstallElectronMock();
     mockIpc({ ai: { ok: true, text: '不是 JSON' } });
     fireEvent.click(screen.getByRole('button', { name: '生成卷纲' }));
     await waitFor(() =>
-      expect(screen.getByRole('status').textContent).toContain('已按结构模板生成')
+      expect(screen.getByRole('status').textContent).toContain('部分方案按结构模板生成')
     );
+    fireEvent.click(within(screen.getByTestId('plan-variants')).getByLabelText('关闭方案'));
+    expect(screen.queryByTestId('plan-variants')).toBeNull();
   });
 
   it('切换派生视图：节奏 / 人物线 / 伏笔，不需要额外输入', async () => {

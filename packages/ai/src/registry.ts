@@ -12,14 +12,30 @@ import {
   OPENAI_COMPATIBLE_DEFAULTS,
 } from './providers/openai-compatible';
 import { createSeedanceVideoProvider, SEEDANCE_VIDEO_DEFAULTS } from './providers/seedance-video';
-import type { ProviderConfig, ProviderDescriptor, TextProvider, VideoProvider } from './types';
+import {
+  createGrokImageProvider,
+  createMinimaxImageProvider,
+  createSeedreamImageProvider,
+  GROK_IMAGE_DEFAULTS,
+  MINIMAX_IMAGE_DEFAULTS,
+  SEEDREAM_IMAGE_DEFAULTS,
+} from './providers/image';
+import type {
+  ImageProvider,
+  ProviderConfig,
+  ProviderDescriptor,
+  TextProvider,
+  VideoProvider,
+} from './types';
 
 export type TextProviderFactory = (config: ProviderConfig) => TextProvider;
 export type VideoProviderFactory = (config: ProviderConfig) => VideoProvider;
+export type ImageProviderFactory = (config: ProviderConfig) => ImageProvider;
 
 type Entry =
   | { descriptor: ProviderDescriptor & { kind: 'text' }; factory: TextProviderFactory }
-  | { descriptor: ProviderDescriptor & { kind: 'video' }; factory: VideoProviderFactory };
+  | { descriptor: ProviderDescriptor & { kind: 'video' }; factory: VideoProviderFactory }
+  | { descriptor: ProviderDescriptor & { kind: 'image' }; factory: ImageProviderFactory };
 
 /** CLI 环境变量名：NOVEL_EDITOR_<PROVIDER>_API_KEY（连字符转下划线、大写） */
 export function providerEnvKey(providerId: string): string {
@@ -71,6 +87,39 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     envKey: providerEnvKey('seedance-video'),
     docsUrl: 'https://www.volcengine.com/docs/82379/1520757',
   },
+  {
+    id: 'seedream-image',
+    kind: 'image',
+    label: 'Seedream 图片（火山方舟）',
+    description: '人物形象 / 三视图 / 服装 / 设定图，支持多张参考图（保持人物一致）',
+    defaultBaseUrl: SEEDREAM_IMAGE_DEFAULTS.baseUrl,
+    defaultModel: SEEDREAM_IMAGE_DEFAULTS.model,
+    models: SEEDREAM_IMAGE_DEFAULTS.models,
+    envKey: providerEnvKey('seedream-image'),
+    docsUrl: 'https://www.volcengine.com/docs/82379/1541523',
+  },
+  {
+    id: 'minimax-image',
+    kind: 'image',
+    label: 'MiniMax 图片',
+    description: 'image-01 文生图，可用一张人物图作参考',
+    defaultBaseUrl: MINIMAX_IMAGE_DEFAULTS.baseUrl,
+    defaultModel: MINIMAX_IMAGE_DEFAULTS.model,
+    models: MINIMAX_IMAGE_DEFAULTS.models,
+    envKey: providerEnvKey('minimax-image'),
+    docsUrl: 'https://platform.minimax.io/docs/guides/image-generation',
+  },
+  {
+    id: 'grok-image',
+    kind: 'image',
+    label: 'xAI Grok 图片',
+    description: 'Grok 文生图（不支持参考图）',
+    defaultBaseUrl: GROK_IMAGE_DEFAULTS.baseUrl,
+    defaultModel: GROK_IMAGE_DEFAULTS.model,
+    models: GROK_IMAGE_DEFAULTS.models,
+    envKey: providerEnvKey('grok-image'),
+    docsUrl: 'https://docs.x.ai/docs/guides/image-generations',
+  },
 ];
 
 export class ProviderRegistry {
@@ -89,6 +138,15 @@ export class ProviderRegistry {
     if (descriptor.kind !== 'video') throw new Error(`${descriptor.id} 不是视频 Provider`);
     this.entries.set(descriptor.id, {
       descriptor: descriptor as ProviderDescriptor & { kind: 'video' },
+      factory,
+    });
+    return this;
+  }
+
+  registerImage(descriptor: ProviderDescriptor, factory: ImageProviderFactory): this {
+    if (descriptor.kind !== 'image') throw new Error(`${descriptor.id} 不是图片 Provider`);
+    this.entries.set(descriptor.id, {
+      descriptor: descriptor as ProviderDescriptor & { kind: 'image' },
       factory,
     });
     return this;
@@ -133,13 +191,26 @@ export class ProviderRegistry {
     }
     return (entry.factory as VideoProviderFactory)(config);
   }
+
+  createImage(id: string, config: ProviderConfig): ImageProvider {
+    const entry = this.entries.get(id);
+    if (!entry) throw unknownProvider(id);
+    if (entry.descriptor.kind !== 'image') {
+      throw new AIError({
+        kind: 'bad-request',
+        message: `${entry.descriptor.label} 不是图片服务`,
+        providerId: id,
+      });
+    }
+    return (entry.factory as ImageProviderFactory)(config);
+  }
 }
 
 function unknownProvider(id: string): AIError {
   return new AIError({ kind: 'bad-request', message: `未知的 AI 服务: ${id}`, providerId: id });
 }
 
-/** 内置四个 Provider 的注册表 */
+/** 内置 Provider（文本 / 视频 / 图片）的注册表 */
 export function createDefaultRegistry(): ProviderRegistry {
   const registry = new ProviderRegistry();
   const byId = (id: string) =>
@@ -150,5 +221,8 @@ export function createDefaultRegistry(): ProviderRegistry {
   registry.registerText(byId('grok'), createGrokProvider);
   registry.registerVideo(byId('minimax-video'), createMinimaxVideoProvider);
   registry.registerVideo(byId('seedance-video'), createSeedanceVideoProvider);
+  registry.registerImage(byId('seedream-image'), createSeedreamImageProvider);
+  registry.registerImage(byId('minimax-image'), createMinimaxImageProvider);
+  registry.registerImage(byId('grok-image'), createGrokImageProvider);
   return registry;
 }
