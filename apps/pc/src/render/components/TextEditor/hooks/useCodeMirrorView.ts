@@ -43,8 +43,6 @@ interface UseCodeMirrorViewOptions {
   showThousandCharMarkers: boolean;
   thousandCharMarkerStep: number;
   characterHighlights: CharacterHighlightPattern[];
-  /** Markdown 实时预览（仅对 markdown 文件生效） */
-  livePreview: boolean;
 }
 
 /**
@@ -76,7 +74,6 @@ export function useCodeMirrorView({
   showThousandCharMarkers,
   thousandCharMarkerStep,
   characterHighlights,
-  livePreview,
 }: UseCodeMirrorViewOptions) {
   const [editorReady, setEditorReady] = useState(false);
 
@@ -280,13 +277,12 @@ export function useCodeMirrorView({
     };
   }, [editorReady, filePath, isUntitled, viewRef]);
 
-  // Markdown 实时预览：仅 markdown 文件且开关开启时懒加载并启用，否则清空
+  // Markdown 实时渲染：.md / .markdown 文件始终懒加载并启用（光标处显示源码），其他格式清空
   useEffect(() => {
     if (!editorReady) return;
     const view = viewRef.current;
     if (!view) return;
-    const enabled =
-      livePreview && Boolean(filePath) && resolveEditorLanguage(filePath ?? '') === 'markdown';
+    const enabled = Boolean(filePath) && resolveEditorLanguage(filePath ?? '') === 'markdown';
     if (!enabled) {
       view.dispatch({ effects: livePreviewCompartment.current.reconfigure([]) });
       return;
@@ -311,7 +307,7 @@ export function useCodeMirrorView({
     return () => {
       cancelled = true;
     };
-  }, [editorReady, filePath, livePreview, viewRef]);
+  }, [editorReady, filePath, viewRef]);
 
   // Update writing decorations when character highlight rules change
   useEffect(() => {

@@ -64,7 +64,6 @@ describe('useCodeMirrorView', () => {
       showThousandCharMarkers: true,
       thousandCharMarkerStep: 1000,
       characterHighlights: [],
-      livePreview: false,
     };
     const hook = renderHook((props) => useCodeMirrorView(props), { initialProps: baseProps });
     return { ...hook, deps, baseProps, host };
@@ -95,7 +94,6 @@ describe('useCodeMirrorView', () => {
         showThousandCharMarkers: false,
         thousandCharMarkerStep: 1000,
         characterHighlights: [],
-        livePreview: true,
       })
     );
     expect(result.current.editorReady).toBe(false);
@@ -129,20 +127,19 @@ describe('useCodeMirrorView', () => {
     expect(view.state.facet(EditorView.editable)).toBe(false);
   });
 
-  it('Markdown 实时预览：markdown 文件开启时懒加载渲染，关闭后恢复源码', async () => {
+  it('Markdown 实时渲染：markdown 文件始终懒加载渲染，非 markdown 文件保持纯文本', async () => {
     const { deps, rerender, baseProps } = setup();
     const view = deps.viewRef.current as EditorView;
     act(() => {
       view.dispatch({ changes: { from: 0, insert: '正文\n\n# 标题' } });
     });
-    rerender({ ...baseProps, livePreview: true });
     await waitFor(() => expect(view.contentDOM.querySelector('.cm-lp-h1')).not.toBeNull());
-    rerender({ ...baseProps, livePreview: false });
+    // .txt 等其他格式不渲染
+    rerender({ ...baseProps, filePath: '/a.txt' });
     await waitFor(() => expect(view.contentDOM.querySelector('.cm-lp-h1')).toBeNull());
-    // 非 markdown 文件即使开启也不渲染
-    rerender({ ...baseProps, livePreview: true, filePath: '/a.txt' });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(view.contentDOM.querySelector('.cm-lp-h1')).toBeNull();
+    // 切回 markdown 文件重新启用
+    rerender({ ...baseProps, filePath: '/b.markdown' });
+    await waitFor(() => expect(view.contentDOM.querySelector('.cm-lp-h1')).not.toBeNull());
   });
 
   it('卸载时保存视口并销毁编辑器', () => {

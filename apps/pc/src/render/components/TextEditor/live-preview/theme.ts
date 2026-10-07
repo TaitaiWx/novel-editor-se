@@ -94,14 +94,36 @@ export const livePreviewTheme = EditorView.theme({
 
   // 渲染结果
   '.cm-lp-math-inline': { padding: '0 1px' },
-  '.cm-lp-math-display': { display: 'block', textAlign: 'center', padding: '6px 0' },
+  // 展示公式比正文宽时在自身内部左右滚动，不撑破版面（不出现竖向滚动）。
+  // contain: inline-size 让宽公式不参与 .cm-content 的最小内容宽度计算：否则 MathML 不可断行，
+  // .cm-content 被撑宽，整篇正文按更宽的宽度换行并被编辑器右侧裁掉（max-width: 100% 拦不住）
+  '.cm-lp-math-display': {
+    display: 'block',
+    textAlign: 'center',
+    padding: '6px 0',
+    maxWidth: '100%',
+    overflowX: 'auto',
+    overflowY: 'hidden',
+    contain: 'inline-size',
+  },
+  '.cm-lp-math-display::-webkit-scrollbar, .cm-lp-table::-webkit-scrollbar': { height: '6px' },
+  '.cm-lp-math-display::-webkit-scrollbar-thumb, .cm-lp-table::-webkit-scrollbar-thumb': {
+    backgroundColor: 'var(--ui-scrollbar-thumb)',
+    borderRadius: '999px',
+  },
   '.cm-lp-math math': { fontSize: '1.08em' },
   '.cm-lp-math-preview': {
     margin: '2px 0 6px',
     borderRadius: '4px',
     backgroundColor: SURFACE,
   },
-  '.cm-lp-table': { padding: '4px 0', overflowX: 'auto', fontFamily: UI_FONT },
+  // 同上：宽表格在自身内部滚动，不撑宽正文
+  '.cm-lp-table': {
+    padding: '4px 0',
+    overflowX: 'auto',
+    fontFamily: UI_FONT,
+    contain: 'inline-size',
+  },
   '.cm-lp-table table': { borderCollapse: 'collapse', fontSize: '13px', minWidth: '40%' },
   '.cm-lp-table th, .cm-lp-table td': {
     border: `1px solid ${BORDER}`,

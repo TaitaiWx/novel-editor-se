@@ -274,3 +274,25 @@ describe('性能：大文档只构建视口', () => {
     expect(coldRenderMs).toBeLessThan(1_000);
   }, 120_000);
 });
+
+describe('实时渲染主题：宽公式 / 宽表格不撑宽正文', () => {
+  it('展示公式与表格带 contain: inline-size（不可断行的 MathML 不参与 .cm-content 最小宽度）', async () => {
+    const { livePreviewTheme } = await import('@/render/components/TextEditor/live-preview/theme');
+    const view = new EditorView({
+      state: EditorState.create({ extensions: [livePreviewTheme] }),
+      parent: document.body,
+    });
+    const css = [
+      ...Array.from(document.querySelectorAll('style')).map((s) => s.textContent ?? ''),
+      ...(document.adoptedStyleSheets ?? []).flatMap((sheet) =>
+        Array.from(sheet.cssRules).map((rule) => rule.cssText)
+      ),
+    ].join('\n');
+    view.destroy();
+    for (const cls of ['cm-lp-math-display', 'cm-lp-table']) {
+      const rule = new RegExp(`\\.${cls}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? '';
+      expect(rule, cls).toMatch(/contain:\s*inline-size/);
+      expect(rule, cls).toMatch(/overflow-x:\s*auto/);
+    }
+  });
+});

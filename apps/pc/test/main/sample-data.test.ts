@@ -92,8 +92,9 @@ describe('示例作品集 sample-data', () => {
   });
 
   it('带版本文件，旧版本机副本会在启动时被升级（改动示例内容时请递增 sampleVersion）', async () => {
-    // v3：资料、成长档案、人物 / 设定改为跟随作品；v4：修复停留在 v3 中间态（根目录 资料/）的本机副本
-    expect(await readSeedVersion(ROOT)).toBeGreaterThanOrEqual(4);
+    // v3：资料、成长档案、人物 / 设定改为跟随作品；v4：修复停留在 v3 中间态（根目录 资料/）的本机副本；
+    // v5：新增根目录 公式示例.md（复杂 LaTeX），排版示例.md 不再提「源码 / 实时预览」切换
+    expect(await readSeedVersion(ROOT)).toBeGreaterThanOrEqual(5);
   });
 
   it('内容指纹与 sample.json 记录一致（改了示例内容却忘记递增 sampleVersion 时失败）', async () => {

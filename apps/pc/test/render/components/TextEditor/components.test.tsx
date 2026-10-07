@@ -143,7 +143,7 @@ describe('TextEditor', () => {
   });
 });
 
-describe('EditorFileHeader：Markdown 源码 / 实时预览切换', () => {
+describe('EditorFileHeader：Markdown 始终实时渲染', () => {
   const props = {
     fileName: '排版示例.md',
     language: 'markdown',
@@ -156,19 +156,10 @@ describe('EditorFileHeader：Markdown 源码 / 实时预览切换', () => {
     onSave: vi.fn(),
   };
 
-  it('非 markdown 文件不显示切换', () => {
-    render(<EditorFileHeader {...props} onToggleLivePreview={vi.fn()} />);
+  it('文件头不再提供「源码 / 实时预览」切换', () => {
+    render(<EditorFileHeader {...props} />);
     expect(screen.queryByRole('group', { name: 'Markdown 显示方式' })).toBeNull();
-  });
-
-  it('点击未选中的一侧才切换', () => {
-    const onToggle = vi.fn();
-    render(<EditorFileHeader {...props} livePreview onToggleLivePreview={onToggle} />);
-    const live = screen.getByRole('button', { name: '实时预览' });
-    expect(live.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(live);
-    expect(onToggle).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '源码' }));
-    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: '源码' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '实时预览' })).toBeNull();
   });
 });

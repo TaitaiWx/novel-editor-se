@@ -1,7 +1,7 @@
 /**
  * 专注模式（CodeMirror 扩展）：
  * - 渐进淡化：当前段落全亮，上下各 3 段按距离逐级变淡，其余保持可读的低对比度，不模糊
- * - 打字机滚动：光标所在行始终保持在视口中部附近
+ * - 打字机滚动：光标所在行始终停在视口垂直中央，滚动条完全隐藏（见 typewriter.ts）
  *
  * 距离的计量单位：「文档行」，并跳过空行。
  * 小说正文一行就是一个自然段，长段落在屏幕上折成多行时仍是同一个文档行，整段使用同一档透明度，
@@ -23,13 +23,12 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
+import { typewriterMode } from './typewriter';
 
 /** 计算淡化档位的最大距离（超过即为最远一档） */
 export const FOCUS_MAX_DISTANCE = 3;
 /** 每个方向最多扫描的文档行数（连续很多空行时不再继续找） */
 export const FOCUS_SCAN_LIMIT = 64;
-/** 打字机滚动：上下各保留视口高度的比例，光标保持在中间约 16% 的区域内 */
-export const TYPEWRITER_MARGIN_RATIO = 0.42;
 
 /** 各档透明度：0 为当前段落，FAR 为其余文字（仍可阅读） */
 export const FOCUS_OPACITY = {
@@ -177,14 +176,6 @@ const blockWidgetFocus = ViewPlugin.fromClass(
   }
 );
 
-/** 打字机滚动：滚动到光标时上下预留大边距，使当前行停在视口中部 */
-const typewriterScrollMargins = EditorView.scrollMargins.of((view) => {
-  const height = view.scrollDOM.clientHeight;
-  if (height <= 0) return null;
-  const margin = Math.round(height * TYPEWRITER_MARGIN_RATIO);
-  return { top: margin, bottom: margin };
-});
-
 const opacityRule = (opacity: number) => ({ opacity: String(opacity) });
 
 const focusTheme = EditorView.theme({
@@ -210,7 +201,7 @@ export const focusLineDecorations = (enabled: boolean): Extension => {
     EditorView.editorAttributes.of({ class: 'cm-focus-mode' }),
     focusLinePlugin,
     blockWidgetFocus,
-    typewriterScrollMargins,
+    typewriterMode(),
     focusTheme,
   ];
 };

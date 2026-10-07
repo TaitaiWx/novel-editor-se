@@ -44,8 +44,6 @@ export interface TextEditorProps {
   virtualContent?: string | null;
   encoding?: string;
   characterHighlights?: CharacterHighlightPattern[];
-  /** Markdown 实时渲染默认开关（设置中心）；文件头可临时切换 源码 / 实时预览 */
-  markdownLivePreview?: boolean;
   scrollToLine?: ScrollToLineRequest | null;
   transientHighlightLine?: TransientHighlightLineRequest | null;
   replaceLineRequest?: ReplaceLineRequest | null;
@@ -61,4 +59,6 @@ export interface TextEditorProps {
   onScrollProcessed?: () => void;
   onTransientHighlightProcessed?: () => void;
   settingsComponent?: React.ReactNode;
+  /** 未打开文件时空状态里的额外操作（如「灵感抽签」） */
+  emptyStateActions?: React.ReactNode;
 }

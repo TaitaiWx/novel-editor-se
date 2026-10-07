@@ -109,15 +109,12 @@
       background: transparent;
     }
 
-    :global(.cm-scroller) {
-      padding-top: 34vh;
-      padding-bottom: 38vh;
-    }
-
+    // 打字机留白（上下各约半屏）与隐藏滚动条在 typewriter.ts 的 CodeMirror 主题中定义
     :global(.cm-content) {
       max-width: 860px;
       margin: 0 auto;
-      padding: 0 8px;
+      padding-left: 8px;
+      padding-right: 8px;
       font-size: 17px;
       line-height: 1.95;
       letter-spacing: 0.2px;
