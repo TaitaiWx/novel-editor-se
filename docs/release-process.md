@@ -18,6 +18,18 @@
 
 应用内展示仍然使用 `Canary`，但 Electron Updater 底层通道名使用 `alpha`。这是 Electron Builder 官方通道模型的一部分，不建议自定义第四套通道协议。
 
+### 通道由我们决定（用户不可选择）
+
+设置中心不提供更新通道、金丝雀计划、灰度分组或崩溃日志上传开关。通道只由安装包版本号决定（`apps/pc/src/main/auto-updater/channel.ts` 的 `resolveUpdateChannel`）：
+
+- 版本号带 `-alpha.` / `-canary.` → Canary（`alpha` 元数据）
+- 版本号带 `-beta.` → Beta
+- 其余 → Stable
+
+灰度比例只由服务端元数据的 `stagingPercentage` 与本机分桶决定。旧版本持久化在 `updater-state.json` 中的用户通道选择会在启动时被版本号推断的结果覆盖。
+
+内部测试需要强制某个通道时，用环境变量 `NOVEL_EDITOR_UPDATE_CHANNEL=stable|beta|canary` 启动应用（非法值忽略）；不提供任何界面入口。用户可以通过应用菜单「检查更新…」或设置中心「关于 → 检查更新」手动检查。
+
 ### 版本指针
 
 版本指针不是单独维护的 JSON 文件，而是 Electron Builder 自动生成的官方更新元数据文件：

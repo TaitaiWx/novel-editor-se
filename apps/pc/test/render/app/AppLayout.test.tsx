@@ -161,7 +161,14 @@ const placeholder = (testId: string) => ({
 
 vi.mock('@/render/components/TitleBar', () => placeholder('title-bar'));
 vi.mock('@/render/components/FilePanel', () => placeholder('file-panel'));
-vi.mock('@/render/components/ContentPanel', () => placeholder('content-panel'));
+// ContentPanel 记录收到的 props，用于校验灵感入口（文件栏胶囊 / 空编辑器主操作）的接线
+const contentPanelProps: { current: Record<string, unknown> | null } = { current: null };
+vi.mock('@/render/components/ContentPanel', () => ({
+  default: (props: Record<string, unknown>) => {
+    contentPanelProps.current = props;
+    return <div data-testid="content-panel" />;
+  },
+}));
 vi.mock('@/render/components/RightPanel', () => placeholder('right-panel'));
 vi.mock('@/render/components/StatusBar', () => placeholder('status-bar'));
 vi.mock('@/render/components/ContextMenu', () => placeholder('context-menu'));
@@ -172,7 +179,11 @@ vi.mock('@/render/components/AboutDialog', () => placeholder('about'));
 vi.mock('@/render/components/VersionTimeline', () => placeholder('versions'));
 vi.mock('@/render/components/DiffEditor', () => placeholder('diff'));
 vi.mock('@/render/components/InspirationDialog', () => placeholder('inspiration'));
-vi.mock('@/render/components/InspirationButton', () => placeholder('inspiration-button'));
+vi.mock('@/render/components/InspirationButton', () => ({
+  default: ({ variant = 'pill', shortcut }: { variant?: string; shortcut?: string }) => (
+    <div data-testid={`inspiration-button-${variant}`} data-shortcut={shortcut} />
+  ),
+}));
 vi.mock('@/render/components/RightPanel/AIAssistantDialog', () => ({
   AIAssistantDialog: () => null,
 }));
@@ -296,5 +307,23 @@ describe('App 卡片式三栏布局', () => {
       'appMainWithStatusBar'
     );
     expect(screen.queryByTestId('status-bar')).toBeNull();
+  });
+
+  it('灵感入口：编辑器文件栏胶囊 + 空编辑器主操作，都带当前快捷键', async () => {
+    render(<App />);
+    await screen.findByTestId('right-panel');
+    const props = contentPanelProps.current as Record<string, React.ReactNode>;
+    const { getByTestId } = render(
+      <>
+        {props.editorHeaderActions}
+        {props.emptyStateActions}
+      </>
+    );
+    expect(getByTestId('inspiration-button-pill').getAttribute('data-shortcut')).toBe(
+      'Mod+Shift+Y'
+    );
+    expect(getByTestId('inspiration-button-primary').getAttribute('data-shortcut')).toBe(
+      'Mod+Shift+Y'
+    );
   });
 });

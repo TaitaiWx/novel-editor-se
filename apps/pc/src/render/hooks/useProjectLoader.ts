@@ -308,11 +308,14 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
     };
   }, [loadDefaultPath]);
 
-  // 应用已运行时，`ne open <path>` 等二次启动由主进程转发到这里打开对应目录
-  React.useEffect(() => {
-    const ipc = window.electron?.ipcRenderer;
-    if (!ipc) return;
-    const dispose = ipc.on('open-folder-request', async (_event: unknown, targetPath: string) => {
+  /**
+   * 按路径打开文件夹：应用菜单「打开最近使用」、项目菜单「打开最近使用」、
+   * `ne open <path>` 二次启动转发（open-folder-request）共用
+   */
+  const handleOpenFolderPath = useCallback(
+    async (targetPath: string) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc || !targetPath) return;
       setIsLoading(true);
       const gen = beginLoad();
       try {
@@ -320,6 +323,7 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
         const result = await ipc.invoke('refresh-folder', targetPath);
         if (!isLatestLoad(gen)) return;
         if (result) {
+          await ipc.invoke('add-recent-folder', result.path);
           setFolderPath(result.path);
           applyFolderTree(result);
           setWorkspaceProjectName(null);
@@ -331,28 +335,39 @@ export function useProjectLoader(ctx: UseProjectLoaderContext) {
       } finally {
         setIsLoading(false);
       }
+    },
+    [
+      initializeProjectStore,
+      toast,
+      beginLoad,
+      isLatestLoad,
+      setIsLoading,
+      setFolderPath,
+      applyFolderTree,
+      setWorkspaceProjectName,
+      setOpenTabs,
+      setActiveTab,
+    ]
+  );
+
+  // 应用已运行时，`ne open <path>` 等二次启动由主进程转发到这里打开对应目录
+  React.useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const dispose = ipc.on('open-folder-request', (_event: unknown, targetPath: string) => {
+      void handleOpenFolderPath(targetPath);
     });
     return () => {
       if (typeof dispose === 'function') dispose();
     };
-  }, [
-    initializeProjectStore,
-    toast,
-    beginLoad,
-    isLatestLoad,
-    setIsLoading,
-    setFolderPath,
-    applyFolderTree,
-    setWorkspaceProjectName,
-    setOpenTabs,
-    setActiveTab,
-  ]);
+  }, [handleOpenFolderPath]);
 
   return {
     initializeProjectStore,
     refreshCurrentFolder,
     loadDefaultPath,
     handleOpenLocal,
+    handleOpenFolderPath,
     handleOpenSampleData,
   };
 }

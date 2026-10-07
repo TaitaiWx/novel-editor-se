@@ -138,7 +138,8 @@ const App: React.FC = () => {
   } = tabs;
   const { handleViewportSnapshotChange } = editorSession;
   const { handleAppSettingsChange, handleToggleThousandCharMarkers } = settingsActions;
-  const { refreshCurrentFolder, handleOpenLocal, handleOpenSampleData } = loader;
+  const { refreshCurrentFolder, handleOpenLocal, handleOpenFolderPath, handleOpenSampleData } =
+    loader;
   const {
     handleCreateCharacter,
     handleCreateLoreEntry,
@@ -178,6 +179,7 @@ const App: React.FC = () => {
     handleScrollProcessed,
     handleTransientHighlightProcessed,
     handleScrollToLine,
+    handleOpenSourceLocation,
     handleReplaceLineText,
     handleDiffRequest,
     handleCloseDiff,
@@ -279,6 +281,7 @@ const App: React.FC = () => {
                 onCreateGrowthSheet={() => void growthEntry.handleCreateGrowthSheet()}
                 onRefresh={refreshCurrentFolder}
                 onOpenFolder={handleOpenLocal}
+                onOpenRecentFolder={(path) => void handleOpenFolderPath(path)}
                 onRenameProject={(name) => void handleRenameProject(name)}
                 onImportFile={handleImportFile}
                 onCollapse={handleCollapseSidebar}
@@ -326,7 +329,6 @@ const App: React.FC = () => {
                 reloadToken={editorReloadToken}
                 encoding={encoding}
                 showThousandCharMarkers={appSettings.general.showThousandCharMarkers}
-                markdownLivePreview={appSettings.general.markdownLivePreview}
                 thousandCharMarkerStep={appSettings.general.thousandCharMarkerStep}
                 formatChapterShortcut={appSettings.shortcuts.formatChapter}
                 characterHighlights={editorCharacterHighlights}
@@ -337,6 +339,12 @@ const App: React.FC = () => {
                 editorViewRef={editorViewRef}
                 editorHeaderActions={
                   <InspirationButton shortcut={appSettings.shortcuts.openInspiration} />
+                }
+                emptyStateActions={
+                  <InspirationButton
+                    variant="primary"
+                    shortcut={appSettings.shortcuts.openInspiration}
+                  />
                 }
                 viewportSnapshots={initialViewportSnapshots}
                 onViewportSnapshotChange={handleViewportSnapshotChange}
@@ -400,6 +408,7 @@ const App: React.FC = () => {
                     onToggle={handleToggleRightPanel}
                     onPopOut={handlePopOutRightPanel}
                     onScrollToLine={handleScrollToLine}
+                    onOpenSourceLocation={handleOpenSourceLocation}
                     onReplaceLineText={handleReplaceLineText}
                     folderPath={workScopePath}
                     dbReady={dbReady}

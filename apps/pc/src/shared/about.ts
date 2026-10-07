@@ -30,7 +30,7 @@ export interface AboutInfo {
   productName: string;
   version: string;
   releaseChannel: ReleaseChannel;
-  /** 更新通道与灰度分组（设置中心「更新」分组使用，关于窗口不展示） */
+  /** 更新通道与灰度分组（只写进日志包 diagnostics.json，界面不展示，用户不可选择） */
   updateChannel: AboutUpdateChannel;
   rollout: AboutRolloutInfo;
   deviceId: string;
@@ -46,12 +46,6 @@ export const RELEASE_CHANNEL_LABELS: Record<ReleaseChannel, string> = {
   alpha: '金丝雀版',
 };
 
-export const UPDATE_CHANNEL_LABELS: Record<AboutUpdateChannel, string> = {
-  stable: '正式版（stable）',
-  beta: '测试版（beta）',
-  canary: '金丝雀（canary）',
-};
-
 export const PLATFORM_LABELS: Record<string, string> = {
   darwin: 'macOS',
   win32: 'Windows',
@@ -64,15 +58,6 @@ export function inferReleaseChannel(version: string): ReleaseChannel {
   if (lower.includes('-alpha.') || lower.includes('-canary.')) return 'alpha';
   if (lower.includes('-beta.')) return 'beta';
   return 'stable';
-}
-
-/** 灰度分组的可读描述 */
-export function describeRollout(rollout: AboutRolloutInfo): string {
-  const bucket = `分桶 ${rollout.bucket}`;
-  if (rollout.percentage === null || rollout.eligible === null) {
-    return `${bucket} · 当前为全量发布`;
-  }
-  return `${bucket} · 灰度 ${rollout.percentage}% · ${rollout.eligible ? '已命中' : '未命中'}`;
 }
 
 function parseDate(iso: string | null): Date | null {

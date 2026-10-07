@@ -147,6 +147,15 @@ export function buildApplicationMenuTemplate(
         { label: '查找', click: () => sendToRenderer(APP_MENU_EVENTS.find) },
         acc('find')
       ),
+      separator,
+      // 加速键可在设置中心自定义，由渲染进程经 menu-sync-shortcuts 同步
+      withAccelerator(
+        {
+          label: '灵感抽签…',
+          click: () => sendToRenderer(APP_MENU_EVENTS.openInspiration),
+        },
+        toMenuAccelerator(options.bindings.openInspiration)
+      ),
     ],
   });
 

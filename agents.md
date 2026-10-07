@@ -82,6 +82,8 @@ packages/
   basic-algorithm/        # 大纲、人物、分块、diff 等算法
   helpers/                # 通用工具函数
   components/             # 共享 UI 组件
+  ai/                     # AI Provider 抽象（文本流式 / 异步视频任务）、上下文组装器、续写与分镜提示词（纯 TS）
+  video/                  # 分镜模型、视频任务状态机与队列、落盘布局、费用钩子；./stitch 为渲染进程样片拼接（WebCodecs）
 docs/                     # 设计与流程文档（发布、自动更新、SQLite、性能等）
 ```
 
@@ -105,25 +107,56 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 
 ### Markdown 实时渲染（编辑器）
 
-- 类 Typora：.md / .markdown 文件中光标所在行（行内语法）或所在块（表格、公式块、代码块）显示源码，其余位置就地渲染；.txt 等不受影响。设置中心「通用 → Markdown 实时渲染」（`general.markdownLivePreview`，默认开）为默认值，文件头「源码 / 实时预览」可临时切换
+- 类 Typora：.md / .markdown 文件**始终**实时渲染，光标所在行（行内语法）或所在块（表格、公式块、代码块）显示源码，其余位置就地渲染；没有「源码 / 实时预览」切换，也没有设置项（旧设置里的 `general.markdownLivePreview` 读取时丢弃）。.txt 等其他格式保持纯文本，不做任何渲染
 - 代码在 `TextEditor/live-preview/`，入口模块经 `editor-runtime.ts` 的 `loadMarkdownLivePreview()` 懒加载（KaTeX 单独分包）；语法树来自 markdown 语言扩展（GFM + `math-syntax.ts` 的 `$...$` / `$$...$$`）
 - 装饰放在 StateField（跨行替换会影响行高，只能直接提供），只构建「可见范围 + 余量」内的顶层块；文档 / 选区变化时只重建受影响的块，IME 组字期间只映射不重建
-- 健壮性：每个块独立 try/catch，公式 / 表格 widget 自带错误兜底（显示原文 + 「!」错误标记）；未闭合的 `$$` 在空行处结束。KaTeX 输出 MathML（无全局 CSS / 字体），结果按源码 LRU 缓存
+- 健壮性：每个块独立 try/catch，公式 / 表格 widget 自带错误兜底（显示原文 + 「!」错误标记）；未闭合的 `$$` 在空行处结束（公式块内不能有空行）。KaTeX 输出 MathML（无全局 CSS / 字体），结果按源码 LRU 缓存；比正文宽的展示公式与表格在自身内部横向滚动，不撑破版面。KaTeX 核心不支持 `multline` 与 mhchem 的 `\ce`（用 `aligned` / `\mathrm` 代替）
+- 复杂公式示例：示例作品集根目录 `公式示例.md`（对齐、矩阵、分段、求和积分极限、中文 `\text`、嵌套上下标、`\mathbb` / `\mathcal`、化学式、超宽公式，外加一条故意写错的公式）；`test/render/components/TextEditor/latex-demo.test.ts` 用编辑器同一套语法逐条渲染，除那条坏公式外必须全部成功
+- 自定义小说格式（Markdown + 指令，`:char[…]` / `::video{…}` / `:::scene{…}`）的设计见 `docs/novel-format.md`（只有设计，未实现）
 - ⌘/Ctrl + 点击链接：网址经 `open-external-url`（主进程只放行 http(s) / mailto），本地路径经 `open-in-system-app`；图片按当前文件目录解析，经 `read-file-binary` 读取
 - 性能基准见 `test/render/components/TextEditor/live-preview-view.test.ts`（10 万行 / 5MB 文档每视口构建远低于 16ms）
+
+### 专注模式（编辑器）
+
+- 渐进淡化在 `TextEditor/focus-mode.ts`（当前段落全亮，上下各 3 段逐级变淡，不模糊）；打字机滚动与隐藏滚动条在 `TextEditor/typewriter.ts`，只在专注模式启用
+- 滚动条完全隐藏（`cm-hide-scrollbar`：`scrollbar-width: none` + `::-webkit-scrollbar` 隐藏），滚轮 / 键盘照常滚动
+- 光标所在行始终停在视口垂直中央：`.cm-content` 上下留白 =（视口高度 − 行高）/ 2（measure 后写入 CSS 变量 `--cm-typewriter-pad`，未测量前回退 50vh），首行 / 末行也能居中；进入专注模式、窗口尺寸变化、光标不在已渲染范围时用 `EditorView.scrollIntoView(head, { y: 'center' })`，其余（键入、方向键、翻页、点击）在下一帧测量光标与中线的距离，容差（约 1/3 行高）内不滚动，超出则平滑滚动（`prefers-reduced-motion` 时直接跳转）；拖选期间不居中，松开鼠标约 220ms 后再居中（不干扰双击）
 
 ### 右侧「大纲」面板 / AI 上下文 / 灵感
 
 - 右侧面板（`RightPanel`，标题「大纲」）只有 目录 / 章纲 / 卷纲 三个视图（`StorylineView` 的 `STORYLINE_MODES`，默认目录），可弹出为独立窗口或折叠（`collapseRightPanelOnStartup`）
+- 卷纲（`RightPanel/VolumePlanView/`）零输入：读取当前章所在卷（选中卷时为该卷，作品级为整部作品）的全部章节，按「第X幕 / 第X场」标记推导 幕 → 章 → 关键节拍（无场景标记时依次用 章纲 → 小标题 → 开篇句），没有幕标记时按章数自动套结构模板（≤3 章三幕式 / 4–8 章起承转合 / ≥9 章英雄之旅，「换一种结构」切换）。唯一输入是可选的「这一卷想写什么？」+「生成卷纲」（开启 AI 走 `ai-request`，否则 / 解析失败时按模板确定性生成幕说明与空白章建议）。同一份数据派生 列表 / 节奏（张力启发式）/ 人物线（人物库名字 + 别名出场）/ 伏笔；点击节拍就地改写、拖拽排序、「插入到章纲」追加到该章章纲。纯算法在 `packages/basic-algorithm/src/volume-plan/`；作者覆盖层存 settings `novel-editor:volume-plan:<卷目录>`，首次打开时从旧版剧情板 `novel-editor:plot-board:<作品>` 迁移（旧键不删）
 - 当前作用域（作品 / 卷 / 章）的 AI 人物 / 设定 / 资料上下文在 AI 助手对话框顶部的「上下文」分区（`RightPanel/AssistantContextSection`，默认折叠只显示计数；数据与动作由 `hooks/useAssistantContext.ts` 组装，复用 `useScopedAssistantGeneration` / `useChapterMaterials`）；资料文件右键菜单也可「关联到当前章 / 从当前章移除」
-- 灵感抽签（`components/InspirationDialog`）：编辑器文件栏「灵感」按钮（`InspirationButton`，经 `ContentPanel` 的 `editorHeaderActions` 插槽）或 `Mod+Shift+Y`（设置中心可改）打开；「抽一签」零输入抽出 人物 / 地点 / 冲突，可单张换签、插入到光标处、复制、交给 AI 扩写；词源 / 我的词池 / 历史收在「更多选项」。纯函数在 `inspiration.ts`；存储复用三签卡（词池 `novel-editor:story-idea-term-pool:<作品>`，历史为 story_idea_card 行，题眼签存人物、变形签存地点、冲突签存冲突），大纲版本的「回到灵感」按卡片 id 回填
+- 灵感抽签（`components/InspirationDialog`）：入口：编辑器文件栏最左侧的「💡 灵感」胶囊按钮（`InspirationButton` 图标 + 文字，经 `ContentPanel` 的 `editorHeaderActions` 插槽）、未打开文件时编辑器空状态的主操作「灵感抽签」（`variant="primary"`，经 `emptyStateActions` → `TextEditor` → `EmptyState.actions`）、应用菜单「编辑 → 灵感抽签…」（`APP_MENU_EVENTS.openInspiration`）、`Mod+Shift+Y`（设置中心可改，经 `menu-sync-shortcuts` 同步到菜单加速键）；弹窗按钮层级：未抽时整行主按钮「抽一签」，抽出后左侧文字按钮「全部重抽」、右侧 复制 / 交给 AI 扩写（次要）+「插入到光标处」（主操作），三张签等高、词条均衡换行（`text-wrap: balance`），窄窗口单列；「抽一签」零输入抽出 人物 / 地点 / 冲突，可单张换签、插入到光标处、复制、交给 AI 扩写；词源 / 我的词池 / 历史收在「更多选项」。纯函数在 `inspiration.ts`；存储复用三签卡（词池 `novel-editor:story-idea-term-pool:<作品>`，历史为 story_idea_card 行，题眼签存人物、变形签存地点、冲突签存冲突），大纲版本的「回到灵感」按卡片 id 回填
 
 ### 关于 / 日志上传
 
 - 关于窗口（`AboutDialog`，约 380px 小窗、不滚动）与设置中心「关于」分区共用 `components/AboutContent`，只展示：图标 + 名称 + 版本（通道徽标）、「首次运行 · 本次已运行」（主进程启动时间经 `get-about-info` 返回，每分钟刷新）、设备 ID（点击复制，提示「设备 ID 已复制」）、「上传日志」按钮。运行环境、数据目录等诊断信息不在界面展示，统一写进日志包的 `diagnostics.json`
-- 更新通道（正式 / 测试 / 金丝雀）、检查更新与「崩溃时自动上传日志」开关在设置中心「通用 → 更新与诊断」（`AppSettingsCenter/UpdateGroup`）
+- 更新通道、金丝雀 / 灰度分组、崩溃日志上传**由我们决定，不对用户展示也不可选择**（设置中心没有「更新与诊断」分组）：通道按安装包版本号推断（`-alpha.` / `-canary.` → canary、`-beta.` → beta、其余 stable，`main/auto-updater/channel.ts` `resolveUpdateChannel`），灰度只看服务端元数据 `stagingPercentage`；旧版持久化在 `updater-state.json` 里的用户通道选择启动时被覆盖。内部测试可用环境变量 `NOVEL_EDITOR_UPDATE_CHANNEL=stable|beta|canary` 强制通道（详见 `docs/release-process.md`）。「检查更新」在应用菜单与设置中心「关于」分区
+- 崩溃日志上传始终开启（shared `shouldUploadCrashReport`：只在配置了上传地址时上传，否则只保存到 `userData/crash-reports/`）；旧版开关文件 `userData/log-upload-settings.json` 被忽略并在注册 IPC 时删除
 - 日志上传在主进程 `src/main/log-upload/`：白名单打包（diagnostics.json + electron-log 日志 + 小状态文件，主目录脱敏为 `~`，绝不包含作品正文与 SQLite 数据库）→ 已配置地址时上传（`NOVEL_EDITOR_LOG_UPLOAD_URL` 或 `config.ts` 常量，默认为空）→ 未配置或失败时保存到「下载」目录并定位。崩溃钩子只在配置了地址且开关开启时上传，否则只保存到 `userData/crash-reports/`（最多 5 个），10 分钟最多一次，E2E / 烟雾测试下不安装
-- 服务端接口约定（请求头、请求体、响应、大小限制、隐私）见 `docs/log-upload.md`；IPC 通道 `log-upload-run` / `log-upload-get-settings` / `log-upload-set-settings`（`main/handlers/log-upload.ts`）
+- 服务端接口约定（请求头、请求体、响应、大小限制、隐私）见 `docs/log-upload.md`；IPC 通道 `log-upload-run`（`main/handlers/log-upload.ts`）
+
+### AI 服务 / 场景视频基础设施
+
+设计见 `docs/roadmap-ai-creative.md`（第一期基础设施已完成，功能界面在后续分期）。
+
+- **`@novel-editor/ai`**（纯 TS，不依赖 Electron / Node 内置模块；GUI 主进程与 CLI 共用）
+  - Provider 抽象（`types.ts`）：`TextProvider { complete, stream(AsyncIterable), testConnection }`、`VideoProvider { submitTask, pollTask, fetchResult, cancelTask?, testConnection }`，均支持 `AbortSignal`；注册表 `createDefaultRegistry()`（`registry.ts`）
+  - 内置实现：`openai-compatible`（原 `handlers/ai.ts` 的 `/chat/completions` 逻辑，请求体 / 默认值 / 错误文案不变）、`grok`（xAI，`https://api.x.ai/v1`，复用 OpenAI 兼容协议，默认模型 `grok-4` 可配置）、`minimax-video`、`seedance-video`（火山方舟）。各厂商接口地址、字段映射与「文档未写明的假设」集中在 `providers/*.ts` 文件头与 `*_ENDPOINTS` / `*_DEFAULTS` 常量里
+  - 基础设施：`sse.ts`（分片 / CRLF / 多字节安全的 SSE 解析、空闲超时、取消）、`http.ts`（超时 + 取消合并、确定性指数退避重试，只重试 限流 / 网络 / 超时 / 5xx；视频提交不重试，避免重复扣费）、`errors.ts`（`AIError.kind`：auth / quota / rate-limit / content-safety / network / timeout / server / bad-request / invalid-response / not-configured / aborted / unknown，MiniMax `base_resp.status_code`、方舟 `error.code` 都映射到这里）
+  - `@novel-editor/ai/context`：`assembleWritingContext({ chapterText, cursor, outline, characters, growth, rules, lore, budget })`，按 token 预算确定性裁剪（规则 > 章纲 > 人物 > 成长 > 设定 > 后文各有上限，前文保留结尾并拿剩余预算，用不完再回填）；`@novel-editor/ai/prompts`：续写（`buildContinuationPrompt` / `cleanContinuationOutput`）与分镜（`buildStoryboardPrompt` / `parseStoryboardResponse`，校验用 video 包的 schema）
+- **`@novel-editor/video`**：分镜 `Storyboard / Shot` 与 `validateStoryboard`（容忍 AI 字段别名）、`STORYBOARD_JSON_SCHEMA`、Markdown 分镜表；视频任务状态机 `queued → submitted → running → succeeded / failed / cancelled`（`transitionVideoTask`，可重试错误按退避重新排队，手动 `retry`）；纯调度 `planVideoQueue` / 重启恢复 `resumeVideoTasks`；落盘布局 `videoOutputLayout`（`<作品>/资料/视频/<章>/<场景>/镜头N-vX.mp4` + `镜头N-vX.prompt.json`，`file` 是相对作品目录的完整路径）；费用钩子 `createCostRegistry` / `checkVideoBudget`（不内置价格，单价由作者在设置中心填写）。`@novel-editor/video/stitch`（改编自 video-maker 的 video-core）在渲染进程把镜头图片 / 视频拼成样片（Canvas2D + WebCodecs + mp4-muxer / webm-muxer），**主进程不得引入 `./stitch`**
+- **主进程**（`src/main/ai/`、`src/main/video/`）
+  - 密钥：`CredentialStore`（`ai/credential-store.ts`）用 Electron `safeStorage` 按 Provider 加密保存到 `userData/ai-credentials.json`（0600，应用全局、不随项目）；系统没有可用钥匙串（或 Linux `basic_text`）时以受限权限文件保存并在设置中心提示。非密钥配置（地址 / 模型 / 启用 / 每秒单价、视频并发与预算）在 `userData/ai-providers.json`；默认 AI（openai-compatible）的地址 / 模型 / 温度仍在设置中心 JSON（`novel-editor:settings-center`）
+  - 迁移：每次打开数据库（`db-init` / `db-init-default` → `ai/runtime.ts` `handleDatabaseOpened`）把设置 JSON 中的明文 `apiKey` 移入安全存储并删除明文（安全存储已有不同 Key 时以安全存储为准）；`db-settings-get` 返回前去掉 Key 并注入 `ai.hasApiKey`，`db-settings-set` 写入前把 Key 转存（`ai/settings-secrets.ts`）
+  - `invokeConfiguredAI`（`handlers/ai.ts`，成长推演、`ai-request` 等使用）改由 `ai/service.ts` 实现，签名、默认值与错误文案不变
+  - 视频任务：表 `video_tasks`（store `videoTaskOps`，在当前项目数据库）+ `video/runner.ts`（提交 → 轮询 → 后台下载，数据库打开后恢复轮询；下载前重新获取签名地址；先写 `.part` 再改名）；落盘路径经 `video/download.ts` `resolveInsideWork` 校验（拒绝 `..` / 绝对路径 / 经符号链接逃出作品目录），提交时作品目录必须存在且位于该窗口已上报的工作区内
+- **IPC**（白名单在 `preload.ts`，类型在 `render/types/ai-api.ts`，协议在 `shared/ai.ts`）：`ai-providers-list / get / set / test`、`ai-complete`、`ai-stream-start / cancel`（片段经 `ai-stream-event` 只推给发起的窗口，窗口关闭自动取消，每窗口最多 4 个并发流）、`video-task-submit / list / cancel / retry`、`video-settings-get / set`；任务变化广播 `video-task-updated`
+- **安全规则**：渲染进程永远拿不到 API Key 明文——只能写入（`ai-providers-set`），读取只返回 `configured`；不得把 Key 写进设置 JSON、日志、prompt.json 或错误信息；主进程对渲染进程传入的消息、模型、地址（只允许 http(s)、不含账号密码）、作品目录与镜头参数做白名单校验
+- **设置中心「AI」**（`AppSettingsCenter/AiSection`）：默认 AI 的 Key 用只写输入（`ApiKeyField`：保存 Key / 清除 / 测试连接）；「更多 AI 服务」（`ProviderList`）列出 Grok / MiniMax / Seedance：启用、接口地址、模型、只写 Key、测试连接、视频每秒单价；「清除 AI 设置 / 全部清空」同时清除安全存储中的默认 Key
+- **CLI**：`ne ai continue` / `ne video storyboard` / `ne video validate`（见下方 CLI 命令）。CLI 没有 safeStorage，Key 读取环境变量 `NOVEL_EDITOR_<PROVIDER>_API_KEY`（连字符转下划线，例如 `NOVEL_EDITOR_GROK_API_KEY`），可选 `NOVEL_EDITOR_<PROVIDER>_BASE_URL` / `_MODEL`；没有 Key 时只输出提示词与 JSON Schema 交给 AI agent
+- 测试：Provider 映射与错误用 mock fetch（`packages/ai/test`），CLI 用本地 mock HTTP 服务（`apps/cli/test/ai-video.test.ts`），E2E `apps/pc/e2e/ai-providers.e2e.ts` 用本地 mock 服务验证 设置 → 保存 Key → 测试连接 → 流式通道
 
 ### 应用菜单 / 快捷键
 
@@ -131,9 +164,9 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
   - macOS：「小说编辑器」（关于、检查更新…、设置… ⌘,、服务、隐藏 / 隐藏其他 / 全部显示、退出）/ 文件 / 编辑 / 视图 / 窗口 / 帮助
   - Windows / Linux：没有应用菜单，设置… 与 退出 在「文件」末尾，检查更新… 与 关于 在「帮助」末尾
   - 文件：新建文件 ⌘N（与按键一致：新建未命名标签）、打开文件夹… ⌘O、打开最近使用 ▸（`recent-folders` 变化时自动重建，点击走 `open-folder-request`）、保存 ⌘S、另存为… ⇧⌘S、导出项目… ⇧⌘E
-  - 编辑：撤销 / 重做 / 剪切 / 复制 / 粘贴 / 全选（原生 role）、查找 ⌘F；视图：切换侧边栏、切换右侧面板、专注写作、放大 / 缩小 / 实际大小、切换全屏（macOS ⌃⌘F；Win/Linux 不设加速键，F11 留给专注模式），开发模式另有 重新加载 / 开发者工具；窗口：最小化 ⌘M、缩放、前置全部窗口；帮助：快捷键说明、更新日志、上传日志…、问题反馈（GitHub issues），打包版本另有 切换开发者工具
+  - 编辑：撤销 / 重做 / 剪切 / 复制 / 粘贴 / 全选（原生 role）、查找 ⌘F、灵感抽签… ⇧⌘Y（加速键随设置中心同步）；视图：切换侧边栏、切换右侧面板、专注写作、放大 / 缩小 / 实际大小、切换全屏（macOS ⌃⌘F；Win/Linux 不设加速键，F11 留给专注模式），开发模式另有 重新加载 / 开发者工具；窗口：最小化 ⌘M、缩放、前置全部窗口；帮助：快捷键说明、更新日志、上传日志…、问题反馈（GitHub issues），打包版本另有 切换开发者工具
 - 所有名称用 `APP_DISPLAY_NAME`，菜单里不得出现 `app.name`（dev 下是 `@novel-editor/pc`）；不使用英文 role 菜单（`editMenu` / `fileMenu` 等），也不再有隐藏的「快捷键」菜单——每个快捷键都对应一个可见菜单项或渲染进程 keydown
-- 一致性：菜单加速键与快捷键总览共用 `shortcuts/config.ts`（`getShortcutConfigs()`），`getAllShortcuts.ts` 只额外列出纯渲染进程按键；设置中心可自定义的「切换侧边栏 / 专注写作」由渲染进程经 `menu-sync-shortcuts` 同步到菜单（`useAppMenu`，主进程按白名单校验）。新增快捷键时同时改 config / 渲染进程 keydown / 总览，`test/main/app-menu.test.ts` 会校验菜单每个加速键都在总览中
+- 一致性：菜单加速键与快捷键总览共用 `shortcuts/config.ts`（`getShortcutConfigs()`），`getAllShortcuts.ts` 只额外列出纯渲染进程按键；设置中心可自定义的「切换侧边栏 / 专注写作 / 灵感抽签」由渲染进程经 `menu-sync-shortcuts` 同步到菜单（`useAppMenu`，主进程按白名单校验）。新增快捷键时同时改 config / 渲染进程 keydown / 总览，`test/main/app-menu.test.ts` 会校验菜单每个加速键都在总览中
 - 渲染进程也处理的按键（⌘N / ⌘S / ⌘F / ⌘Z / ⌘Q 等）必须 `preventDefault`：Electron 只把渲染进程未处理的按键交给菜单，因此不会重复执行，焦点不在编辑器时由菜单兜底
 - 菜单 → 渲染进程事件：`shortcut-*`、`menu-export-project`、`menu-open-about`，以及 `src/shared/app-menu.ts` 的 `APP_MENU_EVENTS`（设置、检查更新、视图切换、查找、快捷键说明、更新日志、上传日志），渲染进程统一在 `hooks/useAppMenu.ts` 处理；保存 / 另存为 / 查找作用于最近聚焦的编辑器（`TextEditor/active-editor.ts`）
 - macOS 菜单栏标题来自 bundle 的 CFBundleName：打包时 `scripts/mac-localized-app-name.mjs`（electron-builder `afterPack`）在每个 `*.lproj` 写入 `InfoPlist.strings`，显示「小说编辑器」。不要改 `productName` 或用 `mac.extendInfo` 覆盖 CFBundleName——前者改变安装路径 / 更新产物，后者会让 Electron 找不到 `<名称> Helper.app` 而启动崩溃；`app.getName()` 与 userData 由 package.json 决定，不受影响。开发模式（`pnpm dev`）菜单栏标题固定为「Electron」（来自 node_modules 中 Electron.app 的 Info.plist），属预期，不要修改 node_modules
@@ -207,10 +240,10 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - 驱动: `apps/pc/e2e/support/` 下的极简 CDP 客户端（Node 24 内置 `WebSocket` + `fetch`）
   - `app.ts`: 用 `apps/pc/node_modules` 中的 electron 启动 `dist/main.mjs`，附加 `--remote-debugging-port=<空闲端口>`，最后一个参数是临时 fixture 项目目录（由 `launch-folder.ts` 打开）；环境变量 `NOVEL_EDITOR_E2E=1`（复用烟雾测试的 userData 隔离 `NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR`，但就绪后不自动退出）、`NOVEL_EDITOR_DISABLE_AUTO_UPDATER=1`；附加 `--disable-renderer-backgrounding` 等参数并关闭窗口 `backgroundThrottling`（窗口被遮挡时 Chromium 会节流定时器、暂停 rAF，曾导致用例偶发变慢 / 超时）；结束时整组杀进程并删除临时目录
   - `page.ts`: `evaluate` / `waitFor` / `waitUntil`（轮询磁盘等 Node 侧条件）/ `click`（按 CSS 选择器或可见文本定位，`Input.dispatchMouseEvent` 真实点击元素中心）/ `doubleClick`（clickCount 1 → 2，触发 dblclick）/ `type`（`Input.insertText`，适合中文）/ `press`（`Input.dispatchKeyEvent`）/ `screenshot`；同时收集 `console.error`、未捕获异常与 Log 错误
-  - `workbench.ts`: 本应用的高层操作（作品切换 `selectWork` / `currentWork`、打开「项目说明」弹层 `openProjectDocs`、行内重命名 `renameByDoubleClick` / `commitInlineRename`、顶部按钮顺序 `workspaceHeaderButtons`、展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
+  - `workbench.ts`: 本应用的高层操作（作品切换 `selectWork` / `currentWork`、打开项目菜单 `openProjectMenu` / 其中的「项目说明」分组 `openProjectDocs` / 菜单「刷新」`refreshWorkspace`、行内重命名 `renameByDoubleClick` / `commitInlineRename`、顶部按钮顺序 `workspaceHeaderButtons`、展开文件树、打开章节、读编辑器内容、状态栏统计、Prompt/确认对话框、右键菜单、右侧面板视图切换）
   - `fixture.ts`: 每次运行把示例作品集 `apps/pc/sample-data` 完整拷贝到临时目录（跳过本机数据库等运行产物，可用 `exclude` 去掉某些路径）；`FIXTURE_CHAPTERS` / `FIXTURE_CHAPTER_TREE` 指向其中的「星河旅人 / 第一卷-离乡」（先用 `selectWork` 在作品切换器选中 `FIXTURE_WORK`，正文树只有当前作品的 卷 → 章，没有 novels / 作品 / 未分卷 层级）；`FIXTURE_MATERIAL_DIR` / `FIXTURE_MEMORY_DIR` 是星河旅人自己的 `资料/`、`资料/记忆/`
   - `suite.ts`: `setupAppSuite()` 为一个 `*.e2e.ts` 注册启动 / 关闭、失败截图、控制台错误检查；另有 `openChapter`、`captureForReview`、成长档案选择器等通用操作
-- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、示例作品集开箱即用（欢迎使用、预置成长档案、种子人物 / 设定、幕剧、章纲）、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧「大纲」面板与专注模式、灵感抽签（工具栏按钮 → 抽一签 → 插入）、GUI 与 CLI 共享写作日志和会话状态、关于小窗口、资料长文件名、Markdown 实时渲染（排版示例.md：公式 / 表格渲染、坏公式隔离、光标处显示源码、源码 / 实时预览切换）、单实例转发）；`growth.e2e.ts` 用去掉 `novels/星河旅人/资料/记忆/` 的示例验证成长档案首次使用（开始使用、新建成长卡、引导、记一笔、提醒、总览、记忆库同步、人物详情入口）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据并写入种子人物；`sample-upgrade.e2e.ts` 验证本机旧版示例被备份并升级为新版
+- 场景: `apps/pc/e2e/app.e2e.ts` 共用一个 Electron 实例顺序执行（启动、示例作品集开箱即用（欢迎使用、预置成长档案、种子人物 / 设定、幕剧、章纲）、编辑与自动保存、撤销重做、文件新建/重命名/删除、字数统计、右侧「大纲」面板与专注模式（渐进淡化、隐藏滚动条、点击 / 方向键后光标行居中）、灵感抽签（文件栏「灵感」胶囊可见且在最左 → 抽一签 → 插入）、卷纲（零输入推导星河旅人第一卷的 幕 / 场，人物线显示林舟）、GUI 与 CLI 共享写作日志和会话状态、关于小窗口、资料长文件名、Markdown 实时渲染（排版示例.md：公式 / 表格渲染、坏公式隔离、光标处显示源码、文件头没有「源码 / 实时预览」切换）、复杂公式（公式示例.md：大量公式渲染、恰好一个错误标记、超宽公式横向滚动）、单实例转发）；`growth.e2e.ts` 用去掉 `novels/星河旅人/资料/记忆/` 的示例验证成长档案首次使用（开始使用、新建成长卡、引导、记一笔、提醒、总览、记忆库同步、人物详情入口）；`first-launch.e2e.ts` 验证首次启动自动打开示例数据并写入种子人物；`sample-upgrade.e2e.ts` 验证本机旧版示例被备份并升级为新版
 - 示例项目的作品名来自 `seed.json`（「示例作品集」），标题栏显示它而不是临时目录名
 - 新增场景: 在 `app.e2e.ts` 里加一个 `it`，开头自行把界面带到需要的状态（`openChapter`、`ensureRightPanelOpen` 等），结尾还原对 fixture 的修改；优先用 `aria-label` / `title` / `role` / 可见文本定位，确需稳定选择器时再给组件加 `data-testid`；不同 Electron 实例或需要干净状态的场景放到新的 `*.e2e.ts` 文件
 - 控制台: 每个用例结束时若出现非预期的控制台错误或未捕获异常会直接失败；确属可接受的错误加到 `ALLOWED_ISSUES` 并注明原因
@@ -223,7 +256,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 
 - **版本与升级**：`.novel-editor/sample.json` 的 `sampleVersion` 标记示例版本。用户首次打开时示例被拷贝到「文稿/Novel Editor/sample-data」；之后每次启动（以及打开示例前）若内置版本更高，旧副本会整体改名备份为 `sample-data-旧版-<时间>`（保留用户改动与数据库），再拷贝新版并提示一次备份位置（core `syncSeededDirectory`）。**修改示例内容后必须递增 `sampleVersion`**，否则老用户看不到新内容
 - **内容指纹**：`sample.json` 还记录 `contentHash`（对除 sample.json 与本机运行产物（core `isSeedRuntimeArtifact`）外的全部文件，按相对路径排序后对「路径 + 字节」做 sha256，文本文件按 LF 计算）。`sample-data.test.ts` 重新计算，不一致时失败并提示「示例内容已变更，请递增 sampleVersion 并更新 contentHash」。改完示例（包括运行 generate-sample-data.mts 之后）执行 `pnpm exec tsx apps/pc/scripts/sample-content-hash.mts --bump`（递增版本并刷新指纹；`--write` 只刷新指纹，不带参数只检查）。core `readSeedVersion` / `syncSeededDirectory` 只读 `sampleVersion`，忽略 `contentHash`
-- 结构遵循 `ne init`，资料跟随作品（v3）：`.novel-editor/config.json`（作品集名「示例作品集」）、`novels/星河旅人/第一卷-离乡|第二卷-星海/00N-*.md`（6 章，正文带「第X幕 / 第X场」供幕剧演示）、`novels/星河旅人/资料/`（设定笔记）、`novels/星河旅人/资料/素材/`（成对的 `xxx` / `xxx-alt` 媒体，演示预览与版本对比）、`novels/星河旅人/资料/文档示例/`（docx / pptx / xlsx，含一个故意损坏的 docx）、`novels/星河旅人/资料/记忆/`（成长档案：林舟 / 苏晴）、`novels/剑与诗/`（2 章）与它自己的 `novels/剑与诗/资料/`（江湖风物.md）和 `资料/记忆/`（小规则之书 + 沈砚）；项目根没有 `资料/`、根目录 `欢迎使用.md`（功能导览，引用的路径都必须存在）、根目录 `排版示例.md`（Markdown 实时渲染演示，含一个故意写错的公式，E2E 依赖）
+- 结构遵循 `ne init`，资料跟随作品（v3）：`.novel-editor/config.json`（作品集名「示例作品集」）、`novels/星河旅人/第一卷-离乡|第二卷-星海/00N-*.md`（6 章，正文带「第X幕 / 第X场」供幕剧演示）、`novels/星河旅人/资料/`（设定笔记）、`novels/星河旅人/资料/素材/`（成对的 `xxx` / `xxx-alt` 媒体，演示预览与版本对比）、`novels/星河旅人/资料/文档示例/`（docx / pptx / xlsx，含一个故意损坏的 docx）、`novels/星河旅人/资料/记忆/`（成长档案：林舟 / 苏晴）、`novels/剑与诗/`（2 章）与它自己的 `novels/剑与诗/资料/`（江湖风物.md）和 `资料/记忆/`（小规则之书 + 沈砚）；项目根没有 `资料/`、根目录 `欢迎使用.md`（功能导览，引用的路径都必须存在）、根目录 `排版示例.md`（Markdown 实时渲染演示，含一个故意写错的公式，E2E 依赖）、根目录 `公式示例.md`（复杂 LaTeX 演示，含一条故意写错的公式，E2E 与 `latex-demo.test.ts` 依赖）
 - 人物 / 设定 / 大纲存在 SQLite 中，且按作品目录的绝对路径区分，不能随包分发数据库。改为 `.novel-editor/seed.json`（沿用全量导出的行结构，路径相对项目根）：`novels` 每部作品一条，`folder_path` 指向作品目录（如 `novels/星河旅人`，省略表示项目根 = 旧版单作品格式），内容行用 `novel_id` 归属作品（只有一部作品时可省略）。主进程 `db-init` 后调用 store `seedProjectData`，按作品判断：某作品目录还没有作品记录时才写入，绝不覆盖用户数据；任何带 seed.json 的项目都适用
 - 各作品的 `资料/记忆/` 与 `seed.json` 由 `apps/pc/scripts/generate-sample-data.mts` 通过 core 成长记录器 API 生成（固定时间戳）。修改章节或成长事件后运行 `pnpm exec tsx apps/pc/scripts/generate-sample-data.mts`，不要手改这些文件
 - `apps/pc/test/main/sample-data.test.ts` 校验：配置与卷章顺序、E2E 依赖的开篇文本、生成文件逐字节一致、成长数据规范化与一致性检查无警告、事件章节正文确实提到该角色、seed.json 可导入、资料 / 成长档案 / 人物与设定按作品隔离、欢迎使用.md 中的路径都存在、没有垃圾 / 空文件 / 运行产物、总体积 < 2MB、打包过滤规则
@@ -244,7 +277,7 @@ Electron 应用有 3 个运行环境，各自对模块格式有不同要求，�
 - 实现: 命令层在 `apps/cli/src`（`parser.ts` 参数解析、`commands/*` 子命令、`daemon.ts` 守护进程），业务逻辑在 `packages/core`，不依赖 Electron
 - 构建: `pnpm build:cli`（或 `pnpm --filter @novel-editor/cli build`）→ `apps/cli/dist/index.mjs`，`bin` 注册为 `novel-editor` 与 `ne`；源码调试用 `pnpm cli <args>`
 - JSON 输出格式: 成功 `{ "ok": true, "data": ... }`，失败 `{ "ok": false, "error": { "code", "message", "hint?" } }`
-- 退出码: 0 成功 / 1 通用错误 / 2 用法错误 / 3 不存在 / 4 已存在 / 5 不在项目中 / 6 不支持或未找到 GUI / 7 daemon 未运行
+- 退出码: 0 成功 / 1 通用错误（含 AI 服务错误 `AI_ERROR`，`message` 前缀为错误类别，如 `[auth]`）/ 2 用法错误 / 3 不存在 / 4 已存在 / 5 不在项目中 / 6 不支持或未找到 GUI / 7 daemon 未运行
 - 未知命令/子命令/选项会给出「你是不是想输入」提示
 
 #### 项目目录约定（`ne init` 生成，GUI 同样识别）
@@ -280,7 +313,7 @@ ne open <path>                  # 用 GUI 打开指定文件夹/项目
 ne status                       # 输出当前项目状态（作品/字数、今日写作、GUI 打开的文件与未保存变更、daemon）
 ```
 
-- GUI 正文树与 CLI 同一口径：打开带 `.novel-editor/config.json` 的文件夹时，主进程 `refresh-folder` / `open-local-folder` 附带 core `readProjectLayout`（novelsDir + 作品列表），渲染进程 `utils/storyStructure.ts` 据此展示「作品 / 卷 / 章」（不显示 novels 容器），根目录文档（欢迎使用.md、README.md）收在文件面板顶部项目名旁的「项目说明」按钮里（带数量徽标，点击弹出文档列表，没有根目录文档时不显示），不计章数、不启用章节助手、不计入写作日志（core `isProjectDocumentPath`）；普通文件夹沿用按名称推断卷的规则，只把 README / 欢迎使用 这类说明文档（或子目录装着章节时根目录的非章节文档）视为项目文档。命名与排序（序号前缀、中文数字卷名）在 `packages/core/src/story-layout.ts`，GUI 通过 `@novel-editor/core/story-layout` 引入
+- GUI 正文树与 CLI 同一口径：打开带 `.novel-editor/config.json` 的文件夹时，主进程 `refresh-folder` / `open-local-folder` 附带 core `readProjectLayout`（novelsDir + 作品列表），渲染进程 `utils/storyStructure.ts` 据此展示「作品 / 卷 / 章」（不显示 novels 容器），根目录文档（欢迎使用.md、README.md）收在文件面板顶部项目菜单的「项目说明」分组里（带数量，没有根目录文档时不显示），不计章数、不启用章节助手、不计入写作日志（core `isProjectDocumentPath`）；普通文件夹沿用按名称推断卷的规则，只把 README / 欢迎使用 这类说明文档（或子目录装着章节时根目录的非章节文档）视为项目文档。命名与排序（序号前缀、中文数字卷名）在 `packages/core/src/story-layout.ts`，GUI 通过 `@novel-editor/core/story-layout` 引入
 - `ne status` 读取 `<project>/.novel-editor/session.json`（core `readGuiSession`）：GUI 渲染进程经 `gui-session-publish` IPC 防抖（500ms）上报打开的标签、当前文件、未保存文件，并每 60 秒心跳刷新；主进程补全 pid/版本/时间后写入。窗口销毁、切换文件夹时标记 `closed`
 - `--json` 下 `data.gui = { status, reason?, pid, appVersion, updatedAt, activeFile, openFiles, unsavedFiles }`；`status`: `active`（GUI 正在使用）/ `closed`（已关闭）/ `stale`（`reason`: `pid-not-alive` 进程已退出，或 `outdated` 超过 5 分钟未刷新）/ `none`（从未打开）。路径相对项目根，未命名标签为 `__untitled__:<名称>`
 - 未 `ne init` 的文件夹被 GUI 打开时，会话文件位于该文件夹的 `.novel-editor/`，在该目录执行 `ne status` 同样能看到
@@ -337,6 +370,22 @@ ne stats history [--days=7]     # 历史写作统计
   - 只统计正文文件（.md/.markdown/.txt），排除 `资料/`（项目根与各作品的 `<作品>/资料/`）与 `.novel-editor/`；项目根按 `.novel-editor/config.json` 向上查找，GUI 打开的文件夹未 `ne init` 时回退到该文件夹（`ne init` 后 CLI 即可读取）
   - 写作时长为估算：同一天相邻两次写入间隔不超过 10 分钟即计入（GUI 自动保存 2 秒一次，持续输入会被连续计时）
 - SQLite `writing_stats` 表与 `db-stats-*` IPC 为历史遗留，GUI 未使用；跨工具的每日写作统计以 writing-log.json 为唯一数据源
+
+#### AI 续写 / 场景分镜
+
+```bash
+ne ai continue <file> [--provider grok] [--chars N] [--length sentence|paragraph|long]
+               [--direction continue|conflict|wrap-up|<文字>] [--cursor N] [--outline <file>]
+               [--budget N] [--no-memory] [--prompt-only]   # 流式输出续写（不写回文件）
+ne video storyboard <file|--stdin> [--ratio 16:9] [--style 水墨] [--characters a:外貌,b]
+               [--min-shots 3 --max-shots 6] [--out board.json] [--prompt-only]
+                                                      # 场景 → 分镜（Markdown 分镜表 / --json）
+ne video validate <file|--stdin> [--ratio] [--out]    # 校验 AI 返回的分镜 JSON
+```
+
+- Key 来自环境变量 `NOVEL_EDITOR_<PROVIDER>_API_KEY`（CLI 不保存密钥）；没有 Key 或 `--prompt-only` 时输出 systemPrompt / prompt（分镜另有 schema），供 AI agent 执行
+- `ai continue` 的上下文与 GUI 同一实现（`@novel-editor/ai`）：前文 + 可选章纲文件 + 文件所属作品记忆库的核心规则与成长档案；人类可读模式边生成边输出，`--json` 返回清理后的 `data.text`；Ctrl+C 取消
+- 视频生成需要异步任务队列与落盘，只在 GUI 中进行
 
 #### 应用控制（daemon 模式）
 
@@ -409,6 +458,6 @@ ne growth apply-sim <角色> <file|--stdin> [--branch <id>] [--dry-run]
 
 所有 `ne growth` 子命令都接受 `--novel <作品>`（`-n`）：记忆库跟随作品。省略时在作品目录中执行即为该作品，否则为项目中唯一的作品；项目有多部作品时报错（退出码 2）并提示 `--novel`；项目还没有作品时提示先 `ne novel create`；`--novel 未归属` 指项目根的旧版资料。普通文件夹（没有 `ne init`）整体是一部作品，不能使用 `--novel`（退出码 5）。
 
-GUI 文件面板（`FilePanel`）顶部是作品切换器（`FilePanel/WorkSwitcher`：当前作品 + 下拉列表（章数）+「新建作品」），下面的正文（当前作品的卷 / 章）、角色、设定、成长档案、资料都只显示当前作品（搜索时跨作品显示结果）；右侧面板、工作区标签（角色 / 设定 / 成长档案）、知识导出、AI 助手同样作用于当前作品。当前作品状态在 `useWorkspaceState`（`workScope` / `workScopePath`，纯函数在 `utils/workScope.ts`），切换与新建在 `hooks/useWorkScope.ts`：按项目记住上次选择（localStorage），打开另一部作品的章节时自动切换。根目录说明文档在项目名旁的「项目说明」按钮弹层（`FilePanel/ProjectDocsButton`）。
+GUI 文件面板（`FilePanel`）顶部是作品切换器（`FilePanel/WorkSwitcher`：当前作品 + 下拉列表（章数）+「新建作品」），下面的正文（当前作品的卷 / 章）、角色、设定、成长档案、资料都只显示当前作品（搜索时跨作品显示结果）；右侧面板、工作区标签（角色 / 设定 / 成长档案）、知识导出、AI 助手同样作用于当前作品。当前作品状态在 `useWorkspaceState`（`workScope` / `workScopePath`，纯函数在 `utils/workScope.ts`），切换与新建在 `hooks/useWorkScope.ts`：按项目记住上次选择（localStorage），打开另一部作品的章节时自动切换。根目录说明文档在项目菜单的「项目说明」分组（`FilePanel/ProjectMenu`）。
 
-文件面板顶部（`FilePanel/WorkspaceHeader`）：项目名 +「项目说明」｜打开文件夹、搜索、新建、刷新｜分隔线 + 折叠侧边栏（固定在最右端）。重命名不再使用铅笔按钮：项目名、正文树（`StoryTreeNode`）、角色 / 设定（`ObjectItemRow`）、资料（`FileTree`）一律**双击名称**或选中行按 **F2** 进入行内编辑（共用 `components/InlineRenameInput`：Enter 提交、Esc 取消并把焦点还给行、失焦提交，空名称或未变化视为取消，输入框内的按键 / 点击不冒泡到行），单击仍是打开；右键菜单「重命名」保留（对话框）。渲染进程的重命名处理（`handleRename` / `handleRenameProject` / `handleRenameCharacterNode` / `handleRenameLoreNode`）传入新名称时直接提交，不传时弹出输入框。成长档案行没有重命名（core 尚无对应 API）
+文件面板顶部（`FilePanel/WorkspaceHeader`）：项目菜单「示例作品集 ▾」｜搜索、新建｜分隔线 + 折叠侧边栏（双左箭头，固定在最右端；右侧「大纲」面板的折叠按钮对称使用双右箭头、同样的尺寸 / 悬停样式与分隔线）。项目菜单（`FilePanel/ProjectMenu`，参照 Notion / Linear 的工作区菜单）：**单击项目名打开菜单，双击或 F2 行内重命名**；菜单项依次为「项目说明」分组（根目录文档，带数量，点击打开、右键走文件菜单）｜在访达中显示（Windows「在资源管理器中显示」、Linux「在文件管理器中显示」，IPC `show-item-in-folder`，主进程只接受已存在的绝对路径）、重命名项目｜打开其他文件夹…、打开最近使用（展开列出 `get-recent-folders`，排除当前文件夹，点击走 `useProjectLoader.handleOpenFolderPath`，与应用菜单 / `open-folder-request` 共用）、刷新。键盘：触发器 Enter / Space / ↓ 打开并聚焦首项、↑ 聚焦末项；菜单内 ↑ / ↓ / Home / End 移动、→ 展开最近使用、← 收起、Esc 关闭并还焦点、Tab 关闭。重命名不再使用铅笔按钮：项目名、正文树（`StoryTreeNode`）、角色 / 设定（`ObjectItemRow`）、资料（`FileTree`）一律**双击名称**或选中行按 **F2** 进入行内编辑（共用 `components/InlineRenameInput`：Enter 提交、Esc 取消并把焦点还给行、失焦提交，空名称或未变化视为取消，输入框内的按键 / 点击不冒泡到行），单击仍是打开；右键菜单「重命名」保留（对话框）。渲染进程的重命名处理（`handleRename` / `handleRenameProject` / `handleRenameCharacterNode` / `handleRenameLoreNode`）传入新名称时直接提交，不传时弹出输入框。成长档案行没有重命名（core 尚无对应 API）

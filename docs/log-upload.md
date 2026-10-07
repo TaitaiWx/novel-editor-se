@@ -69,7 +69,6 @@ X-Bundle-Sha256: <zip 内容的 SHA-256，十六进制>
 | `crash.json`                     | 仅 `crash`：崩溃类型（`uncaughtException` / `unhandledRejection` / `render-process-gone` / `child-process-gone`）、错误信息、堆栈、退出原因与退出码                                                                                                                                                                         |
 | `logs/*.log`                     | electron-log 日志目录（默认 `app.getPath('logs')`）下的 `.log` 文件，最近修改的优先                                                                                                                                                                                                                                         |
 | `state/updater-state.json`       | 自动更新状态（通道、灰度分桶、版本指针、回滚目标），用于排查更新 / 回退问题                                                                                                                                                                                                                                                 |
-| `state/log-upload-settings.json` | 「崩溃时自动上传日志」开关                                                                                                                                                                                                                                                                                                  |
 
 ## 隐私
 
@@ -90,6 +89,7 @@ X-Bundle-Sha256: <zip 内容的 SHA-256，十六进制>
 
 - 触发：主进程 `uncaughtException` / `unhandledRejection`、渲染进程退出（`render-process-gone`，原因不是 `clean-exit`）、子进程异常退出（`child-process-gone`，原因不是 `clean-exit` / `killed`）
 - 10 分钟内最多处理一次；处理过程中的错误全部吞掉，不会因为处理崩溃再次崩溃
-- 只有「配置了地址」且设置中心「通用 → 更新与诊断 → 崩溃时自动上传日志」开启（默认开启）时才上传
-- 未上传（未配置、开关关闭或上传失败）时只把日志包保存到 `userData/crash-reports/`，最多保留 5 个，不会写入「下载」目录
+- 始终开启，用户没有开关（由我们统一处理）：配置了地址时上传（shared `shouldUploadCrashReport`）
+- 旧版设置中心的「崩溃时自动上传日志」开关已移除；旧版持久化的 `userData/log-upload-settings.json` 被忽略，并在启动注册 IPC 时删除（`main/log-upload/settings.ts` `removeLegacyLogUploadSettings`）
+- 未上传（未配置或上传失败）时只把日志包保存到 `userData/crash-reports/`，最多保留 5 个，不会写入「下载」目录
 - E2E / 烟雾测试模式下不安装崩溃钩子；E2E 中「下载」目录被重定向到测试 userData 下的 `downloads/`，且不会弹出文件管理器

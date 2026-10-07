@@ -208,7 +208,7 @@ describe('应用菜单（macOS）', () => {
     expect(item(file, '导出项目…').accelerator).toBe('CommandOrControl+Shift+E');
   });
 
-  it('编辑菜单使用原生 role 与中文标签，并提供查找', async () => {
+  it('编辑菜单使用原生 role 与中文标签，并提供查找与灵感抽签', async () => {
     const edit = menu(await buildMenu('darwin', true), '编辑');
     expect(labels(edit)).toEqual([
       '撤销',
@@ -220,6 +220,8 @@ describe('应用菜单（macOS）', () => {
       '全选',
       '─',
       '查找',
+      '─',
+      '灵感抽签…',
     ]);
     expect(
       edit
@@ -230,6 +232,8 @@ describe('应用菜单（macOS）', () => {
     expect(item(edit, '撤销').accelerator).toBe('CommandOrControl+Z');
     expect(item(edit, '重做').accelerator).toBe('CommandOrControl+Shift+Z');
     expect(item(edit, '查找').accelerator).toBe('CommandOrControl+F');
+    // 灵感抽签的加速键来自设置中心（默认 Mod+Shift+Y），与渲染进程按键一致
+    expect(item(edit, '灵感抽签…').accelerator).toBe('CommandOrControl+Shift+Y');
   });
 
   it('视图菜单：打包版本不含重新加载 / 开发者工具', async () => {
@@ -317,6 +321,7 @@ describe('应用菜单（macOS）', () => {
       ['文件', '另存为…', 'shortcut-save-as-file'],
       ['文件', '导出项目…', 'menu-export-project'],
       ['编辑', '查找', 'menu-find'],
+      ['编辑', '灵感抽签…', 'menu-open-inspiration'],
       ['视图', '切换侧边栏', 'menu-toggle-sidebar'],
       ['视图', '切换右侧面板', 'menu-toggle-right-panel'],
       ['视图', '专注写作', 'menu-toggle-focus-mode'],

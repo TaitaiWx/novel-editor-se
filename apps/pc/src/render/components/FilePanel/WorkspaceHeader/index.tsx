@@ -1,15 +1,12 @@
-import React, { useRef, useState } from 'react';
-import {
-  AiOutlineDoubleLeft,
-  AiOutlineFolderOpen,
-  AiOutlinePlus,
-  AiOutlineReload,
-  AiOutlineSearch,
-} from 'react-icons/ai';
+import React, { useEffect, useRef, useState } from 'react';
+import { AiOutlineDoubleLeft, AiOutlinePlus, AiOutlineSearch } from 'react-icons/ai';
 import Popover from '../../Popover';
 import Tooltip from '../../Tooltip';
-import InlineRenameInput, { isRenameShortcut } from '../../InlineRenameInput';
+import InlineRenameInput from '../../InlineRenameInput';
+import type { ContextMenuEvent } from '../../FileTree';
+import type { FileNode } from '../../../types';
 import { formatShortcutLabel } from '../../../utils/appSettings';
+import ProjectMenu from '../ProjectMenu';
 import styles from './styles.module.scss';
 
 export interface CreateMenuItem {
@@ -49,19 +46,28 @@ export function buildCreateMenuItems(handlers: {
 
 interface WorkspaceHeaderProps {
   workspaceLabel: string | null | undefined;
+  folderPath: string;
   isWorkspaceBusy: boolean;
   isLoading: boolean;
-  hasFolder: boolean;
   showSearch: boolean;
   quickOpenShortcut: string;
   createMenuItems: CreateMenuItem[];
   /** 新建菜单开关状态由 FilePanel 持有，保证面板内容切换时状态不丢失 */
   createMenuOpen: boolean;
   onCreateMenuOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
-  /** 双击项目名（或聚焦后按 F2 / Enter）行内重命名，提交新名称；未提供时项目名不可编辑 */
+  /** 双击项目名（或聚焦后按 F2、菜单「重命名项目」）行内重命名，提交新名称；未提供时不可重命名 */
   onRenameProject?: (nextName: string) => void;
-  /** 项目名右侧的附加内容（「项目说明」按钮） */
-  identityExtra?: React.ReactNode;
+  /** 项目根目录的说明文档，显示在项目菜单「项目说明」分组 */
+  projectDocs?: FileNode[];
+  selectedFile?: string | null;
+  onOpenProjectDoc?: (path: string) => void;
+  onProjectDocContextMenu?: (event: ContextMenuEvent) => void;
+  onOpenRecentFolder?: (folderPath: string) => void;
+  /** 测试注入（默认走 IPC） */
+  projectMenuOverrides?: Pick<
+    React.ComponentProps<typeof ProjectMenu>,
+    'onReveal' | 'loadRecentFolders' | 'platform'
+  >;
   onOpenFolder: () => void;
   onToggleSearch: () => void;
   onCollapse?: () => void;
@@ -69,19 +75,27 @@ interface WorkspaceHeaderProps {
   onContextMenu: (event: React.MouseEvent) => void;
 }
 
-/** 文件面板顶部：项目名（双击重命名）+ 项目说明 | 打开/搜索/新建/刷新 | 折叠侧边栏（最右侧） */
+/**
+ * 文件面板顶部：项目菜单「项目名 ▾」（项目说明、在访达中显示、重命名、打开其他 / 最近使用、刷新；
+ * 双击项目名重命名）| 搜索 / 新建 | 折叠侧边栏（最右侧）
+ */
 const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   workspaceLabel,
+  folderPath,
   isWorkspaceBusy,
   isLoading,
-  hasFolder,
   showSearch,
   quickOpenShortcut,
   createMenuItems,
   createMenuOpen,
   onCreateMenuOpenChange: setCreateMenuOpen,
   onRenameProject,
-  identityExtra,
+  projectDocs = [],
+  selectedFile = null,
+  onOpenProjectDoc,
+  onProjectDocContextMenu,
+  onOpenRecentFolder,
+  projectMenuOverrides,
   onOpenFolder,
   onToggleSearch,
   onCollapse,
@@ -89,8 +103,18 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   onContextMenu,
 }) => {
   const createMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const nameRef = useRef<HTMLSpanElement>(null);
+  const nameRef = useRef<HTMLButtonElement>(null);
   const [renaming, setRenaming] = useState(false);
+  const wasRenamingRef = useRef(false);
+  // 行内重命名结束（Enter / Esc）后输入框卸载、焦点落到 body：把焦点还给项目菜单触发器；
+  // 失焦提交（点到别处）时焦点已在新位置，不抢回
+  useEffect(() => {
+    if (wasRenamingRef.current && !renaming) {
+      const active = document.activeElement;
+      if (!active || active === document.body) nameRef.current?.focus();
+    }
+    wasRenamingRef.current = renaming;
+  }, [renaming]);
   const canRename = Boolean(onRenameProject) && !isWorkspaceBusy && Boolean(workspaceLabel);
   const searchLabel = `搜索文件 (${formatShortcutLabel(quickOpenShortcut)})`;
 
@@ -123,42 +147,32 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             className={styles.projectNameInput}
             initialValue={workspaceLabel ?? ''}
             ariaLabel="重命名项目"
-            restoreFocusRef={nameRef}
             onCommit={(nextName) => {
               setRenaming(false);
               onRenameProject(nextName);
             }}
             onCancel={() => setRenaming(false)}
           />
-        ) : canRename ? (
-          <span className={styles.nameSlot}>
-            <Tooltip content="双击重命名" position="bottom">
-              <span
-                ref={nameRef}
-                className={`${styles.workspaceName} ${styles.editableName}`}
-                tabIndex={0}
-                aria-label={`项目名 ${workspaceLabel}，双击或按 F2 重命名`}
-                aria-keyshortcuts="F2"
-                onDoubleClick={(event) => {
-                  event.preventDefault();
-                  setRenaming(true);
-                }}
-                onKeyDown={(event) => {
-                  if (isRenameShortcut(event) || event.key === 'Enter') {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setRenaming(true);
-                  }
-                }}
-              >
-                {workspaceLabel}
-              </span>
-            </Tooltip>
-          </span>
         ) : (
-          <span className={styles.workspaceName}>{workspaceLabel}</span>
+          <ProjectMenu
+            label={workspaceLabel ?? ''}
+            folderPath={folderPath}
+            docs={projectDocs}
+            selectedFile={selectedFile}
+            busy={isWorkspaceBusy}
+            canRename={canRename}
+            triggerRef={nameRef}
+            onOpenDoc={(path) => onOpenProjectDoc?.(path)}
+            onDocContextMenu={onProjectDocContextMenu}
+            onStartRename={() => {
+              if (canRename) setRenaming(true);
+            }}
+            onOpenFolder={onOpenFolder}
+            onOpenRecentFolder={onOpenRecentFolder}
+            onRefresh={onRefresh}
+            {...projectMenuOverrides}
+          />
         )}
-        {!renaming && identityExtra}
         {isWorkspaceBusy && (
           <span className={styles.workspaceStatus} aria-live="polite">
             正在切换作品…
@@ -166,12 +180,6 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         )}
       </div>
       <div className={styles.workspaceActions}>
-        {renderIconButton(
-          hasFolder ? '更换文件夹' : '打开文件夹',
-          onOpenFolder,
-          <AiOutlineFolderOpen />,
-          isLoading
-        )}
         <Tooltip content={searchLabel} position="bottom">
           <button
             className={`${styles.workspaceAction} ${showSearch ? styles.workspaceActionActive : ''}`}
@@ -196,7 +204,6 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             <AiOutlinePlus />
           </button>
         </Tooltip>
-        {renderIconButton('重新扫描作品目录', onRefresh, <AiOutlineReload />, isLoading)}
         {onCollapse && (
           <>
             <span className={styles.workspaceActionDivider} aria-hidden="true" />

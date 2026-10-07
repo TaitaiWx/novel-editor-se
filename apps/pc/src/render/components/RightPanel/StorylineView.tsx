@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styles from './styles.module.scss';
 import type { StorylineViewMode } from './types';
 import { OutlineView } from './OutlineView';
-import { ActsView } from './ActsView';
+import { VolumePlanView } from './VolumePlanView';
 import { AiCacheProvider } from './AiCacheContext';
 import { useHorizontalOverflow } from './useHorizontalOverflow';
 import type {
@@ -10,7 +10,7 @@ import type {
   PersistedOutlineScopeKind,
 } from '../../types/electron-api';
 
-/** 右侧「大纲」面板的三个视图：目录 / 章纲（作用域大纲）/ 卷纲（幕剧规划） */
+/** 右侧「大纲」面板的三个视图：目录 / 章纲（作用域大纲）/ 卷纲（从本卷章节自动推导） */
 export const STORYLINE_MODES: ReadonlyArray<{ mode: StorylineViewMode; label: string }> = [
   { mode: 'catalog', label: '目录' },
   { mode: 'outline', label: '章纲' },
@@ -38,6 +38,8 @@ export const StorylineView: React.FC<{
   scopeKind?: PersistedOutlineScopeKind;
   scopeLabel?: string;
   outlineScope?: PersistedOutlineScopeInput | null;
+  /** 卷纲中点击其他章节时打开该章并定位 */
+  onOpenSourceLocation?: (filePath: string, line: number, contentKey?: string) => void;
 }> = React.memo(
   ({
     content,
@@ -48,6 +50,7 @@ export const StorylineView: React.FC<{
     scopeKind = 'project',
     scopeLabel = '当前作品',
     outlineScope = null,
+    onOpenSourceLocation,
   }) => {
     const [viewMode, setViewMode] = useState<StorylineViewMode>('catalog');
     // 面板过窄时模式切换栏可横向滚动，用边缘渐隐提示还有被遮住的按钮
@@ -105,7 +108,14 @@ export const StorylineView: React.FC<{
               onReplaceLineText={onReplaceLineText}
             />
           ) : (
-            <ActsView content={content} onScrollToLine={onScrollToLine} folderPath={folderPath} />
+            <VolumePlanView
+              content={content}
+              folderPath={folderPath}
+              dbReady={dbReady}
+              scope={outlineScope}
+              onScrollToLine={onScrollToLine}
+              onOpenSourceLocation={onOpenSourceLocation}
+            />
           )}
         </div>
       </AiCacheProvider>

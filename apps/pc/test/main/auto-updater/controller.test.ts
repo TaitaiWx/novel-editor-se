@@ -232,6 +232,7 @@ describe('auto-updater controller', () => {
 
   afterEach(async () => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
     await rm(env.userData, { recursive: true, force: true });
   });
 
@@ -261,6 +262,8 @@ describe('auto-updater controller', () => {
     });
 
     it('打包模式下配置 updater、注册监听、启动定时检查', async () => {
+      // 内部测试用的环境变量覆盖通道（用户界面不提供选择）
+      vi.stubEnv('NOVEL_EDITOR_UPDATE_CHANNEL', 'beta');
       await writeState({ channel: 'beta', rolloutBucket: 10, lastKnownGoodVersion: '1.1.0' });
       const { controller, health, downloader } = await loadController();
       await controller.setupAutoUpdater();
@@ -709,8 +712,9 @@ describe('auto-updater controller', () => {
     });
   });
 
-  describe('getUpdateStatus / setUpdateChannel', () => {
-    it('getUpdateStatus 从持久化状态填充快照', async () => {
+  describe('getUpdateStatus', () => {
+    it('getUpdateStatus 从持久化状态填充快照（通道来自内部环境变量覆盖）', async () => {
+      vi.stubEnv('NOVEL_EDITOR_UPDATE_CHANNEL', 'beta');
       await writeState({
         channel: 'beta',
         rolloutBucket: 77,
@@ -744,34 +748,14 @@ describe('auto-updater controller', () => {
       errSpy.mockRestore();
     });
 
-    it('setUpdateChannel 持久化通道、重置状态并立即检查', async () => {
-      await writeState({ channel: 'stable', rolloutBucket: 3, lastKnownGoodVersion: '1.1.0' });
-      const { controller, updaterStatus } = await loadController();
-      updaterStatus.updateReady = true;
-      updaterStatus.availableVersion = '1.2.0';
-      updaterStatus.rolloutEligible = true;
-
-      const status = await controller.setUpdateChannel('canary');
-      expect(status.channel).toBe('canary');
-      expect(status.channelFile).toMatch(/^alpha/);
-      expect(status.updateReady).toBe(false);
-      expect(status.availableVersion).toBeNull();
-      expect(fakeUpdater().channel).toBe('alpha');
-      expect(fakeUpdater().allowPrerelease).toBe(true);
-      expect((await readState()).channel).toBe('canary');
-
-      await flush();
-      expect(fakeUpdater().checkForUpdates).toHaveBeenCalledTimes(1);
-    });
-
-    it('setUpdateChannel 在 updater 不可用时仍持久化并报告错误', async () => {
-      env.updaterMissing = true;
-      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    it('旧版持久化的用户通道选择不再生效：按版本号推断并写回', async () => {
+      await writeState({ channel: 'canary', rolloutBucket: 3, lastKnownGoodVersion: '1.1.0' });
       const { controller } = await loadController();
-      const status = await controller.setUpdateChannel('beta');
-      expect(status.lastError).toContain('自动更新模块不可用，已降级');
-      expect((await readState()).channel).toBe('beta');
-      errSpy.mockRestore();
+      const status = await controller.getUpdateStatus();
+      expect(status.channel).toBe('stable');
+      expect(status.channelFile).toMatch(/^latest/);
+      expect((await readState()).channel).toBe('stable');
+      expect('setUpdateChannel' in controller).toBe(false);
     });
   });
 

@@ -83,7 +83,8 @@ function trace(label: string, startedAt: number): void {
  */
 const LOCATE_SOURCE = `(target) => {
   const isVisible = (el) => {
-    if (!(el instanceof HTMLElement) && !(el instanceof SVGElement)) return false;
+    // 任何元素都按布局盒判断（KaTeX 输出的 <math> 是 MathMLElement，既不是 HTML 也不是 SVG）
+    if (!(el instanceof Element)) return false;
     const rect = el.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return false;
     const style = getComputedStyle(el);

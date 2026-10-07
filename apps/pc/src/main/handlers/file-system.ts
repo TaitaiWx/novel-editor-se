@@ -176,6 +176,15 @@ export function registerFileSystemHandlers(): void {
     }
   });
 
+  // 在访达 / 资源管理器 / 文件管理器中显示（项目菜单）：只接受已存在的绝对路径
+  ipcMain.handle('show-item-in-folder', async (_event, targetPath: unknown) => {
+    if (typeof targetPath !== 'string' || !path.isAbsolute(targetPath) || !existsSync(targetPath)) {
+      throw new Error('路径不存在');
+    }
+    shell.showItemInFolder(path.normalize(targetPath));
+    return { success: true };
+  });
+
   // 打开外部链接（Markdown 实时预览中 ⌘/Ctrl + 点击）：只允许 http(s) / mailto
   ipcMain.handle('open-external-url', async (_event, url: unknown) => {
     if (typeof url !== 'string' || !isSafeExternalUrl(url)) {

@@ -51,6 +51,7 @@ import {
   commitInlineRename,
   expandTreePath,
   openProjectDocs,
+  refreshWorkspace,
   renameByDoubleClick,
   selectWork,
   storyRow,
@@ -123,18 +124,21 @@ describe('小说编辑器 GUI', () => {
     expect(titles).not.toContain('novels');
     expect(titles).not.toContain('未分卷');
     expect(titles).not.toContain('剑与诗');
-    // 根目录说明文档收在项目名旁的「项目说明」按钮里（带数量），不在文件树中
+    // 根目录说明文档收在项目菜单的「项目说明」分组里（带数量），不在文件树中
     expect(titles).not.toContain('项目说明');
     expect(titles).not.toContain('欢迎使用');
-    expect(await page.exists(SEL.projectDocsButton)).toBe(true);
     expect(await page.exists(SEL.projectNotes)).toBe(false);
 
-    // 顶部操作：折叠侧边栏固定在最右侧；项目名不再有铅笔按钮（双击重命名）
+    // 顶部：项目菜单「示例作品集 ▾」| 搜索 / 新建 | 折叠侧边栏（最右侧）；
+    // 打开文件夹 / 刷新 / 项目说明收进项目菜单，没有铅笔按钮（双击项目名重命名）
     const headerButtons = await workspaceHeaderButtons(page);
+    expect(headerButtons[0]).toBe('project-menu-trigger');
     expect(headerButtons.at(-1)).toBe('折叠侧边栏');
-    expect(headerButtons.indexOf('重新扫描作品目录')).toBe(headerButtons.length - 2);
-    expect(headerButtons).not.toContain('修改作品名');
-    expect(await page.exists('[aria-label$="双击或按 F2 重命名"]')).toBe(true);
+    expect(headerButtons).toHaveLength(4);
+    for (const gone of ['修改作品名', '更换文件夹', '重新扫描作品目录']) {
+      expect(headerButtons).not.toContain(gone);
+    }
+    expect(await page.exists('[aria-label$="（双击或按 F2 重命名）"]')).toBe(true);
 
     // 开发构建同样应能读到仓库里的 release-notes.json
     const changelog = await page.evaluate<string>(() =>
@@ -193,24 +197,36 @@ describe('小说编辑器 GUI', () => {
     expect(await page.exists({ text: '听雨楼', within: SECTION_LORE, exact: true })).toBe(false);
     expect(Number(await sectionCount(SECTION_MATERIALS))).toBeGreaterThan(10);
 
-    // 欢迎使用.md 是项目文档，不是「章」：收在项目名旁的「项目说明」弹层里
+    // 欢迎使用.md 是项目文档，不是「章」：收在项目菜单的「项目说明」分组里
     await openProjectDocs(page);
+    const revealLabel =
+      process.platform === 'darwin'
+        ? '在访达中显示'
+        : process.platform === 'win32'
+          ? '在资源管理器中显示'
+          : '在文件管理器中显示';
+    expect(await page.exists({ text: revealLabel, within: SEL.projectMenu, exact: true })).toBe(
+      true
+    );
+    for (const item of ['重命名项目', '打开其他文件夹…', '打开最近使用', '刷新']) {
+      expect(await page.exists({ text: item, within: SEL.projectMenu, exact: true })).toBe(true);
+    }
     expect(await page.exists({ text: '欢迎使用', within: SEL.projectNotes, exact: true })).toBe(
       true
     );
     expect(await page.exists({ text: '排版示例', within: SEL.projectNotes, exact: true })).toBe(
       true
     );
-    await captureForReview('project-docs-popover');
+    await captureForReview('project-menu');
     await page.press('Escape');
-    await page.waitForGone(SEL.projectNotes);
+    await page.waitForGone(SEL.projectMenu);
 
     // 长卷名：默认侧边栏宽度下省略显示，完整名称在悬停提示中；双击名称进入行内重命名
     const longVolume = '第三卷-群星尽头的漫长归途与未竟之约';
     await mkdir(fixture.resolve('novels/星河旅人', longVolume), { recursive: true });
     await writeFile(fixture.resolve('novels/星河旅人', longVolume, '007-归途.md'), '归途\n');
     try {
-      await page.click('[aria-label="重新扫描作品目录"]');
+      await refreshWorkspace(page);
       await page.waitForTarget({ text: longVolume, within: SEL.workspaceTree, exact: true });
       expect(
         await page.evaluate<string>(
@@ -243,11 +259,11 @@ describe('小说编辑器 GUI', () => {
       expect(existsSync(fixture.resolve('novels/星河旅人', longVolume))).toBe(true);
     } finally {
       await rm(fixture.resolve('novels/星河旅人', longVolume), { recursive: true, force: true });
-      await page.click('[aria-label="重新扫描作品目录"]');
+      await refreshWorkspace(page);
       await page.waitForGone({ text: longVolume, within: SEL.workspaceTree, exact: true });
     }
 
-    // 欢迎使用.md：功能导览（从「项目说明」弹层打开）
+    // 欢迎使用.md：功能导览（从项目菜单「项目说明」打开）
     await openProjectDocs(page);
     await page.click({ text: '欢迎使用', within: SEL.projectNotes, exact: true });
     await page.waitForGone(SEL.projectNotes);
@@ -292,7 +308,7 @@ describe('小说编辑器 GUI', () => {
     await page.waitForTarget({ text: '星河大陆', exact: true });
     await captureForReview('sample-lore');
 
-    // 幕剧：正文中的「第三幕 / 第一场…」生成卡片
+    // 卷纲：从本卷章节里的「第X幕 / 第X场」自动推导
     await openChapter('003-狼王之夜', '月亮升起来的时候');
     await ensureRightPanelOpen(page);
     await switchStorylineMode(page, '卷纲');
@@ -478,7 +494,7 @@ describe('小说编辑器 GUI', () => {
 
     const views: Array<[StorylineModeLabel, string]> = [
       ['章纲', '章纲'],
-      ['卷纲', '剧情板'],
+      ['卷纲', '生成卷纲'],
       ['目录', '启程'],
     ];
     for (const [label, marker] of views) {
@@ -556,6 +572,69 @@ describe('小说编辑器 GUI', () => {
     expect(fade.blurred).toBe(false);
     await captureForReview('focus-mode-fade');
 
+    // 专注模式完全隐藏滚动条（滚轮 / 键盘仍可滚动）
+    const scrollbar = await page.evaluate<{ width: string; gutter: number }>(() => {
+      const scroller = document.querySelector('.cm-scroller') as HTMLElement;
+      return {
+        width: getComputedStyle(scroller).getPropertyValue('scrollbar-width'),
+        gutter: scroller.offsetWidth - scroller.clientWidth,
+      };
+    });
+    expect(scrollbar.width).toBe('none');
+    expect(scrollbar.gutter).toBe(0);
+
+    // 打字机滚动：光标所在行始终停在视口垂直中央（偏差不超过视口高度的 ±15%）
+    const cursorOffset = () =>
+      page.evaluate<number | null>(() => {
+        const scroller = document.querySelector('.cm-scroller') as HTMLElement;
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return null;
+        let rect = selection.getRangeAt(0).getBoundingClientRect();
+        if (rect.height === 0) {
+          const node = selection.focusNode;
+          const el = node instanceof Element ? node : node?.parentElement;
+          const line = el?.closest('.cm-line');
+          if (!line) return null;
+          rect = line.getBoundingClientRect();
+        }
+        const box = scroller.getBoundingClientRect();
+        return ((rect.top + rect.bottom) / 2 - (box.top + box.height / 2)) / box.height;
+      });
+    const waitCentered = (message: string) =>
+      page.waitUntil(
+        async () => {
+          const offset = await cursorOffset();
+          return offset !== null && Math.abs(offset) <= 0.15 ? true : null;
+        },
+        { timeout: 5_000, message }
+      );
+    // 点击过「进入专注模式」按钮，快捷键需要先把焦点还给编辑器
+    await page.evaluate(() =>
+      (document.querySelector('.cm-content') as HTMLElement | null)?.focus()
+    );
+    await page.press('Home', [PRIMARY_MODIFIER]);
+    await waitCentered('回到开头后首行也停在中央');
+    // 点击视口下部的一行：松开鼠标后平滑滚到中央
+    const lowerLine = await page.evaluate<{ x: number; y: number } | null>(() => {
+      const box = (document.querySelector('.cm-scroller') as HTMLElement).getBoundingClientRect();
+      const lines = Array.from(document.querySelectorAll<HTMLElement>('.cm-content > .cm-line'));
+      for (const line of lines) {
+        if (!line.textContent?.trim()) continue;
+        const rect = line.getBoundingClientRect();
+        const y = rect.top + Math.min(rect.height, 30) / 2;
+        if (y > box.top + box.height * 0.72 && y < box.top + box.height * 0.92) {
+          return { x: rect.left + Math.min(rect.width / 2, 120), y };
+        }
+      }
+      return null;
+    });
+    expect(lowerLine, '视口下部应有可点击的正文行').not.toBeNull();
+    if (lowerLine) await page.mouseClick(lowerLine.x, lowerLine.y);
+    await waitCentered('点击下方的行后居中');
+    for (let i = 0; i < 6; i += 1) await page.press('ArrowDown');
+    await waitCentered('连续按下方向键后仍居中');
+    await captureForReview('focus-mode-typewriter');
+
     // Esc 退出专注模式
     await page.press('Escape');
     await page.waitForTarget(ENTER_FOCUS);
@@ -581,7 +660,28 @@ describe('小说编辑器 GUI', () => {
     const original = await readProjectFile(FIXTURE_CHAPTERS.first.file);
     await focusEditorEnd(page);
 
+    // 入口一眼可见：文件栏上是「图标 + 灵感」胶囊，而不是只有图标
+    const pill = await page.evaluate<{ text: string; visible: boolean; first: boolean }>(() => {
+      const button = document.querySelector<HTMLElement>('[data-testid="inspiration-pill"]');
+      const rect = button?.getBoundingClientRect();
+      const slot = button?.closest('[class*="pillSlot"]') as HTMLElement | null;
+      const actions = slot?.parentElement;
+      // 文件栏操作区是 flex，胶囊排在最左（保存 / 设置图标之前）
+      const leftmost = Array.from(actions?.children ?? []).every(
+        (child) =>
+          child === slot ||
+          child.getBoundingClientRect().left >= (slot?.getBoundingClientRect().right ?? 0)
+      );
+      return {
+        text: button?.textContent?.trim() ?? '',
+        visible: Boolean(rect && rect.width > 30 && rect.height > 0),
+        first: leftmost,
+      };
+    });
+    expect(pill).toEqual({ text: '灵感', visible: true, first: true });
+
     await openInspiration(page);
+    await captureForReview('inspiration-open');
     // 零输入：弹窗里没有任何需要填写的输入框（高级选项默认收起）
     const inputs = await page.evaluate<number>(
       (selector: string) =>
@@ -635,6 +735,41 @@ describe('小说编辑器 GUI', () => {
       async () => (await readProjectFile(FIXTURE_CHAPTERS.first.file)) === original,
       { timeout: 10_000, message: '撤销插入后自动保存还原' }
     );
+  });
+
+  it('6.2 卷纲：零输入从本卷章节推导结构，人物线显示林舟', async () => {
+    await selectWork(page, FIXTURE_WORK);
+    await openChapter('001-启程', '林舟背起行囊');
+    await ensureRightPanelOpen(page);
+    await switchStorylineMode(page, '卷纲');
+
+    // 不填任何内容：卷名、三幕（来自三章正文的幕标记）、场景节拍都已就位
+    await page.waitForTarget({ text: '第一卷-离乡', within: SEL.storyline, exact: true });
+    for (const act of ['第一幕 离乡', '第二幕 迷雾', '第三幕 狼王之夜']) {
+      await page.waitForTarget(`${SEL.storyline} section[aria-label="${act}"]`);
+    }
+    await page.waitForTarget({ text: '第一场 清晨的青石镇', within: SEL.storyline, exact: true });
+    await page.waitForTarget({ text: '石板路还湿着', within: SEL.storyline });
+    const intent = await page.evaluate<string>(
+      () =>
+        document.querySelector<HTMLInputElement>('input[aria-label="这一卷想写什么"]')?.value ??
+        'missing'
+    );
+    expect(intent).toBe('');
+    // 本卷只有第一卷的三章，不混入第二卷
+    expect(await page.exists({ text: '星港城', within: SEL.storyline, exact: true })).toBe(false);
+    await captureForReview('volume-plan-list');
+
+    // 同一份数据派生人物线：林舟（种子人物）出现在泳道里
+    await page.click({ text: '人物线', within: SEL.storyline, exact: true });
+    await page.waitForTarget(`${SEL.storyline} [role="row"][aria-label="人物线 林舟"]`);
+    await captureForReview('volume-plan-lanes');
+
+    await page.click({ text: '节奏', within: SEL.storyline, exact: true });
+    await page.waitForTarget(`${SEL.storyline} [aria-label="张力曲线"]`);
+
+    await page.click({ text: '列表', within: SEL.storyline, exact: true });
+    await switchStorylineMode(page, '目录');
   });
 
   it('7. GUI 与 CLI 共享：保存计入写作日志，会话文件反映打开 / 未保存的文件', async () => {
@@ -707,16 +842,22 @@ describe('小说编辑器 GUI', () => {
     );
     await captureForReview('about-section');
 
-    // 更新通道与崩溃自动上传开关移到「通用 → 更新与诊断」
-    await page.click({ text: '通用', within: '[class*="sidebar"]', exact: true });
-    await page.waitForTarget('[role="radiogroup"][aria-label="更新通道"]');
-    await page.waitForTarget(
-      '[role="switch"][aria-label="崩溃时自动上传日志"][aria-checked="true"]'
-    );
-    await page.evaluate(() => {
-      document.querySelector('[role="radiogroup"][aria-label="更新通道"]')?.scrollIntoView();
+    // 「检查更新」在关于分区；更新通道 / 灰度分组 / 崩溃上传开关由我们决定，「通用」里不再出现
+    await page.waitForTarget({
+      text: '检查更新',
+      within: '[role="dialog"][aria-label="设置中心"]',
+      exact: true,
     });
-    await captureForReview('settings-update-group');
+    await page.click({ text: '通用', within: '[class*="sidebar"]', exact: true });
+    expect(
+      await page.evaluate<boolean>(() =>
+        Boolean(
+          document.querySelector('[role="radiogroup"][aria-label="更新通道"]') ||
+            document.querySelector('[role="switch"][aria-label="崩溃时自动上传日志"]') ||
+            /更新与诊断|灰度分组/.test(document.body.textContent ?? '')
+        )
+      )
+    ).toBe(false);
     await page.click('[aria-label="关闭设置"]');
     await page.waitForGone({ text: '设置中心', exact: true });
 
@@ -788,7 +929,7 @@ describe('小说编辑器 GUI', () => {
           (node) => node.textContent === text
         ),
       {
-        args: ['复制本机设备 ID，用于问题排查与灰度分组'],
+        args: ['复制本机设备 ID，用于问题排查'],
         message: '复制设备 ID 的悬停提示',
       }
     );
@@ -954,7 +1095,7 @@ describe('小说编辑器 GUI', () => {
 
   it('10. Markdown 实时渲染：标题、表格、公式就地渲染，坏公式只影响自身，光标处显示源码', async () => {
     await ensureSidebarOpen();
-    // 排版示例.md 在项目根目录：从项目名旁的「项目说明」弹层打开
+    // 排版示例.md 在项目根目录：从项目菜单「项目说明」打开
     await openProjectDocs(page);
     await page.click({ text: '排版示例', within: SEL.projectNotes, exact: true });
     await waitForEditorText(page, '角色属性表');
@@ -999,14 +1140,64 @@ describe('小说编辑器 GUI', () => {
     });
     await captureForReview('markdown-live-preview');
 
-    // 文件头切换「源码 / 实时预览」
-    const toggle = '[aria-label="Markdown 显示方式"]';
-    await page.click({ text: '源码', within: toggle, exact: true });
-    await page.waitFor(() => !document.querySelector('.cm-content .katex'), {
-      message: '源码模式不渲染公式',
+    // .md 始终实时渲染：文件头不再有「源码 / 实时预览」切换
+    expect(await page.exists('[aria-label="Markdown 显示方式"]')).toBe(false);
+    expect(
+      await page.exists({ text: '实时预览', within: '[class*="fileHeader"]', exact: true })
+    ).toBe(false);
+  });
+
+  it('10.1 复杂公式：公式示例.md 的对齐 / 矩阵 / 分段等全部渲染，只有故意写错的一条显示错误标记', async () => {
+    await ensureSidebarOpen();
+    await openProjectDocs(page);
+    await page.click({ text: '公式示例', within: SEL.projectNotes, exact: true });
+    await waitForEditorText(page, '对齐环境');
+
+    // 文档开头的行内公式与前几个公式块（视口附近的内容）都已渲染
+    await page.waitFor(() => document.querySelectorAll('.cm-content .katex').length >= 8, {
+      message: '复杂公式已渲染',
     });
-    await page.click({ text: '实时预览', within: toggle, exact: true });
-    await page.waitForTarget('.cm-content .katex');
+    await page.waitForTarget('.cm-content .cm-lp-math-display math');
+    await captureForReview('latex-demo-top');
+
+    // 跳到文末：坏公式就地显示原文 + 一个错误标记，过宽的公式在自身内部横向滚动
+    await focusEditorEnd(page);
+    const tail = await page.waitFor<{
+      count: number;
+      title: string;
+      text: string;
+      katex: number;
+      wideScrollable: boolean;
+      wideOverflowX: string;
+      editorOverflow: number;
+    }>(
+      () => {
+        const markers = document.querySelectorAll('.cm-content .cm-lp-error-marker');
+        if (markers.length === 0) return null;
+        const scroller = document.querySelector('.cm-scroller') as HTMLElement;
+        const wide = Array.from(
+          document.querySelectorAll<HTMLElement>('.cm-content .cm-lp-math-display')
+        ).find((el) => el.textContent?.includes('a30') || el.scrollWidth > el.clientWidth + 1);
+        return {
+          count: markers.length,
+          title: markers[0].getAttribute('title') ?? '',
+          text: markers[0].parentElement?.textContent ?? '',
+          katex: document.querySelectorAll('.cm-content .katex').length,
+          wideScrollable: wide ? wide.scrollWidth > wide.clientWidth + 1 : false,
+          wideOverflowX: wide ? getComputedStyle(wide).overflowX : '',
+          editorOverflow: scroller.scrollWidth - scroller.clientWidth,
+        };
+      },
+      { message: '文末的坏公式显示错误标记' }
+    );
+    expect(tail.count).toBe(1);
+    expect(tail.title).toContain('公式错误');
+    expect(tail.text).toContain('\\sqrt{x^2 + y^2');
+    expect(tail.katex).toBeGreaterThanOrEqual(3);
+    expect(tail.wideScrollable).toBe(true);
+    expect(tail.wideOverflowX).toBe('auto');
+    expect(tail.editorOverflow).toBeLessThanOrEqual(1);
+    await captureForReview('latex-demo-tail');
   });
 
   it('11. 单实例：第二次启动把文件夹转发给已有窗口', async () => {

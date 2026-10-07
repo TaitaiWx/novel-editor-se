@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   showOpenDialog: vi.fn(),
   openPath: vi.fn(),
   openExternal: vi.fn(),
+  showItemInFolder: vi.fn(),
   getPath: vi.fn(),
   getAppPath: vi.fn(),
   send: vi.fn(),
@@ -30,7 +31,11 @@ vi.mock('electron', () => ({
     },
   },
   dialog: { showOpenDialog: mocks.showOpenDialog },
-  shell: { openPath: mocks.openPath, openExternal: mocks.openExternal },
+  shell: {
+    openPath: mocks.openPath,
+    openExternal: mocks.openExternal,
+    showItemInFolder: mocks.showItemInFolder,
+  },
   BrowserWindow: {
     getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: mocks.send } }],
   },
@@ -102,6 +107,7 @@ describe('通道注册', () => {
         'get-file-info',
         'get-file-info-batch',
         'open-in-system-app',
+        'show-item-in-folder',
         'open-external-url',
         'watch-file',
         'unwatch-file',
@@ -394,6 +400,15 @@ describe('Electron 专属能力', () => {
     expect(await invoke('open-in-system-app', '/x')).toEqual({ success: true });
     mocks.openPath.mockResolvedValueOnce('no app');
     await expect(invoke('open-in-system-app', '/x')).rejects.toThrow('无法打开文件: no app');
+  });
+
+  it('show-item-in-folder 只接受已存在的绝对路径', async () => {
+    expect(await invoke('show-item-in-folder', dir)).toEqual({ success: true });
+    expect(mocks.showItemInFolder).toHaveBeenCalledWith(path.normalize(dir));
+    for (const bad of ['relative/path', path.join(dir, '不存在'), 42, null]) {
+      await expect(invoke('show-item-in-folder', bad)).rejects.toThrow('路径不存在');
+    }
+    expect(mocks.showItemInFolder).toHaveBeenCalledTimes(1);
   });
 
   it('open-external-url 只放行 http(s) / mailto', async () => {

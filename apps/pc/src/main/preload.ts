@@ -80,15 +80,12 @@ contextBridge.exposeInMainWorld('electron', {
         'about-copy-text',
         // 日志上传
         'log-upload-run',
-        'log-upload-get-settings',
-        'log-upload-set-settings',
         'get-system-profile',
         'get-webauthn-support',
         'update-check',
         'update-status',
         'update-download',
         'update-install',
-        'update-set-channel',
         'update-rollback',
         'delete-file',
         'delete-directory',
@@ -176,6 +173,8 @@ contextBridge.exposeInMainWorld('electron', {
         'export-project',
         // 外部编辑 & 文件监视
         'open-in-system-app',
+        // 项目菜单「在访达 / 资源管理器中显示」（主进程只接受已存在的绝对路径）
+        'show-item-in-folder',
         // Markdown 实时预览中 ⌘/Ctrl + 点击链接（主进程只放行 http(s) / mailto）
         'open-external-url',
         'watch-file',
@@ -206,6 +205,21 @@ contextBridge.exposeInMainWorld('electron', {
         'growth-simulate',
         'growth-apply-branch',
         'memory-sync-snapshots',
+        // AI 服务（Key 只写不读）、一次性 / 流式补全
+        'ai-providers-list',
+        'ai-providers-get',
+        'ai-providers-set',
+        'ai-providers-test',
+        'ai-complete',
+        'ai-stream-start',
+        'ai-stream-cancel',
+        // 场景视频任务
+        'video-task-submit',
+        'video-task-list',
+        'video-task-cancel',
+        'video-task-retry',
+        'video-settings-get',
+        'video-settings-set',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -227,6 +241,7 @@ contextBridge.exposeInMainWorld('electron', {
         'menu-toggle-right-panel',
         'menu-toggle-focus-mode',
         'menu-find',
+        'menu-open-inspiration',
         'menu-show-shortcuts',
         'menu-open-changelog',
         'menu-upload-logs',
@@ -238,6 +253,9 @@ contextBridge.exposeInMainWorld('electron', {
         'update-state-changed',
         'update-rollback-available',
         'file-changed',
+        // AI 流式输出片段、视频任务状态变化（main/handlers/ai-providers.ts、video.ts）
+        'ai-stream-event',
+        'video-task-updated',
         'open-file-from-ai',
         'open-settings-from-ai',
         'ai-apply-fix-request',
@@ -269,6 +287,7 @@ contextBridge.exposeInMainWorld('electron', {
         'menu-toggle-right-panel',
         'menu-toggle-focus-mode',
         'menu-find',
+        'menu-open-inspiration',
         'menu-show-shortcuts',
         'menu-open-changelog',
         'menu-upload-logs',
@@ -280,6 +299,9 @@ contextBridge.exposeInMainWorld('electron', {
         'update-state-changed',
         'update-rollback-available',
         'file-changed',
+        // AI 流式输出片段、视频任务状态变化（main/handlers/ai-providers.ts、video.ts）
+        'ai-stream-event',
+        'video-task-updated',
       ];
       if (validChannels.includes(channel)) {
         ipcRenderer.removeListener(channel, listener);

@@ -7,7 +7,7 @@ import { reportCrash } from './service';
 
 export { getLogUploadEndpoint } from './config';
 export { runManualLogUpload, reportCrash, prepareLogBundle } from './service';
-export { loadLogUploadSettings, saveLogUploadSettings } from './settings';
+export { removeLegacyLogUploadSettings } from './settings';
 
 /** 应用启动早期调用：安装崩溃钩子（E2E / 烟雾测试模式下跳过） */
 export function setupCrashLogUpload(): void {

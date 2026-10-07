@@ -2,10 +2,10 @@
  * 设置中心「关于」分区：与「通用」一致的行式布局（应用 / 运行时间 / 设备 ID / 诊断日志）
  *
  * 与关于小窗口是两套独立的界面，只共用读取信息、复制、上传日志的 hooks。
- * 更新通道与崩溃自动上传开关在「通用 → 更新与诊断」。
+ * 应用行右侧提供「检查更新」（应用菜单也有）。更新通道、灰度分组、崩溃日志上传由我们决定，不对用户展示。
  */
 import React, { useCallback } from 'react';
-import { VscCloudUpload, VscCopy, VscInfo, VscLoading } from 'react-icons/vsc';
+import { VscCloudUpload, VscCopy, VscInfo, VscLoading, VscSync } from 'react-icons/vsc';
 import appMarkUrl from '../../../../../resources/branding/app-mark.svg';
 import { RELEASE_CHANNEL_LABELS, formatRunningSummary } from '../../../../shared/about';
 import { useAboutInfo, writeClipboard } from '../../../hooks/useAboutInfo';
@@ -41,6 +41,10 @@ const AboutSection: React.FC<AboutSectionProps> = ({ active }) => {
     }
   }, [info, toast]);
 
+  const handleCheckUpdates = useCallback(() => {
+    void window.electron?.ipcRenderer.invoke('update-check').catch(() => undefined);
+  }, []);
+
   const statusTone =
     result?.status === 'uploaded'
       ? styles.statusOk
@@ -73,6 +77,14 @@ const AboutSection: React.FC<AboutSectionProps> = ({ active }) => {
                 </div>
               </div>
             </div>
+            <button
+              type="button"
+              className={sharedStyles.secondaryButton}
+              onClick={handleCheckUpdates}
+            >
+              <VscSync className={styles.buttonIcon} />
+              <span>检查更新</span>
+            </button>
           </div>
 
           <div className={styles.row}>
@@ -87,7 +99,7 @@ const AboutSection: React.FC<AboutSectionProps> = ({ active }) => {
           <div className={styles.row}>
             <div className={sharedStyles.formMeta}>
               <div className={sharedStyles.formLabel}>设备 ID</div>
-              <div className={sharedStyles.formDesc}>用于问题排查与灰度分组，不包含个人信息。</div>
+              <div className={sharedStyles.formDesc}>用于问题排查，不包含个人信息。</div>
               <code className={styles.deviceId} data-testid="about-device-id">
                 {info.deviceId}
               </code>

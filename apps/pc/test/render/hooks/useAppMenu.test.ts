@@ -14,6 +14,7 @@ import {
 } from '@/render/components/TextEditor/active-editor';
 import { DEFAULT_SHORTCUT_SETTINGS } from '@/render/utils/appSettings';
 import { APP_MENU_EVENTS } from '../../../src/shared/app-menu';
+import { OPEN_INSPIRATION_EVENT } from '@/render/components/InspirationDialog/inspiration';
 import {
   installElectronMock,
   uninstallElectronMock,
@@ -107,6 +108,16 @@ describe('useAppMenu', () => {
     renderHook(() => useAppMenu(ctx));
     const channels = mock.on.mock.calls.map(([channel]) => channel);
     expect(channels.sort()).toEqual(Object.values(APP_MENU_EVENTS).sort());
+  });
+
+  it('灵感抽签：菜单事件转成打开灵感弹窗的窗口事件', () => {
+    const { ctx } = createCtx();
+    renderHook(() => useAppMenu(ctx));
+    const onOpen = vi.fn();
+    window.addEventListener(OPEN_INSPIRATION_EVENT, onOpen);
+    act(() => mock.emit(APP_MENU_EVENTS.openInspiration));
+    window.removeEventListener(OPEN_INSPIRATION_EVENT, onOpen);
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
   it('查找：打开最近聚焦编辑器的查找面板；没有编辑器时给出提示', () => {
@@ -220,7 +231,7 @@ describe('useAppMenu', () => {
     );
   });
 
-  it('把自定义的侧边栏 / 专注模式快捷键同步给主进程', () => {
+  it('把自定义的侧边栏 / 专注模式 / 灵感抽签快捷键同步给主进程', () => {
     const { ctx } = createCtx();
     const { rerender } = renderHook((props: UseAppMenuContext) => useAppMenu(props), {
       initialProps: ctx,
@@ -228,6 +239,7 @@ describe('useAppMenu', () => {
     expect(mock.invoke).toHaveBeenCalledWith('menu-sync-shortcuts', {
       toggleSidebar: 'Mod+B',
       toggleFocusMode: 'Mod+Shift+F',
+      openInspiration: 'Mod+Shift+Y',
     });
     rerender({
       ...ctx,
@@ -239,6 +251,7 @@ describe('useAppMenu', () => {
     expect(mock.invoke).toHaveBeenLastCalledWith('menu-sync-shortcuts', {
       toggleSidebar: 'Mod+Shift+B',
       toggleFocusMode: 'Mod+Shift+F',
+      openInspiration: 'Mod+Shift+Y',
     });
   });
 

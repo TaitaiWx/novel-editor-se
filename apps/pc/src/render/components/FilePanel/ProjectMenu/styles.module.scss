@@ -1,0 +1,203 @@
+// 项目名 = 下拉触发器「示例作品集 ▾」
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 6px;
+  margin-left: -6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-fg-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+
+    .triggerChevron {
+      color: var(--ui-fg-primary);
+    }
+  }
+}
+
+.triggerActive {
+  background: var(--ui-interaction-active-bg);
+
+  .triggerChevron {
+    color: var(--ui-fg-primary);
+  }
+}
+
+.triggerLabel {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.triggerChevron {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--ui-fg-muted);
+  transition: color 0.15s;
+}
+
+.popover {
+  width: 264px;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 10px;
+  background: #262626;
+  border: 1px solid var(--ui-border-strong);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 0;
+}
+
+.groupTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-fg-muted);
+}
+
+.groupCount {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-fg-muted);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.groupHint {
+  padding: 2px 8px 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ui-fg-disabled);
+}
+
+.docList,
+.recentList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.item {
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-fg-primary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    background: var(--ui-interaction-hover-bg);
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 1px var(--ui-interaction-focus-ring);
+  }
+
+  &:disabled {
+    color: var(--ui-fg-disabled);
+    cursor: default;
+  }
+}
+
+.itemActive {
+  background: var(--ui-interaction-accent-soft);
+}
+
+.subItem {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  min-height: 34px;
+  padding: 3px 8px 3px 30px;
+}
+
+.itemIcon {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--ui-fg-muted);
+}
+
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemPath {
+  max-width: 100%;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--ui-fg-disabled);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemShortcut {
+  flex-shrink: 0;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--ui-fg-disabled);
+}
+
+.itemChevron {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--ui-fg-muted);
+  transition: transform 0.15s;
+}
+
+.itemChevronOpen {
+  transform: rotate(90deg);
+}
+
+.separator {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--ui-border-subtle);
+}

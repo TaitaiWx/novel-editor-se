@@ -8,7 +8,8 @@ import { PRIMARY_MODIFIER, type Page } from './page';
 
 export const SEL = {
   workspaceTree: '[class*="workspaceTree"]',
-  workspaceName: '[class*="workspaceName"]',
+  /** 项目名（项目菜单触发器「示例作品集 ▾」） */
+  workspaceName: '[data-testid="project-menu-trigger"]',
   storyNodeTitle: '[class*="storyNodeTitle"]',
   editor: '.cm-content',
   statusBar: '[class*="statusBar"]',
@@ -23,9 +24,10 @@ export const SEL = {
   workList: '[role="listbox"][aria-label="作品"]',
   /** 文件面板顶部（项目名 + 操作按钮） */
   workspaceHeader: '[class*="workspaceHeader"]',
-  /** 项目名旁的「项目说明」按钮（根目录说明文档，带数量）与它弹出的文档列表 */
-  projectDocsButton: 'button[aria-label^="项目说明（"]',
-  projectNotes: '[role="list"][aria-label="项目说明"]',
+  /** 项目菜单（单击项目名打开）与其中的「项目说明」分组（根目录说明文档，带数量） */
+  projectMenuTrigger: '[data-testid="project-menu-trigger"]',
+  projectMenu: '[role="menu"][aria-label="项目菜单"]',
+  projectNotes: '[role="group"][aria-label^="项目说明（"]',
   /** 行内重命名输入框（双击名称 / F2） */
   renameInput: 'input[aria-label^="重命名"]',
 } as const;
@@ -103,10 +105,23 @@ export async function selectWork(page: Page, name: string): Promise<void> {
   );
 }
 
-/** 打开项目名旁的「项目说明」弹层（根目录说明文档列表） */
+/** 单击项目名打开项目菜单 */
+export async function openProjectMenu(page: Page): Promise<void> {
+  if (!(await page.exists(SEL.projectMenu))) await page.click(SEL.projectMenuTrigger);
+  await page.waitForTarget(SEL.projectMenu);
+}
+
+/** 打开项目菜单并等待「项目说明」分组（根目录说明文档列表） */
 export async function openProjectDocs(page: Page): Promise<void> {
-  if (!(await page.exists(SEL.projectNotes))) await page.click(SEL.projectDocsButton);
+  await openProjectMenu(page);
   await page.waitForTarget(SEL.projectNotes);
+}
+
+/** 项目菜单 →「刷新」（重新扫描作品目录） */
+export async function refreshWorkspace(page: Page): Promise<void> {
+  await openProjectMenu(page);
+  await page.click({ text: '刷新', within: SEL.projectMenu, exact: true });
+  await page.waitForGone(SEL.projectMenu);
 }
 
 /** 在已出现的行内重命名输入框中输入新名称并回车提交 */
@@ -134,12 +149,12 @@ export async function renameByDoubleClick(page: Page, name: string, value: strin
   await commitInlineRename(page, value);
 }
 
-/** 文件面板顶部按钮的 aria-label（按显示顺序） */
+/** 文件面板顶部按钮（按显示顺序）：有 data-testid 的取 testid，否则取 aria-label */
 export function workspaceHeaderButtons(page: Page): Promise<string[]> {
   return page.evaluate<string[]>(
     (selector: string) =>
       Array.from(document.querySelector(selector)?.querySelectorAll('button') ?? []).map(
-        (button) => button.getAttribute('aria-label') ?? ''
+        (button) => button.getAttribute('data-testid') ?? button.getAttribute('aria-label') ?? ''
       ),
     SEL.workspaceHeader
   );

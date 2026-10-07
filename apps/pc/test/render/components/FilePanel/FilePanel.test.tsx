@@ -330,7 +330,7 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
     expect(screen.getByText('剑与诗')).toBeTruthy();
   });
 
-  it('根目录文档收在项目名旁的「项目说明」按钮里（带数量），不再占用底部分区，点击打开', () => {
+  it('根目录文档收在项目菜单「项目说明」分组里（带数量），不再占用底部分区，点击打开', () => {
     const { props } = renderPanel({
       files: sampleFiles,
       folderPath: '/s',
@@ -339,25 +339,29 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
     });
     expect(screen.queryByRole('region', { name: '项目说明' })).toBeNull();
     expect(screen.queryByText('欢迎使用')).toBeNull();
-    const trigger = screen.getByLabelText('项目说明（1 个文件）');
-    // 位于项目名旁（文件面板顶部），而不是任何分区里
+    // 不再有项目名旁的单独「项目说明」按钮
+    expect(screen.queryByLabelText(/^项目说明（/)).toBeNull();
+    const trigger = screen.getByTestId('project-menu-trigger');
     expect(trigger.closest('section')).toBeNull();
     fireEvent.click(trigger);
-    const list = screen.getByRole('list', { name: '项目说明' });
-    expect(list.textContent).toContain('欢迎使用');
-    expect(list.textContent).not.toContain('章');
-    fireEvent.click(screen.getByText('欢迎使用'));
+    const group = screen.getByRole('group', { name: '项目说明（1 个文件）' });
+    expect(group.textContent).toContain('欢迎使用');
+    expect(group.textContent).not.toContain('章');
+    fireEvent.click(within(group).getByRole('menuitem', { name: '欢迎使用' }));
     expect(props.onFileSelect).toHaveBeenCalledWith('/s/欢迎使用.md');
+    expect(screen.queryByRole('menu', { name: '项目菜单' })).toBeNull();
   });
 
-  it('没有根目录文档时不显示「项目说明」按钮', () => {
+  it('没有根目录文档时项目菜单不显示「项目说明」分组', () => {
     renderPanel({
       files: sampleFiles.slice(1),
       folderPath: '/s',
       projectLayout,
       workScope: star,
     });
-    expect(screen.queryByLabelText(/^项目说明/)).toBeNull();
+    fireEvent.click(screen.getByTestId('project-menu-trigger'));
+    expect(screen.getByRole('menu', { name: '项目菜单' })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: /^项目说明/ })).toBeNull();
   });
 
   it('普通文件夹：没有作品切换器；根目录说明文档放进项目说明，不计入未分卷章数', () => {
@@ -369,8 +373,10 @@ describe('FilePanel · ne init 项目结构（角色 / 设定 / 成长档案 / �
       folderPath: '/p',
     });
     expect(screen.queryByTestId('work-switcher')).toBeNull();
-    fireEvent.click(screen.getByLabelText('项目说明（1 个文件）'));
-    expect(screen.getByRole('list', { name: '项目说明' }).textContent).toContain('README');
+    fireEvent.click(screen.getByTestId('project-menu-trigger'));
+    expect(screen.getByRole('group', { name: '项目说明（1 个文件）' }).textContent).toContain(
+      'README'
+    );
     expect(rowOf('未分卷').textContent).toContain('1章');
   });
 });

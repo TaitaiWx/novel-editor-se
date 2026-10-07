@@ -22,7 +22,7 @@ const UPTIME_REFRESH_MS = 60_000;
 /** 含文件名的结果提示停留更久，方便看清 */
 const RESULT_TOAST_MS = 6_000;
 
-export const COPY_DEVICE_ID_TIP = '复制本机设备 ID，用于问题排查与灰度分组';
+export const COPY_DEVICE_ID_TIP = '复制本机设备 ID，用于问题排查';
 export const UPLOAD_LOG_TIP = '打包诊断信息与最近日志并上传，不含作品内容';
 
 interface AboutDialogProps {

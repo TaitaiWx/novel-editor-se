@@ -1,11 +1,4 @@
-import type {
-  TabType,
-  LoreCategory,
-  RelationTone,
-  CharacterCamp,
-  PlotSceneBoard,
-  StorylineLayoutMode,
-} from './types';
+import type { TabType, LoreCategory, RelationTone, CharacterCamp } from './types';
 
 export const OUTLINE_AI_DEBOUNCE_MS = 320;
 export const OUTLINE_AI_BATCH_SIZE = 5;
@@ -38,27 +31,11 @@ export const RELATION_TONE_LABELS: Record<RelationTone, string> = {
   other: '其他',
 };
 
-export const PLOT_STATUS_LABELS: Record<PlotSceneBoard['status'], string> = {
-  draft: '草稿',
-  ready: '成型',
-  done: '完成',
-};
-
 export const CAMP_LABELS: Record<CharacterCamp, string> = {
   protagonist: '主角团',
   antagonist: '对立阵营',
   support: '关键支撑角色',
 };
-
-export const STRUCTURE_NODE_PRESETS = [
-  '引子',
-  '诱发事件',
-  '第一次转折',
-  '中点',
-  '至暗时刻',
-  '高潮',
-  '结局',
-];
 
 export const TAB_KEYS = Object.keys(TAB_LABELS) as TabType[];
 
@@ -69,24 +46,3 @@ export const ROLE_COLORS: Record<string, string> = {
   导师: '#dcdcaa',
   盟友: '#c586c0',
 };
-
-export const ACT_COLORS = ['#4ec9b0', '#d7ba7d', '#c586c0', '#dcdcaa', '#b5cea8', '#f14c4c'];
-
-export const LAYOUT_MODE_LABELS: Record<StorylineLayoutMode, string> = {
-  board: '故事板',
-  timeline: '泳道线',
-  causal: '因果链',
-};
-
-export const LAYOUT_MODE_KEYS = Object.keys(LAYOUT_MODE_LABELS) as StorylineLayoutMode[];
-
-/** Intensity heat-map gradient stops (1–5) */
-export const INTENSITY_COLORS = [
-  'rgba(180, 180, 170, 0.25)', // 1 - calm
-  'rgba(78, 201, 176, 0.35)', // 2 - building
-  'rgba(220, 220, 170, 0.4)', // 3 - tension
-  'rgba(241, 148, 76, 0.5)', // 4 - high
-  'rgba(241, 76, 76, 0.55)', // 5 - climax
-];
-
-export const INTENSITY_LABELS = ['平静', '铺垫', '紧张', '激烈', '高潮'];

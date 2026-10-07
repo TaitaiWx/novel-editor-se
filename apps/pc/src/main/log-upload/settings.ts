@@ -1,40 +1,19 @@
 /**
- * 日志上传设置（userData/log-upload-settings.json）
+ * 旧版日志上传设置清理
  *
- * 由主进程持有：崩溃发生时渲染进程可能已经不在了，开关必须在主进程直接可读
+ * 旧版本在设置中心提供「崩溃时自动上传日志」开关，持久化在 userData/log-upload-settings.json。
+ * 现在崩溃日志上传始终由我们处理（只在配置了上传地址时上传，否则只保存在本地），
+ * 该文件的内容被忽略；启动后尽力删除，失败也不影响任何功能。
  */
 import { app } from 'electron';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
-import { normalizeLogUploadSettings, type LogUploadSettings } from '../../shared/log-upload';
+import { LEGACY_LOG_UPLOAD_SETTINGS_FILE } from '../../shared/log-upload';
 
-let cached: LogUploadSettings | null = null;
-
-function settingsPath(): string {
-  return path.join(app.getPath('userData'), 'log-upload-settings.json');
-}
-
-export async function loadLogUploadSettings(): Promise<LogUploadSettings> {
-  if (cached) return cached;
+export async function removeLegacyLogUploadSettings(): Promise<void> {
   try {
-    cached = normalizeLogUploadSettings(JSON.parse(await readFile(settingsPath(), 'utf-8')));
+    await rm(path.join(app.getPath('userData'), LEGACY_LOG_UPLOAD_SETTINGS_FILE), { force: true });
   } catch {
-    cached = normalizeLogUploadSettings(null);
+    // userData 不可用或无权限时忽略
   }
-  return cached;
-}
-
-export async function saveLogUploadSettings(patch: unknown): Promise<LogUploadSettings> {
-  const current = await loadLogUploadSettings();
-  const raw = patch && typeof patch === 'object' ? (patch as Partial<LogUploadSettings>) : {};
-  const next = normalizeLogUploadSettings({ ...current, ...raw });
-  await mkdir(path.dirname(settingsPath()), { recursive: true });
-  await writeFile(settingsPath(), JSON.stringify(next, null, 2), 'utf-8');
-  cached = next;
-  return next;
-}
-
-/** 仅供测试：清空缓存 */
-export function resetLogUploadSettingsCache(): void {
-  cached = null;
 }

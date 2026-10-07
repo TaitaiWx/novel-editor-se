@@ -181,7 +181,7 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
         onClick={(event) => event.stopPropagation()}
       >
         <div className={styles.header}>
-          <div>
+          <div className={styles.heading}>
             <h2 className={styles.title}>灵感</h2>
             <p className={styles.subtitle}>卡文时抽一签：人物、地点、冲突各来一张。</p>
           </div>
@@ -217,24 +217,19 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
           <div className={styles.empty}>不用填任何东西，点下面的按钮就行。</div>
         )}
 
-        <div className={styles.actions}>
-          <button
-            ref={drawButtonRef}
-            type="button"
-            className={draw ? styles.secondaryButton : styles.drawButton}
-            onClick={handleDrawAll}
-          >
-            {draw ? '全部重抽' : '抽一签'}
-          </button>
-          {draw && (
-            <>
-              <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={() => handleInsert(drawnText)}
-              >
-                插入到光标处
-              </button>
+        {draw ? (
+          // 层级：左侧次要「全部重抽」；右侧 复制 / AI 扩写（次要）+ 插入到光标处（主操作，最右）
+          <div className={styles.actions}>
+            <button
+              ref={drawButtonRef}
+              type="button"
+              className={styles.ghostButton}
+              onClick={handleDrawAll}
+            >
+              <VscRefresh aria-hidden="true" />
+              全部重抽
+            </button>
+            <div className={styles.actionsEnd}>
               <button
                 type="button"
                 className={styles.secondaryButton}
@@ -253,9 +248,25 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
                   {ai.status === 'loading' ? '扩写中…' : '交给 AI 扩写'}
                 </button>
               )}
-            </>
-          )}
-        </div>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => handleInsert(drawnText)}
+              >
+                插入到光标处
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            ref={drawButtonRef}
+            type="button"
+            className={styles.drawButton}
+            onClick={handleDrawAll}
+          >
+            抽一签
+          </button>
+        )}
 
         {ai.status === 'done' && (
           <div className={styles.aiResult} aria-label="AI 扩写结果">
@@ -263,17 +274,17 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
             <div className={styles.aiActions}>
               <button
                 type="button"
-                className={styles.primaryButton}
-                onClick={() => handleInsert(ai.text)}
-              >
-                插入扩写
-              </button>
-              <button
-                type="button"
                 className={styles.secondaryButton}
                 onClick={() => void handleCopy(ai.text)}
               >
                 复制扩写
+              </button>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => handleInsert(ai.text)}
+              >
+                插入扩写
               </button>
             </div>
           </div>

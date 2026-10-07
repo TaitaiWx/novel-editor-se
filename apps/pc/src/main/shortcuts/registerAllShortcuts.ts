@@ -49,7 +49,8 @@ export const syncMenuShortcuts = (value: unknown): MenuShortcutBindings => {
   const next = normalizeMenuShortcutBindings(value);
   const changed =
     next.toggleSidebar !== bindings.toggleSidebar ||
-    next.toggleFocusMode !== bindings.toggleFocusMode;
+    next.toggleFocusMode !== bindings.toggleFocusMode ||
+    next.openInspiration !== bindings.openInspiration;
   bindings = next;
   if (changed) registerAllShortcuts();
   return next;

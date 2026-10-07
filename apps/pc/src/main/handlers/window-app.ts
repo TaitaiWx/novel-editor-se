@@ -24,9 +24,7 @@ import {
   noteUpdaterRendererHealthy,
   noteUpdaterRendererReady,
   rollbackToPreviousVersion,
-  setUpdateChannel,
 } from '../auto-updater';
-import type { UpdateChannel } from '../auto-updater';
 import { settingsOps } from '@novel-editor/store';
 import { isE2ETestMode, isSmokeTestMode } from '../launch-mode';
 import { getReleaseNotesCandidates, isJustUpdated } from '../changelog';
@@ -38,6 +36,7 @@ const DOCUMENT_CACHE_PREFIXES = [
   'novel-editor:lore:',
   'novel-editor:character-relations:',
   'novel-editor:plot-board:',
+  'novel-editor:volume-plan:',
   'novel-editor:graph-layout:',
 ];
 
@@ -118,9 +117,6 @@ export function registerWindowAppHandlers(): void {
   ipcMain.handle('update-install', () => installUpdate());
   ipcMain.handle('update-check', () => checkForUpdatesManually());
   ipcMain.handle('update-status', () => getUpdateStatus());
-  ipcMain.handle('update-set-channel', (_event, channel: UpdateChannel) =>
-    setUpdateChannel(channel)
-  );
   ipcMain.handle('update-rollback', () => rollbackToPreviousVersion());
 
   // ─── Recent Folders ───────────────────────────────────────────────────────

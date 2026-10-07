@@ -7,8 +7,6 @@ export interface GeneralSettings {
   showStatusBar: boolean;
   showThousandCharMarkers: boolean;
   thousandCharMarkerStep: number;
-  /** Markdown 文件实时渲染（类 Typora，光标所在处显示源码） */
-  markdownLivePreview: boolean;
   showFileSizes: boolean;
   openChangelogAfterUpdate: boolean;
 }
@@ -47,7 +45,13 @@ export interface AISettings {
   preset: AIPresetKey;
   baseUrl: string;
   model: string;
+  /**
+   * 只写字段：填写后由主进程转存到系统钥匙串（safeStorage）并从设置中删除，
+   * 读取到的设置里永远为空；是否已配置看 hasApiKey
+   */
   apiKey: string;
+  /** 主进程在读取设置时注入：安全存储中是否已有默认 AI 的 Key（派生字段，写入时被忽略） */
+  hasApiKey?: boolean;
   temperature: number;
   contextTokens: number;
   maxTokens: number;
@@ -140,7 +144,6 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   showStatusBar: true,
   showThousandCharMarkers: true,
   thousandCharMarkerStep: 1000,
-  markdownLivePreview: true,
   showFileSizes: true,
   openChangelogAfterUpdate: true,
 };
@@ -220,7 +223,7 @@ function normalizeParsedAISettings(parsed: ParsedSettingsDraft): Partial<AISetti
     hasOwnField(parsed, 'enabledExplicitlySet') ||
     (nestedAi ? hasOwnField(nestedAi, 'enabledExplicitlySet') : false);
 
-  const hasStoredCredential = Boolean(mergedAi.apiKey?.trim());
+  const hasStoredCredential = Boolean(mergedAi.apiKey?.trim()) || mergedAi.hasApiKey === true;
 
   return {
     ...mergedAi,
@@ -253,7 +256,10 @@ export function mergeSettingsDraft(raw: string | null): SettingsDraft {
   if (!raw) return DEFAULT_SETTINGS_DRAFT;
   try {
     const parsed = JSON.parse(raw) as ParsedSettingsDraft;
-    const general = { ...DEFAULT_GENERAL_SETTINGS, ...(parsed.general || {}) };
+    // 中文说明：旧版本的 markdownLivePreview 已废弃（.md 始终实时渲染），读取时丢弃
+    const { markdownLivePreview: _legacyLivePreview, ...storedGeneral } = (parsed.general ||
+      {}) as Partial<GeneralSettings> & { markdownLivePreview?: unknown };
+    const general = { ...DEFAULT_GENERAL_SETTINGS, ...storedGeneral };
     return {
       general: {
         ...general,
@@ -279,7 +285,8 @@ export function mergeSettingsDraft(raw: string | null): SettingsDraft {
 export function getAIConfigStatus(settings: SettingsDraft): AIConfigStatus {
   const ai = settings.ai ?? DEFAULT_AI_SETTINGS;
   const enabled = Boolean(ai.enabled);
-  const hasApiKey = Boolean(ai.apiKey?.trim());
+  // Key 保存在主进程安全存储中，渲染进程只知道 hasApiKey；草稿里刚填写还未保存的 Key 同样算已配置
+  const hasApiKey = Boolean(ai.apiKey?.trim()) || ai.hasApiKey === true;
   const hasBaseUrl = Boolean(ai.baseUrl?.trim());
   const hasModel = Boolean(ai.model?.trim());
   return {

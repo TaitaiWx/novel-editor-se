@@ -27,38 +27,6 @@ export interface CharacterRelation {
   note: string;
 }
 
-export interface PlotSceneBoard {
-  sceneKey: string;
-  title: string;
-  objective: string;
-  tension: string;
-  outcome: string;
-  status: 'draft' | 'ready' | 'done';
-  /** 场景涉及人物 */
-  characters: string[];
-  /** 场景内节拍 */
-  beats: string[];
-  /** 因果链：当前场景指向的下一个场景 */
-  causesScene: string | null;
-  /** 泳道视图使用的 POV 人物 */
-  pov: string;
-  /** 情绪强度 1-5，用于热度可视化 */
-  intensity: number;
-}
-
-export interface PlotActBoard {
-  premise: string;
-  goal: string;
-  conflict: string;
-  twist: string;
-  payoff: string;
-  structureNodes: string[];
-  aiSuggestion: string;
-  sceneBoards: PlotSceneBoard[];
-}
-
-export type StorylineLayoutMode = 'board' | 'timeline' | 'causal';
-
 export interface PersistedAISettings {
   enabled?: boolean;
   contextTokens?: number;
@@ -125,6 +93,8 @@ export interface RightPanelProps {
   onPopOut?: () => void;
   onScrollToLine?: (line: number, contentKey?: string) => void;
   onReplaceLineText?: (line: number, text: string) => void;
+  /** 打开某章并定位到行（卷纲点击其他章节时使用） */
+  onOpenSourceLocation?: (filePath: string, line: number, contentKey?: string) => void;
   folderPath: string | null;
   dbReady: boolean;
 }

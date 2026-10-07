@@ -31,10 +31,7 @@ export function resolveLogDirectory(): string | null {
 export function getStateFiles(): string[] {
   const userData = safeGetPath('userData');
   if (!userData) return [];
-  return [
-    path.join(userData, 'updater-state.json'),
-    path.join(userData, 'log-upload-settings.json'),
-  ];
+  return [path.join(userData, 'updater-state.json')];
 }
 
 function safeSampleDataPath(): string | null {

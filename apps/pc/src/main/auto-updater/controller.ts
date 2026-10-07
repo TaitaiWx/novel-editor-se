@@ -1,5 +1,5 @@
 /**
- * 自动更新控制器：electron-updater 事件绑定，以及对外暴露的检查/下载/安装/切换通道等操作。
+ * 自动更新控制器：electron-updater 事件绑定，以及对外暴露的检查/下载/安装等操作（通道由版本号决定，见 channel.ts）。
  */
 import type {
   AppUpdater,
@@ -231,34 +231,6 @@ export async function getUpdateStatus() {
   if (getAutoUpdaterUnavailableReason() && !updaterStatus.lastError) {
     updaterStatus.lastError = getUpdaterUnavailableMessage();
   }
-  return updaterStatus;
-}
-
-export async function setUpdateChannel(channel: UpdateChannel) {
-  const state = await loadUpdaterState();
-  state.channel = channel;
-  await persistUpdaterState();
-
-  updaterStatus.channel = channel;
-  updaterStatus.channelFile = getChannelMetadataFile(channel);
-  updaterStatus.lastError = null;
-  updaterStatus.updateReady = false;
-  updaterStatus.availableVersion = null;
-  updaterStatus.downloadedVersion = null;
-  updaterStatus.downloadPercent = null;
-  updaterStatus.channelVersion = null;
-  updaterStatus.rolloutPercentage = null;
-  updaterStatus.rolloutEligible = null;
-
-  const updater = await getAutoUpdater();
-  if (!updater) {
-    updaterStatus.lastError = getUpdaterUnavailableMessage();
-    emitStatus();
-    return updaterStatus;
-  }
-
-  configureAutoUpdater(updater, channel);
-  void checkForUpdatesManually();
   return updaterStatus;
 }
 

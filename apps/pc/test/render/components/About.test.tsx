@@ -4,10 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AboutDialog from '@/render/components/AboutDialog';
 import AboutSection from '@/render/components/AppSettingsCenter/AboutSection';
-import UpdateGroup from '@/render/components/AppSettingsCenter/UpdateGroup';
 import ToastProvider from '@/render/components/Toast';
 import type { AboutInfo } from '@/shared/about';
-import type { LogUploadResult, LogUploadSettingsState } from '@/shared/log-upload';
+import type { LogUploadResult } from '@/shared/log-upload';
 import {
   installElectronMock,
   uninstallElectronMock,
@@ -37,17 +36,11 @@ interface MockOptions {
   info?: AboutInfo;
   copyResult?: { success: boolean };
   upload?: () => LogUploadResult | Promise<LogUploadResult>;
-  settings?: LogUploadSettingsState;
-  setSettingsFails?: boolean;
 }
 
 function mockIpc(opts: MockOptions = {}): { mock: ElectronMock; state: { info: AboutInfo } } {
   const state = { info: opts.info ?? makeInfo() };
-  let settings: LogUploadSettingsState = opts.settings ?? {
-    autoUploadOnCrash: true,
-    endpointConfigured: false,
-  };
-  const mock = installElectronMock((channel, ...args) => {
+  const mock = installElectronMock((channel) => {
     switch (channel) {
       case 'get-about-info':
         return state.info;
@@ -63,21 +56,6 @@ function mockIpc(opts: MockOptions = {}): { mock: ElectronMock; state: { info: A
               uploadError: null,
               bytes: 1024,
             };
-      case 'log-upload-get-settings':
-        return settings;
-      case 'log-upload-set-settings':
-        if (opts.setSettingsFails) throw new Error('disk full');
-        settings = { ...settings, ...(args[0] as Partial<LogUploadSettingsState>) };
-        return settings;
-      case 'update-set-channel': {
-        const channel = args[0] as AboutInfo['updateChannel'];
-        state.info = {
-          ...state.info,
-          updateChannel: channel,
-          rollout: { ...state.info.rollout, canaryEnrolled: channel === 'canary' },
-        };
-        return {};
-      }
       default:
         return undefined;
     }
@@ -150,7 +128,7 @@ describe('AboutDialog（精简小窗口）', () => {
     mockIpc();
     renderWithToast(<AboutDialog visible onClose={vi.fn()} />);
     const copy = await screen.findByRole('button', { name: '复制设备 ID' });
-    expect(await hoverTooltip(copy)).toBe('复制本机设备 ID，用于问题排查与灰度分组');
+    expect(await hoverTooltip(copy)).toBe('复制本机设备 ID，用于问题排查');
     await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
     expect(await hoverTooltip(screen.getByRole('button', { name: '上传日志' }))).toBe(
       '打包诊断信息与最近日志并上传，不含作品内容'
@@ -349,74 +327,20 @@ describe('AboutSection（设置中心 → 关于）', () => {
   });
 });
 
-describe('UpdateGroup（通用 → 更新与诊断）', () => {
-  it('切换更新通道：加入金丝雀计划后刷新信息', async () => {
-    const { mock } = mockIpc();
-    renderWithToast(<UpdateGroup />);
-    const canary = await screen.findByRole('radio', { name: '金丝雀（canary）' });
-    expect(screen.getByRole('radio', { name: '测试版（beta）' }).getAttribute('aria-checked')).toBe(
-      'true'
-    );
-    expect(screen.getByText('分桶 12 · 当前为全量发布')).toBeTruthy();
-    fireEvent.click(canary);
-    await waitFor(() => expect(canary.getAttribute('aria-checked')).toBe('true'));
-    expect(callsOf(mock, 'update-set-channel')).toEqual([['canary']]);
-    expect(screen.getByText(/加入金丝雀计划，第一时间获得新版本/)).toBeTruthy();
-
-    // 点击当前通道不重复请求
-    fireEvent.click(canary);
-    expect(callsOf(mock, 'update-set-channel')).toHaveLength(1);
-  });
-
-  it('检查更新与灰度描述', async () => {
+describe('设置中心不再提供更新通道 / 灰度 / 崩溃上传开关', () => {
+  it('「关于」只提供检查更新按钮，不显示通道、灰度分组与崩溃上传开关', async () => {
     const { mock } = mockIpc({
       info: makeInfo({
-        rollout: { bucket: 3, percentage: 10, eligible: false, canaryEnrolled: false },
+        rollout: { bucket: 3, percentage: 10, eligible: false, canaryEnrolled: true },
+        updateChannel: 'canary',
       }),
     });
-    renderWithToast(<UpdateGroup />);
-    await screen.findByText('分桶 3 · 灰度 10% · 未命中');
-    fireEvent.click(screen.getByRole('button', { name: '检查更新' }));
+    renderWithToast(<AboutSection active />);
+    fireEvent.click(await screen.findByRole('button', { name: '检查更新' }));
     expect(callsOf(mock, 'update-check')).toHaveLength(1);
-  });
-
-  it('切换通道失败时提示', async () => {
-    installElectronMock((channel) => {
-      if (channel === 'get-about-info') return makeInfo();
-      if (channel === 'update-set-channel') throw new Error('x');
-      if (channel === 'log-upload-get-settings')
-        return { autoUploadOnCrash: true, endpointConfigured: true };
-      return undefined;
-    });
-    renderWithToast(<UpdateGroup />);
-    fireEvent.click(await screen.findByRole('radio', { name: '正式版（stable）' }));
-    await screen.findByText('切换更新通道失败');
-  });
-
-  it('「崩溃时自动上传日志」默认开启，可关闭并保存到主进程', async () => {
-    const { mock } = mockIpc();
-    renderWithToast(<UpdateGroup />);
-    const toggle = await screen.findByRole('switch', { name: '崩溃时自动上传日志' });
-    await waitFor(() => expect((toggle as HTMLButtonElement).disabled).toBe(false));
-    expect(toggle.getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByText(/当前未配置上传服务，崩溃日志只保存在本机/)).toBeTruthy();
-
-    fireEvent.click(toggle);
-    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('false'));
-    expect(callsOf(mock, 'log-upload-set-settings')).toEqual([[{ autoUploadOnCrash: false }]]);
-  });
-
-  it('保存开关失败时回滚并提示', async () => {
-    mockIpc({
-      setSettingsFails: true,
-      settings: { autoUploadOnCrash: true, endpointConfigured: true },
-    });
-    renderWithToast(<UpdateGroup />);
-    const toggle = await screen.findByRole('switch', { name: '崩溃时自动上传日志' });
-    await waitFor(() => expect((toggle as HTMLButtonElement).disabled).toBe(false));
-    expect(screen.queryByText(/当前未配置上传服务/)).toBeNull();
-    fireEvent.click(toggle);
-    await screen.findByText('保存失败，请重试');
-    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByText(/更新通道|灰度|金丝雀|canary|分桶|崩溃时自动上传/)).toBeNull();
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(callsOf(mock, 'log-upload-get-settings')).toHaveLength(0);
   });
 });

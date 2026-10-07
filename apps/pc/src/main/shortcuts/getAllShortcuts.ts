@@ -26,7 +26,8 @@ export const getAllShortcuts = (): ShortcutDisplay[] => {
     .filter((config) => !config.devOnly)
     .map(({ accelerator, description, category }) => ({ accelerator, description, category }));
 
-  // 只在渲染进程处理的快捷键（其中「切换侧边栏」「切换专注模式」同时出现在视图菜单，加速键由渲染进程同步）
+  // 只在渲染进程处理的快捷键（「切换侧边栏」「切换专注模式」同时出现在视图菜单、「灵感抽签」出现在编辑菜单，
+  // 加速键由渲染进程经 menu-sync-shortcuts 同步）
   const rendererShortcuts: ShortcutDisplay[] = [
     { accelerator: `${mod}+P`, description: '搜索文件', category: '文件' },
     { accelerator: `${mod}+W`, description: '关闭当前标签', category: '文件' },

@@ -1,7 +1,7 @@
 /** 对渲染进程暴露的更新状态快照，以及广播工具 */
 import { app, BrowserWindow } from 'electron';
 import type { UpdateChannel } from '../auto-updater-state';
-import { getChannelMetadataFile, inferDefaultChannel } from './channel';
+import { getChannelMetadataFile, resolveUpdateChannel } from './channel';
 
 export type UpdateNetworkPhase = 'online' | 'recovering' | 'offline';
 
@@ -37,8 +37,8 @@ interface UpdaterConnectivityState {
 }
 
 export const updaterStatus: UpdateStatus = {
-  channel: inferDefaultChannel(app.getVersion()),
-  channelFile: getChannelMetadataFile(inferDefaultChannel(app.getVersion())),
+  channel: resolveUpdateChannel(app.getVersion()),
+  channelFile: getChannelMetadataFile(resolveUpdateChannel(app.getVersion())),
   currentVersion: app.getVersion(),
   checking: false,
   updateReady: false,

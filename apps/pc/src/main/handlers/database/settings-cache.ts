@@ -1,5 +1,12 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { isDatabaseReady, statsOps, settingsOps, aiCacheOps } from '@novel-editor/store';
+import { getCredentialStore } from '../../ai/runtime';
+import {
+  DEFAULT_TEXT_PROVIDER_ID,
+  interceptSettingsWrite,
+  sanitizeSettingsForRenderer,
+  SETTINGS_CENTER_KEY,
+} from '../../ai/settings-secrets';
 
 /** 写作统计、应用设置与 AI 缓存 */
 export function registerSettingsAndCacheHandlers(): void {
@@ -19,10 +26,20 @@ export function registerSettingsAndCacheHandlers(): void {
 
   ipcMain.handle('db-settings-get', (_event, key: string) => {
     if (!isDatabaseReady()) return undefined;
-    return settingsOps.get(key);
+    const value = settingsOps.get(key);
+    // AI Key 只写不读：去掉明文，只告诉渲染进程是否已配置
+    if (key === SETTINGS_CENTER_KEY) {
+      return sanitizeSettingsForRenderer(value, getCredentialStore().has(DEFAULT_TEXT_PROVIDER_ID));
+    }
+    return value;
   });
   ipcMain.handle('db-settings-set', (_event, key: string, value: string) => {
-    settingsOps.set(key, value);
+    // 渲染进程写入的 apiKey 转存到 safeStorage，数据库里不再保存明文
+    const stored =
+      key === SETTINGS_CENTER_KEY && typeof value === 'string'
+        ? interceptSettingsWrite(value, getCredentialStore())
+        : value;
+    settingsOps.set(key, stored);
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
         win.webContents.send('settings-updated', key);

@@ -13,6 +13,31 @@ export function inferDefaultChannel(version: string): UpdateChannel {
   return 'stable';
 }
 
+/**
+ * 仅供内部测试的通道覆盖（环境变量）：stable / beta / canary。
+ * 用户界面不提供通道选择——通道由安装包版本号决定，灰度比例由服务端元数据（stagingPercentage）决定。
+ */
+export const UPDATE_CHANNEL_ENV = 'NOVEL_EDITOR_UPDATE_CHANNEL';
+
+/** 读取环境变量覆盖；未设置或非法时返回 null */
+export function readUpdateChannelOverride(
+  env: NodeJS.ProcessEnv = process.env
+): UpdateChannel | null {
+  const raw = env[UPDATE_CHANNEL_ENV]?.trim().toLowerCase();
+  return raw === 'stable' || raw === 'beta' || raw === 'canary' ? raw : null;
+}
+
+/**
+ * 实际生效的更新通道：环境变量覆盖 > 版本号推断（alpha/canary → canary，beta → beta，其余 stable）。
+ * 持久化状态里旧版用户选择的通道不再生效。
+ */
+export function resolveUpdateChannel(
+  version: string,
+  env: NodeJS.ProcessEnv = process.env
+): UpdateChannel {
+  return readUpdateChannelOverride(env) ?? inferDefaultChannel(version);
+}
+
 /** 将应用内通道映射为 electron-updater 的 channel 名 */
 export function mapUpdateChannel(channel: UpdateChannel) {
   switch (channel) {

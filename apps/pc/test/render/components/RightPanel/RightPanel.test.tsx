@@ -2,12 +2,13 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { AiOutlineDoubleLeft, AiOutlineDoubleRight } from 'react-icons/ai';
 
 vi.mock('@/render/components/RightPanel/OutlineView', () => ({
   OutlineView: ({ mode }: { mode: string }) => <div data-testid={`outline-${mode}`} />,
 }));
-vi.mock('@/render/components/RightPanel/ActsView', () => ({
-  ActsView: () => <div data-testid="acts" />,
+vi.mock('@/render/components/RightPanel/VolumePlanView', () => ({
+  VolumePlanView: () => <div data-testid="acts" />,
 }));
 
 const { default: RightPanel } = await import('@/render/components/RightPanel');
@@ -38,6 +39,28 @@ describe('RightPanel（大纲）', () => {
     fireEvent.click(screen.getByRole('button', { name: '折叠面板' }));
     expect(onPopOut).toHaveBeenCalledTimes(1);
     expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('折叠按钮与左侧「折叠侧边栏」同一图标族：双右箭头，与其他操作用分隔线隔开并在最右', () => {
+    renderPanel({ onPopOut: vi.fn() });
+    const collapse = screen.getByRole('button', { name: '折叠面板' });
+    const { container } = render(<AiOutlineDoubleRight />);
+    expect(collapse.querySelector('svg')?.innerHTML).toBe(
+      container.querySelector('svg')?.innerHTML
+    );
+    expect(collapse.textContent).toBe('');
+    expect(collapse.className).toContain('collapseButton');
+    const actions = collapse.closest('[class*="headerActions"]') as HTMLElement;
+    const buttons = Array.from(actions.querySelectorAll('button'));
+    expect(buttons.at(-1)).toBe(collapse);
+    expect(actions.querySelector('[class*="headerActionDivider"]')).toBeTruthy();
+  });
+
+  it('折叠后的展开按钮用双左箭头', () => {
+    renderPanel({ collapsed: true });
+    const expand = screen.getByRole('button', { name: '展开面板' });
+    const { container } = render(<AiOutlineDoubleLeft />);
+    expect(expand.querySelector('svg')?.innerHTML).toBe(container.querySelector('svg')?.innerHTML);
   });
 
   it('只有 目录 / 章纲 / 卷纲 三个视图，默认目录', () => {

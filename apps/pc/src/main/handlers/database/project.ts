@@ -12,6 +12,7 @@ import {
 } from '@novel-editor/store';
 import { getNativeBinding } from '../../native-binding';
 import { prepareProjectWorkScopes } from '../work-scope';
+import { handleDatabaseOpened } from '../../ai/runtime';
 
 /**
  * 项目数据库初始化后，若 `<项目>/.novel-editor/seed.json` 存在，按作品写入其中的人物 / 设定 / 大纲
@@ -38,6 +39,8 @@ export function registerProjectHandlers(): void {
   ipcMain.handle('db-init', async (_event, dbDir: string) => {
     initDatabase(dbDir, 'novel-editor.db', getNativeBinding());
     seedProjectFromDbDir(dbDir);
+    // 明文 AI Key 迁移到安全存储、恢复视频任务轮询
+    handleDatabaseOpened();
     // 人物 / 设定 / 大纲跟随作品：确保每部作品有记录，并迁移旧版项目级数据
     const scopes = await prepareProjectWorkScopes(path.dirname(dbDir)).catch((error: unknown) => {
       console.warn('[work-scope] 准备作品作用域失败:', error);
@@ -49,6 +52,7 @@ export function registerProjectHandlers(): void {
   ipcMain.handle('db-init-default', () => {
     const defaultDbDir = path.join(app.getPath('userData'), '.novel-editor');
     initDatabase(defaultDbDir, 'novel-editor.db', getNativeBinding());
+    handleDatabaseOpened();
     return { success: true, dbDir: defaultDbDir };
   });
 

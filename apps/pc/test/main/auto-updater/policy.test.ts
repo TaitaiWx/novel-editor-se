@@ -3,6 +3,9 @@ import {
   getChannelMetadataFile,
   inferDefaultChannel,
   mapUpdateChannel,
+  readUpdateChannelOverride,
+  resolveUpdateChannel,
+  UPDATE_CHANNEL_ENV,
 } from '../../../src/main/auto-updater/channel';
 import { computeRolloutBucket, isRolloutEligible } from '../../../src/main/auto-updater/rollout';
 import {
@@ -54,6 +57,18 @@ describe('auto-updater/channel', () => {
     expect(inferDefaultChannel('1.2.0-beta.3')).toBe('beta');
     expect(inferDefaultChannel('1.2.0-alpha.1')).toBe('canary');
     expect(inferDefaultChannel('1.2.0-CANARY.1')).toBe('canary');
+  });
+
+  it('resolveUpdateChannel：用户不可选择，按版本号推断，只允许内部环境变量覆盖', () => {
+    expect(resolveUpdateChannel('1.2.0', {})).toBe('stable');
+    expect(resolveUpdateChannel('1.2.0-beta.3', {})).toBe('beta');
+    expect(resolveUpdateChannel('1.2.0-alpha.0', {})).toBe('canary');
+    expect(resolveUpdateChannel('1.2.0', { [UPDATE_CHANNEL_ENV]: ' Canary ' })).toBe('canary');
+    expect(resolveUpdateChannel('1.2.0-beta.1', { [UPDATE_CHANNEL_ENV]: 'stable' })).toBe('stable');
+    // 非法值忽略
+    expect(resolveUpdateChannel('1.2.0-beta.1', { [UPDATE_CHANNEL_ENV]: 'nightly' })).toBe('beta');
+    expect(readUpdateChannelOverride({})).toBeNull();
+    expect(readUpdateChannelOverride({ [UPDATE_CHANNEL_ENV]: '' })).toBeNull();
   });
 
   it('通道映射为 electron-updater channel 并生成平台元数据文件名', () => {

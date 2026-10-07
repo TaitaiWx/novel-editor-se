@@ -46,7 +46,11 @@ describe('normalizeMenuShortcutBindings', () => {
     expect(normalizeMenuShortcutBindings({ toggleSidebar: '', toggleFocusMode: 1 })).toEqual({
       toggleSidebar: '',
       toggleFocusMode: 'Mod+Shift+F',
+      openInspiration: 'Mod+Shift+Y',
     });
+    expect(normalizeMenuShortcutBindings({ openInspiration: 'Mod+Alt+I' }).openInspiration).toBe(
+      'Mod+Alt+I'
+    );
   });
 
   it('默认值与渲染进程设置的默认快捷键一致', () => {
@@ -55,6 +59,9 @@ describe('normalizeMenuShortcutBindings', () => {
     );
     expect(DEFAULT_MENU_SHORTCUT_BINDINGS.toggleFocusMode).toBe(
       DEFAULT_SHORTCUT_SETTINGS.toggleFocusMode
+    );
+    expect(DEFAULT_MENU_SHORTCUT_BINDINGS.openInspiration).toBe(
+      DEFAULT_SHORTCUT_SETTINGS.openInspiration
     );
   });
 

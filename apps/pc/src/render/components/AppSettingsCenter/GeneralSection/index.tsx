@@ -3,7 +3,6 @@ import { AiOutlineSetting } from 'react-icons/ai';
 import { type SettingsDraft, THOUSAND_CHAR_MARKER_STEP_OPTIONS } from '../../../utils/appSettings';
 import type { SystemProfileInfo } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
-import UpdateGroup from '../UpdateGroup';
 import sharedStyles from '../styles.module.scss';
 import styles from './styles.module.scss';
 
@@ -90,23 +89,6 @@ const GeneralSection: React.FC<GeneralSectionProps> = ({ settings, setGeneral, s
 
       <div className={sharedStyles.formRow}>
         <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>Markdown 实时渲染</div>
-          <div className={sharedStyles.formDesc}>
-            打开 .md 文件时就地渲染标题、表格、图片与公式，光标所在处显示源码。
-          </div>
-        </div>
-        <button
-          className={`${sharedStyles.switchButton} ${settings.general.markdownLivePreview ? sharedStyles.enabled : ''}`}
-          aria-label="Markdown 实时渲染"
-          aria-pressed={settings.general.markdownLivePreview}
-          onClick={() => setGeneral('markdownLivePreview', !settings.general.markdownLivePreview)}
-        >
-          <span className={sharedStyles.switchThumb} />
-        </button>
-      </div>
-
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
           <div className={sharedStyles.formLabel}>显示文件大小</div>
           <div className={sharedStyles.formDesc}>
             在资源树中显示文件大小。关闭后可减轻大目录的加载压力。
@@ -135,8 +117,6 @@ const GeneralSection: React.FC<GeneralSectionProps> = ({ settings, setGeneral, s
         </button>
       </div>
     </div>
-
-    <UpdateGroup />
 
     {systemProfile && (
       <div className={sharedStyles.statusCard}>

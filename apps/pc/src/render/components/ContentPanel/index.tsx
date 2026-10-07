@@ -54,8 +54,6 @@ interface ContentPanelProps {
   reloadToken?: number;
   encoding?: string;
   showThousandCharMarkers?: boolean;
-  /** Markdown 实时渲染（设置中心「通用」） */
-  markdownLivePreview?: boolean;
   thousandCharMarkerStep?: number;
   formatChapterShortcut?: string;
   characterHighlights?: CharacterHighlightPattern[];
@@ -66,6 +64,8 @@ interface ContentPanelProps {
   editorViewRef?: React.MutableRefObject<EditorView | null>;
   /** 文本编辑器文件栏上额外的操作按钮（如「灵感」），放在设置按钮之前 */
   editorHeaderActions?: React.ReactNode;
+  /** 未打开文件时编辑器空状态里的操作（如「灵感抽签」） */
+  emptyStateActions?: React.ReactNode;
   viewportSnapshots?: Record<string, EditorViewportSnapshot>;
   onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onTabSelect: (filePath: string) => void;
@@ -141,7 +141,6 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   reloadToken,
   encoding,
   showThousandCharMarkers = true,
-  markdownLivePreview = true,
   thousandCharMarkerStep = 1000,
   formatChapterShortcut,
   characterHighlights = [],
@@ -151,6 +150,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   inlineDiff,
   editorViewRef,
   editorHeaderActions,
+  emptyStateActions,
   viewportSnapshots,
   onViewportSnapshotChange,
   onTabSelect,
@@ -353,7 +353,6 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
               wordWrap={wordWrap}
               showLineNumbers={showLineNumbers}
               showThousandCharMarkers={showThousandCharMarkers}
-              markdownLivePreview={markdownLivePreview}
               thousandCharMarkerStep={thousandCharMarkerStep}
               encoding={encoding}
               characterHighlights={characterHighlights}
@@ -369,6 +368,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
               onSaveUntitled={onSaveUntitled}
               onScrollProcessed={onScrollProcessed}
               onTransientHighlightProcessed={onTransientHighlightProcessed}
+              emptyStateActions={emptyStateActions}
               settingsComponent={
                 editorHeaderActions ? (
                   <>

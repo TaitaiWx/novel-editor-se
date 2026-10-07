@@ -32,30 +32,16 @@ export type LogUploadResult =
     }
   | { status: 'failed'; error: string };
 
-/** 日志上传相关的用户设置（主进程持久化在 userData/log-upload-settings.json） */
-export interface LogUploadSettings {
-  /** 崩溃 / 未捕获异常时自动上传日志（默认开启；未配置上传地址时只保存在本地） */
-  autoUploadOnCrash: boolean;
+/**
+ * 崩溃时是否上传日志包：始终由我们处理，用户没有开关。
+ * 只有配置了上传地址时才上传；否则（或上传失败时）只保存在 userData/crash-reports/。
+ */
+export function shouldUploadCrashReport(endpoint: string | null | undefined): endpoint is string {
+  return typeof endpoint === 'string' && endpoint.length > 0;
 }
 
-export interface LogUploadSettingsState extends LogUploadSettings {
-  /** 是否配置了上传地址 */
-  endpointConfigured: boolean;
-}
-
-export const DEFAULT_LOG_UPLOAD_SETTINGS: LogUploadSettings = {
-  autoUploadOnCrash: true,
-};
-
-export function normalizeLogUploadSettings(value: unknown): LogUploadSettings {
-  const raw = value && typeof value === 'object' ? (value as Partial<LogUploadSettings>) : {};
-  return {
-    autoUploadOnCrash:
-      typeof raw.autoUploadOnCrash === 'boolean'
-        ? raw.autoUploadOnCrash
-        : DEFAULT_LOG_UPLOAD_SETTINGS.autoUploadOnCrash,
-  };
-}
+/** 旧版「崩溃时自动上传日志」开关的持久化文件名（已废弃，启动后删除，内容被忽略） */
+export const LEGACY_LOG_UPLOAD_SETTINGS_FILE = 'log-upload-settings.json';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 

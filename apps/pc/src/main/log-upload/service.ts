@@ -2,7 +2,7 @@
  * 日志上传服务：打包 → 上传（已配置地址时）→ 失败或未配置时本地兜底
  *
  * - 手动（关于窗口「上传日志」）：兜底保存到「下载」目录并在访达 / 资源管理器中定位
- * - 崩溃：只在配置了地址且用户开启「崩溃时自动上传日志」时上传；否则只保存在 userData/crash-reports（最多 5 个）
+ * - 崩溃：始终开启（用户无开关），配置了地址时上传；未配置或失败时只保存在 userData/crash-reports（最多 5 个）
  */
 import { app, shell } from 'electron';
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   buildLogBundleFileName,
+  shouldUploadCrashReport,
   type LogUploadReason,
   type LogUploadResult,
 } from '../../shared/log-upload';
@@ -23,7 +24,6 @@ import {
   getStateFiles,
   resolveLogDirectory,
 } from './diagnostics';
-import { loadLogUploadSettings } from './settings';
 import { uploadLogBundle, type FetchLike, type UploadOutcome } from './uploader';
 
 export interface LogUploadServiceOptions {
@@ -178,16 +178,15 @@ export type CrashReportOutcome =
   | { status: 'uploaded'; ticketId: string | null }
   | { status: 'saved'; filePath: string; uploadError: string | null };
 
-/** 崩溃时打包日志：配置了地址且开启自动上传时上传，否则（或失败时）保存到 crash-reports */
+/** 崩溃时打包日志：配置了地址时上传，否则（或失败时）保存到 crash-reports */
 export async function reportCrash(
   crash: CrashContext,
   options: LogUploadServiceOptions = {}
 ): Promise<CrashReportOutcome> {
   const bundle = await prepareLogBundle('crash', crash, options.now);
   const endpoint = resolveEndpoint(options);
-  const settings = await loadLogUploadSettings();
   let uploadError: string | null = null;
-  if (endpoint && settings.autoUploadOnCrash) {
+  if (shouldUploadCrashReport(endpoint)) {
     const outcome = await tryUpload(bundle, 'crash', endpoint, options);
     if (outcome.ok) return { status: 'uploaded', ticketId: outcome.ticketId };
     uploadError = outcome.error;

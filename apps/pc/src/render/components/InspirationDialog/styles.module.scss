@@ -9,23 +9,43 @@ $amber: rgb(215, 186, 125);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
 }
 
+// 宽度随窗口变化：最宽 600px，窄窗口下签卡改为单列
 .modal {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 64px);
-  padding: 18px 20px 16px;
+  gap: 16px;
+  width: min(600px, 100%);
+  max-height: calc(100vh - 48px);
+  padding: 20px;
   overflow-y: auto;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #202124;
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-bg-elevated);
   color: var(--ui-fg-primary);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    0 24px 52px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+}
+
+// 统一的键盘焦点环（与全局 token 一致，向外偏移避免压住边框）
+.iconButton,
+.rerollButton,
+.drawButton,
+.primaryButton,
+.secondaryButton,
+.ghostButton,
+.disclosure {
+  font-family: inherit;
+
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 2px;
+  }
 }
 
 .header {
@@ -35,31 +55,39 @@ $amber: rgb(215, 186, 125);
   gap: 12px;
 }
 
+.heading {
+  min-width: 0;
+}
+
 .title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  line-height: 24px;
   color: #ececec;
 }
 
 .subtitle {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   font-size: 12px;
+  line-height: 18px;
   color: var(--ui-fg-muted);
 }
 
+// 关闭按钮与标题同一行垂直居中，右侧对齐到内容边缘
 .iconButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 26px;
   height: 26px;
+  margin: -1px -4px 0 0;
   flex-shrink: 0;
   border: none;
   border-radius: 6px;
   background: none;
   color: var(--ui-fg-muted);
-  font-size: 15px;
+  font-size: 16px;
   cursor: pointer;
 
   &:hover {
@@ -69,26 +97,34 @@ $amber: rgb(215, 186, 125);
 }
 
 .empty {
-  padding: 22px 12px;
+  padding: 20px 12px;
   border-radius: 10px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border: 1px dashed var(--ui-border-strong);
   font-size: 12px;
   color: var(--ui-fg-muted);
   text-align: center;
 }
 
+// 三张签等高：grid 行内拉伸，词条区 flex: 1，「换一签」统一贴底
 .slots {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  align-items: stretch;
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .slots {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .slot {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
-  padding: 12px;
+  padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid rgba($amber, 0.16);
   background: linear-gradient(180deg, rgba($amber, 0.07), rgba(255, 255, 255, 0.02));
@@ -102,12 +138,14 @@ $amber: rgb(215, 186, 125);
 }
 
 .slotLabel {
+  flex-shrink: 0;
   font-size: 12px;
   font-weight: 600;
   color: #d9c18d;
 }
 
 .slotHint {
+  min-width: 0;
   overflow: hidden;
   font-size: 11px;
   color: var(--ui-fg-muted);
@@ -115,13 +153,16 @@ $amber: rgb(215, 186, 125);
   text-overflow: ellipsis;
 }
 
+// 词条：两行等高占位；均衡换行，避免「规矩与良心只能选一 / 个」这种单字孤行
 .slotTerm {
   flex: 1;
-  min-height: 42px;
+  min-height: calc(1.5em * 2);
   font-size: 15px;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.5;
   color: #f2e4bf;
+  text-wrap: balance;
+  line-break: strict;
   overflow-wrap: anywhere;
 }
 
@@ -131,13 +172,17 @@ $amber: rgb(215, 186, 125);
   justify-content: center;
   gap: 4px;
   align-self: flex-start;
-  padding: 3px 8px;
+  height: 24px;
+  padding: 0 8px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--ui-fg-muted);
   font-size: 11px;
   cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 
   &:hover {
     background: var(--ui-interaction-hover-bg);
@@ -145,23 +190,42 @@ $amber: rgb(215, 186, 125);
   }
 }
 
-.actions,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.actionsEnd,
 .aiActions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  margin-left: auto;
 }
 
 .drawButton,
 .primaryButton,
-.secondaryButton {
-  padding: 7px 14px;
+.secondaryButton,
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
   border-radius: 7px;
   font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease;
 
   &:disabled {
     opacity: 0.5;
@@ -169,37 +233,49 @@ $amber: rgb(215, 186, 125);
   }
 }
 
-.drawButton {
-  flex: 1;
-  padding: 12px 18px;
-  border: 1px solid rgba($amber, 0.4);
-  background: rgba($amber, 0.2);
-  color: #f6ecd2;
-  font-size: 14px;
+// 主操作：抽一签（未抽时整行）/ 插入到光标处
+.drawButton,
+.primaryButton {
+  border: 1px solid rgba($amber, 0.55);
+  background: rgba($amber, 0.26);
+  color: #fbf3df;
   font-weight: 600;
 
-  &:hover {
-    background: rgba($amber, 0.28);
-  }
-}
-
-.primaryButton {
-  border: 1px solid rgba($amber, 0.36);
-  background: rgba($amber, 0.16);
-  color: #f2e4bf;
-
   &:hover:not(:disabled) {
-    background: rgba($amber, 0.24);
+    background: rgba($amber, 0.34);
+    border-color: rgba($amber, 0.7);
   }
 }
 
+.drawButton {
+  width: 100%;
+  height: 42px;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+// 次要：复制 / 交给 AI 扩写
 .secondaryButton {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ui-border-strong);
   background: rgba(255, 255, 255, 0.04);
-  color: #c8ccd1;
+  color: var(--ui-fg-primary);
 
   &:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+// 最弱：全部重抽（文字按钮，图标与内容左边缘对齐）
+.ghostButton {
+  margin-left: -8px;
+  padding: 0 10px 0 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ui-fg-muted);
+
+  &:hover {
+    background: var(--ui-interaction-hover-bg);
+    color: var(--ui-fg-primary);
   }
 }
 
@@ -237,7 +313,9 @@ $amber: rgb(215, 186, 125);
   align-items: center;
   gap: 6px;
   align-self: flex-start;
-  padding: 2px 0;
+  margin-top: -4px;
+  padding: 2px 4px 2px 0;
+  border-radius: 4px;
   border: none;
   background: none;
   color: var(--ui-fg-muted);

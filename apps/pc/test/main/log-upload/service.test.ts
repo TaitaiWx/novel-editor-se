@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LogUploadResult, LogUploadSettingsState } from '../../../src/shared/log-upload';
+import type { LogUploadResult } from '../../../src/shared/log-upload';
 import type { FetchLike } from '../../../src/main/log-upload/uploader';
 
 // ─── electron / electron-log / auto-updater mock ───
@@ -62,7 +62,7 @@ import {
   reportCrash,
   runManualLogUpload,
 } from '../../../src/main/log-upload/service';
-import { resetLogUploadSettingsCache } from '../../../src/main/log-upload/settings';
+import { removeLegacyLogUploadSettings } from '../../../src/main/log-upload/settings';
 
 function invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T> {
   const handler: Handler | undefined = mocks.handlers.get(channel);
@@ -99,7 +99,6 @@ beforeEach(async () => {
   await mkdir(mocks.paths.userData, { recursive: true });
   await writeFile(path.join(mocks.paths.userData, 'novel-editor.db'), 'SQLite format 3');
   mocks.showItemInFolder.mockClear();
-  resetLogUploadSettingsCache();
   vi.stubEnv('NOVEL_EDITOR_LOG_UPLOAD_URL', '');
   vi.stubEnv('NOVEL_EDITOR_E2E', '');
 });
@@ -194,7 +193,7 @@ describe('reportCrash', () => {
     expect(existsSync(mocks.paths.downloads)).toBe(false);
   });
 
-  it('开启自动上传且配置了地址时上传，X-Upload-Reason 为 crash', async () => {
+  it('配置了地址时崩溃日志始终上传，X-Upload-Reason 为 crash', async () => {
     const fetchImpl = vi.fn<FetchLike>(
       async () => new Response(JSON.stringify({ ok: true }), { status: 200 })
     );
@@ -208,14 +207,26 @@ describe('reportCrash', () => {
     expect(headers['X-Upload-Reason']).toBe('crash');
   });
 
-  it('关闭「崩溃时自动上传日志」后不上传，只保存在本地', async () => {
-    await invoke('log-upload-set-settings', { autoUploadOnCrash: false });
-    const fetchImpl = vi.fn<FetchLike>();
+  it('旧版「崩溃时自动上传日志」关闭也不再生效：配置了地址时照常上传', async () => {
+    await writeFile(
+      path.join(mocks.paths.userData, 'log-upload-settings.json'),
+      JSON.stringify({ autoUploadOnCrash: false })
+    );
+    const fetchImpl = vi.fn<FetchLike>(
+      async () => new Response(JSON.stringify({ ok: true, ticketId: 'T-1' }), { status: 200 })
+    );
     const result = await reportCrash(crash, {
       endpoint: 'https://logs.example.com/up',
       fetchImpl,
       now: NOW,
     });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ status: 'uploaded', ticketId: 'T-1' });
+  });
+
+  it('未配置地址时崩溃日志不上传，只保存在本地', async () => {
+    const fetchImpl = vi.fn<FetchLike>();
+    const result = await reportCrash(crash, { endpoint: null, fetchImpl, now: NOW });
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(result).toMatchObject({ status: 'saved', uploadError: null });
   });
@@ -241,30 +252,16 @@ describe('log-upload IPC', () => {
     expect(result.status).toBe('saved');
   });
 
-  it('读取 / 修改设置：默认开启，只接受已知字段并持久化', async () => {
-    await expect(invoke<LogUploadSettingsState>('log-upload-get-settings')).resolves.toEqual({
-      autoUploadOnCrash: true,
-      endpointConfigured: false,
-    });
-    await expect(
-      invoke<LogUploadSettingsState>('log-upload-set-settings', {
-        autoUploadOnCrash: false,
-        evil: true,
-      })
-    ).resolves.toEqual({ autoUploadOnCrash: false, endpointConfigured: false });
-    const stored = JSON.parse(
-      await readFile(path.join(mocks.paths.userData, 'log-upload-settings.json'), 'utf-8')
-    );
-    expect(stored).toEqual({ autoUploadOnCrash: false });
+  it('不再提供崩溃上传开关的读写通道', () => {
+    expect(mocks.handlers.has('log-upload-get-settings')).toBe(false);
+    expect(mocks.handlers.has('log-upload-set-settings')).toBe(false);
+  });
 
-    // 非法参数不改变设置
-    await expect(invoke('log-upload-set-settings', 'oops')).resolves.toMatchObject({
-      autoUploadOnCrash: false,
-    });
-
-    vi.stubEnv('NOVEL_EDITOR_LOG_UPLOAD_URL', 'https://logs.example.com/up');
-    await expect(invoke('log-upload-get-settings')).resolves.toMatchObject({
-      endpointConfigured: true,
-    });
+  it('removeLegacyLogUploadSettings 删除旧版开关文件，文件不存在时不报错', async () => {
+    const legacy = path.join(mocks.paths.userData, 'log-upload-settings.json');
+    await writeFile(legacy, JSON.stringify({ autoUploadOnCrash: false }));
+    await removeLegacyLogUploadSettings();
+    expect(existsSync(legacy)).toBe(false);
+    await expect(removeLegacyLogUploadSettings()).resolves.toBeUndefined();
   });
 });

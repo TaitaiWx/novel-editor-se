@@ -9,6 +9,8 @@ interface EmptyStateProps {
   actionText?: string;
   onAction?: () => void;
   variant?: 'folder' | 'file' | 'generic';
+  /** 描述下方的自定义操作区（如空编辑器的「灵感抽签」） */
+  actions?: React.ReactNode;
 }
 
 const EmptyState: React.FC<EmptyStateProps> = ({
@@ -18,6 +20,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   actionText,
   onAction,
   variant = 'generic',
+  actions,
 }) => {
   const getDefaultIcon = () => {
     switch (variant) {
@@ -73,6 +76,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
           {actionText}
         </button>
       )}
+      {actions && <div className={styles.emptyActions}>{actions}</div>}
     </div>
   );
 };

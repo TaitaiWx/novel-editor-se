@@ -1,21 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeOs,
-  describeRollout,
   formatAboutDate,
   formatAboutDay,
   formatRunningSummary,
   formatUptime,
   inferReleaseChannel,
-  type AboutRolloutInfo,
 } from '../../src/shared/about';
 
-const rollout: AboutRolloutInfo = {
-  bucket: 7,
-  percentage: 20,
-  eligible: true,
-  canaryEnrolled: true,
-};
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
@@ -25,14 +17,6 @@ describe('shared/about', () => {
     expect(inferReleaseChannel('1.1.0-beta.2')).toBe('beta');
     expect(inferReleaseChannel('1.1.0-alpha.0')).toBe('alpha');
     expect(inferReleaseChannel('1.1.0-Canary.3')).toBe('alpha');
-  });
-
-  it('describeRollout 区分全量发布与灰度命中', () => {
-    expect(describeRollout({ ...rollout, percentage: null, eligible: null })).toBe(
-      '分桶 7 · 当前为全量发布'
-    );
-    expect(describeRollout(rollout)).toBe('分桶 7 · 灰度 20% · 已命中');
-    expect(describeRollout({ ...rollout, eligible: false })).toBe('分桶 7 · 灰度 20% · 未命中');
   });
 
   it('formatAboutDay / formatAboutDate 对缺失或非法时间返回「未知」', () => {

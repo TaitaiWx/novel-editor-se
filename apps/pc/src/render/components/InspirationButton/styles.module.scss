@@ -1,26 +1,102 @@
-// 与编辑器文件栏的保存按钮同尺寸、同配色
-.button {
+// 灵感入口统一用柔和的金色（与灵感弹窗、右侧面板的 info 色一致），不抢正文注意力但一眼可见
+$insp: rgb(215, 186, 125);
+
+.icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+// 编辑器文件栏操作区是 flex：排到最前，与右侧图标按钮留出间距
+.pillSlot {
+  order: -1;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: #888;
-  font-size: 16px;
+  margin-right: 6px;
+}
+
+// 编辑器文件栏上的胶囊按钮：与保存按钮（28px）垂直居中对齐
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid rgba($insp, 0.28);
+  border-radius: 999px;
+  background: rgba($insp, 0.08);
+  color: #d9c18d;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #d9c18d;
+    background: rgba($insp, 0.16);
+    border-color: rgba($insp, 0.45);
+    color: #f2e4bf;
   }
 
   &:active {
-    background: rgba(255, 255, 255, 0.12);
-    transform: scale(0.92);
+    background: rgba($insp, 0.22);
   }
+
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.label {
+  letter-spacing: 0.5px;
+}
+
+// 空编辑器里的主操作
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba($insp, 0.4);
+  border-radius: 8px;
+  background: rgba($insp, 0.14);
+  color: #f2e4bf;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+
+  .icon {
+    font-size: 16px;
+    color: #d9c18d;
+  }
+
+  &:hover {
+    background: rgba($insp, 0.22);
+    border-color: rgba($insp, 0.6);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.kbd {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ui-fg-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
 }

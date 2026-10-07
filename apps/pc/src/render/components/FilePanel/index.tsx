@@ -43,7 +43,6 @@ import SearchBar from './SearchBar';
 import CharacterGenerationHint from './CharacterGenerationHint';
 import GrowthSection from './GrowthSection';
 import WorkSwitcher from './WorkSwitcher';
-import ProjectDocsButton from './ProjectDocsButton';
 import type { GrowthSheetSummary } from '../../utils/growthIndex';
 import styles from './styles.module.scss';
 
@@ -97,6 +96,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onCreateGrowthSheet,
     onRefresh,
     onOpenFolder,
+    onOpenRecentFolder,
     onRenameProject,
     onImportFile,
     onCollapse,
@@ -329,21 +329,18 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                   workspaceLabel={workspaceLabel}
                   isWorkspaceBusy={isWorkspaceBusy}
                   isLoading={isLoading}
-                  hasFolder={Boolean(folderPath)}
+                  folderPath={folderPath}
                   showSearch={showSearch}
                   quickOpenShortcut={quickOpenShortcut}
                   createMenuItems={createMenuItems}
                   createMenuOpen={createMenuOpen}
                   onCreateMenuOpenChange={setCreateMenuOpen}
                   onRenameProject={onRenameProject}
-                  identityExtra={
-                    <ProjectDocsButton
-                      docs={projectDocNodes}
-                      selectedFile={selectedFile}
-                      onOpen={handleFileSelectFromSearch}
-                      onContextMenu={onContextMenu}
-                    />
-                  }
+                  projectDocs={projectDocNodes}
+                  selectedFile={selectedFile}
+                  onOpenProjectDoc={handleFileSelectFromSearch}
+                  onProjectDocContextMenu={onContextMenu}
+                  onOpenRecentFolder={onOpenRecentFolder}
                   onOpenFolder={onOpenFolder}
                   onToggleSearch={handleToggleSearch}
                   onCollapse={onCollapse}

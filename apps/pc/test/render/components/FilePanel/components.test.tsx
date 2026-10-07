@@ -253,9 +253,9 @@ describe('WorkspaceHeader', () => {
   function renderHeader(overrides: Partial<React.ComponentProps<typeof WorkspaceHeader>> = {}) {
     const props: React.ComponentProps<typeof WorkspaceHeader> = {
       workspaceLabel: '我的小说',
+      folderPath: '/novel',
       isWorkspaceBusy: false,
       isLoading: false,
-      hasFolder: true,
       showSearch: false,
       quickOpenShortcut: 'Mod+P',
       createMenuItems: buildCreateMenuItems(createHandlers),
@@ -275,7 +275,9 @@ describe('WorkspaceHeader', () => {
     const props = renderHeader({ onRenameProject: vi.fn(), isWorkspaceBusy: true });
     expect(screen.getByText('我的小说')).toBeTruthy();
     expect(screen.getByText('正在切换作品…')).toBeTruthy();
-    expect(screen.getByLabelText('更换文件夹')).toBeTruthy();
+    // 打开文件夹 / 刷新收进项目菜单，头部不再有单独按钮
+    expect(screen.queryByLabelText('更换文件夹')).toBeNull();
+    expect(screen.queryByLabelText('重新扫描作品目录')).toBeNull();
     // 切换作品中：项目名暂不可重命名，也没有铅笔按钮
     expect(screen.queryByLabelText('修改作品名')).toBeNull();
     expect(screen.queryByLabelText(/双击或按 F2 重命名/)).toBeNull();
@@ -283,16 +285,19 @@ describe('WorkspaceHeader', () => {
 
     fireEvent.click(screen.getByLabelText(/搜索文件/));
     expect(props.onToggleSearch).toHaveBeenCalled();
-    fireEvent.click(screen.getByLabelText('重新扫描作品目录'));
+    fireEvent.click(screen.getByTestId('project-menu-trigger'));
+    expect(
+      (screen.getByRole('menuitem', { name: '重命名项目' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('menuitem', { name: '刷新' }));
     expect(props.onRefresh).toHaveBeenCalled();
     fireEvent.click(screen.getByLabelText('新建'));
     expect(props.onCreateMenuOpenChange).toHaveBeenCalled();
   });
 
-  it('加载中禁用新建与刷新', () => {
+  it('加载中禁用新建', () => {
     renderHeader({ isLoading: true, onCollapse: vi.fn() });
     expect((screen.getByLabelText('新建') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByLabelText('重新扫描作品目录') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByLabelText('折叠侧边栏')).toBeTruthy();
   });
 

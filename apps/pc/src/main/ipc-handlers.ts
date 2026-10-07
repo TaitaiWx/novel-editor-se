@@ -15,6 +15,7 @@
  * - session:      GUI 会话文件（供 CLI ne status 读取）
  * - about:        「关于小说编辑器」信息
  * - log-upload:   打包 / 上传日志
+ * - ai-providers / video: AI 服务配置与流式输出、场景视频任务队列
  */
 import {
   registerFileSystemHandlers,
@@ -28,6 +29,8 @@ import {
   registerSessionHandlers,
   registerAboutHandlers,
   registerLogUploadHandlers,
+  registerAIProviderHandlers,
+  registerVideoHandlers,
 } from './handlers';
 
 export { type FileNode } from './handlers';
@@ -44,4 +47,6 @@ export function setupIPC() {
   registerSessionHandlers();
   registerAboutHandlers();
   registerLogUploadHandlers();
+  registerAIProviderHandlers();
+  registerVideoHandlers();
 }

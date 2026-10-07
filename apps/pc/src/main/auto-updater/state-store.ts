@@ -5,7 +5,7 @@ import { mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { normalizeUpdaterState } from '../auto-updater-state';
 import type { PersistedUpdaterState, UpdateChannel } from '../auto-updater-state';
-import { getChannelMetadataFile, inferDefaultChannel } from './channel';
+import { getChannelMetadataFile, resolveUpdateChannel } from './channel';
 import { computeRolloutBucket, isRolloutEligible } from './rollout';
 import { updaterStatus } from './status';
 
@@ -25,7 +25,7 @@ export async function loadUpdaterState() {
   }
 
   const initialState: PersistedUpdaterState = {
-    channel: inferDefaultChannel(app.getVersion()),
+    channel: resolveUpdateChannel(app.getVersion()),
     rolloutBucket: createRolloutBucket(),
     lastKnownGoodVersion: app.getVersion(),
     rollbackTarget: null,
@@ -38,6 +38,11 @@ export async function loadUpdaterState() {
     const content = await readFile(getUpdaterStatePath(), 'utf8');
     const parsed = JSON.parse(content) as Partial<PersistedUpdaterState>;
     updaterState = normalizeUpdaterState(parsed, initialState);
+    // 通道不由用户选择：旧版持久化的用户选择一律改为由版本号（或内部环境变量）决定
+    if (updaterState.channel !== initialState.channel) {
+      updaterState.channel = initialState.channel;
+      await persistUpdaterState().catch(() => undefined);
+    }
   } catch {
     updaterState = initialState;
     await persistUpdaterState();

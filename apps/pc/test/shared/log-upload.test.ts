@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLogBundleFileName,
   describeLogUploadResult,
-  normalizeLogUploadSettings,
+  shouldUploadCrashReport,
 } from '../../src/shared/log-upload';
 
 describe('shared/log-upload', () => {
@@ -37,13 +37,10 @@ describe('shared/log-upload', () => {
     );
   });
 
-  it('normalizeLogUploadSettings 默认开启崩溃自动上传', () => {
-    expect(normalizeLogUploadSettings(null)).toEqual({ autoUploadOnCrash: true });
-    expect(normalizeLogUploadSettings({ autoUploadOnCrash: 'no' })).toEqual({
-      autoUploadOnCrash: true,
-    });
-    expect(normalizeLogUploadSettings({ autoUploadOnCrash: false, extra: 1 })).toEqual({
-      autoUploadOnCrash: false,
-    });
+  it('shouldUploadCrashReport 始终开启：只看是否配置了上传地址', () => {
+    expect(shouldUploadCrashReport('https://logs.example.com/up')).toBe(true);
+    expect(shouldUploadCrashReport(null)).toBe(false);
+    expect(shouldUploadCrashReport(undefined)).toBe(false);
+    expect(shouldUploadCrashReport('')).toBe(false);
   });
 });

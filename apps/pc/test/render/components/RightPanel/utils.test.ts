@@ -1,4 +1,4 @@
-import type { ActNode, OutlineNode } from '@novel-editor/basic-algorithm';
+import type { OutlineNode } from '@novel-editor/basic-algorithm';
 import {
   CHARACTER_CATEGORY_LABELS,
   DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
@@ -6,10 +6,8 @@ import {
   buildOutlineCacheKeyFromTitle,
   buildOutlineEntries,
   buildOutlineEntryCacheKey,
-  createActBoardKey,
   createCharacterTimelineOrderStorageKey,
   createCharacterTimelineStorageKey,
-  createDefaultActBoard,
   createGraphLayoutStorageKey,
   createLoreStorageKey,
   createPlotStorageKey,
@@ -28,7 +26,6 @@ import {
   isChapterHeading,
   isGenericOutlineTitle,
   mapCharacterRows,
-  mergeActBoard,
   mergeCharacterGraphResults,
   mergeCharacterTimelineItems,
   migrateCacheKey,
@@ -50,8 +47,6 @@ import type {
   CharacterRelation,
   CharacterTimelineItem,
   OutlineEntry,
-  PlotActBoard,
-  PlotSceneBoard,
 } from '@/render/components/RightPanel/types';
 
 function makeEntry(overrides: Partial<OutlineEntry> = {}): OutlineEntry {
@@ -174,11 +169,6 @@ describe('storage key builders', () => {
     expect(createCharacterTimelineOrderStorageKey(7, 9)).toBe(
       'novel-editor:character-timeline-order:7:9'
     );
-  });
-
-  it('createActBoardKey combines index, line and title', () => {
-    const act: ActNode = { title: '第一幕 相遇', line: 3, scenes: [] };
-    expect(createActBoardKey(act, 0)).toBe('0:3:第一幕 相遇');
   });
 });
 
@@ -899,107 +889,6 @@ describe('inferCharacterCamp / inferRelationStage', () => {
     ['一起喝酒', '阶段未定义'],
   ])('inferRelationStage(%s) -> %s', (note, expected) => {
     expect(inferRelationStage(note)).toBe(expected);
-  });
-});
-
-describe('act boards', () => {
-  const act: ActNode = {
-    title: '第一幕 相遇',
-    line: 1,
-    scenes: [
-      { title: '山门初见', line: 2, preview: '' },
-      { title: '药庐夜话', line: 8, preview: '' },
-    ],
-  };
-
-  it('createDefaultActBoard builds draft scenes', () => {
-    const board = createDefaultActBoard(act, 0);
-    expect(board.sceneBoards.map((s) => s.sceneKey)).toEqual(['0:0:2', '0:1:8']);
-    expect(board.sceneBoards[0]).toMatchObject({
-      title: '山门初见',
-      status: 'draft',
-      characters: [],
-      beats: [],
-      causesScene: null,
-      pov: '',
-      intensity: 1,
-    });
-    expect(board.premise).toBe('');
-  });
-
-  it('mergeActBoard returns defaults without saved board', () => {
-    expect(mergeActBoard(act, 1)).toEqual(createDefaultActBoard(act, 1));
-  });
-
-  it('mergeActBoard overlays saved scenes by key or title and keeps extras', () => {
-    const savedScene = (overrides: Partial<PlotSceneBoard>): PlotSceneBoard => ({
-      sceneKey: 'x',
-      title: '',
-      objective: '',
-      tension: '',
-      outcome: '',
-      status: 'draft',
-      characters: [],
-      beats: [],
-      causesScene: null,
-      pov: '',
-      intensity: 1,
-      ...overrides,
-    });
-    const legacyScene = {
-      ...savedScene({ sceneKey: 'old-key', title: '药庐夜话', status: 'ready', objective: '疗伤' }),
-      characters: undefined,
-      beats: undefined,
-      causesScene: undefined,
-      pov: undefined,
-      intensity: undefined,
-    } as unknown as PlotSceneBoard;
-    const board = {
-      premise: '林远入宗',
-      goal: '',
-      conflict: '外门欺压',
-      twist: '',
-      payoff: '',
-      structureNodes: 'bad',
-      aiSuggestion: '',
-      sceneBoards: [
-        savedScene({
-          sceneKey: '0:0:2',
-          title: '改名',
-          pov: '林远',
-          intensity: 4,
-          characters: ['林远'],
-        }),
-        legacyScene,
-        {
-          ...savedScene({ sceneKey: 'extra', title: '番外' }),
-          beats: undefined,
-        } as unknown as PlotSceneBoard,
-      ],
-    } as unknown as PlotActBoard;
-
-    const merged = mergeActBoard(act, 0, board);
-    expect(merged.premise).toBe('林远入宗');
-    expect(merged.conflict).toBe('外门欺压');
-    expect(merged.structureNodes).toEqual([]);
-    expect(merged.sceneBoards).toHaveLength(3);
-    expect(merged.sceneBoards[0]).toMatchObject({
-      title: '改名',
-      pov: '林远',
-      intensity: 4,
-      characters: ['林远'],
-    });
-    expect(merged.sceneBoards[1]).toMatchObject({
-      sceneKey: 'old-key',
-      status: 'ready',
-      objective: '疗伤',
-      characters: [],
-      beats: [],
-      causesScene: null,
-      pov: '',
-      intensity: 1,
-    });
-    expect(merged.sceneBoards[2]).toMatchObject({ sceneKey: 'extra', beats: [] });
   });
 });
 

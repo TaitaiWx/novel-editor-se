@@ -28,36 +28,6 @@
     text-overflow: ellipsis;
   }
 
-  // Tooltip 包裹层默认不会收缩，这里让长项目名仍能省略显示
-  .nameSlot {
-    display: flex;
-    min-width: 0;
-
-    > span {
-      min-width: 0;
-      max-width: 100%;
-    }
-  }
-
-  // 可双击重命名：文本光标 + 悬停时淡底与虚下划线提示
-  .editableName {
-    padding: 1px 4px;
-    margin-left: -4px;
-    border-radius: 4px;
-    cursor: text;
-    text-decoration: underline dotted transparent;
-    text-underline-offset: 3px;
-    transition:
-      background-color 0.15s,
-      text-decoration-color 0.15s;
-
-    &:hover,
-    &:focus-visible {
-      background: var(--ui-interaction-hover-bg);
-      text-decoration-color: var(--ui-fg-disabled);
-    }
-  }
-
   .projectNameInput {
     flex: 1;
     font-weight: 600;

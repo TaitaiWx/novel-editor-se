@@ -22,7 +22,6 @@ export {
   downloadUpdate,
   getUpdateStatus,
   installUpdate,
-  setUpdateChannel,
   setupAutoUpdater,
 } from './controller';
 export { noteUpdaterRendererHealthy, noteUpdaterRendererReady } from './health';

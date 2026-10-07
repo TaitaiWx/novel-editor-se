@@ -91,6 +91,8 @@ export interface FilePanelProps {
   onCreateGrowthSheet?: () => void;
   onRefresh: () => void;
   onOpenFolder: () => void;
+  /** 项目菜单「打开最近使用」：按路径打开文件夹 */
+  onOpenRecentFolder?: (folderPath: string) => void;
   /** 双击项目名行内重命名后提交新名称 */
   onRenameProject?: (nextName: string) => void;
   onImportFile?: () => void;

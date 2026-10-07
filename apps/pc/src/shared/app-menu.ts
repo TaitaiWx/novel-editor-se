@@ -17,6 +17,8 @@ export const APP_MENU_EVENTS = {
   toggleFocusMode: 'menu-toggle-focus-mode',
   /** 编辑 → 查找（打开最近聚焦编辑器的查找面板） */
   find: 'menu-find',
+  /** 编辑 → 灵感抽签…（打开灵感抽签弹窗） */
+  openInspiration: 'menu-open-inspiration',
   /** 帮助 → 快捷键说明 */
   showShortcuts: 'menu-show-shortcuts',
   /** 帮助 → 更新日志 */
@@ -34,12 +36,14 @@ export const MENU_SYNC_SHORTCUTS_CHANNEL = 'menu-sync-shortcuts';
 export interface MenuShortcutBindings {
   toggleSidebar: string;
   toggleFocusMode: string;
+  openInspiration: string;
 }
 
 /** 与渲染进程 DEFAULT_SHORTCUT_SETTINGS 保持一致（渲染进程同步前使用） */
 export const DEFAULT_MENU_SHORTCUT_BINDINGS: MenuShortcutBindings = {
   toggleSidebar: 'Mod+B',
   toggleFocusMode: 'Mod+Shift+F',
+  openInspiration: 'Mod+Shift+Y',
 };
 
 /** 帮助 → 问题反馈 */
@@ -115,5 +119,9 @@ export function normalizeMenuShortcutBindings(value: unknown): MenuShortcutBindi
       : {};
   const pick = (key: keyof MenuShortcutBindings): string =>
     typeof record[key] === 'string' ? (record[key] as string) : DEFAULT_MENU_SHORTCUT_BINDINGS[key];
-  return { toggleSidebar: pick('toggleSidebar'), toggleFocusMode: pick('toggleFocusMode') };
+  return {
+    toggleSidebar: pick('toggleSidebar'),
+    toggleFocusMode: pick('toggleFocusMode'),
+    openInspiration: pick('openInspiration'),
+  };
 }

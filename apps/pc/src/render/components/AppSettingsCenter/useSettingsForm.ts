@@ -205,6 +205,11 @@ export function useSettingsForm({
         }
       }
 
+      if (scope === 'ai' || scope === 'all') {
+        // 默认 AI 的 Key 保存在主进程安全存储中，恢复默认时一并清除
+        await ipc?.invoke('ai-providers-set', 'openai-compatible', { clearKey: true });
+      }
+
       if (scope === 'ai') {
         const next = {
           ...settings,

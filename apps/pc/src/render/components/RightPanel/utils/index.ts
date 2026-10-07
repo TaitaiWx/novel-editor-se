@@ -10,4 +10,3 @@ export * from './character-attributes';
 export * from './character-timeline';
 export * from './outline';
 export * from './character-insight';
-export * from './plot-board';

@@ -333,7 +333,11 @@ describe('registerAllShortcuts', () => {
     expect(view().find((i) => i.label === '切换侧边栏')?.accelerator).toBe('CommandOrControl+B');
 
     const result = syncMenuShortcuts({ toggleSidebar: 'Mod+Shift+B', toggleFocusMode: 42 });
-    expect(result).toEqual({ toggleSidebar: 'Mod+Shift+B', toggleFocusMode: 'Mod+Shift+F' });
+    expect(result).toEqual({
+      toggleSidebar: 'Mod+Shift+B',
+      toggleFocusMode: 'Mod+Shift+F',
+      openInspiration: 'Mod+Shift+Y',
+    });
     expect(view().find((i) => i.label === '切换侧边栏')?.accelerator).toBe(
       'CommandOrControl+Shift+B'
     );
@@ -346,5 +350,13 @@ describe('registerAllShortcuts', () => {
     // 清空绑定后菜单项不显示加速键
     syncMenuShortcuts({ toggleSidebar: '', toggleFocusMode: 'Mod+Shift+F' });
     expect(view().find((i) => i.label === '切换侧边栏')?.accelerator).toBeUndefined();
+
+    // 灵感抽签：自定义后编辑菜单加速键随之变化
+    const edit = () => lastTemplate().find((t) => t.label === '编辑')?.submenu ?? [];
+    expect(edit().find((i) => i.label === '灵感抽签…')?.accelerator).toBe(
+      'CommandOrControl+Shift+Y'
+    );
+    syncMenuShortcuts({ toggleSidebar: '', openInspiration: 'Mod+Alt+I' });
+    expect(edit().find((i) => i.label === '灵感抽签…')?.accelerator).toBe('CommandOrControl+Alt+I');
   });
 });

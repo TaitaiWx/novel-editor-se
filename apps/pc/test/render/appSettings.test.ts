@@ -84,3 +84,13 @@ describe('app settings AI migration', () => {
     expect(invalidSettings.general.thousandCharMarkerStep).toBe(1000);
   });
 });
+
+describe('app settings：废弃字段', () => {
+  it('旧版保存的 markdownLivePreview 被忽略（.md 始终实时渲染，设置中不再有该字段）', () => {
+    const settings = mergeSettingsDraft(
+      JSON.stringify({ general: { markdownLivePreview: false, showStatusBar: false } })
+    );
+    expect('markdownLivePreview' in settings.general).toBe(false);
+    expect(settings.general.showStatusBar).toBe(false);
+  });
+});

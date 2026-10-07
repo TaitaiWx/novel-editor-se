@@ -37,6 +37,8 @@ function mockIpc(opts: Options = {}): ElectronMock {
       case 'app-cache-clear':
         if (opts.clearError) throw new Error('磁盘被锁定');
         return { removedSettingRows: 1 };
+      case 'ai-providers-set':
+        return { ok: true, data: {} };
       default:
         return undefined;
     }
@@ -273,6 +275,10 @@ describe('AppSettingsCenter', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认清除' }));
     expect(await screen.findByText('AI 设置已恢复默认')).toBeTruthy();
     await waitFor(() => expect(lastSaved(mock).ai.apiKey).toBe(''));
+    // 安全存储中的 Key 一并清除
+    expect(mock.invoke).toHaveBeenCalledWith('ai-providers-set', 'openai-compatible', {
+      clearKey: true,
+    });
   });
 
   it('数据：全部清空', async () => {
@@ -331,7 +337,14 @@ describe('AppSettingsCenter', () => {
     fireEvent.change(inputFor('服务类型', 'select'), { target: { value: 'openai' } });
     fireEvent.change(inputFor('接口地址'), { target: { value: 'https://x.test/v1' } });
     fireEvent.change(inputFor('模型名称'), { target: { value: 'my-model' } });
+    // Key 只写不读：输入后点「保存 Key」交给主进程加密保存，草稿里只记录 hasApiKey
     fireEvent.change(inputFor('API Key'), { target: { value: 'sk-1' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存 Key' }));
+    expect(await screen.findByText('Key 已安全保存')).toBeTruthy();
+    expect(mock.invoke).toHaveBeenCalledWith('ai-providers-set', 'openai-compatible', {
+      apiKey: 'sk-1',
+    });
+    expect(inputFor('API Key').value).toBe('');
     fireEvent.change(inputFor('温度'), { target: { value: '0.7' } });
     fireEvent.change(inputFor('上下文长度'), { target: { value: '10' } });
     fireEvent.change(inputFor('单次回复长度'), { target: { value: '100' } });
@@ -340,7 +353,8 @@ describe('AppSettingsCenter', () => {
       expect(ai.provider).toBe('openai');
       expect(ai.baseUrl).toBe('https://x.test/v1');
       expect(ai.model).toBe('my-model');
-      expect(ai.apiKey).toBe('sk-1');
+      expect(ai.apiKey).toBe('');
+      expect(ai.hasApiKey).toBe(true);
       expect(ai.temperature).toBe(0.7);
       expect(ai.contextTokens).toBe(128000);
       expect(ai.maxTokens).toBe(512);
@@ -400,5 +414,19 @@ describe('AppSettingsCenter', () => {
       resolveGet(null);
     });
     expect(switchFor('显示状态栏').className).not.toContain('enabled');
+  });
+});
+
+describe('AppSettingsCenter「通用」不展示更新与诊断', () => {
+  it('没有更新通道、灰度分组与崩溃时自动上传日志开关', async () => {
+    const mock = mockIpc();
+    const { onSettingsChange } = renderCenter();
+    await waitFor(() => expect(onSettingsChange).toHaveBeenCalled());
+    expect(screen.queryByText('更新与诊断')).toBeNull();
+    expect(screen.queryByText(/更新通道|灰度分组|金丝雀|崩溃时自动上传日志/)).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: '更新通道' })).toBeNull();
+    const channels = mock.invoke.mock.calls.map((call) => call[0]);
+    expect(channels).not.toContain('log-upload-get-settings');
+    expect(channels).not.toContain('get-about-info');
   });
 });
