@@ -1,0 +1,192 @@
+// 场景视频工作区共用的设计 token 与 mixin（仅供 SceneVideoView 下各组件 @use，不产出全局样式）
+// 柔和的低饱和配色：主色沿用应用的蓝（--ui-interaction-accent），提示用暖金，成功 / 失败用灰绿 / 灰红
+
+$fg: var(--ui-fg-primary, #d4d4d4);
+$fg-strong: rgba(255, 255, 255, 0.88);
+$muted: var(--ui-fg-muted, #8b8b8b);
+$disabled: var(--ui-fg-disabled, #666);
+$line: rgba(255, 255, 255, 0.07);
+$line-strong: rgba(255, 255, 255, 0.12);
+$surface: rgba(255, 255, 255, 0.025);
+$surface-hover: rgba(255, 255, 255, 0.05);
+$accent: #569cd6;
+$hint: #d7ba7d;
+$hint-fg: #e6d3a6;
+$success: #7ab896;
+$danger: #e08a80;
+$radius: 10px;
+$gap: 20px;
+
+@mixin column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  min-height: 0;
+  padding: 20px 22px 24px;
+  border-radius: 12px;
+  background: $surface;
+  border: 1px solid $line;
+  overflow: auto;
+}
+
+@mixin column-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: $fg-strong;
+}
+
+@mixin field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+@mixin label {
+  font-size: 12px;
+  font-weight: 500;
+  color: $muted;
+}
+
+@mixin input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid $line-strong;
+  background: rgba(0, 0, 0, 0.18);
+  color: $fg;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &:focus {
+    border-color: rgba($accent, 0.6);
+  }
+
+  &::placeholder {
+    color: $disabled;
+  }
+}
+
+@mixin textarea {
+  @include input;
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.75;
+  resize: vertical;
+}
+
+@mixin button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid $line-strong;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    color: $fg-strong;
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+@mixin button-primary {
+  @include button;
+  background: rgba($accent, 0.18);
+  border-color: rgba($accent, 0.4);
+  color: #d6e6f5;
+
+  &:hover:not(:disabled) {
+    background: rgba($accent, 0.28);
+    color: #eef5fb;
+  }
+}
+
+@mixin icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: $muted;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: $surface-hover;
+    color: $fg-strong;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+@mixin chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 4px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid $line-strong;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+// 浅色软提示：只建议，不阻止
+@mixin soft-hint {
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  border-radius: 8px;
+  background: rgba($hint, 0.07);
+  border: 1px solid rgba($hint, 0.16);
+  color: $hint-fg;
+}
+
+@mixin empty {
+  padding: 28px 12px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: $muted;
+  text-align: center;
+}

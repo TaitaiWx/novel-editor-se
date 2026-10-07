@@ -1,0 +1,173 @@
+@use '../scene-video-ui' as ui;
+
+.column {
+  @include ui.column;
+}
+
+.title {
+  @include ui.column-title;
+}
+
+.field {
+  @include ui.field;
+}
+
+.label {
+  @include ui.label;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.labelMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  color: ui.$disabled;
+}
+
+.input {
+  @include ui.input;
+}
+
+.select {
+  @include ui.input;
+  padding-right: 8px;
+  cursor: pointer;
+}
+
+.textarea {
+  @include ui.textarea;
+  min-height: 180px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  @include ui.chip;
+}
+
+.avatar,
+.avatarFallback {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.avatar {
+  object-fit: cover;
+}
+
+.avatarFallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  background: rgba(ui.$accent, 0.2);
+  color: #d6e6f5;
+}
+
+.chipRemove {
+  @include ui.icon-button;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+}
+
+.muted {
+  font-size: 12px;
+  color: ui.$muted;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: ui.$muted;
+  cursor: pointer;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.segment,
+.segmentActive {
+  @include ui.button;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+
+.segmentActive {
+  background: rgba(ui.$accent, 0.2);
+  border-color: rgba(ui.$accent, 0.45);
+  color: #d6e6f5;
+}
+
+.button {
+  @include ui.button;
+  align-self: flex-start;
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: ui.$hint-fg;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.seedHint {
+  @include ui.soft-hint;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seedActions {
+  display: flex;
+  gap: 16px;
+}
+
+.serviceEmpty {
+  @include ui.soft-hint;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  strong {
+    font-size: 13px;
+    font-weight: 600;
+  }
+}
+
+.hints {
+  @include ui.soft-hint;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 28px;
+}

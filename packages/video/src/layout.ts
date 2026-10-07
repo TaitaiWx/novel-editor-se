@@ -185,3 +185,48 @@ export function buildPromptRecord(
   }
   return record;
 }
+
+/** 场景目录中的分镜文件（工作区状态 JSON + 可读的 Markdown 分镜表） */
+export const SCENE_STORYBOARD_JSON = '分镜.json';
+export const SCENE_STORYBOARD_MARKDOWN = '分镜.md';
+
+export interface VideoSceneLayout {
+  /** 目录（相对作品目录）：资料/视频/<章>/<场景> */
+  dir: string;
+  /** 资料/视频/<章>/<场景>/分镜.json */
+  storyboardJson: string;
+  /** 资料/视频/<章>/<场景>/分镜.md */
+  storyboardMarkdown: string;
+  segments: string[];
+}
+
+/** 场景目录布局（与 videoOutputLayout 同一套清洗规则，保证镜头与分镜在同一目录） */
+export function videoSceneLayout(input: { chapter: string; scene: string }): VideoSceneLayout {
+  const segments = [
+    ...VIDEO_MATERIAL_SEGMENTS,
+    sanitizePathSegment(input.chapter, '未命名章节'),
+    sanitizePathSegment(input.scene, '未命名场景'),
+  ];
+  const dir = segments.join('/');
+  return {
+    dir,
+    storyboardJson: `${dir}/${SCENE_STORYBOARD_JSON}`,
+    storyboardMarkdown: `${dir}/${SCENE_STORYBOARD_MARKDOWN}`,
+    segments,
+  };
+}
+
+const ANIMATIC_FILE_RE = /^样片-(\d{8}-\d{6})\.(mp4|webm)$/i;
+
+/** 拼接样片文件名：样片-20261007-153000.mp4（本地时间） */
+export function animaticFileName(date: Date, ext: 'mp4' | 'webm'): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const stamp = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(
+    date.getHours()
+  )}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  return `样片-${stamp}.${ext}`;
+}
+
+export function isAnimaticFileName(name: string): boolean {
+  return ANIMATIC_FILE_RE.test(name);
+}

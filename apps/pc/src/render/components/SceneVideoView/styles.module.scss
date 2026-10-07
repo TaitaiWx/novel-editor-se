@@ -1,0 +1,116 @@
+@use './scene-video-ui' as ui;
+
+// 工作区标签：三栏铺满，宽度不够时（标签区域 < 1080px）改为上下排列，保证每栏都有足够空间
+.view {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+  padding: 24px 28px 32px;
+  color: ui.$fg;
+}
+
+.loading {
+  @include ui.empty;
+  padding-top: 80px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.headingTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: ui.$fg-strong;
+}
+
+.headingMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: ui.$muted;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.saveStatus {
+  font-size: 12px;
+  color: ui.$disabled;
+
+  &[data-status='saved'] {
+    color: ui.$success;
+  }
+
+  &[data-status='error'] {
+    color: ui.$danger;
+  }
+}
+
+.headerButton {
+  @include ui.button;
+}
+
+.notice {
+  @include ui.soft-hint;
+  margin: 0;
+}
+
+.message {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+  background: rgba(ui.$accent, 0.08);
+  border: 1px solid rgba(ui.$accent, 0.18);
+  color: #c7dcef;
+
+  &[data-tone='success'] {
+    background: rgba(122, 184, 150, 0.08);
+    border-color: rgba(122, 184, 150, 0.22);
+    color: #b5dcc6;
+  }
+
+  &[data-tone='error'] {
+    background: rgba(224, 138, 128, 0.08);
+    border-color: rgba(224, 138, 128, 0.22);
+    color: #efb8b1;
+  }
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(380px, 1.35fr) minmax(300px, 1.1fr);
+  gap: ui.$gap;
+  align-items: start;
+  flex: 1;
+  min-height: 0;
+}
+
+@container (max-width: 1080px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

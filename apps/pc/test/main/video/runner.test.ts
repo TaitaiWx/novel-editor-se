@@ -236,12 +236,18 @@ describe('VideoTaskRunner', () => {
       .mockRejectedValueOnce(new AIError({ kind: 'network', message: '抖动' }))
       .mockRejectedValueOnce(new AIError({ kind: 'auth', message: 'Key 失效' }));
     const { provider } = fakeProvider({ pollTask });
-    const { runner, repo } = createRunner({ provider });
+    const log = vi.fn();
+    const { runner, repo } = createRunner({ provider, deps: { log } });
     await runner.submit(input);
     await runner.submit({ ...input, shotIndex: 2 });
     await runner.tick();
     now += 60_000;
     await runner.tick();
+    // 轮询失败（会退避）必须留下日志，便于排查「任务卡住」
+    expect(log).toHaveBeenCalledWith(
+      '[video] 轮询任务 t2 失败',
+      expect.objectContaining({ message: '抖动' })
+    );
     expect(repo.get('t1')).toMatchObject({
       status: 'failed',
       error: { code: 'content-safety', message: '输出违规' },
