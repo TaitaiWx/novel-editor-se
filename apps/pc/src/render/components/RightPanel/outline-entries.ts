@@ -66,7 +66,7 @@ export function buildOutlineVersionName(source: OutlineVersionSource): string {
 function normalizeAnchorText(value: string): string {
   return value
     .replace(/^#+\s*/, '')
-    .replace(/[：:]+$/, '')
+    .replace(/[\uff1a:]+$/, '')
     .replace(/\s+/g, '')
     .trim()
     .toLowerCase();

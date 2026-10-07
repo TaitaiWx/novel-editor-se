@@ -27,7 +27,7 @@ export function renderTable(headers: string[], rows: Array<Array<string | number
   const cells = [headers, ...rows.map((row) => row.map((cell) => String(cell)))];
   // 中日韩字符按 2 个宽度计算，保证对齐
   const width = (text: string) =>
-    Array.from(text).reduce((sum, char) => sum + (/[ᄀ-￿]/.test(char) ? 2 : 1), 0);
+    Array.from(text).reduce((sum, char) => sum + (/[\u1100-\uffff]/.test(char) ? 2 : 1), 0);
   const widths = headers.map((_, col) => Math.max(...cells.map((row) => width(row[col] ?? ''))));
   return cells
     .map((row) =>

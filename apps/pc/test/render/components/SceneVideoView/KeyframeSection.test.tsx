@@ -51,12 +51,30 @@ describe('KeyframeSection', () => {
 
   it('已有预演与首帧：显示两张图，按钮变为「重新预演」「重新生成首帧」，可「不用首帧」', async () => {
     const handlers = setup({ previz: '资料/视频/a/预演.png', keyframe: '资料/视频/a/首帧.png' });
-    expect(await screen.findByAltText('镜头1 预演截图')).toBeTruthy();
+    expect(await screen.findByAltText('镜头1 预演第一帧')).toBeTruthy();
     expect(await screen.findByAltText('镜头1 首帧')).toBeTruthy();
     expect(screen.getByRole('button', { name: '重新预演' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '重新生成首帧' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '不用首帧' }));
     expect(handlers.onClear).toHaveBeenCalledTimes(1);
+  });
+
+  it('有预演视频时在首帧上方播放（读取场景目录内的 镜头N-预演.mp4）', async () => {
+    const readFile = vi.fn(
+      async (_name: string) => new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112])
+    );
+    const createObjectURL = vi.fn(() => 'blob:previz');
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    setup({
+      previz: '资料/视频/a/镜头1-预演.png',
+      previzVideo: '资料/视频/a/镜头1-预演.mp4',
+      previzScript: {},
+      readFile,
+    });
+    await waitFor(() => expect(readFile).toHaveBeenCalledWith('镜头1-预演.mp4'));
+    const video = (await screen.findByTestId('previz-video')) as HTMLVideoElement;
+    expect(video.getAttribute('src')).toBe('blob:previz');
+    expect(screen.getAllByText('预演视频（动作参考）').length).toBeGreaterThan(0);
   });
 
   it('未配置图片服务时不能生成', () => {

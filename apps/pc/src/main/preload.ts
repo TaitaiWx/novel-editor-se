@@ -217,6 +217,8 @@ contextBridge.exposeInMainWorld('electron', {
         'workspace-search-content',
         // 人物头像（保存到 <作品>/资料/人物头像/）
         'character-avatar-save',
+        // 单个图片 / 视频导出（另存为，main/handlers/media-export.ts）
+        'media-export',
         // 人物 / 设定图集（资料/图集/）与 AI 出图（main/handlers/entity-media.ts）
         'entity-image-save',
         'entity-image-delete',
@@ -234,6 +236,8 @@ contextBridge.exposeInMainWorld('electron', {
         'video-scene-read-file',
         'video-scene-write-animatic',
         'video-scene-write-image',
+        // 预演视频（镜头N-预演.mp4，3D 预演逐帧导出）
+        'video-scene-write-media',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);

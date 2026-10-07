@@ -28,6 +28,8 @@ import {
 import Tooltip from '../Tooltip';
 import ContextMenu from '../ContextMenu';
 import { joinWorkPath, requestOpenReference } from '../../utils/referencePane';
+import { IMAGE_EXPORT_FORMATS, exportMediaWithToast } from '../../utils/mediaExport';
+import { useOptionalToast } from '../Toast';
 import AiImagePanel, { CANDIDATE_COUNT, type AiImageRequest } from './AiImagePanel';
 import { MediaImage } from './MediaTile';
 import { dataUrlToBytes, deleteImage, saveImage } from './mediaActions';
@@ -73,6 +75,7 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const uploadKind: MediaKind = kinds[0]?.kind ?? 'other';
   const [menu, setMenu] = useState<{ x: number; y: number; item: MediaItem } | null>(null);
+  const toast = useOptionalToast();
   const [dragging, setDragging] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [viewing, setViewing] = useState<MediaItem | null>(null);
@@ -388,6 +391,23 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
               },
             },
             { label: '查看大图', onClick: () => setViewing(menu.item) },
+            { label: '', onClick: () => undefined, separator: true },
+            // 单独导出：PNG / JPEG / WebP（与原格式相同时原样复制）
+            ...IMAGE_EXPORT_FORMATS.map(({ format, label }) => ({
+              label: `导出为 ${label}…`,
+              disabled: !workPath || /^data:/i.test(menu.item.path),
+              onClick: () => {
+                if (!workPath) return;
+                void exportMediaWithToast(
+                  {
+                    sourcePath: joinWorkPath(workPath, menu.item.path),
+                    format,
+                    title: `${name}-${kinds.find((option) => option.kind === groupKindOf(menu.item))?.label ?? '图片'}`,
+                  },
+                  toast
+                );
+              },
+            })),
             { label: '', onClick: () => undefined, separator: true },
             { label: '删除', danger: true, onClick: () => void remove(menu.item) },
           ]}

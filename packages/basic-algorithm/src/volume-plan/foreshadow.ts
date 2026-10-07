@@ -23,8 +23,8 @@ const SETUP_KEYWORDS = [
   '预言',
 ];
 
-const RE_SENTENCES = /[^。！？!?\n]+[。！？!?]*[”」』"]?/g;
-const RE_CJK_RUN = /[一-鿿]{3,}/g;
+const RE_SENTENCES = /[^\u3002\uff01\uff1f!?\n]+[\u3002\uff01\uff1f!?]*[\u201d\u300d\u300f"]?/g;
+const RE_CJK_RUN = /[\u4e00-\u9fff]{3,}/g;
 /** 太常见、不能用来判断呼应的片段 */
 const COMMON_GRAMS = new Set(['他说道', '她说道', '一下子', '这个时候', '没有人']);
 

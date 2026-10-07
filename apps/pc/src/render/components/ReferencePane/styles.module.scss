@@ -226,10 +226,62 @@ $muted: var(--ui-fg-muted);
 }
 
 .gridHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   flex-shrink: 0;
   padding: 8px 12px 4px;
   font-size: 11px;
   color: $muted;
+}
+
+.gridHint {
+  margin-left: auto;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* 来源分组小标题（本章 / 场景视频 / 人物 / 添加的），占满一整行 */
+.groupLabel {
+  grid-column: 1 / -1;
+  padding: 4px 2px 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: $muted;
+}
+
+/* 拖动排序的落点指示 */
+.dropBefore,
+.dropAfter {
+  position: relative;
+}
+
+.dropBefore::before,
+.dropAfter::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--ui-interaction-focus-ring);
+}
+
+.dropBefore::before {
+  left: -5px;
+}
+
+.dropAfter::after {
+  right: -5px;
+}
+
+.thumbDragging {
+  opacity: 0.45;
+}
+
+/* 文件拖到窗格上时的高亮 */
+.paneDrop {
+  box-shadow: inset 0 0 0 2px var(--ui-interaction-focus-ring);
 }
 
 .grid {

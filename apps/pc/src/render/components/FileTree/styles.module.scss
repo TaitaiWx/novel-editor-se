@@ -39,6 +39,13 @@
         }
       }
 
+      // 「在资料中定位」：高亮一段时间后淡出
+      &.revealed {
+        background-color: rgba(0, 122, 204, 0.28);
+        box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.75);
+        animation: fileTreeRevealPulse 2.4s ease-out;
+      }
+
       // Directory items: slightly bolder
       &.directory {
         .itemName {
@@ -235,5 +242,15 @@
     &:hover {
       background: rgba(255, 255, 255, 0.25);
     }
+  }
+}
+
+@keyframes fileTreeRevealPulse {
+  0%,
+  60% {
+    background-color: rgba(0, 122, 204, 0.32);
+  }
+  100% {
+    background-color: rgba(0, 122, 204, 0.12);
   }
 }

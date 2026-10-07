@@ -1,24 +1,45 @@
 /**
- * 3D 预演（摆拍）：像片场走位一样，先用木偶小人摆好站位、朝向、姿势，加几件道具、选时段，
- * 再定景别 / 角度 / 焦距 / 机位，截一张图作为首帧构图参考。
+ * 3D 预演（动作预演 / previz）：作者描述这个镜头的动作与走位 → 选模型 →「生成预演」，
+ * AI 返回经过校验的 PrevizScript（人物关键帧 + 机位关键帧 + 道具 + 时段），确定性的 three.js 引擎按脚本播放动画。
+ * 没有配置 AI 时使用默认脚本（人物站成一排、镜头缓慢推近）。
  *
- * 操作：拖人物 / 道具改站位，Shift + 拖动旋转；拖空白处转动机位；Q / E 旋转、Delete 移除、⌘/Ctrl + Z 撤销。
- * 取景框、三分线、安全框、名字标签都是 DOM 叠加层，不进截图；截图按画幅比例、长边 1280。
+ * 「保存预演视频」逐帧渲染（长边 1280、24fps，不是实时录屏）并编码为 MP4，同时保存第一帧 PNG：
+ * 第一帧作为生成首帧图的构图参考，视频是作者的动作参考（将来也可交给支持视频参考的模型）。
+ *
+ * 取景框、三分线、安全框、名字标签都是 DOM 叠加层，不进画面。
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { VscClose, VscDiscard, VscScreenFull } from 'react-icons/vsc';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { VscClose } from 'react-icons/vsc';
+import {
+  previzShotSizeOf,
+  samplePrevizScript,
+  withPrevizMood,
+  type PrevizScript,
+} from '@novel-editor/video';
 import Tooltip from '../../Tooltip';
-import CameraPanel from './CameraPanel';
-import FigurePanel from './FigurePanel';
-import FrameOverlay from './FrameOverlay';
-import ScenePanel from './ScenePanel';
-import { captureSize, ratioOf } from './presets';
+import DirectorPanel from './DirectorPanel';
+import FrameOverlay, { type PrevizOverlays } from './FrameOverlay';
+import PlayerBar from './PlayerBar';
+import {
+  defaultScriptFor,
+  generatePrevizScript,
+  type PrevizCharacterBrief,
+} from './previzGeneration';
+import {
+  defaultPrevizEncoder,
+  renderPrevizVideo,
+  type PrevizVideoEncoder,
+  type PrevizVideoOutput,
+} from './previzVideo';
+import { ratioOf } from './presets';
 import type { CreatePrevizStage, PrevizLabel, PrevizStageApi } from './types';
+import { usePrevizModels } from './usePrevizModels';
+import { usePrevizPlayback } from './usePrevizPlayback';
 import { usePrevizPointer } from './usePrevizPointer';
-import { usePrevizScene, type PrevizOverlays } from './usePrevizScene';
 import styles from './styles.module.scss';
 
 export type { CreatePrevizStage, PrevizLabel, PrevizStageApi } from './types';
+export type { PrevizEncodeInput, PrevizVideoEncoder } from './previzVideo';
 
 /**
  * GPU 忙（例如同时开着别的 Electron 窗口）时 WebGL 上下文偶尔创建失败（three 读取着色器精度为 null），
@@ -39,20 +60,31 @@ const defaultCreateStage: CreatePrevizStage = async (canvas) => {
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 };
 
-export interface PrevizDialogProps {
-  shotLabel: string;
+export interface PrevizShotInfo {
   shotSize: string;
-  /** 本镜头的人物（默认摆上舞台） */
-  characters: readonly string[];
-  /** 本场全部人物（可再添加到舞台上），默认同 characters */
-  availableCharacters?: readonly string[];
-  aspectRatio: string;
-  onSave: (png: Uint8Array) => Promise<void>;
-  onClose: () => void;
-  createStage?: CreatePrevizStage;
+  durationSec: number;
+  description: string;
+  camera?: string;
+  location?: string;
 }
 
-const ROTATE_STEP = Math.PI / 12;
+export interface PrevizSaveOutput extends PrevizVideoOutput {
+  script: PrevizScript;
+}
+
+export interface PrevizDialogProps {
+  shotLabel: string;
+  shot: PrevizShotInfo;
+  /** 本镜头的人物（带外貌，交给 AI 理解人物） */
+  characters: readonly PrevizCharacterBrief[];
+  aspectRatio: string;
+  /** 上次保存的脚本（重新打开时恢复） */
+  initialScript?: PrevizScript | null;
+  onSave: (output: PrevizSaveOutput) => Promise<void>;
+  onClose: () => void;
+  createStage?: CreatePrevizStage;
+  encodeVideo?: PrevizVideoEncoder;
+}
 
 const sameLabels = (a: readonly PrevizLabel[], b: readonly PrevizLabel[]) =>
   a.length === b.length &&
@@ -70,15 +102,27 @@ const isTextInput = (target: EventTarget | null) =>
     target.isContentEditable ||
     (target.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'range'));
 
+/** 预填的动作描述：画面描述 + 出场人物 + 运镜 */
+export function initialActionText(shot: PrevizShotInfo, names: readonly string[]): string {
+  return [
+    shot.description.trim(),
+    names.length ? `出场人物：${names.join('、')}` : '',
+    shot.camera?.trim() ? `运镜：${shot.camera.trim()}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 const PrevizDialog: React.FC<PrevizDialogProps> = ({
   shotLabel,
-  shotSize,
+  shot,
   characters,
-  availableCharacters,
   aspectRatio,
+  initialScript,
   onSave,
   onClose,
   createStage = defaultCreateStage,
+  encodeVideo = defaultPrevizEncoder,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -86,12 +130,32 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
   const stageRef = useRef<PrevizStageApi | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [labels, setLabels] = useState<PrevizLabel[]>([]);
-  const scene = usePrevizScene(characters, shotSize);
-  const pointer = usePrevizPointer(stageRef, scene);
+  const [overlays, setOverlays] = useState<PrevizOverlays>({ thirds: true, safe: false });
+  const names = useMemo(() => characters.map((item) => item.name), [characters]);
+  const shotSize = previzShotSizeOf(shot.shotSize);
+  const [generated, setGenerated] = useState<PrevizScript>(
+    () => initialScript ?? defaultScriptFor({ characters, shotSize, durationSec: shot.durationSec })
+  );
+  const [script, setScript] = useState<PrevizScript>(generated);
+  const [action, setAction] = useState(() => initialActionText(shot, names));
+  const [notes, setNotes] = useState<string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const models = usePrevizModels();
+  const playback = usePrevizPlayback(script.durationSec);
   const aspect = ratioOf(aspectRatio);
+  const busy = generating || progress !== null;
+  const pointer = usePrevizPointer({
+    stageRef,
+    script,
+    time: playback.time,
+    aspect,
+    size,
+    onChange: setScript,
+    disabled: busy,
+  });
 
   const measure = useCallback(() => {
     const frame = frameRef.current;
@@ -132,7 +196,7 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
     };
   }, [createStage, measure]);
 
-  // 打开后焦点放到弹窗上，Esc / Q / E / Delete / ⌘Z 立即可用
+  // 打开后焦点放到弹窗上，Esc / 空格立即可用
   useEffect(() => {
     dialogRef.current?.focus({ preventScroll: true });
   }, []);
@@ -145,64 +209,77 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
     return () => observer.disconnect();
   }, [measure]);
 
-  const { view, figures, props, selectedId, mood } = scene;
   useEffect(() => {
     if (ready) stageRef.current?.setFrame(aspect);
   }, [aspect, ready]);
+
+  // 导出期间舞台由导出流程逐帧驱动，不跟随播放进度
   useEffect(() => {
-    if (ready) stageRef.current?.setCamera(view);
-  }, [ready, view]);
-  useEffect(() => {
-    if (ready) stageRef.current?.setMood(mood);
-  }, [mood, ready]);
-  useEffect(() => {
-    if (ready) stageRef.current?.setFigures(figures, selectedId);
-  }, [figures, ready, selectedId]);
-  useEffect(() => {
-    if (ready) stageRef.current?.setProps(props, selectedId);
-  }, [props, ready, selectedId]);
+    if (ready && progress === null) {
+      stageRef.current?.setSample(samplePrevizScript(script, playback.time));
+    }
+  }, [playback.time, progress, ready, script]);
+
+  const generate = async () => {
+    playback.pause();
+    setGenerating(true);
+    setError('');
+    try {
+      const result = await generatePrevizScript(window.electron?.ipcRenderer, {
+        action,
+        shotTitle: shotLabel,
+        characters,
+        shotSize,
+        durationSec: shot.durationSec,
+        aspectRatio,
+        cameraNote: shot.camera,
+        location: shot.location,
+        model: models.selected,
+      });
+      setGenerated(result.script);
+      setScript(result.script);
+      setNotes(result.notes);
+      playback.seek(0);
+      playback.play();
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const save = async () => {
     const stage = stageRef.current;
     if (!stage) return;
-    setSaving(true);
+    playback.pause();
+    setProgress(0);
     setError('');
     try {
-      await onSave(await stage.capture(captureSize(aspect)));
+      const output = await renderPrevizVideo(stage, script, aspect, encodeVideo, {
+        onProgress: setProgress,
+      });
+      await onSave({ ...output, script });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setSaving(false);
+      setProgress(null);
     }
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      onClose();
+      if (!busy) onClose();
       return;
     }
-    if (isTextInput(event.target)) return;
-    const mod = event.metaKey || event.ctrlKey;
-    if (mod && event.key.toLowerCase() === 'z' && !event.shiftKey) {
+    if (isTextInput(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === ' ' && event.target === event.currentTarget) {
       event.preventDefault();
-      scene.undo();
-      return;
-    }
-    if (mod || event.altKey || !selectedId) return;
-    if (event.key === 'Delete' || event.key === 'Backspace') {
-      event.preventDefault();
-      scene.removeItem(selectedId);
-    } else if (event.key === 'q' || event.key === 'Q') {
-      scene.rotateBy(selectedId, ROTATE_STEP);
-    } else if (event.key === 'e' || event.key === 'E') {
-      scene.rotateBy(selectedId, -ROTATE_STEP);
+      playback.toggle();
     }
   };
 
-  const toggleOverlay = (key: keyof PrevizOverlays) =>
-    scene.setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
+  const resetCamera = () => setScript((prev) => ({ ...prev, camera: generated.camera }));
+  const resetBlocking = () => setScript((prev) => ({ ...prev, figures: generated.figures }));
 
   return (
     <div
@@ -213,20 +290,22 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
       aria-modal="true"
       aria-label={`3D 预演 · ${shotLabel}`}
       data-testid="previz-dialog"
-      data-stage={ready ? 'ready' : error ? 'error' : 'loading'}
+      data-stage={ready ? 'ready' : error && !ready ? 'error' : 'loading'}
+      data-busy={busy ? 'true' : undefined}
       onKeyDown={onKeyDown}
     >
       <div className={styles.dialog}>
         <header className={styles.head}>
           <h2 className={styles.title}>3D 预演 · {shotLabel}</h2>
           <span className={styles.hint}>
-            拖人物或道具改站位（Shift + 拖动旋转），拖空白处转动机位；截图会作为首帧的构图参考
+            描述动作与走位，AI 生成一段可播放的预演；保存后第一帧作为首帧的构图参考
           </span>
           <Tooltip content="关闭（不保存）">
             <button
               type="button"
               className={styles.iconButton}
               aria-label="关闭预演"
+              disabled={progress !== null}
               onClick={onClose}
             >
               <VscClose />
@@ -237,7 +316,8 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
           <div className={styles.viewportWrap}>
             <div
               ref={frameRef}
-              className={pointer.orbiting ? styles.viewportOrbiting : styles.viewport}
+              className={pointer.dragging ? styles.viewportOrbiting : styles.viewport}
+              data-testid="previz-viewport"
               onPointerDown={pointer.onPointerDown}
               onPointerMove={pointer.onPointerMove}
               onPointerUp={pointer.onPointerUp}
@@ -250,74 +330,63 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
                   height={size.height}
                   aspect={aspect}
                   aspectLabel={aspectRatio}
-                  overlays={scene.overlays}
+                  overlays={overlays}
                   labels={labels}
-                  figures={figures}
-                  selectedId={selectedId}
+                  figures={script.figures}
+                  activeId={null}
                 />
               )}
               {!ready && <span className={styles.status}>{error || '正在准备 3D 舞台…'}</span>}
             </div>
-            <div className={styles.viewTools} role="toolbar" aria-label="视图">
-              <button
-                type="button"
-                aria-pressed={scene.overlays.thirds}
-                className={scene.overlays.thirds ? styles.toolActive : styles.tool}
-                onClick={() => toggleOverlay('thirds')}
-              >
-                三分线
-              </button>
-              <button
-                type="button"
-                aria-pressed={scene.overlays.safe}
-                className={scene.overlays.safe ? styles.toolActive : styles.tool}
-                onClick={() => toggleOverlay('safe')}
-              >
-                安全框
-              </button>
-              <span className={styles.toolGap} />
-              <Tooltip content="撤销上一步（⌘/Ctrl + Z）">
-                <button
-                  type="button"
-                  className={styles.tool}
-                  aria-label="撤销"
-                  disabled={!scene.canUndo}
-                  onClick={scene.undo}
-                >
-                  <VscDiscard />
-                </button>
-              </Tooltip>
-              <Tooltip content="回到正面、对准人物">
-                <button
-                  type="button"
-                  className={styles.tool}
-                  aria-label="重置视角"
-                  onClick={scene.camera.reset}
-                >
-                  <VscScreenFull />
-                </button>
-              </Tooltip>
-            </div>
+            <PlayerBar
+              playback={playback}
+              duration={script.durationSec}
+              disabled={!ready || busy}
+              overlays={overlays}
+              onToggleOverlay={(key) => setOverlays((prev) => ({ ...prev, [key]: !prev[key] }))}
+            />
           </div>
           <aside className={styles.side}>
-            <div className={styles.sideScroll}>
-              <CameraPanel view={view} camera={scene.camera} />
-              <FigurePanel scene={scene} availableCharacters={availableCharacters ?? characters} />
-              <ScenePanel scene={scene} />
-            </div>
+            <DirectorPanel
+              action={action}
+              onActionChange={setAction}
+              models={models}
+              onModelChange={models.setValue}
+              generating={generating}
+              onGenerate={() => void generate()}
+              notes={notes}
+              summary={script.summary}
+              mood={script.mood}
+              onMoodChange={(mood) => setScript((prev) => withPrevizMood(prev, mood))}
+              onResetCamera={resetCamera}
+              onResetBlocking={resetBlocking}
+              disabled={!ready || progress !== null}
+            />
             <footer className={styles.sideFoot}>
               {error && ready && (
                 <p className={styles.error} role="alert">
                   {error}
                 </p>
               )}
+              {progress !== null && (
+                <div
+                  className={styles.progress}
+                  role="progressbar"
+                  aria-label="预演视频导出进度"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(progress * 100)}
+                >
+                  <span style={{ width: `${Math.round(progress * 100)}%` }} />
+                </div>
+              )}
               <button
                 type="button"
                 className={styles.primary}
-                disabled={!ready || saving}
+                disabled={!ready || busy}
                 onClick={() => void save()}
               >
-                {saving ? '保存中…' : '截图作为构图'}
+                {progress !== null ? `渲染中 ${Math.round(progress * 100)}%` : '保存预演视频'}
               </button>
             </footer>
           </aside>

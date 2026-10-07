@@ -74,6 +74,11 @@ export interface VideoGenerationRequest {
   referenceImages?: readonly string[];
   seed?: number;
   watermark?: boolean;
+  /**
+   * 是否让模型同时生成声音（对白 / 音效 / 环境声）。只映射到公开文档支持的厂商
+   * （Seedance：`generate_audio`）；不支持的厂商忽略。缺省时不发送，沿用厂商默认
+   */
+  withAudio?: boolean;
 }
 
 export type VideoRemoteState = 'queued' | 'running' | 'succeeded' | 'failed';

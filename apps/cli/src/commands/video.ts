@@ -133,11 +133,11 @@ export const videoCommands: CommandSpec[] = [
       }
       const aspectRatio = (str(args, 'ratio') ?? '16:9') as AspectRatio;
       const characters = (str(args, 'characters') ?? '')
-        .split(/[,，]/)
+        .split(/[,\uff0c]/)
         .map((item) => item.trim())
         .filter(Boolean)
         .map((item) => {
-          const [name, ...rest] = item.split(/[:：]/);
+          const [name, ...rest] = item.split(/[:\uff1a]/);
           return { name: name.trim(), appearance: rest.join(':').trim() || undefined };
         });
       const prompt = buildStoryboardPrompt({

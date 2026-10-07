@@ -219,6 +219,19 @@ describe('seedance-video', () => {
     });
   });
 
+  it('声音：只有显式 withAudio 时才发送 generate_audio，文本命令格式不发送', () => {
+    expect(buildSeedanceSubmitBody({ prompt: 'p' }, 'm')).not.toHaveProperty('generate_audio');
+    expect(buildSeedanceSubmitBody({ prompt: 'p', withAudio: true }, 'm')).toMatchObject({
+      generate_audio: true,
+    });
+    expect(buildSeedanceSubmitBody({ prompt: 'p', withAudio: false }, 'm')).toMatchObject({
+      generate_audio: false,
+    });
+    expect(
+      buildSeedanceSubmitBody({ prompt: 'p', withAudio: true }, 'm', 'text-command')
+    ).not.toHaveProperty('generate_audio');
+  });
+
   it('状态映射', () => {
     expect(
       ['queued', 'running', 'succeeded', 'failed', 'cancelled', 'expired', 'x'].map(

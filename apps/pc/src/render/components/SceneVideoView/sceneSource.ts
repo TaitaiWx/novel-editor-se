@@ -6,8 +6,10 @@
  */
 import { STORYBOARD_MAX_SHOTS, type Shot, type ShotSize } from '@novel-editor/video';
 
-const RE_SCENE = /^(第[一二两三四五六七八九十百千万零〇\d]+场)\s*(.*)$/;
-const RE_ACT = /^第[一二两三四五六七八九十百千万零〇\d]+幕/;
+const RE_SCENE =
+  /^(\u7b2c[\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u573a)\s*(.*)$/;
+const RE_ACT =
+  /^\u7b2c[\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u5e55/;
 const RE_HEADING = /^#{1,6}\s/;
 
 /** 场景正文上限（交给分镜提示词前还会按 token 再截断） */
@@ -111,7 +113,13 @@ export interface SceneSource {
 /** 选段的场景名：所在「第X场」的标题，否则「选段-<前 10 个字>」 */
 export function selectionSceneName(selection: string, enclosing: SceneBlock | null): string {
   if (enclosing) return enclosing.title;
-  const head = clip(selection.replace(/[\s“”"'‘’「」『』，。！？、：；…—\-#/\\]+/g, ''), 10);
+  const head = clip(
+    selection.replace(
+      /[\s\u201c\u201d"'\u2018\u2019\u300c\u300d\u300e\u300f\uff0c\u3002\uff01\uff1f\u3001\uff1a\uff1b\u2026\u2014\-#/\\]+/g,
+      ''
+    ),
+    10
+  );
   return head ? `选段-${head}` : '选段';
 }
 
@@ -184,7 +192,8 @@ export function suggestLocation(text: string, titles: readonly string[]): string
 
 // ─── 确定性分镜（没有配置 AI 时） ─────────────────────────────────────────
 
-const SENTENCE_RE = /[^。！？!?…]+(?:[。！？!?…]+[”"』」]?)?/g;
+const SENTENCE_RE =
+  /[^\u3002\uff01\uff1f!?\u2026]+(?:[\u3002\uff01\uff1f!?\u2026]+[\u201d"\u300f\u300d]?)?/g;
 
 /** 按句末标点切句（引号跟随句末标点） */
 export function splitSentences(paragraph: string): string[] {
@@ -217,7 +226,7 @@ export interface FallbackStoryboardOptions {
 const DESCRIPTION_MAX = 160;
 
 function firstQuote(text: string): string | undefined {
-  const match = /[“"「]([^”"」]{1,80})[”"」]/.exec(text);
+  const match = /[\u201c"\u300c]([^\u201d"\u300d]{1,80})[\u201d"\u300d]/.exec(text);
   return match?.[1]?.trim() || undefined;
 }
 

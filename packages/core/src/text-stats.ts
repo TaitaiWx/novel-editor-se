@@ -114,8 +114,8 @@ export function buildThousandCharMarkers(
   return markers;
 }
 
-const CJK_REGEX = /[㐀-䶿一-鿿豈-﫿぀-ヿ가-힯]/gu;
-const WORD_REGEX = /[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*/g;
+const CJK_REGEX = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/gu;
+const WORD_REGEX = /[A-Za-z0-9]+(?:['\u2019-][A-Za-z0-9]+)*/g;
 
 export function computeTextStats(content: string): TextStats {
   const { lineCount, charCount } = analyzeContentStats(content);

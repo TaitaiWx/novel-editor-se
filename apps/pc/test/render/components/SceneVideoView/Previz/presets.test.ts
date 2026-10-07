@@ -1,37 +1,30 @@
 import { describe, expect, it } from 'vitest';
+import { SHOT_SIZES } from '@novel-editor/video';
 import {
-  LENSES,
+  GAIT_JOINTS,
   MIN_CAMERA_HEIGHT,
   MOODS,
   POSE_PRESETS,
   PROP_PRESETS,
   SHOT_FRAMING,
-  SHOT_SIZES,
-  STAGE_LIMIT,
   cameraPlacement,
   captureSize,
-  clampPedestal,
-  clampPitch,
-  clampToStage,
-  createFigure,
-  createProp,
   defaultCameraView,
   defaultFigures,
   defaultLensFor,
-  figuresCenter,
   frameRect,
+  gaitJoints,
   lensFov,
   lightDirection,
+  placementFromSample,
   moodById,
-  nextFigureId,
-  nextPropId,
-  normalizeRotation,
-  normalizeYaw,
   poseById,
   propPreset,
   ratioOf,
   type PrevizCameraView,
 } from '@/render/components/SceneVideoView/Previz/presets';
+
+const LENSES = [24, 35, 50, 85];
 
 const view = (patch: Partial<PrevizCameraView> = {}): PrevizCameraView => ({
   ...defaultCameraView('中景'),
@@ -115,16 +108,19 @@ describe('Previz 机位', () => {
     expect(cameraPlacement(view({ pitch: 30 })).position[1]).toBeGreaterThan(raised.target[1]);
   });
 
-  it('normalizeYaw / clampPitch / clampPedestal', () => {
-    expect(normalizeYaw(190)).toBe(-170);
-    expect(normalizeYaw(-190)).toBe(170);
-    expect(normalizeYaw(180)).toBe(180);
-    expect(normalizeYaw(-180)).toBe(180);
-    expect(normalizeYaw(725)).toBe(5);
-    expect(clampPitch(99)).toBe(60);
-    expect(clampPitch(-99)).toBe(-50);
-    expect(clampPedestal(5)).toBe(2);
-    expect(clampPedestal(-0.123)).toBe(-0.12);
+  it('placementFromSample 与 cameraPlacement 一致（预演脚本的机位采样）', () => {
+    const base = cameraPlacement(view({ yaw: 30, pitch: 10, pedestal: 0.3, focusX: 1 }));
+    const sampled = placementFromSample({
+      framingHeight: SHOT_FRAMING['中景'].height,
+      targetY: SHOT_FRAMING['中景'].targetY,
+      lens: 50,
+      elevation: 10,
+      yaw: 30,
+      height: 0.3,
+      focusX: 1,
+      focusZ: 0,
+    });
+    expect(sampled).toEqual(base);
   });
 
   it('ratioOf / frameRect / captureSize：取景框居中、比例正确；截图长边 1280', () => {
@@ -161,51 +157,30 @@ describe('Previz 人物', () => {
     const seven = defaultFigures(['1', '2', '3', '4', '5', '6', '7']);
     expect(seven[6].color).toBe(seven[0].color);
   });
+});
 
-  it('createFigure / nextFigureId：放在最右侧再往右 0.9 米、颜色不重复、id 只增不减', () => {
-    const two = defaultFigures(['林舟', '苏晴']);
-    const third = createFigure('秦伯', two);
-    expect(third).toMatchObject({ id: 'f3', name: '秦伯', x: 1.35, z: 0, pose: 'stand' });
-    expect(two.map((figure) => figure.color)).not.toContain(third.color);
-    expect(nextFigureId([{ id: 'f1' }, { id: 'f7' }, { id: 'x' }])).toBe('f8');
-    expect(createFigure('a', [])).toMatchObject({ id: 'f1', x: 0 });
-    // 右侧超出舞台时放到左侧
-    const edge = [{ ...two[0], x: STAGE_LIMIT }];
-    expect(createFigure('b', edge).x).toBeCloseTo(STAGE_LIMIT - 0.9);
-  });
-
-  it('clampToStage / figuresCenter / normalizeRotation', () => {
-    expect(clampToStage(100)).toBe(STAGE_LIMIT);
-    expect(clampToStage(-100)).toBe(-STAGE_LIMIT);
-    expect(clampToStage(1.23456)).toBe(1.23);
-    expect(clampToStage(-0.005)).toBeCloseTo(0);
-    expect(figuresCenter([])).toEqual({ x: 0, z: 0 });
-    expect(figuresCenter(defaultFigures(['a', 'b', 'c']))).toEqual({ x: 0, z: 0 });
-    expect(
-      figuresCenter([
-        { x: 1, z: 2 },
-        { x: 2, z: -1 },
-      ])
-    ).toEqual({ x: 1.5, z: 0.5 });
-    expect(normalizeRotation((200 * Math.PI) / 180)).toBeCloseTo((-160 * Math.PI) / 180);
-    expect(normalizeRotation((-200 * Math.PI) / 180)).toBeCloseTo((160 * Math.PI) / 180);
+describe('Previz 步态', () => {
+  it('左腿向前时右臂向前（对侧摆臂），半个周期后反过来；只影响四肢', () => {
+    const a = gaitJoints('walk', Math.PI / 2);
+    expect(a.leftThigh?.[0]).toBeLessThan(0);
+    expect(a.rightThigh?.[0]).toBeGreaterThan(0);
+    expect(a.rightUpperArm?.[0]).toBeLessThan(0);
+    const b = gaitJoints('walk', (Math.PI * 3) / 2);
+    expect(b.leftThigh?.[0]).toBeGreaterThan(0);
+    expect(Math.abs(gaitJoints('run', Math.PI / 2).leftThigh?.[0] ?? 0)).toBeGreaterThan(
+      Math.abs(a.leftThigh?.[0] ?? 0)
+    );
+    expect(Object.keys(a).every((name) => (GAIT_JOINTS as readonly string[]).includes(name))).toBe(
+      true
+    );
   });
 });
 
 describe('Previz 场景', () => {
-  it('道具：包含墙 / 门 / 桌子 / 树 / 柱子；新道具放在人物后方左右错开', () => {
+  it('道具：包含墙 / 门 / 桌子 / 树 / 柱子', () => {
     const labels = PROP_PRESETS.map((preset) => preset.label);
     for (const label of ['墙', '门', '桌子', '树', '柱子']) expect(labels).toContain(label);
     expect(propPreset('door').label).toBe('门');
-    const first = createProp('table', []);
-    expect(first).toMatchObject({ id: 'p1', kind: 'table', x: 0, rotation: 0 });
-    expect(first.z).toBeLessThan(0);
-    const second = createProp('tree', [first]);
-    const third = createProp('pillar', [first, second]);
-    expect(second.id).toBe('p2');
-    expect(Math.sign(second.x)).toBe(-Math.sign(third.x));
-    expect(createProp('wall', []).z).toBeLessThan(first.z);
-    expect(nextPropId([{ id: 'p3' }, { id: 'f9' }])).toBe('p4');
   });
 
   it('时段：白天 / 黄昏 / 夜晚，主光方向是单位向量且在地平线以上', () => {

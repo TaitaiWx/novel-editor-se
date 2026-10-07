@@ -132,7 +132,7 @@ function asStringList(value: unknown): string[] | undefined {
   const list = Array.isArray(value)
     ? value
     : typeof value === 'string'
-      ? value.split(/[,，、;；]/)
+      ? value.split(/[,\uff0c\u3001;\uff1b]/)
       : [];
   const result = list.map((item) => asText(item)).filter((item): item is string => Boolean(item));
   return result.length ? Array.from(new Set(result)) : undefined;

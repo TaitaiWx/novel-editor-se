@@ -248,6 +248,8 @@ export interface ShotInspectorProps {
   onRetryTask: (id: string) => void;
   /** 在参考窗格（编辑器旁边）打开某个成片 */
   onOpenBeside?: (fileName: string) => void;
+  /** 导出某个版本的成片（原格式另存） */
+  onExportVersion?: (fileName: string) => void;
   /** 首帧 / 预演（可选步骤） */
   keyframe?: Omit<KeyframeSectionProps, 'label'>;
   onClose: () => void;
@@ -267,6 +269,7 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
   onCancelTask,
   onRetryTask,
   onOpenBeside,
+  onExportVersion,
   keyframe,
   onClose,
 }) => {
@@ -396,6 +399,18 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
                   onClick={() => onOpenBeside(previewFile)}
                 >
                   在旁边看
+                </button>
+              </Tooltip>
+            )}
+            {onExportVersion && previewFile && (
+              <Tooltip content={`导出 ${previewFile}（原格式，不转码）`}>
+                <button
+                  type="button"
+                  className={styles.linkButton}
+                  aria-label={`导出 ${previewFile}`}
+                  onClick={() => onExportVersion(previewFile)}
+                >
+                  导出
                 </button>
               </Tooltip>
             )}

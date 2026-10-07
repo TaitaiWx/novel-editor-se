@@ -2,7 +2,8 @@
  * 场景视频（独立的 Electron 实例 + 本地 mock 服务）
  *
  * mock 服务同时扮演：
- * - 文本服务（xAI Grok，OpenAI 兼容 /v1/chat/completions）：返回 4 个镜头的分镜 JSON
+ * - 文本服务（xAI Grok，OpenAI 兼容 /v1/chat/completions）：返回 4 个镜头的分镜 JSON；
+ *   系统提示词带预演标记（PREVIZ_PROMPT_TAG）时返回 3D 预演脚本（PrevizScript）
  * - 视频服务（MiniMax 形状）：提交 → 第一次查询生成中 → 之后成功 → 取文件地址 → 下载测试内生成的小 MP4
  *
  * 流程（画布）：打开 001-启程 → 选中「第一场」正文 → 文件栏「场景视频」→ 自动用 AI 拆分镜（≥3 个镜头节点）
@@ -16,6 +17,7 @@ import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { captureForReview, ensureSidebarOpen, openChapter, setupAppSuite } from './support/suite';
 import { createTinyMp4 } from './support/mp4-fixture';
+import { PREVIZ_PROMPT_TAG } from '@novel-editor/ai/prompts';
 import { comboboxSelector, selectedOptionText } from './support/select';
 
 const suite = setupAppSuite({ fixture: { prefix: 'novel-editor-e2e-scene-video-' } });
@@ -37,6 +39,39 @@ const STORYBOARD = {
     { shotSize: '特写', durationSec: 6, description: '林舟接过烤得焦黄的饼', camera: '推近' },
   ],
 };
+
+/** 3D 预演脚本：林舟从左走到中间回头，镜头从全景推到中景 */
+const PREVIZ_SCRIPT = {
+  durationSec: 2,
+  mood: 'dusk',
+  summary: '林舟走到镇口回头',
+  figures: [
+    {
+      name: '林舟',
+      keys: [
+        { t: 0, x: -1.5, z: 0, facing: 90, pose: 'walk' },
+        { t: 1.5, x: 0, z: 0, facing: 90, pose: 'walk' },
+        { t: 2, x: 0, z: 0, facing: 0, pose: 'look-back' },
+      ],
+    },
+  ],
+  camera: [
+    { t: 0, shotSize: 'full', lens: 35 },
+    { t: 2, shotSize: 'medium', lens: 35 },
+  ],
+  props: [{ kind: 'tree', x: 1.5, z: -2 }],
+};
+
+function isPrevizRequest(body: Record<string, unknown>): boolean {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  const first: unknown = messages[0];
+  return (
+    typeof first === 'object' &&
+    first !== null &&
+    typeof (first as { content?: unknown }).content === 'string' &&
+    (first as { content: string }).content.includes(PREVIZ_PROMPT_TAG)
+  );
+}
 
 interface RecordedRequest {
   method: string;
@@ -82,7 +117,14 @@ function handle(req: IncomingMessage, res: ServerResponse) {
       case '/v1/chat/completions':
         json(res, 200, {
           model: 'grok-mock',
-          choices: [{ message: { content: JSON.stringify(STORYBOARD) }, finish_reason: 'stop' }],
+          choices: [
+            {
+              message: {
+                content: JSON.stringify(isPrevizRequest(body) ? PREVIZ_SCRIPT : STORYBOARD),
+              },
+              finish_reason: 'stop',
+            },
+          ],
         });
         return;
       case '/v1/video_generation':
@@ -333,7 +375,7 @@ describe('场景视频', () => {
       await ensureSidebarOpen(page);
     }
   }, 120_000);
-  it('人物节点显示三视图；成片在编辑器旁边打开；3D 预演截图保存为首帧构图', async () => {
+  it('人物节点显示三视图；成片在编辑器旁边打开；3D 预演生成动画并保存为预演视频 + 首帧构图', async () => {
     const { page, fixture } = suite;
     // 示例人物带三视图：画布人物节点直接显示（生成视频时自动作为参考图）
     await page.waitFor(
@@ -364,7 +406,7 @@ describe('场景视频', () => {
     await page.click('[data-testid="reference-mini"] [aria-label="关闭参考"]');
     await page.waitForGone('[data-testid="reference-mini"]');
 
-    // 首帧：3D 预演（木偶小人摆位）→ 截图作为构图，落盘为 镜头1-预演.png
+    // 首帧：3D 预演 → 用 mock 文本服务生成预演脚本 → 播放 → 保存预演视频（镜头1-预演.mp4 + 第一帧 镜头1-预演.png）
     await page.waitForTarget('[data-testid="keyframe-section"]');
     await page.click({ text: '3D 预演', within: '[data-testid="keyframe-section"]', exact: true });
     await page.waitForTarget('[data-testid="previz-dialog"]');
@@ -384,22 +426,93 @@ describe('场景视频', () => {
       await page.waitForGone('[data-testid="previz-dialog"]');
       return;
     }
-    await page.click({ text: '坐', within: '[role="radiogroup"][aria-label="姿势"]', exact: true });
+    // 动作描述预填了镜头画面描述；模型下拉列出已配置的 Grok
+    await page.waitFor(
+      () =>
+        (
+          document.querySelector(
+            '[data-testid="previz-dialog"] textarea'
+          ) as HTMLTextAreaElement | null
+        )?.value.includes('老槐树') ?? false,
+      { timeout: 5_000, message: '动作描述预填画面描述' }
+    );
+    await page.waitFor(
+      () =>
+        document
+          .querySelector('[data-testid="previz-dialog"] [role="combobox"][aria-label="预演模型"]')
+          ?.textContent?.includes('Grok') ?? false,
+      { timeout: 10_000, message: '模型下拉列出 Grok' }
+    );
+    const before = requests.filter((item) => isPrevizRequest(item.body)).length;
+    await page.click({ text: '生成预演', within: '[data-testid="previz-dialog"]', exact: true });
+    await page.waitForTarget(
+      { text: PREVIZ_SCRIPT.summary, within: '[data-testid="previz-dialog"]' },
+      15_000
+    );
+    expect(requests.filter((item) => isPrevizRequest(item.body)).length).toBe(before + 1);
+    // 生成后自动播放：进度在走
+    await page.waitFor(
+      () => {
+        const text = document.querySelector('[data-testid="previz-time"]')?.textContent ?? '';
+        return /^(?!0\.0s)\d+\.\ds \/ 2\.0s$/.test(text);
+      },
+      { timeout: 5_000, message: '预演在播放' }
+    );
     await captureForReview(page, 'scene-video-previz');
-    await page.click({ text: '截图作为构图', within: '[data-testid="previz-dialog"]' });
-    await page.waitForGone('[data-testid="previz-dialog"]', 15_000);
+    await page.click({ text: '保存预演视频', within: '[data-testid="previz-dialog"]' });
+    // 没有可用编码器的环境：显示错误后关闭即可
+    const outcome = await page.waitFor<'saved' | 'error'>(
+      () => {
+        const dialog = document.querySelector('[data-testid="previz-dialog"]');
+        if (!dialog) return 'saved';
+        return dialog.querySelector('[role="alert"]') ? 'error' : null;
+      },
+      { timeout: 60_000, message: '预演视频保存完成' }
+    );
+    if (outcome === 'error') {
+      await page.click('[aria-label="关闭预演"]');
+      await page.waitForGone('[data-testid="previz-dialog"]');
+      return;
+    }
+    const mp4File = fixture.resolve(...SCENE_DIR, '镜头1-预演.mp4');
+    const webmFile = fixture.resolve(...SCENE_DIR, '镜头1-预演.webm');
     const previzFile = fixture.resolve(...SCENE_DIR, '镜头1-预演.png');
-    await page.waitUntil(() => existsSync(previzFile), { message: '镜头1-预演.png 已落盘' });
+    await page.waitUntil(
+      () => existsSync(previzFile) && (existsSync(mp4File) || existsSync(webmFile)),
+      {
+        message: '镜头1-预演.mp4 与 镜头1-预演.png 已落盘',
+      }
+    );
     const png = await readFile(previzFile);
     expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
-    await page.waitForTarget('[data-testid="keyframe-section"] img[alt$="预演截图"]', 10_000);
+    if (existsSync(mp4File)) {
+      const video = await readFile(mp4File);
+      expect(video.subarray(4, 8).toString('ascii')).toBe('ftyp');
+      expect(video.length).toBeGreaterThan(1000);
+    }
+    await page.waitForTarget('[data-testid="keyframe-section"] img[alt$="预演第一帧"]', 10_000);
+    await page.waitFor(
+      () =>
+        (
+          document.querySelector('[data-testid="previz-video"]') as HTMLVideoElement | null
+        )?.src.startsWith('blob:') ?? false,
+      { timeout: 15_000, message: '检查器播放预演视频' }
+    );
     await page.waitUntil(
       async () => {
         const raw = await readFile(fixture.resolve(...SCENE_DIR, '分镜.json'), 'utf-8');
-        const state = JSON.parse(raw) as { previz?: Record<string, string> };
-        return Object.values(state.previz ?? {}).some((value) => value.endsWith('镜头1-预演.png'));
+        const state = JSON.parse(raw) as {
+          previz?: Record<string, string>;
+          previzVideo?: Record<string, string>;
+          previzScripts?: Record<string, { durationSec?: number }>;
+        };
+        return (
+          Object.values(state.previz ?? {}).some((value) => value.endsWith('镜头1-预演.png')) &&
+          Object.values(state.previzVideo ?? {}).some((value) => /-\S*\.(mp4|webm)$/.test(value)) &&
+          Object.values(state.previzScripts ?? {}).some((value) => value.durationSec === 2)
+        );
       },
-      { timeout: 10_000, message: '分镜.json 记录了预演截图' }
+      { timeout: 10_000, message: '分镜.json 记录了预演第一帧、预演视频与脚本' }
     );
-  }, 60_000);
+  }, 120_000);
 });

@@ -109,8 +109,8 @@ export function videoOutputLayout(input: {
   };
 }
 
-const SHOT_FILE_RE = /^镜头(\d+)-v(\d+)\.([a-z0-9]{1,5})$/i;
-const PROMPT_FILE_RE = /^镜头(\d+)-v(\d+)\.prompt\.json$/i;
+const SHOT_FILE_RE = /^\u955c\u5934(\d+)-v(\d+)\.([a-z0-9]{1,5})$/i;
+const PROMPT_FILE_RE = /^\u955c\u5934(\d+)-v(\d+)\.prompt\.json$/i;
 
 function toPositiveInt(text: string | undefined): number | null {
   const value = Number(text);
@@ -216,7 +216,7 @@ export function videoSceneLayout(input: { chapter: string; scene: string }): Vid
   };
 }
 
-const ANIMATIC_FILE_RE = /^样片-(\d{8}-\d{6})\.(mp4|webm)$/i;
+const ANIMATIC_FILE_RE = /^\u6837\u7247-(\d{8}-\d{6})\.(mp4|webm)$/i;
 
 /** 拼接样片文件名：样片-20261007-153000.mp4（本地时间） */
 export function animaticFileName(date: Date, ext: 'mp4' | 'webm'): string {

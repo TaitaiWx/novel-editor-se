@@ -2,12 +2,14 @@
  * 3D 预演的场景元素：简单道具（墙、门、桌椅、柱、树、箱子）与时段氛围（白天 / 黄昏 / 夜晚）。纯数据 + 纯函数。
  */
 
-export type PropKind = 'wall' | 'door' | 'table' | 'chair' | 'pillar' | 'tree' | 'crate';
+import type { PrevizMood, PrevizPropKind } from '@novel-editor/video';
+
+export type PropKind = PrevizPropKind;
 
 export interface PropPreset {
   kind: PropKind;
   label: string;
-  /** 占地半径（米）：新放的道具按它错开，避免与人物重叠 */
+  /** 占地半径（米）：选中标记按它放大 */
   radius: number;
 }
 
@@ -25,40 +27,7 @@ export function propPreset(kind: PropKind): PropPreset {
   return PROP_PRESETS.find((item) => item.kind === kind) ?? PROP_PRESETS[0];
 }
 
-export interface PrevizProp {
-  id: string;
-  kind: PropKind;
-  x: number;
-  z: number;
-  /** 朝向（弧度） */
-  rotation: number;
-}
-
-/** 新道具的 id：p1、p2…，只增不减 */
-export function nextPropId(props: readonly { id: string }[]): string {
-  const max = props.reduce((acc, item) => {
-    const match = /^p(\d+)$/.exec(item.id);
-    return match ? Math.max(acc, Number(match[1])) : acc;
-  }, 0);
-  return `p${max + 1}`;
-}
-
-/** 新道具放在人物后方，依次向左右错开；墙放得更靠后作为背景 */
-export function createProp(kind: PropKind, existing: readonly PrevizProp[]): PrevizProp {
-  const count = existing.length;
-  const side = count % 2 === 0 ? 1 : -1;
-  const step = Math.ceil(count / 2);
-  const back = kind === 'wall' ? -2.6 : -1.4;
-  return {
-    id: nextPropId(existing),
-    kind,
-    x: Math.round(side * step * 1.4 * 100) / 100,
-    z: back,
-    rotation: 0,
-  };
-}
-
-export type MoodId = 'day' | 'dusk' | 'night';
+export type MoodId = PrevizMood;
 
 export interface MoodPreset {
   id: MoodId;

@@ -9,13 +9,14 @@ const RE_MARKDOWN = /^(#{1,6})\s+(.+)/;
  * 中文章节标记（支持汉字数字和阿拉伯数字混合）
  * 匹配: 第一章、第12章、第三卷、第二幕、第一节、第五回、第六部
  */
-const RE_CHINESE_SECTION = /^(第[一二三四五六七八九十百千万零〇\d]+[章幕节卷部回篇集])\s*(.*)/;
+const RE_CHINESE_SECTION =
+  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+[\u7ae0\u5e55\u8282\u5377\u90e8\u56de\u7bc7\u96c6])\s*(.*)/;
 
 /**
  * 纯数字编号标题
  * 匹配: "1. 标题"、"1.2 标题"、"第1章"
  */
-const RE_NUMBERED = /^(\d+(?:\.\d+)*)[.、)\s]\s*(.+)/;
+const RE_NUMBERED = /^(\d+(?:\.\d+)*)[.\u3001)\s]\s*(.+)/;
 
 /**
  * 日期行（如 "2024.03.15"、"2024-3-15 晴"、"2024/03/15"），不应被识别为编号标题
@@ -156,7 +157,9 @@ export function extractOutline(text: string, options: OutlineOptions = {}): Outl
         // 排除常见非标题短行
         const isLikelyTitle =
           // 不以标点开头
-          !/^[，。！？、；：“”‘’「」『』《》〈〉"'（）【】—…·,.;:!?()[\]{}]/.test(trimmed) &&
+          !/^[\uff0c\u3002\uff01\uff1f\u3001\uff1b\uff1a\u201c\u201d\u2018\u2019\u300c\u300d\u300e\u300f\u300a\u300b\u3008\u3009"'\uff08\uff09\u3010\u3011\u2014\u2026\u00b7,.;:!?()[\]{}]/.test(
+            trimmed
+          ) &&
           // 不是纯数字/纯标点
           !/^[\d\s.,;:!?]+$/.test(trimmed) &&
           // 不是空白标记

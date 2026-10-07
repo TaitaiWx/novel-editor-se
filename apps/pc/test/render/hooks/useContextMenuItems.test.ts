@@ -95,7 +95,15 @@ describe('useContextMenuItems', () => {
     window.addEventListener(REFERENCE_OPEN_EVENT, listener);
     const { items } = setup({ name, path: filePath, type: 'file' });
     expect(items[0].label).toBe('在编辑器旁边打开');
-    expect(items[1].separator).toBe(true);
+    // 其后是单独导出：图片 PNG / JPEG / WebP，视频只有原格式
+    const exportLabels = items
+      .slice(1)
+      .filter((item) => item.label.startsWith('导出'))
+      .map((item) => item.label);
+    expect(exportLabels).toEqual(
+      kind === 'image' ? ['导出为 PNG…', '导出为 JPEG…', '导出为 WebP…'] : ['导出 MP4…']
+    );
+    expect(items[1 + exportLabels.length].separator).toBe(true);
     items[0].onClick();
     expect(listener).toHaveBeenCalledTimes(1);
     const detail = (listener.mock.calls[0][0] as CustomEvent<OpenReferenceDetail>).detail;

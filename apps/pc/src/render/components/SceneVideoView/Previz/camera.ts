@@ -1,20 +1,21 @@
 /**
  * 3D 预演的机位：景别（取景高度）+ 角度 + 焦距 + 环绕 / 升降，以及画幅、取景框与截图尺寸。纯函数，便于测试。
+ * 景别取景表与角度仰角来自 @novel-editor/video 的 PREVIZ_FRAMING / PREVIZ_ANGLE_ELEVATION（与预演脚本同一份）。
  *
  * 景别按「画面竖直方向框住多高的人」定义，焦距决定视角，二者一起推出相机距离：
  * 换长焦时相机自动后退、人物大小不变，只有透视感（背景压缩）变化，和真实拍摄一致。
  */
 
-export type CameraAngle = 'eye' | 'high' | 'low';
+import {
+  PREVIZ_ANGLE_ELEVATION,
+  PREVIZ_FRAMING,
+  PREVIZ_SHOT_SIZES,
+  SHOT_SIZES,
+  type PrevizAngle,
+  type PrevizCameraSample,
+} from '@novel-editor/video';
 
-export const CAMERA_ANGLES: ReadonlyArray<{ id: CameraAngle; label: string }> = [
-  { id: 'eye', label: '平视' },
-  { id: 'high', label: '俯视' },
-  { id: 'low', label: '仰视' },
-];
-
-/** 各角度的基础仰角（度，正 = 相机在上方往下拍） */
-const ANGLE_ELEVATION: Record<CameraAngle, number> = { eye: 0, high: 32, low: -22 };
+export type CameraAngle = PrevizAngle;
 
 export interface ShotFraming {
   /** 画面竖直方向框住的高度（米） */
@@ -25,23 +26,15 @@ export interface ShotFraming {
   lens: number;
 }
 
-/** 景别（从远到近），名称与分镜的景别一致 */
-export const SHOT_FRAMING: Record<string, ShotFraming> = {
-  大远景: { height: 30, targetY: 1.2, lens: 24 },
-  远景: { height: 9, targetY: 1.1, lens: 24 },
-  全景: { height: 2.3, targetY: 0.92, lens: 35 },
-  中景: { height: 1.0, targetY: 1.33, lens: 50 },
-  近景: { height: 0.7, targetY: 1.5, lens: 50 },
-  特写: { height: 0.42, targetY: 1.62, lens: 85 },
-  大特写: { height: 0.2, targetY: 1.67, lens: 85 },
-};
+/** 景别（从远到近），名称与分镜的景别一致（按顺序对应预演景别 id） */
+export const SHOT_FRAMING: Record<string, ShotFraming> = Object.fromEntries(
+  SHOT_SIZES.map((name, index) => [name, PREVIZ_FRAMING[PREVIZ_SHOT_SIZES[index]]])
+);
 
-export const SHOT_SIZES = Object.keys(SHOT_FRAMING);
-
-export const LENSES: readonly number[] = [24, 35, 50, 85];
+const DEFAULT_SHOT_SIZE = SHOT_SIZES[3];
 
 export function defaultLensFor(shotSize: string): number {
-  return (SHOT_FRAMING[shotSize] ?? SHOT_FRAMING['中景']).lens;
+  return (SHOT_FRAMING[shotSize] ?? SHOT_FRAMING[DEFAULT_SHOT_SIZE]).lens;
 }
 
 export interface PrevizCameraView {
@@ -64,7 +57,7 @@ export function defaultCameraView(
   shotSize: string,
   focus: { x: number; z: number } = { x: 0, z: 0 }
 ): PrevizCameraView {
-  const size = SHOT_FRAMING[shotSize] ? shotSize : '中景';
+  const size = SHOT_FRAMING[shotSize] ? shotSize : DEFAULT_SHOT_SIZE;
   return {
     shotSize: size,
     angle: 'eye',
@@ -104,42 +97,44 @@ export interface CameraPlacement {
 
 /** 机位 → 相机位置与注视点；aspect 为画幅宽高比 */
 export function cameraPlacement(view: PrevizCameraView, aspect = 16 / 9): CameraPlacement {
-  const framing = SHOT_FRAMING[view.shotSize] ?? SHOT_FRAMING['中景'];
-  const fov = lensFov(view.lens, aspect);
+  const framing = SHOT_FRAMING[view.shotSize] ?? SHOT_FRAMING[DEFAULT_SHOT_SIZE];
+  return placementFromSample(
+    {
+      framingHeight: framing.height,
+      targetY: framing.targetY,
+      lens: view.lens,
+      elevation: PREVIZ_ANGLE_ELEVATION[view.angle] + view.pitch,
+      yaw: view.yaw,
+      height: view.pedestal,
+      focusX: view.focusX,
+      focusZ: view.focusZ,
+    },
+    aspect
+  );
+}
+
+/**
+ * 预演脚本插值出的机位（samplePrevizScript 的 camera）→ 相机位置与注视点。
+ * 景别高度与焦距一起决定距离：换长焦时相机后退、人物大小不变。
+ */
+export function placementFromSample(camera: PrevizCameraSample, aspect = 16 / 9): CameraPlacement {
+  const fov = lensFov(camera.lens, aspect);
   const halfFov = (fov * Math.PI) / 360;
-  const distance = clamp(framing.height / 2 / Math.tan(halfFov), 0.4, 150);
-  const elevation = (clamp(ANGLE_ELEVATION[view.angle] + view.pitch, -40, 80) * Math.PI) / 180;
-  const yaw = (view.yaw * Math.PI) / 180;
-  const targetY = Math.max(0.05, framing.targetY + view.pedestal);
-  const target: [number, number, number] = [view.focusX, targetY, view.focusZ];
+  const distance = clamp(camera.framingHeight / 2 / Math.tan(halfFov), 0.4, 150);
+  const elevation = (clamp(camera.elevation, -40, 80) * Math.PI) / 180;
+  const yaw = (camera.yaw * Math.PI) / 180;
+  const targetY = Math.max(0.05, camera.targetY + camera.height);
+  const target: [number, number, number] = [camera.focusX, targetY, camera.focusZ];
   const horizontal = Math.cos(elevation) * distance;
   const position: [number, number, number] = [
-    round(view.focusX + Math.sin(yaw) * horizontal),
+    round(camera.focusX + Math.sin(yaw) * horizontal),
     round(Math.max(MIN_CAMERA_HEIGHT, targetY + Math.sin(elevation) * distance)),
-    round(view.focusZ + Math.cos(yaw) * horizontal),
+    round(camera.focusZ + Math.cos(yaw) * horizontal),
   ];
   return { position, target, fov, distance };
 }
 
 const round = (value: number) => Math.round(value * 1000) / 1000;
-
-/** 环绕角规范到 (-180, 180] */
-export function normalizeYaw(degrees: number): number {
-  let value = degrees % 360;
-  if (value > 180) value -= 360;
-  if (value <= -180) value += 360;
-  return Math.round(value * 10) / 10;
-}
-
-export function clampPitch(degrees: number): number {
-  return clamp(Math.round(degrees * 10) / 10, -50, 60);
-}
-
-export const PEDESTAL_LIMIT = 2;
-
-export function clampPedestal(meters: number): number {
-  return clamp(Math.round(meters * 100) / 100, -PEDESTAL_LIMIT, PEDESTAL_LIMIT);
-}
 
 export interface FrameRect {
   x: number;

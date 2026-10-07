@@ -108,10 +108,11 @@ export const AI_ERROR_HINTS: Record<AIErrorKind, string> = {
 };
 
 const CONTENT_SAFETY_PATTERN =
-  /(sensitive|content[_\s-]?(policy|filter|safety|moderation)|moderat|safety|unsafe|违规|敏感|审核|安全策略)/i;
+  /(sensitive|content[_\s-]?(policy|filter|safety|moderation)|moderat|safety|unsafe|\u8fdd\u89c4|\u654f\u611f|\u5ba1\u6838|\u5b89\u5168\u7b56\u7565)/i;
 const QUOTA_PATTERN =
-  /(insufficient[_\s-]?(balance|quota|credit)|quota|overdue|balance|billing|exceeded your current|欠费|余额|额度)/i;
-const AUTH_PATTERN = /(api[_\s-]?key|unauthori[sz]ed|authenticat|invalid[_\s-]?token|鉴权|密钥)/i;
+  /(insufficient[_\s-]?(balance|quota|credit)|quota|overdue|balance|billing|exceeded your current|\u6b20\u8d39|\u4f59\u989d|\u989d\u5ea6)/i;
+const AUTH_PATTERN =
+  /(api[_\s-]?key|unauthori[sz]ed|authenticat|invalid[_\s-]?token|\u9274\u6743|\u5bc6\u94a5)/i;
 
 /** 按 HTTP 状态码 + 错误文本 / 错误码推断错误类别 */
 export function classifyHttpError(status: number, text: string, code?: string): AIErrorKind {

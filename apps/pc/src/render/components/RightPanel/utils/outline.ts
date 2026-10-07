@@ -36,7 +36,12 @@ export function extractChapterContent(
 export function isGenericOutlineTitle(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return true;
-  if (/^第[一二三四五六七八九十百千万零〇\d]+[章幕节卷部回篇集]$/.test(trimmed)) return true;
+  if (
+    /^\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+[\u7ae0\u5e55\u8282\u5377\u90e8\u56de\u7bc7\u96c6]$/.test(
+      trimmed
+    )
+  )
+    return true;
   if (/^(chapter|part|act|scene)\s*\d+$/i.test(trimmed)) return true;
   return false;
 }
@@ -44,9 +49,13 @@ export function isGenericOutlineTitle(text: string): boolean {
 export function isChapterHeading(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
-  if (/^第[一二三四五六七八九十百千万零〇\d]+[章幕节卷部回篇集](?:[：:：\s-].+)?$/.test(trimmed))
+  if (
+    /^\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+[\u7ae0\u5e55\u8282\u5377\u90e8\u56de\u7bc7\u96c6](?:[\uff1a:\uff1a\s-].+)?$/.test(
+      trimmed
+    )
+  )
     return true;
-  if (/^(chapter|part|act)\s*\d+(?:\s*[:：-]\s*.+)?$/i.test(trimmed)) return true;
+  if (/^(chapter|part|act)\s*\d+(?:\s*[:\uff1a-]\s*.+)?$/i.test(trimmed)) return true;
   return false;
 }
 
@@ -70,7 +79,7 @@ export function parseOutlineTitleCompletions(raw: string): Array<{ line: number;
     return raw
       .split(/\r?\n/)
       .map((line) => {
-        const match = line.match(/line\s*[:=]\s*(\d+)\s*[,，;；\s]+title\s*[:=]\s*(.+)$/i);
+        const match = line.match(/line\s*[:=]\s*(\d+)\s*[,\uff0c;\uff1b\s]+title\s*[:=]\s*(.+)$/i);
         if (!match) return null;
         return {
           line: Number(match[1]) || 0,

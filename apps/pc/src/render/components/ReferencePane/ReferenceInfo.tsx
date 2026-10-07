@@ -1,12 +1,17 @@
 /**
- * 主画面下方的信息行：类型 · 文件名 · 尺寸 / 时长，以及操作（用系统应用打开、在资料中定位、从列表移除）。
+ * 主画面下方的信息行：类型 · 文件名 · 尺寸 / 时长，以及操作
+ * （插入到正文、导出、用系统应用打开、在资料中定位、从列表移除）。
  */
-import React from 'react';
-import { VscClose, VscLinkExternal, VscTarget } from 'react-icons/vsc';
+import React, { useState } from 'react';
+import { VscClose, VscCloudDownload, VscInsert, VscLinkExternal, VscTarget } from 'react-icons/vsc';
 import Tooltip from '../Tooltip';
-import { formatTime } from '../VideoPlayer/format';
+import ContextMenu from '../ContextMenu';
+import { useOptionalToast } from '../Toast';
+import { formatTime } from '@novel-editor/media-player';
 import type { ReferenceItem } from '../../utils/referencePane';
 import { requestRevealInFilePanel } from '../../utils/workspaceFiles';
+import { exportChoicesFor, exportMediaWithToast } from '../../utils/mediaExport';
+import { getActiveEditor } from '../TextEditor/active-editor';
 import type { MediaInfo } from './ReferenceStage';
 import styles from './styles.module.scss';
 
@@ -33,8 +38,25 @@ const ReferenceInfo: React.FC<{
   item: ReferenceItem;
   info: MediaInfo | null;
   onRemove: () => void;
-}> = ({ item, info, onRemove }) => {
+  /** 插入正文的指令（::image / ::video，路径相对作品目录） */
+  directive: string;
+}> = ({ item, info, onRemove, directive }) => {
   const [kind, ...rest] = describeReference(item, info);
+  const toast = useOptionalToast();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const choices = exportChoicesFor(item.path);
+  const runExport = (format?: string) =>
+    void exportMediaWithToast({ sourcePath: item.path, format, title: item.title }, toast);
+
+  const insert = () => {
+    const editor = getActiveEditor();
+    if (editor?.insertBlock?.(directive)) {
+      toast?.success('已插入到正文');
+    } else {
+      toast?.error('没有可插入的正文（先打开一个章节）');
+    }
+  };
+
   return (
     <div className={styles.info} data-testid="reference-info">
       <div className={styles.meta} title={item.path}>
@@ -42,6 +64,41 @@ const ReferenceInfo: React.FC<{
         <span className={styles.metaText}>{rest.join(' · ')}</span>
       </div>
       <div className={styles.infoActions}>
+        <Tooltip content={`插入到正文（${item.kind === 'video' ? '::video' : '::image'}）`}>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="插入到正文"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={insert}
+          >
+            <VscInsert />
+          </button>
+        </Tooltip>
+        {choices.length > 0 && (
+          <Tooltip
+            content={
+              item.kind === 'video' ? `导出 ${choices[0].label}…` : '导出为 PNG / JPEG / WebP…'
+            }
+          >
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label="导出"
+              aria-haspopup={item.kind === 'image' ? 'menu' : undefined}
+              onClick={(event) => {
+                if (item.kind === 'video') {
+                  runExport(choices[0].format);
+                  return;
+                }
+                const rect = event.currentTarget.getBoundingClientRect();
+                setMenu({ x: rect.left, y: rect.bottom + 4 });
+              }}
+            >
+              <VscCloudDownload />
+            </button>
+          </Tooltip>
+        )}
         <Tooltip content="用系统应用打开">
           <button
             type="button"
@@ -73,6 +130,17 @@ const ReferenceInfo: React.FC<{
           </button>
         </Tooltip>
       </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={choices.map((choice) => ({
+            label: `导出为 ${choice.label}…`,
+            onClick: () => runExport(choice.format),
+          }))}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 };

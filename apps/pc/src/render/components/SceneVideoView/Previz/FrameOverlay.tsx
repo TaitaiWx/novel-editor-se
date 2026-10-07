@@ -1,12 +1,16 @@
 /**
  * 预演视口上的 DOM 叠加层：画幅取景框（框外遮罩）、三分线、安全框、人物名字标签。
- * 都是 DOM，不在 WebGL 画布里，因此不会进截图。
+ * 都是 DOM，不在 WebGL 画布里，因此不会进截图 / 视频。
  */
 import React from 'react';
-import { frameRect, type PrevizFigure } from './presets';
+import { frameRect } from './presets';
 import type { PrevizLabel } from './types';
-import type { PrevizOverlays } from './usePrevizScene';
 import styles from './styles.module.scss';
+
+export interface PrevizOverlays {
+  thirds: boolean;
+  safe: boolean;
+}
 
 interface FrameOverlayProps {
   width: number;
@@ -15,8 +19,8 @@ interface FrameOverlayProps {
   aspectLabel: string;
   overlays: PrevizOverlays;
   labels: readonly PrevizLabel[];
-  figures: readonly PrevizFigure[];
-  selectedId: string | null;
+  figures: readonly { id: string; name: string; color: string }[];
+  activeId: string | null;
 }
 
 const FrameOverlay: React.FC<FrameOverlayProps> = ({
@@ -27,7 +31,7 @@ const FrameOverlay: React.FC<FrameOverlayProps> = ({
   overlays,
   labels,
   figures,
-  selectedId,
+  activeId,
 }) => {
   if (width <= 0 || height <= 0) return null;
   const rect = frameRect(width, height, aspect);
@@ -55,7 +59,7 @@ const FrameOverlay: React.FC<FrameOverlayProps> = ({
         return (
           <span
             key={label.id}
-            className={label.id === selectedId ? styles.nameTagActive : styles.nameTag}
+            className={label.id === activeId ? styles.nameTagActive : styles.nameTag}
             style={{ left: label.x, top: label.y }}
           >
             <span className={styles.dot} style={{ background: figure.color }} />

@@ -27,7 +27,7 @@ export function buildKeyframePrompt(
     hasPreviz ? '人物站位、朝向与镜头角度按第一张参考图（预演截图）的构图' : '',
     people ? '人物外貌、发型与服装与人物参考图保持一致' : '',
   ].filter(Boolean);
-  return parts.join('。').replace(/。。+/g, '。');
+  return parts.join('。').replace(/\u3002\u3002+/g, '。');
 }
 
 /** 首帧参考图：预演截图在前（决定构图），其后是镜头人物的参考图，去重后最多 4 张 */

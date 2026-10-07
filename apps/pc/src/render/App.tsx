@@ -61,6 +61,7 @@ const App: React.FC = () => {
     workspaceTabLabels,
     editorCharacterHighlights,
     referenceFallback,
+    referenceSource,
     specialTabContent,
     handleAssistantApplyFix,
     handleAssistantPreviewDiff,
@@ -360,7 +361,7 @@ const App: React.FC = () => {
                     <InspirationButton shortcut={appSettings.shortcuts.openInspiration} />
                     <ContinuationButton editorViewRef={editorViewRef} />
                     <SceneVideoButton shortcutLabel={formatShortcutLabel('Mod+Alt+V')} />
-                    <ReferenceButton fallback={referenceFallback} />
+                    <ReferenceButton fallback={referenceFallback} source={referenceSource} />
                   </>
                 }
                 emptyStateActions={

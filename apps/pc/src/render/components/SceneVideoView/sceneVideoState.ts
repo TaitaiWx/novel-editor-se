@@ -14,10 +14,12 @@ import {
   parseShotFileName,
   perSecondEstimator,
   storyboardDurationSec,
+  validatePrevizScript,
   validateStoryboard,
   videoSceneLayout,
   type AspectRatio,
   type CostCurrency,
+  type PrevizScript,
   type Shot,
   type Storyboard,
   type VideoTask,
@@ -55,8 +57,12 @@ export interface SceneVideoState {
   canvas: SceneCanvasState;
   /** 镜头 id → 采用的首帧图（相对作品目录）；生成视频时作为首帧 */
   keyframes: Record<string, string>;
-  /** 镜头 id → 预演截图（3D 摆拍，相对作品目录）；生成首帧时作为构图参考 */
+  /** 镜头 id → 预演第一帧（3D 预演，相对作品目录）；生成首帧时作为构图参考 */
   previz: Record<string, string>;
+  /** 镜头 id → 预演视频（3D 预演逐帧导出的 MP4，相对作品目录）；作者的动作参考 */
+  previzVideo: Record<string, string>;
+  /** 镜头 id → 预演脚本（AI 生成 + 作者微调；重新打开预演时恢复） */
+  previzScripts: Record<string, PrevizScript>;
   /** 最近一次自动合成样片时各镜头选用的版本签名（未变化时不重复合成） */
   animaticSignature?: string;
   /** 已自动在本章章纲里记录这一场的视频（只记录一次） */
@@ -103,8 +109,22 @@ export function createSceneVideoState(input: CreateSceneStateInput, now: Date): 
     canvas: { positions: {} },
     keyframes: {},
     previz: {},
+    previzVideo: {},
+    previzScripts: {},
     updatedAt: now.toISOString(),
   };
+}
+
+/** 镜头 id → 预演脚本：只保留存在的镜头，脚本重新校验（数值夹到安全范围） */
+function parsePrevizScripts(raw: unknown, ids: ReadonlySet<string>): Record<string, PrevizScript> {
+  const result: Record<string, PrevizScript> = {};
+  if (!isRecord(raw)) return result;
+  for (const [id, value] of Object.entries(raw)) {
+    if (!ids.has(id)) continue;
+    const validation = validatePrevizScript(value);
+    if (validation.ok) result[id] = validation.script;
+  }
+  return result;
 }
 
 /** 镜头 id → 相对路径的映射：只保留存在的镜头与安全的相对路径 */
@@ -238,6 +258,8 @@ export function parseSceneVideoState(raw: unknown): SceneVideoState | null {
     canvas: parseCanvasState(raw.canvas),
     keyframes: parseShotImageMap(raw.keyframes, ids),
     previz: parseShotImageMap(raw.previz, ids),
+    previzVideo: parseShotImageMap(raw.previzVideo, ids),
+    previzScripts: parsePrevizScripts(raw.previzScripts, ids),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
   if (typeof raw.model === 'string' && raw.model) state.model = raw.model;
@@ -260,6 +282,8 @@ export function replaceStoryboardShots(state: SceneVideoState, shots: Shot[]): S
     canvas: { ...state.canvas, positions },
     keyframes: {},
     previz: {},
+    previzVideo: {},
+    previzScripts: {},
     storyboard: { ...state.storyboard, shots: renumbered.shots },
     nextShotNumber: renumbered.next,
     selectedShotIds: renumbered.shots.map((shot) => shot.id),
@@ -293,11 +317,17 @@ export function removeShot(state: SceneVideoState, id: string): SceneVideoState 
   delete keyframes[id];
   const previz = { ...state.previz };
   delete previz[id];
+  const previzVideo = { ...state.previzVideo };
+  delete previzVideo[id];
+  const previzScripts = { ...state.previzScripts };
+  delete previzScripts[id];
   return {
     ...state,
     canvas: { ...state.canvas, positions },
     keyframes,
     previz,
+    previzVideo,
+    previzScripts,
     storyboard: {
       ...state.storyboard,
       shots: state.storyboard.shots.filter((shot) => shot.id !== id),
@@ -491,7 +521,7 @@ export function buildShotVideoPrompt(shot: Shot, state: SceneVideoState): string
     [shot.shotSize, shot.camera].filter(Boolean).join('，'),
     shot.description.trim(),
   ].filter(Boolean);
-  const text = parts.join('。').replace(/。。+/g, '。');
+  const text = parts.join('。').replace(/\u3002\u3002+/g, '。');
   return Array.from(text).slice(0, VIDEO_PROMPT_MAX).join('');
 }
 

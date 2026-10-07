@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { AiOutlineFolderOpen } from 'react-icons/ai';
 import LoadingSpinner from '../LoadingSpinner';
 import EmptyState from '../EmptyState';
-import FileTree from '../FileTree';
+import FileTree, { findTreePath } from '../FileTree';
+import { notifyWorkspaceFilesChanged } from '../../utils/workspaceFiles';
 import { isImeComposing } from '../../utils/ime';
 import {
   parseVolumeWorkspaceTab,
@@ -176,6 +177,21 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     const groupedCharacters = useMemo(() => groupCharacters(characters), [characters]);
     const growthSheets = growthIndex?.sheets ?? EMPTY_GROWTH_SHEETS;
 
+    // 定位目标属于「资料」：在资料树里，或既不是正文也不是项目说明（例如刚生成、文件树还没刷新的成片）
+    const isMaterialPath = useCallback(
+      (path: string) =>
+        Boolean(findTreePath(materialNodes, path)) ||
+        (!findTreePath(storyNodes, path) && !findTreePath(projectDocNodes, path)),
+      [materialNodes, projectDocNodes, storyNodes]
+    );
+    const materialRevealRequest = useMemo(
+      () =>
+        revealFileRequest?.path && isMaterialPath(revealFileRequest.path)
+          ? revealFileRequest
+          : null,
+      [isMaterialPath, revealFileRequest]
+    );
+
     const {
       revealPath,
       collapsedSections,
@@ -191,6 +207,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
       revealFileRequest,
       characterGenerationStatus,
       closeSearch,
+      isMaterialPath,
     });
 
     // 搜索结果中选择文件时：关闭搜索、展开目录、选中文件
@@ -461,6 +478,8 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                               onInlineCreate={onInlineCreate}
                               onCancelCreate={onCancelCreate}
                               revealPath={revealPath}
+                              revealRequest={materialRevealRequest}
+                              onRevealMissing={notifyWorkspaceFilesChanged}
                               onRenameNode={onRenameNode}
                             />
                           </div>

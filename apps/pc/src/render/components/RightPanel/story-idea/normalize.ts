@@ -13,7 +13,7 @@ const STORY_IDEA_TERM_LIMIT = 6;
 const STORY_IDEA_POOL_LIMIT = 24;
 
 export function normalizeIdeaTags(input: string[] | string): string[] {
-  const items = Array.isArray(input) ? input : input.split(/[，,、]/g);
+  const items = Array.isArray(input) ? input : input.split(/[\uff0c,\u3001]/g);
   const seen = new Set<string>();
   return items
     .map((item) => cleanText(item, 20))
@@ -27,7 +27,7 @@ export function normalizeIdeaTags(input: string[] | string): string[] {
 }
 
 export function normalizeIdeaTerms(input: string[] | string): string[] {
-  const items = Array.isArray(input) ? input : input.split(/[，,、/|｜\n]/g);
+  const items = Array.isArray(input) ? input : input.split(/[\uff0c,\u3001/|\uff5c\n]/g);
   const seen = new Set<string>();
   return items
     .map((item) => cleanText(item, 16))
@@ -41,7 +41,7 @@ export function normalizeIdeaTerms(input: string[] | string): string[] {
 }
 
 export function normalizeIdeaTermPool(input: string[] | string): string[] {
-  const items = Array.isArray(input) ? input : input.split(/[，,、/|｜\n]/g);
+  const items = Array.isArray(input) ? input : input.split(/[\uff0c,\u3001/|\uff5c\n]/g);
   const seen = new Set<string>();
   return items
     .map((item) => cleanText(item, 16))

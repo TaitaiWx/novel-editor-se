@@ -1,7 +1,8 @@
-// 改编自 video-maker/packages/video-core/src/types.ts（同一作者的项目），删去 WebGPU / 音频 / 叠加轨
+// 改编自 video-maker/packages/video-core/src/types.ts（同一作者的项目），删去 WebGPU / 叠加轨（声音见 audio-*.ts）
 /**
- * 样片（animatic）拼接的数据类型：只有一条主视频轨，片段可以是静态图或视频源。
+ * 样片（animatic）拼接的数据类型：一条主视频轨（片段可以是静态图或视频源）+ 可选的混音音轨。
  */
+import type { AudioCodecPreset } from './audio-codecs';
 
 /** 能直接绘制到 canvas 的图像对象 */
 export type FrameSource =
@@ -82,11 +83,26 @@ export interface Mp4CodecPreset {
 
 export type CodecPreset = WebmCodecPreset | Mp4CodecPreset;
 
+/** 已混好的 PCM 声音（planar，每个声道一样长） */
+export interface PcmAudio {
+  sampleRate: number;
+  channels: Float32Array[];
+}
+
+export interface EncodeAudioOptions {
+  pcm: PcmAudio;
+  codec: AudioCodecPreset;
+  /** 音频码率（bit/s），默认 128k */
+  bitrate?: number;
+}
+
 export interface EncodeOptions {
   fps: number;
   /** 码率（bit/s） */
   bitrate: number;
   codec: CodecPreset;
+  /** 声音轨（不给时只导出画面） */
+  audio?: EncodeAudioOptions;
   /** 取消导出 */
   signal?: AbortSignal;
 }
@@ -102,4 +118,6 @@ export interface EncodeResult {
   blob: Blob;
   mimeType: string;
   fileExtension: string;
+  /** 输出文件是否带音轨 */
+  hasAudio: boolean;
 }

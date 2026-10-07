@@ -81,8 +81,9 @@ function parseOrderNumber(raw: string): number | null {
 /** 卷目录的序号：「第一卷」「第12卷」「卷3」「Volume 2」；无序号返回 null */
 export function parseVolumeOrder(dirName: string): number | null {
   const matched =
-    /^第([\d零〇一二两三四五六七八九十百千]+)[卷部]/.exec(dirName) ??
-    /^(?:卷|volume|vol\.?|part)[\s_-]*(\d+)/i.exec(dirName);
+    /^\u7b2c([\d\u96f6\u3007\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343]+)[\u5377\u90e8]/.exec(
+      dirName
+    ) ?? /^(?:\u5377|volume|vol\.?|part)[\s_-]*(\d+)/i.exec(dirName);
   if (!matched) return null;
   return parseOrderNumber(matched[1]);
 }
@@ -93,8 +94,9 @@ export function parseChapterOrder(fileName: string): number | null {
   if (order !== null) return order;
   const base = stripExtension(baseName(fileName)).trim();
   const matched =
-    /^第([\d零〇一二两三四五六七八九十百千]+)[章节回幕篇集]/.exec(base) ??
-    /^(?:chapter|scene)\s*(\d+)/i.exec(base);
+    /^\u7b2c([\d\u96f6\u3007\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343]+)[\u7ae0\u8282\u56de\u5e55\u7bc7\u96c6]/.exec(
+      base
+    ) ?? /^(?:chapter|scene)\s*(\d+)/i.exec(base);
   return matched ? parseOrderNumber(matched[1]) : null;
 }
 

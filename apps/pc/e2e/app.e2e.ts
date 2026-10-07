@@ -1438,7 +1438,7 @@ describe('小说编辑器 GUI', () => {
     await page.click('[data-testid="reference-pane"] [aria-label="关闭参考"]');
     await page.waitForGone('[data-testid="reference-pane"]');
 
-    // 文件栏「参考」：没有内容时先放当前作品人物的三视图 / 形象图，再按一次收起
+    // 文件栏「参考」：先放本章引用的图片 / 视频，再放当前作品人物的三视图 / 形象图；再按一次收起
     await page.click('[data-testid="reference-pill"]');
     await page.waitFor(
       () =>
@@ -1449,11 +1449,12 @@ describe('小说编辑器 GUI', () => {
         )?.src.startsWith('blob:') ?? false,
       { timeout: 10_000, message: '参考窗格显示人物参考' }
     );
+    // 主画面是本章第一个引用（::image[星港城 · 码头]）
     expect(
       await page.evaluate<string>(
         () => document.querySelector('[data-testid="reference-pane"] header')?.textContent ?? ''
       )
-    ).toContain('三视图');
+    ).toContain('星港城');
     // 主画面贴在窗格顶部（不再垂直居中留大块空白），下方是信息行与缩略图网格
     const layout = await page.evaluate<{ gap: number; options: number; info: boolean }>(() => {
       const pane = document.querySelector('[data-testid="reference-pane"]') as HTMLElement;

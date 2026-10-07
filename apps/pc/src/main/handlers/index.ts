@@ -19,6 +19,7 @@
  * - ai-providers: AI 服务配置（密钥 safeStorage 加密）、一次性 / 流式补全
  * - video:       场景视频异步任务队列（提交 → 轮询 → 下载落盘）
  * - character-avatar: 人物头像保存到 <作品>/资料/人物头像/
+ * - media-export: 单个图片 / 视频导出（另存为对话框，图片可转 PNG / JPEG / WebP）
  */
 export { registerFileSystemHandlers } from './file-system';
 export { registerDatabaseHandlers } from './database';
@@ -36,5 +37,6 @@ export { registerVideoHandlers } from './video';
 export { registerCharacterAvatarHandlers } from './character-avatar';
 export { registerEntityMediaHandlers } from './entity-media';
 export { registerWorkspaceSearchHandlers } from './workspace-search';
+export { registerMediaExportHandlers } from './media-export';
 
 export type { FileNode } from './file-system';

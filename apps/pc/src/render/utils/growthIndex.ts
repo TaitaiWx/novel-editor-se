@@ -165,7 +165,10 @@ export function inferChapterNumber(filePath: string | null | undefined): number 
   if (!base) return null;
   const leading = /^(\d+)(?:[-_.\s]|$)/.exec(base);
   if (leading) return Number(leading[1]);
-  const marked = /第\s*([0-9]+|[零〇一二两三四五六七八九十百千万]+)\s*[章回节]/.exec(base);
+  const marked =
+    /\u7b2c\s*([0-9]+|[\u96f6\u3007\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07]+)\s*[\u7ae0\u56de\u8282]/.exec(
+      base
+    );
   if (!marked) return null;
   const value = /^\d+$/.test(marked[1]) ? Number(marked[1]) : parseChineseNumber(marked[1]);
   return value !== null && Number.isFinite(value) ? value : null;

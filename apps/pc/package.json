@@ -43,6 +43,7 @@
     "@novel-editor/basic-algorithm": "workspace:*",
     "@novel-editor/core": "workspace:*",
     "@novel-editor/helpers": "workspace:*",
+    "@novel-editor/media-player": "workspace:*",
     "@novel-editor/store": "workspace:*",
     "@novel-editor/video": "workspace:*",
     "better-sqlite3": "^12.10.0",

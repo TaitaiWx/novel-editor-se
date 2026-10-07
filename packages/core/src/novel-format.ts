@@ -163,12 +163,23 @@ const HEADING_RE = /^#{1,2}\s/;
 
 export type StructureLineKind = 'chapter' | 'act' | 'scene';
 
-const CN_NUMBER = '[一二三四五六七八九十百千万零〇两\\d]+';
+// 中文数字（一二三……万、零〇两）或阿拉伯数字
+const CN_NUMBER =
+  '[\\u4e00\\u4e8c\\u4e09\\u56db\\u4e94\\u516d\\u4e03\\u516b\\u4e5d\\u5341\\u767e\\u5343\\u4e07\\u96f6\\u3007\\u4e24\\d]+';
+// 汉字一律写成 \u 转义（不在判断逻辑里直接写汉字）：
+// \u7b2c 第；\u7ae0 章 \u56de 回 \u5377 卷 \u90e8 部 \u7bc7 篇 \u96c6 集 \u8282 节；\u5e55 幕；\u573a 场
 // 章标题允许紧跟标题（「第一章离港」）；幕 / 场要求分隔，避免「第一场雨……」误判
-const CHAPTER_LINE_RE = new RegExp(`^第${CN_NUMBER}[章回卷部篇集节]`);
-const SPECIAL_CHAPTER_RE = /^(?:序章|序幕|楔子|引子|尾声|终章|后记|番外)(?:[\s:：·、\-—]|$)/;
-const ACT_LINE_RE = new RegExp(`^第${CN_NUMBER}幕(?:[\\s:：·、.\\-—]|$)`);
-const SCENE_LINE_RE = new RegExp(`^第${CN_NUMBER}场(?:[\\s:：·、.\\-—]|$)`);
+const CHAPTER_LINE_RE = new RegExp(
+  `^\\u7b2c${CN_NUMBER}[\\u7ae0\\u56de\\u5377\\u90e8\\u7bc7\\u96c6\\u8282]`
+);
+const SPECIAL_CHAPTER_RE =
+  /^(?:\u5e8f\u7ae0|\u5e8f\u5e55|\u6954\u5b50|\u5f15\u5b50|\u5c3e\u58f0|\u7ec8\u7ae0|\u540e\u8bb0|\u756a\u5916)(?:[\s:\uff1a\u00b7\u3001\-\u2014]|$)/;
+const ACT_LINE_RE = new RegExp(
+  `^\\u7b2c${CN_NUMBER}\\u5e55(?:[\\s:\\uff1a\\u00b7\\u3001.\\-\\u2014]|$)`
+);
+const SCENE_LINE_RE = new RegExp(
+  `^\\u7b2c${CN_NUMBER}\\u573a(?:[\\s:\\uff1a\\u00b7\\u3001.\\-\\u2014]|$)`
+);
 
 /**
  * 不用 Markdown 语法的结构行（很多作者直接写「第一章 离港」「第一幕 离乡」「第一场 清晨」）：
@@ -176,7 +187,8 @@ const SCENE_LINE_RE = new RegExp(`^第${CN_NUMBER}场(?:[\\s:：·、.\\-—]|$)
  */
 export function classifyStructureLine(line: string): StructureLineKind | null {
   const text = line.trim();
-  if (!text || text.length > 40 || /[。！？!?，,；;”"]$/.test(text)) return null;
+  if (!text || text.length > 40 || /[\u3002\uff01\uff1f!?\uff0c,\uff1b;\u201d"]$/.test(text))
+    return null;
   if (CHAPTER_LINE_RE.test(text) || SPECIAL_CHAPTER_RE.test(text)) return 'chapter';
   if (ACT_LINE_RE.test(text)) return 'act';
   if (SCENE_LINE_RE.test(text)) return 'scene';

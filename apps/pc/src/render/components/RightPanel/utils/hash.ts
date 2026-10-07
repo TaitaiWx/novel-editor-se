@@ -43,7 +43,10 @@ export function sanitizeAiSummary(raw: string): string {
   // 先 trim 再剥引号：否则首尾空白会挡住引号，'  ""  ' 这类结果无法被识别为空
   return raw
     .trim()
-    .replace(/^['"“”‘’「」『』]+|['"“”‘’「」『』]+$/g, '')
+    .replace(
+      /^['"\u201c\u201d\u2018\u2019\u300c\u300d\u300e\u300f]+|['"\u201c\u201d\u2018\u2019\u300c\u300d\u300e\u300f]+$/g,
+      ''
+    )
     .replace(/\s+/g, ' ')
     .trim();
 }

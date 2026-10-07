@@ -205,14 +205,47 @@ describe('状态持久化', () => {
     expect(baseState().previz).toEqual({});
   });
 
+  it('预演视频与预演脚本：只保留存在的镜头与安全路径，脚本重新校验（数值夹到范围内）', () => {
+    const parsed = parseSceneVideoState({
+      schemaVersion: 1,
+      chapter: '001',
+      scene: '雪夜',
+      storyboard: {
+        shots: [
+          { id: 'shot-1', description: 'a' },
+          { id: 'shot-2', description: 'b' },
+        ],
+      },
+      previzVideo: { 'shot-1': '资料/视频/001/雪夜/镜头1-预演.mp4', 'shot-2': '../x.mp4' },
+      previzScripts: {
+        'shot-1': {
+          durationSec: 99,
+          figures: [{ name: 'A', keys: [{ t: 0, x: 50, z: 0, pose: 'stand' }] }],
+          camera: [{ shotSize: 'medium' }],
+        },
+        'shot-2': 'broken',
+        ghost: { figures: [], camera: [] },
+      },
+    });
+    expect(parsed?.previzVideo).toEqual({ 'shot-1': '资料/视频/001/雪夜/镜头1-预演.mp4' });
+    expect(Object.keys(parsed?.previzScripts ?? {})).toEqual(['shot-1']);
+    expect(parsed?.previzScripts['shot-1']).toMatchObject({ durationSec: 10 });
+    expect(parsed?.previzScripts['shot-1'].figures[0].keys[0].x).toBe(8);
+    expect(parseSceneVideoState(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
+    expect(baseState().previzVideo).toEqual({});
+    expect(baseState().previzScripts).toEqual({});
+  });
+
   it('删除镜头时移除它的首帧 / 预演；重新生成分镜时全部清空', () => {
     let state = replaceStoryboardShots(baseState(), [shot('a'), shot('b')]);
     state = {
       ...state,
       keyframes: { 'shot-1': '资料/k1.png', 'shot-2': '资料/k2.png' },
       previz: { 'shot-1': '资料/p1.png', 'shot-2': '资料/p2.png' },
+      previzVideo: { 'shot-1': '资料/p1.mp4', 'shot-2': '资料/p2.mp4' },
     };
     const removed = removeShot(state, 'shot-1');
+    expect(removed.previzVideo).toEqual({ 'shot-2': '资料/p2.mp4' });
     expect(removed.keyframes).toEqual({ 'shot-2': '资料/k2.png' });
     expect(removed.previz).toEqual({ 'shot-2': '资料/p2.png' });
     // 不修改原状态
@@ -220,6 +253,7 @@ describe('状态持久化', () => {
     const replaced = replaceStoryboardShots(removed, [shot('c')]);
     expect(replaced.keyframes).toEqual({});
     expect(replaced.previz).toEqual({});
+    expect(replaced.previzVideo).toEqual({});
   });
 
   it('排序与编辑', () => {

@@ -39,7 +39,7 @@ const CONFLICT_WORDS = [
 /** 大纲 / 场景标题里的转折词，权重更高 */
 const TURN_WORDS = ['转折', '高潮', '危机', '对决', '抉择', '真相', '背叛', '决战', '反转', '之夜'];
 
-const RE_SENTENCE = /[^。！？!?…\n]+[。！？!?…]*/g;
+const RE_SENTENCE = /[^\u3002\uff01\uff1f!?\u2026\n]+[\u3002\uff01\uff1f!?\u2026]*/g;
 
 function countOccurrences(text: string, word: string): number {
   if (!word) return 0;
@@ -66,7 +66,8 @@ function rawTension(source: VolumeChapterSource): RawTension {
   if (length === 0) return { score: 0, conflict: 0, exclaim: 0, shortRatio: 0, turns: 0 };
   const perK = 1000 / Math.max(length, 200);
   const conflict = CONFLICT_WORDS.reduce((sum, word) => sum + countOccurrences(text, word), 0);
-  const exclaim = (text.match(/[！!]/g) || []).length + (text.match(/[？?]/g) || []).length * 0.5;
+  const exclaim =
+    (text.match(/[\uff01!]/g) || []).length + (text.match(/[\uff1f?]/g) || []).length * 0.5;
   const sentences = (text.match(RE_SENTENCE) || []).map((item) => item.trim()).filter(Boolean);
   const short = sentences.filter((item) => item.replace(/\s/g, '').length <= 12).length;
   const shortRatio = sentences.length > 0 ? short / sentences.length : 0;

@@ -131,8 +131,8 @@ export function buildLoreDedupKey(entry: Pick<LoreDraft, 'category' | 'title'>):
 
 function normalizeLoreAuditItem(line: string): string {
   return line
-    .replace(/^(?:[-*•])\s*/, '')
-    .replace(/^\d+[.、)）]\s*/, '')
+    .replace(/^(?:[-*\u2022])\s*/, '')
+    .replace(/^\d+[.\u3001)\uff09]\s*/, '')
     .trim();
 }
 
@@ -147,7 +147,7 @@ function inferLoreAuditCategory(text: string, fallback: LoreCategory): LoreCateg
 }
 
 function getLoreAuditSectionMeta(line: string): Pick<LoreAuditSection, 'key' | 'title'> | null {
-  const normalized = line.trim().replace(/^\d+[.、)）]\s*/, '');
+  const normalized = line.trim().replace(/^\d+[.\u3001)\uff09]\s*/, '');
   if (normalized.startsWith('缺失设定')) {
     return { key: 'missing', title: '缺失设定' };
   }
@@ -184,7 +184,7 @@ export function parseLoreAuditSections(raw: string): LoreAuditSection[] {
       return;
     }
 
-    const sectionMeta = getLoreAuditSectionMeta(line.replace(/[：:]/g, ''));
+    const sectionMeta = getLoreAuditSectionMeta(line.replace(/[\uff1a:]/g, ''));
     if (sectionMeta) {
       pushCurrent();
       currentSection = { ...sectionMeta, lines: [] };
@@ -223,7 +223,7 @@ export function parseLoreDraftFromAuditItem(
   if (!normalized) return null;
 
   const segments = normalized
-    .split(/[：:]/)
+    .split(/[\uff1a:]/)
     .map((segment) => segment.trim())
     .filter(Boolean);
 

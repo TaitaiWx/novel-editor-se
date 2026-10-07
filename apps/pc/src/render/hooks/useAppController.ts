@@ -120,6 +120,7 @@ export function useAppController() {
     ...contentReader,
   });
   const editor = useEditorInteractions({
+    ...workScopeApi,
     ...tabsState,
     ...layoutState,
     ...editorState,
@@ -218,19 +219,24 @@ export function useAppController() {
     ...chapterMaterials,
     ...tabs,
   });
-  const { workspaceTabLabels, editorCharacterHighlights, referenceFallback, specialTabContent } =
-    useWorkspaceTabContent({
-      ...workspaceState,
-      ...tabsState,
-      ...editorState,
-      ...entitiesState,
-      ...derived,
-      ...tabs,
-      ...creation,
-      ...entityActions,
-      ...growthEntry,
-      ...editor,
-    });
+  const {
+    workspaceTabLabels,
+    editorCharacterHighlights,
+    referenceFallback,
+    referenceSource,
+    specialTabContent,
+  } = useWorkspaceTabContent({
+    ...workspaceState,
+    ...tabsState,
+    ...editorState,
+    ...entitiesState,
+    ...derived,
+    ...tabs,
+    ...creation,
+    ...entityActions,
+    ...growthEntry,
+    ...editor,
+  });
   useOpenSettingsTabListener(uiState);
   // 应用菜单「关于」/ 状态栏「关于…」打开关于对话框；只设置显隐，无顺序依赖
   useAboutDialogListener(uiState);
@@ -281,6 +287,7 @@ export function useAppController() {
     workspaceTabLabels,
     editorCharacterHighlights,
     referenceFallback,
+    referenceSource,
     specialTabContent,
     handleAssistantApplyFix,
     handleAssistantPreviewDiff,

@@ -84,4 +84,27 @@ describe('在资料中定位（REVEAL_IN_FILE_PANEL_EVENT）', () => {
     act(() => requestRevealInFilePanel('/x'));
     expect(ctx.setFilePanelRevealRequest).toHaveBeenCalledTimes(1);
   });
+
+  it('文件属于其他作品时先切换作品（selectWorkForPath），再请求定位', () => {
+    const selectWorkForPath = vi.fn();
+    const ctx = {
+      focusMode: false,
+      setFocusMode: vi.fn(),
+      sidebarCollapsedRef: ref(false),
+      handleExpandSidebar: vi.fn(),
+      setFilePanelRevealRequest: vi.fn(),
+      filePanelRevealCounterRef: ref(0),
+      selectWorkForPath,
+    };
+    const { unmount } = renderHook(() =>
+      useEditorInteractions(ctx as unknown as UseEditorInteractionsContext)
+    );
+    const target = '/w/novels/剑与诗/资料/图集/人物/沈砚/三视图.webp';
+    act(() => requestRevealInFilePanel(target));
+    expect(selectWorkForPath).toHaveBeenCalledWith(target);
+    expect(ctx.setFocusMode).not.toHaveBeenCalled();
+    expect(ctx.handleExpandSidebar).not.toHaveBeenCalled();
+    expect(ctx.setFilePanelRevealRequest).toHaveBeenCalledWith({ path: target, id: 'reveal-1' });
+    unmount();
+  });
 });

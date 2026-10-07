@@ -1,9 +1,11 @@
-// 改编自 video-maker/packages/video-core/src/encoder.ts（同一作者的项目），删去 WebGPU / 音频 / 叠加轨
+// 改编自 video-maker/packages/video-core/src/encoder.ts（同一作者的项目），删去 WebGPU / 叠加轨
 /**
  * 把时间轴编码为视频文件：Canvas2D 逐帧绘制 → WebCodecs VideoEncoder → mp4-muxer / webm-muxer。
+ * 给了 options.audio 时同时用 AudioEncoder 编码混好的声音，随画面进度交错写入同一个文件。
  * 只能在渲染进程（或 Worker）中运行。每 2 秒一个关键帧，每秒 flush 一次控制内存，
  * 支持 AbortSignal 取消；无论成功失败都会关闭帧与编码器。
  */
+import { createAudioTrackWriter, type AudioTrackWriter } from './audio-encode';
 import { createMuxer } from './muxer';
 import { prepareTimelineFrames } from './render';
 import { createRenderer } from './renderer';
@@ -71,8 +73,20 @@ export async function encodeTimeline(
   const keyframeEvery = Math.max(1, Math.round(fps * 2));
   const flushEvery = Math.max(1, Math.round(fps));
 
+  const audio = options.audio;
   const renderer = createRenderer(width, height);
-  const muxer = createMuxer(codec, width, height);
+  const muxer = createMuxer(
+    codec,
+    width,
+    height,
+    audio
+      ? {
+          preset: audio.codec,
+          sampleRate: audio.pcm.sampleRate,
+          numberOfChannels: audio.pcm.channels.length,
+        }
+      : undefined
+  );
   let encodeError: Error | null = null;
   const encoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
@@ -80,12 +94,15 @@ export async function encodeTimeline(
       encodeError = toError(error);
     },
   });
+  let audioWriter: AudioTrackWriter | null = null;
   const checkError = () => {
     if (encodeError) throw encodeError;
+    if (audioWriter?.error) throw audioWriter.error;
   };
 
   try {
     encoder.configure(encoderConfig);
+    if (audio) audioWriter = createAudioTrackWriter(audio, muxer);
     for (let index = 0; index < totalFrames; index += 1) {
       throwIfAborted(signal);
       checkError();
@@ -107,15 +124,19 @@ export async function encodeTimeline(
         percent: ((index + 1) / totalFrames) * 100,
       });
       if ((index + 1) % flushEvery === 0) {
+        // 声音跟上画面进度，封装器里的音视频块按时间交错
+        audioWriter?.encodeUntil((index + 1) * frameIntervalMs);
         await encoder.flush();
         checkError();
       }
     }
     throwIfAborted(signal);
     await encoder.flush();
+    await audioWriter?.finish();
     checkError();
   } finally {
     if (encoder.state !== 'closed') encoder.close();
+    audioWriter?.close();
     renderer.destroy();
   }
 
@@ -124,5 +145,6 @@ export async function encodeTimeline(
     blob: new Blob([muxer.target.buffer], { type: codec.mimeType }),
     mimeType: codec.mimeType,
     fileExtension: codec.fileExtension,
+    hasAudio: audioWriter !== null,
   };
 }

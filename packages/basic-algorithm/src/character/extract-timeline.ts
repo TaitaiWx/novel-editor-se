@@ -28,13 +28,15 @@ interface TimelineSection {
   endLine: number;
 }
 
-const SENTENCE_RE = /[^。！？!?；;\n]+[。！？!?；;]?/g;
+const SENTENCE_RE = /[^\u3002\uff01\uff1f!?\uff1b;\n]+[\u3002\uff01\uff1f!?\uff1b;]?/g;
 const DEFAULT_MAX_SUMMARY_LENGTH = 120;
 const DEFAULT_FALLBACK_SEGMENT_CHARS = 1200;
 const DEFAULT_EVENT_TITLE_LENGTH = 30;
-const RE_PRIMARY_CHAPTER = /^(第([一二三四五六七八九十百千万零〇两\d]+)([章节回集篇]))\s*(.*)$/;
-const RE_CONTAINER_CHAPTER = /^(第([一二三四五六七八九十百千万零〇两\d]+)([幕卷部]))\s*(.*)$/;
-const RE_NUMBERED_TITLE = /^(\d+(?:\.\d+)*)[.、)\s]\s*(.+)$/;
+const RE_PRIMARY_CHAPTER =
+  /^(\u7b2c([\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\u4e24\d]+)([\u7ae0\u8282\u56de\u96c6\u7bc7]))\s*(.*)$/;
+const RE_CONTAINER_CHAPTER =
+  /^(\u7b2c([\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\u4e24\d]+)([\u5e55\u5377\u90e8]))\s*(.*)$/;
+const RE_NUMBERED_TITLE = /^(\d+(?:\.\d+)*)[.\u3001)\s]\s*(.+)$/;
 
 interface ParsedChapterMeta {
   label: string;
@@ -61,7 +63,7 @@ function normalizeKeywords(keywords: string[]): string[] {
 function normalizeComparableText(value: string): string {
   return value
     .replace(/\s+/g, '')
-    .replace(/[。！？!?；;，,、]/g, '')
+    .replace(/[\u3002\uff01\uff1f!?\uff1b;\uff0c,\u3001]/g, '')
     .trim();
 }
 
@@ -199,7 +201,7 @@ function clipSentence(sentence: string, maxSummaryLength: number): string {
 }
 
 function trimSentenceEnding(text: string): string {
-  return text.replace(/[。！？!?；;：:]+$/g, '').trim();
+  return text.replace(/[\u3002\uff01\uff1f!?\uff1b;\uff1a:]+$/g, '').trim();
 }
 
 function buildEventTitle(
@@ -211,14 +213,14 @@ function buildEventTitle(
   const parsed = parseChapterMeta(sectionTitle);
   const headingRemainder = trimSentenceEnding(parsed.remainder);
   if (headingRemainder) {
-    return clipSentence(headingRemainder, maxLength).replace(/…$/g, '');
+    return clipSentence(headingRemainder, maxLength).replace(/\u2026$/g, '');
   }
 
   const candidateSentence = trimSentenceEnding(
     (summary.match(SENTENCE_RE) || [summary])[0] || summary
   );
   if (candidateSentence) {
-    return clipSentence(candidateSentence, maxLength).replace(/…$/g, '');
+    return clipSentence(candidateSentence, maxLength).replace(/\u2026$/g, '');
   }
 
   return chapterLabel;

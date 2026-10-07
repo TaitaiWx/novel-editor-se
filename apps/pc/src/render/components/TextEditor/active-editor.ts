@@ -18,6 +18,20 @@ export interface ActiveEditorHandle {
   getSnapshot: () => ActiveEditorSnapshot;
   /** 打开查找面板 */
   openSearch: () => void;
+  /** 在光标所在行之后插入独立的一行（例如 ::image 指令）；只读或没有编辑器时返回 false */
+  insertBlock?: (text: string) => boolean;
+}
+
+/**
+ * 把一段文字作为独立的一行插入：光标所在行为空时直接写在这一行，否则插在这一行末尾之后。
+ * 返回插入位置与插入内容（纯函数，便于测试）。
+ */
+export function planBlockInsert(
+  line: { from: number; to: number; text: string },
+  text: string
+): { from: number; insert: string } {
+  if (!line.text.trim()) return { from: line.from, insert: text };
+  return { from: line.to, insert: `\n${text}` };
 }
 
 interface Entry {

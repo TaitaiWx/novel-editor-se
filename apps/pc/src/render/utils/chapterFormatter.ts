@@ -26,9 +26,11 @@ function isStructuralLine(trimmedLine: string): boolean {
     trimmedLine.startsWith('+ ') ||
     /^```/.test(trimmedLine) ||
     /^-{3,}$/.test(trimmedLine) ||
-    /^\d+[.)、]/.test(trimmedLine) ||
-    /^第[0-9零一二三四五六七八九十百千万两〇]+[章节卷部幕篇回集]/.test(trimmedLine) ||
-    /^【[^】]+】$/.test(trimmedLine)
+    /^\d+[.)\u3001]/.test(trimmedLine) ||
+    /^\u7b2c[0-9\u96f6\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u4e24\u3007]+[\u7ae0\u8282\u5377\u90e8\u5e55\u7bc7\u56de\u96c6]/.test(
+      trimmedLine
+    ) ||
+    /^\u3010[^\u3011]+\u3011$/.test(trimmedLine)
   );
 }
 

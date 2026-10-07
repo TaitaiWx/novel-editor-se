@@ -1,4 +1,13 @@
 // 播放器：容器贴合视频宽高比，没有黑边；控制条浮在画面底部的渐变上
+// 可由使用方覆盖的主题变量：
+//   --media-player-accent      进度条 / 开关高亮色
+//   --media-player-focus-ring  键盘焦点环（默认沿用宿主应用的 --ui-interaction-focus-ring）
+$accent: var(--media-player-accent, rgba(156, 196, 232, 0.95));
+$focus-ring: var(
+  --media-player-focus-ring,
+  var(--ui-interaction-focus-ring, rgba(156, 196, 232, 0.6))
+);
+
 .player {
   position: relative;
   display: block;
@@ -13,7 +22,7 @@
   isolation: isolate;
 
   &:focus-visible {
-    box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+    box-shadow: 0 0 0 2px $focus-ring;
   }
 
   &:fullscreen {
@@ -139,7 +148,7 @@
   touch-action: none;
 
   &:focus-visible .progressTrack {
-    box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+    box-shadow: 0 0 0 2px $focus-ring;
   }
 }
 
@@ -167,7 +176,7 @@
 .progressFill {
   height: 100%;
   border-radius: inherit;
-  background: rgba(156, 196, 232, 0.95);
+  background: $accent;
 }
 
 .progressThumb {
@@ -216,13 +225,128 @@
 
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px var(--ui-interaction-focus-ring);
+    box-shadow: 0 0 0 2px $focus-ring;
   }
 }
 
 .controlOn {
-  color: rgba(156, 196, 232, 1);
+  color: $accent;
   background: rgba(156, 196, 232, 0.16);
+}
+
+// 确定没有音轨：静音图标变淡、不可点
+.noAudio {
+  opacity: 0.45;
+  cursor: default;
+
+  &:hover {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.86);
+  }
+}
+
+// 音量：悬停 / 聚焦时在静音按钮右侧展开滑块
+.volume {
+  display: inline-flex;
+  align-items: center;
+}
+
+.volumeSlider {
+  width: 0;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  transition:
+    width 0.15s ease,
+    opacity 0.15s ease,
+    margin 0.15s ease;
+
+  .volume:hover &,
+  .volume:focus-within & {
+    width: 64px;
+    margin: 0 6px 0 2px;
+    opacity: 1;
+  }
+
+  &::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      #eef4fa var(--media-player-volume, 100%),
+      rgba(255, 255, 255, 0.22) var(--media-player-volume, 100%)
+    );
+  }
+
+  &::-webkit-slider-thumb {
+    width: 10px;
+    height: 10px;
+    margin-top: -3.5px;
+    border-radius: 50%;
+    background: #eef4fa;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    appearance: none;
+  }
+
+  &:focus-visible::-webkit-slider-runnable-track {
+    box-shadow: 0 0 0 2px $focus-ring;
+  }
+}
+
+// 自动播放静音起播时的「开启声音」：画面右下角的胶囊，始终可见
+.unmute {
+  position: absolute;
+  right: 10px;
+  bottom: 44px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.62);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: background 0.15s ease;
+
+  svg {
+    font-size: 14px;
+  }
+
+  &:hover {
+    background: rgba(20, 20, 22, 0.8);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px $focus-ring;
+  }
+}
+
+// 小卡片：只有图标，悬停 / 聚焦时出现
+.unmuteCompact {
+  right: 6px;
+  bottom: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  justify-content: center;
+  opacity: 0;
+
+  .player:hover &,
+  &:focus-visible {
+    opacity: 1;
+  }
 }
 
 .time {
@@ -252,7 +376,9 @@
   .controls,
   .bigPlay,
   .progressTrack,
-  .progressThumb {
+  .progressThumb,
+  .volumeSlider,
+  .unmute {
     transition: none;
   }
 }

@@ -102,4 +102,14 @@ export interface AIInvokeOverloads {
     channel: 'video-scene-write-image',
     payload: VideoSceneRef & { kind: 'keyframe' | 'previz'; shotIndex: number; data: Uint8Array }
   ): Promise<AIIpcResult<{ fileName: string; relativePath: string }>>;
+  /** 预演视频（3D 预演逐帧导出的 MP4 / WebM）：保存为 镜头N-预演.<ext>，覆盖写入，返回相对作品目录的路径 */
+  invoke(
+    channel: 'video-scene-write-media',
+    payload: VideoSceneRef & {
+      kind: 'previz-video';
+      shotIndex: number;
+      ext: 'mp4' | 'webm';
+      data: Uint8Array;
+    }
+  ): Promise<AIIpcResult<{ fileName: string; relativePath: string }>>;
 }

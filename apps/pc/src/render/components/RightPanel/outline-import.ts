@@ -67,7 +67,12 @@ function createTitleFromChunk(chunk: string, index: number): string {
     .map((item) => item.trim())
     .find(Boolean);
   if (!line) return `导入片段 ${index + 1}`;
-  const compact = line.replace(/^[#\-*\d.\s一二三四五六七八九十章节回卷]+/, '').trim();
+  const compact = line
+    .replace(
+      /^[#\-*\d.\s\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u7ae0\u8282\u56de\u5377]+/,
+      ''
+    )
+    .trim();
   if (!compact) return `导入片段 ${index + 1}`;
   return compact.length <= 18 ? compact : `${compact.slice(0, 18)}...`;
 }

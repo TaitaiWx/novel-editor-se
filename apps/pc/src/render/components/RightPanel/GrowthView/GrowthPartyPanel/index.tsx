@@ -162,7 +162,7 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
             void commit(() =>
               addParty(party, {
                 name,
-                members: members.split(/[,，、\s]+/),
+                members: members.split(/[,\uff0c\u3001\s]+/),
                 fromChapter: toChapter(from),
               })
             ).then((ok) => {

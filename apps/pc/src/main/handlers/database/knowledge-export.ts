@@ -37,7 +37,12 @@ function parseCharacterAliases(attributesRaw?: string): string[] {
 }
 
 function parseCharacterCategory(attributesRaw?: string, role = ''): 'major' | 'secondary' {
-  const fallback = /主角|主人公|男主|女主|核心|主线/.test(role.trim()) ? 'major' : 'secondary';
+  const fallback =
+    /\u4e3b\u89d2|\u4e3b\u4eba\u516c|\u7537\u4e3b|\u5973\u4e3b|\u6838\u5fc3|\u4e3b\u7ebf/.test(
+      role.trim()
+    )
+      ? 'major'
+      : 'secondary';
   if (!attributesRaw) return fallback;
   try {
     const parsed = JSON.parse(attributesRaw) as CharacterAttributesPayload;

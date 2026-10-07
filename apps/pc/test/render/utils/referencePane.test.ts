@@ -87,11 +87,13 @@ describe('characterReferenceItems（「参考」按钮的默认内容）', () =>
         path: '/w/星河旅人/资料/图集/人物/林舟/三视图.webp',
         title: '林舟 · 三视图',
         kind: 'image',
+        group: 'character',
       },
       {
         path: '/w/星河旅人/资料/图集/人物/林舟/形象图.webp',
         title: '林舟 · 形象图',
         kind: 'image',
+        group: 'character',
       },
     ]);
   });

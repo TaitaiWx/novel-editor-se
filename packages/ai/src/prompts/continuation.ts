@@ -122,9 +122,12 @@ export function cleanContinuationOutput(text: string, precedingText = ''): strin
   let result = (text ?? '').replace(/\r\n/g, '\n');
   const fenced = result.match(/^\s*```[a-zA-Z]*\n([\s\S]*?)\n?```\s*$/);
   if (fenced) result = fenced[1];
-  result = result.replace(/^\s*(续写(内容|正文)?|正文|以下是续写(内容)?)[:：]\s*/u, '');
-  const quoted = result.trim().match(/^[“"「]([\s\S]*)[”"」]$/u);
-  if (quoted && !/[“"「”"」]/u.test(quoted[1])) result = quoted[1];
+  result = result.replace(
+    /^\s*(\u7eed\u5199(\u5185\u5bb9|\u6b63\u6587)?|\u6b63\u6587|\u4ee5\u4e0b\u662f\u7eed\u5199(\u5185\u5bb9)?)[:\uff1a]\s*/u,
+    ''
+  );
+  const quoted = result.trim().match(/^[\u201c"\u300c]([\s\S]*)[\u201d"\u300d]$/u);
+  if (quoted && !/[\u201c"\u300c\u201d"\u300d]/u.test(quoted[1])) result = quoted[1];
   const tail = precedingText.trimEnd();
   const trimmedStart = result.replace(/^\s+/, '');
   const overlap = overlapLength(tail, trimmedStart);

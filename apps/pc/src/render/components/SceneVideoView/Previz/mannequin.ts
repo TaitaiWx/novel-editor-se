@@ -3,7 +3,16 @@
  * 不需要外部模型文件，无授权问题；身高约 1.77 米，关节可按 poses.ts 的姿势旋转。
  */
 import * as THREE from 'three';
-import { HIP_HEIGHT, poseById, type JointName, type PrevizFigure } from './presets';
+import type { PrevizFigureSample } from '@novel-editor/video';
+import {
+  GAIT_JOINTS,
+  HIP_HEIGHT,
+  gaitJoints,
+  poseById,
+  type JointName,
+  type JointRotation,
+  type PrevizFigure,
+} from './presets';
 
 /** 木头本色：人物标识色只混入一点，保持整体统一 */
 const WOOD = new THREE.Color('#d9bc94');
@@ -189,25 +198,70 @@ export function buildMannequin(color: string): Mannequin {
   };
 }
 
-/** 摆姿势：先清零，再套用预设与微调（头部转向、抬右手） */
-export function applyPose(mannequin: Mannequin, figure: PrevizFigure): void {
-  const pose = poseById(figure.pose);
-  for (const node of Object.values(mannequin.joints)) node.rotation.set(0, 0, 0);
-  for (const [name, rotation] of Object.entries(pose.joints)) {
-    const node = mannequin.joints[name as JointName];
-    if (node && rotation) node.rotation.set(rotation[0], rotation[1], rotation[2]);
+/** 姿势采样：两个姿势按 mix 混合 + 关节微调（度）+ 步态 */
+export type PoseSample = Pick<
+  PrevizFigureSample,
+  'poseFrom' | 'poseTo' | 'mix' | 'joints' | 'gait'
+>;
+
+const DEG = Math.PI / 180;
+const ZERO: JointRotation = [0, 0, 0];
+const mixRotation = (a: JointRotation, b: JointRotation, s: number): JointRotation => [
+  a[0] + (b[0] - a[0]) * s,
+  a[1] + (b[1] - a[1]) * s,
+  a[2] + (b[2] - a[2]) * s,
+];
+
+/**
+ * 按采样摆姿势：先清零，再按 mix 混合两个预设姿势，移动中的 walk / run 叠加步态周期，最后加上关节微调。
+ * 髋部下移与整体前倾同样按 mix 混合（坐下、倒地是渐变过去的）。
+ */
+export function applyPoseSample(mannequin: Mannequin, sample: PoseSample): void {
+  const from = poseById(sample.poseFrom);
+  const to = poseById(sample.poseTo);
+  const mix = Math.max(0, Math.min(1, sample.mix));
+  const walk = Math.max(0, Math.min(1, sample.gait.walk));
+  const run = Math.max(0, Math.min(1, sample.gait.run));
+  const walkCycle = walk > 0 ? gaitJoints('walk', sample.gait.phase) : null;
+  const runCycle = run > 0 ? gaitJoints('run', sample.gait.phase) : null;
+  for (const [name, node] of Object.entries(mannequin.joints) as [JointName, THREE.Group][]) {
+    let rotation = mixRotation(from.joints[name] ?? ZERO, to.joints[name] ?? ZERO, mix);
+    if (GAIT_JOINTS.includes(name)) {
+      if (walkCycle) rotation = mixRotation(rotation, walkCycle[name] ?? ZERO, walk);
+      if (runCycle) rotation = mixRotation(rotation, runCycle[name] ?? ZERO, run);
+    }
+    const offset = sample.joints[name];
+    node.rotation.set(
+      rotation[0] + (offset?.[0] ?? 0) * DEG,
+      rotation[1] + (offset?.[1] ?? 0) * DEG,
+      rotation[2] + (offset?.[2] ?? 0) * DEG
+    );
   }
-  const headTurn = ((figure.headTurn ?? 0) * Math.PI) / 180;
-  mannequin.joints.head.rotation.y += headTurn;
-  const raise = ((figure.armRaise ?? 0) * Math.PI) / 180;
-  mannequin.joints.rightUpperArm.rotation.x -= raise;
-  mannequin.hips.position.y = HIP_HEIGHT - (pose.drop ?? 0);
-  mannequin.hips.rotation.x = pose.tilt ?? 0;
+  const drop = (from.drop ?? 0) + ((to.drop ?? 0) - (from.drop ?? 0)) * mix;
+  // 迈步时髋部随步伐轻微起伏
+  const bob = (walk * 0.02 + run * 0.04) * Math.abs(Math.cos(sample.gait.phase));
+  mannequin.hips.position.y = HIP_HEIGHT - drop - bob;
+  const tilt = (from.tilt ?? 0) + ((to.tilt ?? 0) - (from.tilt ?? 0)) * mix;
+  mannequin.hips.rotation.x = tilt;
   if (mannequin.contact) {
     // 躺倒时身体沿前后方向铺开，接触阴影跟着拉长
-    const lying = Math.abs(pose.tilt ?? 0) > Math.PI / 4;
-    mannequin.contact.scale.set(lying ? 1.1 : 1, lying ? 2.1 : 1, 1);
+    const lying = Math.min(1, Math.abs(tilt) / (Math.PI / 2));
+    mannequin.contact.scale.set(1 + 0.1 * lying, 1 + 1.1 * lying, 1);
   }
+}
+
+/** 单帧摆姿势（静态人物）：预设姿势 + 头部转向、抬右手微调 */
+export function applyPose(mannequin: Mannequin, figure: PrevizFigure): void {
+  applyPoseSample(mannequin, {
+    poseFrom: figure.pose as PoseSample['poseFrom'],
+    poseTo: figure.pose as PoseSample['poseTo'],
+    mix: 0,
+    joints: {
+      head: [0, figure.headTurn ?? 0, 0],
+      rightUpperArm: [-(figure.armRaise ?? 0), 0, 0],
+    },
+    gait: { phase: 0, walk: 0, run: 0 },
+  });
 }
 
 export function setMannequinSelected(mannequin: Mannequin, selected: boolean): void {

@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useEffect } from 'react';
 import type { EditorView } from '@codemirror/view';
-import { registerActiveEditor } from '../active-editor';
+import { planBlockInsert, registerActiveEditor } from '../active-editor';
 
 interface UseActiveEditorRegistrationOptions {
   editorContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -39,6 +39,19 @@ export function useActiveEditorRegistration({
         void import('@codemirror/search').then(({ openSearchPanel }) => {
           if (viewRef.current === view) openSearchPanel(view);
         });
+      },
+      insertBlock: (text) => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) return false;
+        const line = view.state.doc.lineAt(view.state.selection.main.head);
+        const plan = planBlockInsert(line, text);
+        view.dispatch({
+          changes: { from: plan.from, insert: plan.insert },
+          selection: { anchor: plan.from + plan.insert.length },
+          scrollIntoView: true,
+        });
+        view.focus();
+        return true;
       },
     });
     const container = editorContainerRef.current;

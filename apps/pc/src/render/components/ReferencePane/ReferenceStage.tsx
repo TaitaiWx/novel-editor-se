@@ -100,16 +100,18 @@ const ZoomableImage: React.FC<{
 export const ReferenceMedia: React.FC<{
   item: ReferenceItem;
   compact: boolean;
+  /** 文件在磁盘上被修改后递增，重新读取 */
+  version?: number;
   onInfo?: (info: MediaInfo) => void;
-}> = ({ item, compact, onInfo }) => {
-  const { url, error } = useReferenceMedia(item);
+}> = ({ item, compact, version = 0, onInfo }) => {
+  const { url, error } = useReferenceMedia(item, version);
   if (!url) {
     return <div className={styles.placeholder}>{error ? `无法读取：${error}` : '读取中…'}</div>;
   }
   if (item.kind === 'video') {
     return (
       <VideoPlayer
-        key={item.path}
+        key={`${item.path}#${version}`}
         src={url}
         title={item.title}
         variant={compact ? 'compact' : 'full'}
@@ -132,17 +134,25 @@ export const ReferenceMedia: React.FC<{
       <img className={styles.miniImage} src={url} alt={item.title} data-testid="reference-image" />
     );
   }
-  return <ZoomableImage key={item.path} url={url} item={item} onInfo={(info) => onInfo?.(info)} />;
+  return (
+    <ZoomableImage
+      key={`${item.path}#${version}`}
+      url={url}
+      item={item}
+      onInfo={(info) => onInfo?.(info)}
+    />
+  );
 };
 
 const ReferenceStage: React.FC<{
   item: ReferenceItem;
+  version?: number;
   multiple: boolean;
   onStep: (offset: number) => void;
   onInfo: (info: MediaInfo) => void;
-}> = ({ item, multiple, onStep, onInfo }) => (
+}> = ({ item, version = 0, multiple, onStep, onInfo }) => (
   <div className={styles.stage} data-testid="reference-stage">
-    <ReferenceMedia item={item} compact={false} onInfo={onInfo} />
+    <ReferenceMedia item={item} compact={false} version={version} onInfo={onInfo} />
     {multiple && (
       <>
         <Tooltip content="上一张（←）" className={`${styles.navSlot} ${styles.navPrev}`}>

@@ -55,7 +55,7 @@ function positionalChapter(value: string | undefined): number | undefined {
 
 function splitList(value: string | undefined): string[] {
   return (value ?? '')
-    .split(/[,，]/)
+    .split(/[,\uff0c]/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -341,7 +341,7 @@ export const growthWorldCommands: CommandSpec[] = [
         ruleset: memory.ruleset,
         sheet,
         candidateChoices: choices,
-        coreRules: (str(args, 'rule') ?? '').split(/[;；]/),
+        coreRules: (str(args, 'rule') ?? '').split(/[;\uff1b]/),
         mode,
         horizon: num(args, 'horizon') ?? 10,
         currentChapter: optionalChapter(args, 'chapter'),

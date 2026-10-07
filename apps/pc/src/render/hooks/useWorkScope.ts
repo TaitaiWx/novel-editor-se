@@ -79,6 +79,17 @@ export function useWorkScope(ctx: UseWorkScopeContext) {
     [selectWork, workScopeOptions, workScopePathRef]
   );
 
+  // 「在资料中定位」等：目标文件属于其他作品时切过去，文件面板才会显示它。
+  // 不改 handledDocumentRef，当前标签不会因此把作品切回去
+  const selectWorkForPath = useCallback(
+    (filePath: string) => {
+      const owner = findWorkScopeForPath(workScopeOptions, filePath);
+      if (!owner || isSameWorkPath(owner.path, workScopePathRef.current)) return;
+      selectWork(owner.path);
+    },
+    [selectWork, workScopeOptions, workScopePathRef]
+  );
+
   const handleCreateWork = useCallback(async () => {
     const ipc = window.electron?.ipcRenderer;
     if (!ipc || !projectLayout) return;
@@ -106,6 +117,7 @@ export function useWorkScope(ctx: UseWorkScopeContext) {
     handleSelectWork: selectWork,
     handleCreateWork,
     revealWorkForDocument,
+    selectWorkForPath,
   };
 }
 

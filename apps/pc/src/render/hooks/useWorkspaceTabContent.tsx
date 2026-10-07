@@ -1,4 +1,4 @@
-import { characterReferenceItems } from '../utils/referencePane';
+import { characterReferenceItems, type ReferenceAutoSource } from '../utils/referencePane';
 import {
   characterReferencePaths,
   isSafeMediaPath,
@@ -59,6 +59,7 @@ export type UseWorkspaceTabContentContext = Pick<
 > &
   Pick<WorkspaceState, 'dbReady' | 'files' | 'folderPath' | 'storyOrderMap'> &
   Partial<Pick<WorkspaceState, 'workScopePath'>> &
+  Partial<Pick<WorkspaceDerivedState, 'activeDocumentTab'>> &
   Partial<Pick<EntitiesState, 'workspaceEntitiesPath'>> &
   Pick<TabsState, 'openTabs'> &
   Pick<EditorState, 'editorContent'> &
@@ -192,6 +193,18 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
         }))
       ),
     [ctx.workspaceEntitiesPath, scopePath, sceneVideoCharacters]
+  );
+  // 「参考」按钮的自动来源：当前文档引用的媒体 + 本章场景视频（从文件树查找）
+  const activeDocumentPath = ctx.activeDocumentTab ?? null;
+  const referenceWorkPath = ctx.workspaceEntitiesPath ?? scopePath ?? null;
+  const referenceSource = useMemo<ReferenceAutoSource>(
+    () => ({
+      documentPath: activeDocumentPath,
+      text: activeDocumentPath ? editorContent : '',
+      workPath: referenceWorkPath,
+      files,
+    }),
+    [activeDocumentPath, editorContent, files, referenceWorkPath]
   );
   const sceneVideoLoreTitles = useMemo(
     () => workspaceLoreEntries.map((item) => item.title),
@@ -383,6 +396,7 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
     workspaceTabLabels,
     editorCharacterHighlights,
     referenceFallback,
+    referenceSource,
     specialTabContent,
   };
 }

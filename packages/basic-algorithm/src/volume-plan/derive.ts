@@ -17,11 +17,13 @@ import type {
   VolumeStructureId,
 } from './types';
 
-const NUM = '[一二三四五六七八九十百千万零〇两\\d]+';
-const RE_ACT = new RegExp(`^(第${NUM}幕)\\s*(.*)$`);
-const RE_SCENE = new RegExp(`^(第${NUM}场)\\s*(.*)$`);
+// 中文数字（一二三……万、零〇两）或阿拉伯数字
+const NUM =
+  '[\\u4e00\\u4e8c\\u4e09\\u56db\\u4e94\\u516d\\u4e03\\u516b\\u4e5d\\u5341\\u767e\\u5343\\u4e07\\u96f6\\u3007\\u4e24\\d]+';
+const RE_ACT = new RegExp(`^(\\u7b2c${NUM}\\u5e55)\\s*(.*)$`);
+const RE_SCENE = new RegExp(`^(\\u7b2c${NUM}\\u573a)\\s*(.*)$`);
 const RE_HEADING = /^(#{1,6})\s+(.+?)\s*#*$/;
-const RE_CHAPTER_HEADING = new RegExp(`^第${NUM}[章节回卷]`);
+const RE_CHAPTER_HEADING = new RegExp(`^\\u7b2c${NUM}[\\u7ae0\\u8282\\u56de\\u5377]`);
 const BEAT_TEXT_MAX = 48;
 
 /** 作者对推导结果的覆盖层（全部可选） */
@@ -49,7 +51,7 @@ function fileBase(filePath: string): string {
 /** 取一行的首句并截断，用作节拍内容 */
 export function firstSentence(line: string, max = BEAT_TEXT_MAX): string {
   const trimmed = line.trim().replace(/^[>*\-\s]+/, '');
-  const match = trimmed.match(/^.+?[。！？!?…]+[”」』"]?/);
+  const match = trimmed.match(/^.+?[\u3002\uff01\uff1f!?\u2026]+[\u201d\u300d\u300f"]?/);
   const sentence = (match ? match[0] : trimmed).trim();
   return sentence.length > max ? `${sentence.slice(0, max)}…` : sentence;
 }

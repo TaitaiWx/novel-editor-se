@@ -49,7 +49,8 @@ export function clearSceneVideoSeed(tabPath: string): void {
 
 // ─── 从资料打开：单击 资料/视频/<章>/<场景>/分镜.json 直接打开这一场的画布 ─────────
 
-const STORYBOARD_FILE_RE = /[\\/]资料[\\/]视频[\\/][^\\/]+[\\/][^\\/]+[\\/]分镜\.json$/;
+const STORYBOARD_FILE_RE =
+  /[\\/]\u8d44\u6599[\\/]\u89c6\u9891[\\/][^\\/]+[\\/][^\\/]+[\\/]\u5206\u955c\.json$/;
 
 export function isSceneStoryboardFile(filePath: string): boolean {
   return STORYBOARD_FILE_RE.test(filePath);

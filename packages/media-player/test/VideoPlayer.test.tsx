@@ -2,8 +2,7 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import VideoPlayer, { formatTime } from '@/render/components/VideoPlayer';
-import { clampTime, frameWidth, ratioFromPointer } from '@/render/components/VideoPlayer/format';
+import VideoPlayer, { clampTime, formatTime, frameWidth, ratioFromPointer } from '../src';
 
 /** 模拟浏览器读到元数据：设置尺寸与时长并派发 loadedmetadata */
 function loadMetadata(video: HTMLVideoElement, width: number, height: number, duration: number) {
@@ -200,7 +199,7 @@ describe('VideoPlayer 组件', () => {
     expect(video.paused).toBe(true);
   });
 
-  it('compact：静音、循环、自动播放，没有控制条', () => {
+  it('compact：静音、循环、自动播放，没有控制条，只有「开启声音」图标', () => {
     const { video, group } = setup({ variant: 'compact' });
     expect(video.muted).toBe(true);
     expect(video.loop).toBe(true);
@@ -208,5 +207,121 @@ describe('VideoPlayer 组件', () => {
     expect(group.getAttribute('tabindex')).toBe('-1');
     expect(screen.queryByRole('slider')).toBeNull();
     expect(screen.queryByRole('button', { name: '播放' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '开启声音' }));
+    expect(video.muted).toBe(false);
+    expect(screen.queryByRole('button', { name: '开启声音' })).toBeNull();
+  });
+});
+
+describe('VideoPlayer 声音', () => {
+  /** 模拟 Chromium：只有 webkitAudioDecodedByteCount，播放了一段时间 */
+  function decodeBytes(video: HTMLVideoElement, bytes: number, played: number) {
+    Object.defineProperty(video, 'readyState', { configurable: true, value: 4 });
+    Object.defineProperty(video, 'webkitAudioDecodedByteCount', {
+      configurable: true,
+      value: bytes,
+    });
+    Object.defineProperty(video, 'played', {
+      configurable: true,
+      value: { length: 1, start: () => 0, end: () => played },
+    });
+    act(() => {
+      video.dispatchEvent(new Event('timeupdate'));
+    });
+  }
+
+  it('用户发起的播放默认有声，不显示「开启声音」', () => {
+    const { video } = setup();
+    expect(video.muted).toBe(false);
+    expect(screen.queryByRole('button', { name: '开启声音' })).toBeNull();
+  });
+
+  it('自动播放静音起播并显示「开启声音」；点它恢复声音', () => {
+    const { video, group } = setup({ autoPlay: true });
+    expect(video.muted).toBe(true);
+    expect(group.getAttribute('data-muted')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: '开启声音' }));
+    expect(video.muted).toBe(false);
+    expect(screen.queryByRole('button', { name: '开启声音' })).toBeNull();
+  });
+
+  it('自动播放后用户主动播放时恢复声音', async () => {
+    const { video } = setup({ autoPlay: true });
+    expect(video.muted).toBe(true);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '播放' }));
+    });
+    expect(video.paused).toBe(false);
+    expect(video.muted).toBe(false);
+  });
+
+  it('确定没有音轨：静音按钮显示「无音轨」且不可切换，不显示「开启声音」，回调一次', () => {
+    const onAudioTrack = vi.fn();
+    const { video, group } = setup({ autoPlay: true, onAudioTrack });
+    decodeBytes(video, 0, 0.3);
+    // 播放太短还不能下结论
+    expect(group.getAttribute('data-audio')).toBe('unknown');
+    decodeBytes(video, 0, 2);
+    expect(group.getAttribute('data-audio')).toBe('absent');
+    const button = screen.getByRole('button', { name: '无音轨' });
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('button', { name: '开启声音' })).toBeNull();
+    expect(screen.queryByRole('slider', { name: '音量' })).toBeNull();
+    fireEvent.keyDown(group, { key: 'm' });
+    expect(video.muted).toBe(true);
+    expect(onAudioTrack).toHaveBeenCalledTimes(1);
+    expect(onAudioTrack).toHaveBeenCalledWith('absent');
+  });
+
+  it('有音轨：解码字节数大于 0 即判定，换片后重新判断', () => {
+    const onAudioTrack = vi.fn();
+    const { video, group, rerender } = setup({ onAudioTrack });
+    decodeBytes(video, 2048, 0.1);
+    expect(group.getAttribute('data-audio')).toBe('present');
+    expect(onAudioTrack).toHaveBeenCalledWith('present');
+    rerender(<VideoPlayer src="blob:other" title="离港" onAudioTrack={onAudioTrack} />);
+    expect(group.getAttribute('data-audio')).toBe('unknown');
+  });
+
+  it('音量滑块与 ↑ / ↓：调到 0 即静音，再调大恢复', () => {
+    const { video, group } = setup();
+    const slider = screen.getByRole('slider', { name: '音量' }) as HTMLInputElement;
+    expect(slider.value).toBe('100');
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(video.volume).toBeCloseTo(0.4);
+    expect(video.muted).toBe(false);
+    fireEvent.keyDown(group, { key: 'ArrowDown' });
+    expect(video.volume).toBeCloseTo(0.3);
+    fireEvent.change(slider, { target: { value: '0' } });
+    expect(video.muted).toBe(true);
+    fireEvent.keyDown(group, { key: 'ArrowUp' });
+    expect(video.muted).toBe(false);
+    expect(video.volume).toBeCloseTo(0.1);
+  });
+
+  it('defaultVolume 初始音量；取消静音时音量为 0 则恢复到 100%', () => {
+    const { video } = setup({ defaultVolume: 0, defaultMuted: true });
+    expect(video.volume).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: '取消静音' }));
+    expect(video.muted).toBe(false);
+    expect(video.volume).toBe(1);
+  });
+
+  it('提示：默认用原生 title；传入 renderTooltip 时改用使用方的提示组件', () => {
+    setup();
+    expect(screen.getByRole('button', { name: '播放' }).getAttribute('title')).toBe('播放（空格）');
+  });
+
+  it('renderTooltip 包裹每个控制按钮且不再设置 title', () => {
+    const renderTooltip = vi.fn((content: string, control: React.ReactElement) => (
+      <span data-tip={content}>{control}</span>
+    ));
+    setup({ renderTooltip, showLoopToggle: true });
+    const play = screen.getByRole('button', { name: '播放' });
+    expect(play.getAttribute('title')).toBeNull();
+    expect(play.parentElement?.getAttribute('data-tip')).toBe('播放（空格）');
+    expect(renderTooltip.mock.calls.map((call) => call[0])).toEqual(
+      expect.arrayContaining(['播放（空格）', '静音（M）', '循环播放', '全屏（F）'])
+    );
   });
 });

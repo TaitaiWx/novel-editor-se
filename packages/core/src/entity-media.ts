@@ -314,7 +314,7 @@ export function buildCharacterImagePrompt(input: CharacterImagePromptInput): str
     visualDescription(input.design, input.description ?? ''),
     input.extra?.trim() ?? '',
   ].filter(Boolean);
-  return lines.join('。').replace(/。。+/g, '。');
+  return lines.join('。').replace(/\u3002\u3002+/g, '。');
 }
 
 export interface LoreImagePromptInput {
@@ -336,7 +336,7 @@ export function buildLoreImagePrompt(input: LoreImagePromptInput): string {
     summary,
     input.extra?.trim() ?? '',
   ].filter(Boolean);
-  return lines.join('。').replace(/。。+/g, '。');
+  return lines.join('。').replace(/\u3002\u3002+/g, '。');
 }
 
 // ─── 设定分类（多级目录）与标签 ─────────────────────────────────────────
@@ -348,7 +348,7 @@ const FOLDER_SEGMENT_MAX = 30;
 export function normalizeLoreFolder(raw: unknown): string {
   if (typeof raw !== 'string') return '';
   return raw
-    .split(/[\\/／]+/)
+    .split(/[\\/\uff0f]+/)
     .map((part) => {
       const cleaned = Array.from(part)
         .filter((char) => (char.codePointAt(0) ?? 0) >= 0x20)
@@ -363,7 +363,11 @@ export function normalizeLoreFolder(raw: unknown): string {
 
 /** 标签：去重、去空白、去掉开头的 #，最多 12 个 */
 export function normalizeTags(raw: unknown): string[] {
-  const values = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[,，、\s]+/) : [];
+  const values = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw.split(/[,\uff0c\u3001\s]+/)
+      : [];
   const seen = new Set<string>();
   const tags: string[] = [];
   for (const value of values) {

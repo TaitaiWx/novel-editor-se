@@ -277,7 +277,8 @@ export function useWorkspaceCreation(ctx: UseWorkspaceCreationContext) {
         const chapterCount = childNodes.filter(
           (node) =>
             node.type === 'file' &&
-            (!isDraftLikeName(node.name) || /第.+[章节幕回篇集]/.test(node.name))
+            (!isDraftLikeName(node.name) ||
+              /\u7b2c.+[\u7ae0\u8282\u5e55\u56de\u7bc7\u96c6]/.test(node.name))
         ).length;
         return `第${chapterCount + 1}章 未命名`;
       }

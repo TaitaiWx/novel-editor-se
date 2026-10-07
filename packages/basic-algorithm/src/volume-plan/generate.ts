@@ -51,7 +51,7 @@ export function buildTemplatePlan(outline: VolumeOutline, intent: string): Gener
       const isFirst = chapterIndex === 0;
       const isLast = chapterIndex === act.chapters.length - 1;
       const line = isFirst
-        ? `开场：${hint.split(/[，,]/)[0]}`
+        ? `开场：${hint.split(/[\uff0c,]/)[0]}`
         : isLast
           ? '收束本段，留下通往下一段的钩子'
           : '推进：加深冲突，或让一段关系发生变化';

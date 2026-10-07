@@ -32,46 +32,59 @@ async function readAsBlobUrl(path: string): Promise<string> {
   return toBlobUrl(data);
 }
 
-function acquire(path: string): { entry: MediaEntry; promise: Promise<string> } {
-  let entry = entries.get(path);
+/** 缓存键：路径 + 版本（文件在磁盘上变化后版本递增，重新读取） */
+function cacheKey(path: string, version: number): string {
+  return `${path}\n${version}`;
+}
+
+function acquire(path: string, version: number): { entry: MediaEntry; promise: Promise<string> } {
+  const key = cacheKey(path, version);
+  let entry = entries.get(key);
   if (!entry) {
     const created: MediaEntry = { count: 0, promise: readAsBlobUrl(path) };
     created.promise.catch(() => {
-      if (entries.get(path) === created) entries.delete(path);
+      if (entries.get(key) === created) entries.delete(key);
     });
-    entries.set(path, created);
+    entries.set(key, created);
     entry = created;
   }
   entry.count += 1;
   return { entry, promise: entry.promise };
 }
 
-function release(path: string, entry: MediaEntry): void {
+function release(key: string, entry: MediaEntry): void {
   entry.count -= 1;
   if (entry.count > 0) return;
-  if (entries.get(path) === entry) entries.delete(path);
+  if (entries.get(key) === entry) entries.delete(key);
   entry.promise.then((url) => URL.revokeObjectURL(url)).catch(() => undefined);
 }
 
-/** 读取参考窗格里的一张图 / 一段视频（经 read-file-binary），生成 blob 地址；切换或卸载时释放 */
-export function useReferenceMedia(item: Pick<ReferenceItem, 'path'> | null): {
+/**
+ * 读取参考窗格里的一张图 / 一段视频（经 read-file-binary），生成 blob 地址；切换或卸载时释放。
+ * version 变化（文件在磁盘上被修改）时重新读取，新内容不用重新打开窗格就能看到。
+ */
+export function useReferenceMedia(
+  item: Pick<ReferenceItem, 'path'> | null,
+  version = 0
+): {
   url: string | null;
   error: string;
 } {
   const path = item?.path ?? null;
-  const [state, setState] = useState<{ path: string; url: string } | null>(null);
+  const [state, setState] = useState<{ key: string; url: string } | null>(null);
   const [error, setError] = useState('');
+  const key = path ? cacheKey(path, version) : null;
   useEffect(() => {
-    if (!path) {
+    if (!path || !key) {
       setState(null);
       return;
     }
     let cancelled = false;
     setError('');
-    const { entry, promise } = acquire(path);
+    const { entry, promise } = acquire(path, version);
     promise
       .then((url) => {
-        if (!cancelled) setState({ path, url });
+        if (!cancelled) setState({ key, url });
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
@@ -80,8 +93,8 @@ export function useReferenceMedia(item: Pick<ReferenceItem, 'path'> | null): {
       });
     return () => {
       cancelled = true;
-      release(path, entry);
+      release(key, entry);
     };
-  }, [path]);
-  return { url: state && path && state.path === path ? state.url : null, error };
+  }, [key, path, version]);
+  return { url: state && key && state.key === key ? state.url : null, error };
 }

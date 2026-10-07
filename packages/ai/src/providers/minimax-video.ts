@@ -15,6 +15,8 @@
  * - 默认地址为国内站 https://api.minimax.cn（国际站 https://api.minimax.io，可在设置中心改）
  * - duration 只接受 6 / 10 秒，这里就近取值；resolution 取大写形式（720P / 768P / 1080P）
  * - 文档未提供取消接口，cancelTask 不实现（调用方只在本地标记取消）
+ * - 声音：公开文档的视频生成接口没有声音相关参数，`withAudio` 不映射（忽略）；
+ *   成片若自带音轨，按原始字节下载落盘，不转码，音轨原样保留
  */
 import { AIError, type AIErrorKind } from '../errors';
 import { createHttpClient, NO_RETRY } from '../http';

@@ -17,17 +17,19 @@ export function findNodeInTree(nodes: FileNode[], path: string): FileNode | null
 }
 
 export function isDraftLikeName(name: string): boolean {
-  return /(draft|sample|test|outline|note|草稿|样稿|测试|片段|提纲|灵感)/i.test(name);
+  return /(draft|sample|test|outline|note|\u8349\u7a3f|\u6837\u7a3f|\u6d4b\u8bd5|\u7247\u6bb5|\u63d0\u7eb2|\u7075\u611f)/i.test(
+    name
+  );
 }
 
 export function isVolumeLikeName(name: string): boolean {
-  return /(^第[一二三四五六七八九十百千万零〇\d]+卷)|(^volume\s*\d+)|(^part\s*\d+)|(^act\s*\d+)|(^卷[\s_-]?\d+)/i.test(
+  return /(^\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u5377)|(^volume\s*\d+)|(^part\s*\d+)|(^act\s*\d+)|(^\u5377[\s_-]?\d+)/i.test(
     name.replace(/\.[^.]+$/, '')
   );
 }
 
 export function isMaterialLikeName(name: string): boolean {
-  return /(资料|素材|media|material|materials|asset|assets|reference|references|research|image|images|doc|docs|pdf)/i.test(
+  return /(\u8d44\u6599|\u7d20\u6750|media|material|materials|asset|assets|reference|references|research|image|images|doc|docs|pdf)/i.test(
     name
   );
 }

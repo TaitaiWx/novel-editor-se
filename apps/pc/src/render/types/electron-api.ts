@@ -376,6 +376,11 @@ export interface ElectronAPI {
         rootPath: string,
         query: string
       ): Promise<WorkspaceContentSearchResponse>;
+      /** 单个图片 / 视频导出：弹出另存为对话框；data 为渲染进程转换好的 PNG / JPEG / WebP */
+      invoke(
+        channel: 'media-export',
+        request: { sourcePath: string; defaultName?: string; format?: string; data?: Uint8Array }
+      ): Promise<{ saved: boolean; filePath?: string; error?: string }>;
       /** 人物头像：保存到 <作品>/资料/人物头像/，返回相对作品目录的路径 */
       invoke(
         channel: 'character-avatar-save',

@@ -56,7 +56,7 @@ export function asString(value: unknown): string | undefined {
 export function asStringArray(value: unknown): string[] {
   if (typeof value === 'string') {
     return value
-      .split(/[,，、]/)
+      .split(/[,\uff0c\u3001]/)
       .map((item) => item.trim())
       .filter(Boolean);
   }

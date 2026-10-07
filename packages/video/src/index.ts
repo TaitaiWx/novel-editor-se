@@ -9,3 +9,6 @@ export * from './task';
 export * from './queue';
 export * from './layout';
 export * from './cost';
+export * from './previz';
+export * from './previz-sample';
+export * from './previz-validate';

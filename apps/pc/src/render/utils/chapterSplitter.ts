@@ -32,7 +32,7 @@ export interface Chapter {
  * - Chapter N
  */
 const CHAPTER_PATTERN =
-  /^(?:第[零〇一二三四五六七八九十百千万\d]+[章节回卷部篇]\s*.*|楔子|引子|序章|序|尾声|番外.*|Chapter\s+\d+.*)$/i;
+  /^(?:\u7b2c[\u96f6\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\d]+[\u7ae0\u8282\u56de\u5377\u90e8\u7bc7]\s*.*|\u6954\u5b50|\u5f15\u5b50|\u5e8f\u7ae0|\u5e8f|\u5c3e\u58f0|\u756a\u5916.*|Chapter\s+\d+.*)$/i;
 
 /**
  * 备选：纯数字行（"1"、"01" 等），仅在无标准章节标记时启用

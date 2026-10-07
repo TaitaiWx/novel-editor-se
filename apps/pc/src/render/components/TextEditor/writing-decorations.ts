@@ -44,11 +44,14 @@ type HighlightMatcher = {
 // ── 正则 ──
 
 /** 中文幕标记 */
-const RE_ACT = /^(第[一二三四五六七八九十百千万零〇\d]+幕)\s*(.*)/;
+const RE_ACT =
+  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u5e55)\s*(.*)/;
 /** 中文场景标记 */
-const RE_SCENE = /^(第[一二三四五六七八九十百千万零〇\d]+场)\s*(.*)/;
+const RE_SCENE =
+  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u573a)\s*(.*)/;
 /** 中文章节/卷/回/节/部/篇/集 */
-const RE_CHAPTER = /^(第[一二三四五六七八九十百千万零〇\d]+[章节幕回篇集卷])\s*(.*)/;
+const RE_CHAPTER =
+  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+[\u7ae0\u8282\u5e55\u56de\u7bc7\u96c6\u5377])\s*(.*)/;
 /** Markdown 标题 */
 const RE_HEADING = /^(#{1,6})\s+(.+)/;
 

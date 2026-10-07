@@ -5,8 +5,10 @@ import { isDirectiveLine, sceneContainerTitle } from './novel-markers';
 /**
  * 幕/场景的正则
  */
-const RE_ACT = /^(第[一二三四五六七八九十百千万零〇\d]+幕)\s*(.*)/;
-const RE_SCENE = /^(第[一二三四五六七八九十百千万零〇\d]+场)\s*(.*)/;
+const RE_ACT =
+  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u5e55)\s*(.*)/;
+const RE_SCENE =
+  /^(\u7b2c[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u573a)\s*(.*)/;
 
 /** Chapters per auto-generated act when no explicit act/scene markers exist */
 const CHAPTERS_PER_ACT = 10;

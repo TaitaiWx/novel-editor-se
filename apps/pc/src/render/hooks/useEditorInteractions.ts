@@ -19,6 +19,7 @@ import type { UiState } from './state/useUiState';
 import type { PaneLayoutApi } from './usePaneLayout';
 import type { TabActions } from './useTabActions';
 import type { ProjectLoaderApi } from './useProjectLoader';
+import type { WorkScopeApi } from './useWorkScope';
 
 export type UseEditorInteractionsContext = Pick<
   TabsState,
@@ -42,7 +43,8 @@ export type UseEditorInteractionsContext = Pick<
   > &
   Pick<PaneLayoutApi, 'handleExpandSidebar'> &
   Pick<TabActions, 'openFileInTab'> &
-  Pick<ProjectLoaderApi, 'refreshCurrentFolder'>;
+  Pick<ProjectLoaderApi, 'refreshCurrentFolder'> &
+  Partial<Pick<WorkScopeApi, 'selectWorkForPath'>>;
 
 /**
  * 编辑器交互：内容 / 光标变更、滚动定位、高亮、diff 与修复应用、右键菜单入口
@@ -70,6 +72,7 @@ export function useEditorInteractions(ctx: UseEditorInteractionsContext) {
     setUntitledTabContents,
     sidebarCollapsedRef,
     toast,
+    selectWorkForPath,
   } = ctx;
 
   const handleFormatCurrentChapter = useCallback(() => {
@@ -178,11 +181,13 @@ export function useEditorInteractions(ctx: UseEditorInteractionsContext) {
     [setTransientHighlightLine]
   );
 
-  // 其他视图请求「在资料中定位」（例如场景视频的成片）：退出专注模式、展开侧边栏并高亮该文件
+  // 其他视图请求「在资料中定位」（例如场景视频的成片、参考窗格）：退出专注模式、展开侧边栏，
+  // 文件属于其他作品时先切换作品，再由文件面板展开祖先目录、滚动到该行并高亮
   useEffect(() => {
     const onReveal = (event: Event) => {
       const path = (event as CustomEvent<RevealInFilePanelDetail>).detail?.path;
       if (!path) return;
+      selectWorkForPath?.(path);
       if (focusMode) setFocusMode(false);
       if (sidebarCollapsedRef.current) handleExpandSidebar();
       setFilePanelRevealRequest({ path, id: `reveal-${++filePanelRevealCounterRef.current}` });
@@ -193,6 +198,7 @@ export function useEditorInteractions(ctx: UseEditorInteractionsContext) {
     filePanelRevealCounterRef,
     focusMode,
     handleExpandSidebar,
+    selectWorkForPath,
     setFilePanelRevealRequest,
     setFocusMode,
     sidebarCollapsedRef,

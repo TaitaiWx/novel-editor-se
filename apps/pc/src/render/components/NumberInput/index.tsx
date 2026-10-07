@@ -132,9 +132,9 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       // 全角数字 / 句号 / 减号统一为半角，其余非数字输入直接拒绝
       const text = event.target.value
-        .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
-        .replace(/[。．]/g, '.')
-        .replace(/[－—]/g, '-')
+        .replace(/[\uff10-\uff19]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+        .replace(/[\u3002\uff0e]/g, '.')
+        .replace(/[\uff0d\u2014]/g, '-')
         .replace(/\s+/g, '');
       if (!isNumericDraft(text, allowNegative, allowDecimal)) return;
       editingRef.current = true;

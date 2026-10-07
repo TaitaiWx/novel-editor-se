@@ -20,7 +20,7 @@ export function estimateTokens(text: string): number {
   return wide + Math.ceil(narrow / 4);
 }
 
-const SENTENCE_END = /[。！？!?….;；\n]/u;
+const SENTENCE_END = /[\u3002\uff01\uff1f!?\u2026.;\uff1b\n]/u;
 export const TRUNCATION_MARK = '……';
 
 export interface TruncateResult {

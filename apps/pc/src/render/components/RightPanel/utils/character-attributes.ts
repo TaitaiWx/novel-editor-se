@@ -31,7 +31,11 @@ export const CHARACTER_CATEGORY_LABELS: Record<CharacterCategory, string> = {
 
 export function inferCharacterCategoryFromRole(role: string): CharacterCategory {
   const normalizedRole = role.trim();
-  return /主角|主人公|男主|女主|核心|主线/.test(normalizedRole) ? 'major' : 'secondary';
+  return /\u4e3b\u89d2|\u4e3b\u4eba\u516c|\u7537\u4e3b|\u5973\u4e3b|\u6838\u5fc3|\u4e3b\u7ebf/.test(
+    normalizedRole
+  )
+    ? 'major'
+    : 'secondary';
 }
 
 export function normalizeCharacterCategory(value: unknown, role = ''): CharacterCategory {

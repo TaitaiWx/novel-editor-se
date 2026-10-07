@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   applyPose,
+  applyPoseSample,
   buildMannequin,
   disposeMannequin,
   setMannequinSelected,
@@ -100,6 +101,38 @@ describe('木偶小人', () => {
     expect(left.z).toBeGreaterThan(0.3);
     expect(right.z).toBeGreaterThan(0.3);
     expect(Math.abs(left.x - right.x)).toBeLessThan(0.3);
+  });
+
+  it('姿势混合：站→坐过渡中髋部在两者之间；行走步态让双腿前后交替', () => {
+    const at = (mix: number) => {
+      const mannequin = buildMannequin('#c9a27a');
+      applyPoseSample(mannequin, {
+        poseFrom: 'stand',
+        poseTo: 'sit',
+        mix,
+        joints: {},
+        gait: { phase: 0, walk: 0, run: 0 },
+      });
+      return mannequin.hips.position.y;
+    };
+    expect(at(0.5)).toBeLessThan(at(0));
+    expect(at(0.5)).toBeGreaterThan(at(1));
+    const walking = (phase: number) => {
+      const mannequin = buildMannequin('#c9a27a');
+      applyPoseSample(mannequin, {
+        poseFrom: 'walk',
+        poseTo: 'walk',
+        mix: 0,
+        joints: { head: [0, 30, 0] },
+        gait: { phase, walk: 1, run: 0 },
+      });
+      return mannequin;
+    };
+    const a = walking(Math.PI / 2);
+    const b = walking((Math.PI * 3) / 2);
+    expect(a.joints.leftThigh.rotation.x).toBeLessThan(0);
+    expect(b.joints.leftThigh.rotation.x).toBeGreaterThan(0);
+    expect(a.joints.head.rotation.y).toBeCloseTo((30 * Math.PI) / 180, 5);
   });
 
   it('选中时整体带一点高亮，取消后恢复；释放不报错', () => {

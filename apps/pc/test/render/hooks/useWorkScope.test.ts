@@ -101,6 +101,18 @@ describe('useWorkScope', () => {
     expect(hook.result.current.workScope?.name).toBe('星河旅人');
   });
 
+  it('selectWorkForPath：定位到其他作品的资料时切过去；不属于作品的路径不切换；当前标签不会把作品切回', () => {
+    const chapter = '/s/novels/剑与诗/001-山门.md';
+    const { hook } = setup({ activeDocumentTab: chapter });
+    expect(hook.result.current.workScope?.name).toBe('剑与诗');
+    act(() => hook.result.current.selectWorkForPath('/s/novels/星河旅人/资料/视频/示例/离港.mp4'));
+    expect(hook.result.current.workScope?.name).toBe('星河旅人');
+    hook.rerender({ activeDocumentTab: chapter });
+    expect(hook.result.current.workScope?.name).toBe('星河旅人');
+    act(() => hook.result.current.selectWorkForPath('/s/资料/旧资料.png'));
+    expect(hook.result.current.workScope?.name).toBe('星河旅人');
+  });
+
   it('新建作品：在作品根目录创建文件夹、刷新并切换过去', async () => {
     const mock = installElectronMock((channel, ...args) =>
       channel === 'create-directory' ? { success: true, dirPath: `${args[0]}/${args[1]}` } : null

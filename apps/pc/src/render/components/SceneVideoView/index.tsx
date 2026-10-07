@@ -5,6 +5,7 @@ import {
   requestRevealInFilePanel,
 } from '@/render/utils/workspaceFiles';
 import { referenceItemFor, requestOpenReference } from '@/render/utils/referencePane';
+import { exportMediaFile } from '@/render/utils/mediaExport';
 import SceneCanvas from './SceneCanvas';
 import { CharacterNode, OutputNode, SceneNode, ShotNode } from './nodes';
 import { CharacterInspector, OutputInspector, SceneInspector, ShotInspector } from './Inspector';
@@ -31,7 +32,7 @@ import { useVideoServices } from './useVideoServices';
 import { useResolvedAvatars } from './useResolvedAvatars';
 import { useSceneKeyframes } from './useSceneKeyframes';
 import { useOutlineAutoLink } from './useOutlineAutoLink';
-import PrevizDialog from './Previz';
+import ScenePreviz from './ScenePreviz';
 import { useImageServices } from '../EntityGallery/useImageServices';
 import { dataUrlToBytes } from '../EntityGallery/mediaActions';
 import styles from './styles.module.scss';
@@ -153,7 +154,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
   );
 
   // ─── 首帧 / 预演 ───────────────────────────────────────────────────
-  const { writeSceneImage, generateKeyframes } = useSceneKeyframes({
+  const { writeSceneImage, writePrevizVideo, generateKeyframes } = useSceneKeyframes({
     state,
     characters,
     references,
@@ -279,7 +280,14 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         if (signature) updateState((prev) => ({ ...prev, animaticSignature: signature }));
         await refreshFiles();
         notifyWorkspaceFilesChanged();
-        setMessage({ tone: 'success', text: `样片已保存到资料：${result.data.fileName}` });
+        setMessage(
+          output.audioDropped
+            ? {
+                tone: 'info',
+                text: `样片已保存到资料：${result.data.fileName}（当前环境无法编码声音，样片没有声音；镜头成片的原声不受影响）`,
+              }
+            : { tone: 'success', text: `样片已保存到资料：${result.data.fileName}` }
+        );
       } catch (error) {
         setMessage({
           tone: 'error',
@@ -356,6 +364,22 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         `${state?.scene ?? ''} · ${fileName}`
       );
       if (reference) requestOpenReference({ items: [reference] });
+    },
+    [doc.dir, state?.scene]
+  );
+
+  // 版本列表「导出」：成片按原格式另存（不转码）
+  const exportVersion = useCallback(
+    (fileName: string) => {
+      if (!doc.dir) return;
+      void exportMediaFile({
+        sourcePath: joinPath(doc.dir, fileName),
+        title: `${state?.scene ?? ''}-${fileName}`,
+      }).then((result) => {
+        if (result.saved)
+          setMessage({ tone: 'success', text: `已导出到 ${result.filePath ?? ''}` });
+        else if (result.error) setMessage({ tone: 'error', text: `导出失败：${result.error}` });
+      });
     },
     [doc.dir, state?.scene]
   );
@@ -483,6 +507,9 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
             workPath,
             keyframe: state.keyframes[entry.shot.id],
             previz: state.previz[entry.shot.id],
+            previzVideo: state.previzVideo[entry.shot.id],
+            previzScript: state.previzScripts[entry.shot.id],
+            readFile,
             imageReady: imageServices.providers.length > 0,
             onOpenPreviz: () => setPrevizShotId(entry.shot.id),
             onGenerate: () => generateKeyframes(entry.shot),
@@ -524,6 +551,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
             updateState((prev) => removeShot(prev, entry.shot.id));
           }}
           onOpenBeside={openBeside}
+          onExportVersion={exportVersion}
           onCancelTask={(id) =>
             void cancelTask(id).then((error) => error && setMessage({ tone: 'error', text: error }))
           }
@@ -606,22 +634,15 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         {inspector}
       </div>
       {previzShot && (
-        <PrevizDialog
-          shotLabel={`镜头 ${previzShot.index + 1}`}
-          shotSize={previzShot.shot.shotSize}
-          characters={
-            previzShot.shot.characters?.length ? previzShot.shot.characters : state.characters
-          }
-          availableCharacters={state.characters}
-          aspectRatio={state.aspectRatio}
-          onSave={async (png) => {
-            const path = await writeSceneImage('previz', previzShot.shot, png);
-            updateState((prev) => ({
-              ...prev,
-              previz: { ...prev.previz, [previzShot.shot.id]: path },
-            }));
-            setMessage({ tone: 'success', text: '预演截图已保存，生成首帧时会按它的构图' });
-          }}
+        <ScenePreviz
+          shot={previzShot.shot}
+          index={previzShot.index}
+          state={state}
+          characters={characters}
+          updateState={updateState}
+          writeSceneImage={writeSceneImage}
+          writePrevizVideo={writePrevizVideo}
+          onSaved={(text) => setMessage({ tone: 'success', text })}
           onClose={() => setPrevizShotId(null)}
         />
       )}

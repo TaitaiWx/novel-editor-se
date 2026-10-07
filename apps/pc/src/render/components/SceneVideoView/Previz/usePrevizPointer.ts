@@ -1,95 +1,105 @@
 /**
- * 预演视口的鼠标操作：
- * - 按住人物 / 道具拖动 → 在地面上移动（保持按下时的相对位置，不会跳到鼠标下）
- * - 按住 Shift（或 Alt）拖动人物 / 道具 → 左右拖动旋转朝向
- * - 拖动空白处 → 转动机位（左右环绕、上下改俯仰）
+ * 预演视口的鼠标微调（只改脚本，不另存状态）：
+ * - 按住人物拖动 → 整段走位一起平移（translateFigureTrack），位移按人物深度换算（drag.ts，不会飞走）
+ * - 拖动空白处 → 所有机位关键帧一起环绕（orbitScriptCamera）
+ * 每次拖动都基于按下时的脚本计算总位移，不累积误差；移动不足几个像素视为单击。
  */
 import { useRef, useState } from 'react';
 import type React from 'react';
-import type { PrevizScene } from './usePrevizScene';
+import {
+  orbitScriptCamera,
+  pinCameraFocus,
+  samplePrevizScript,
+  translateFigureTrack,
+  type PrevizScript,
+} from '@novel-editor/video';
+import { DRAG_THRESHOLD_PX, ORBIT_DEG_PER_PX, depthAlongView, dragDeltaOnGround } from './drag';
+import { frameRect, placementFromSample } from './presets';
 import type { PrevizStageApi } from './types';
 
 type Drag =
-  | { mode: 'move'; id: string; offsetX: number; offsetZ: number }
-  | { mode: 'rotate'; id: string; startX: number; startRotation: number }
-  | { mode: 'orbit'; startX: number; startY: number; startYaw: number; startPitch: number };
+  | { mode: 'move'; id: string; startX: number; startY: number; base: PrevizScript; moved: boolean }
+  | { mode: 'orbit'; startX: number; startY: number; base: PrevizScript; moved: boolean };
 
-/** 拖动多少像素转一度（机位环绕 / 俯仰、人物旋转） */
-const ORBIT_DEG_PER_PX = 0.3;
-const PITCH_DEG_PER_PX = 0.2;
-const ROTATE_RAD_PER_PX = 0.012;
+export interface PrevizPointerOptions {
+  stageRef: React.RefObject<PrevizStageApi | null>;
+  script: PrevizScript;
+  time: number;
+  aspect: number;
+  /** 视口尺寸（CSS 像素） */
+  size: { width: number; height: number };
+  /** 拖动中实时改脚本 */
+  onChange: (script: PrevizScript) => void;
+  disabled?: boolean;
+}
 
-export function usePrevizPointer(
-  stageRef: React.RefObject<PrevizStageApi | null>,
-  scene: PrevizScene
-) {
+/** 胸口高度：深度按人物胸口计算 */
+const CHEST_HEIGHT = 1.2;
+
+export function usePrevizPointer({
+  stageRef,
+  script,
+  time,
+  aspect,
+  size,
+  onChange,
+  disabled,
+}: PrevizPointerOptions) {
   const dragRef = useRef<Drag | null>(null);
-  const [orbiting, setOrbiting] = useState(false);
-
-  const positionOf = (id: string) =>
-    scene.figures.find((figure) => figure.id === id) ??
-    scene.props.find((prop) => prop.id === id) ??
-    null;
+  const [dragging, setDragging] = useState<'move' | 'orbit' | null>(null);
 
   const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
     const stage = stageRef.current;
-    if (!stage || event.button > 0) return;
+    if (!stage || disabled || event.button > 0) return;
     const id = stage.pick(event.clientX, event.clientY);
-    const item = id ? positionOf(id) : null;
-    if (id && item) {
-      scene.setSelectedId(id);
-      if (event.shiftKey || event.altKey) {
-        dragRef.current = {
-          mode: 'rotate',
-          id,
-          startX: event.clientX,
-          startRotation: item.rotation,
-        };
-      } else {
-        const ground = stage.pickGround(event.clientX, event.clientY);
-        dragRef.current = {
-          mode: 'move',
-          id,
-          offsetX: ground ? item.x - ground.x : 0,
-          offsetZ: ground ? item.z - ground.z : 0,
-        };
-      }
+    const start = { startX: event.clientX, startY: event.clientY, base: script, moved: false };
+    if (id && script.figures.some((track) => track.id === id)) {
+      // 机位固定在当前人物中心，拖动时人物在画面里跟手移动
+      dragRef.current = { mode: 'move', id, ...start, base: pinCameraFocus(script) };
+      stage.setHighlight(id);
+      setDragging('move');
     } else {
-      dragRef.current = {
-        mode: 'orbit',
-        startX: event.clientX,
-        startY: event.clientY,
-        startYaw: scene.view.yaw,
-        startPitch: scene.view.pitch,
-      };
-      setOrbiting(true);
+      dragRef.current = { mode: 'orbit', ...start };
+      setDragging('orbit');
     }
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
-    const stage = stageRef.current;
-    if (!drag || !stage) return;
-    if (drag.mode === 'move') {
-      const point = stage.pickGround(event.clientX, event.clientY);
-      if (point) scene.moveItem(drag.id, point.x + drag.offsetX, point.z + drag.offsetZ);
-    } else if (drag.mode === 'rotate') {
-      scene.setRotation(
-        drag.id,
-        drag.startRotation + (event.clientX - drag.startX) * ROTATE_RAD_PER_PX
-      );
-    } else {
-      scene.camera.setYaw(drag.startYaw - (event.clientX - drag.startX) * ORBIT_DEG_PER_PX);
-      scene.camera.setPitch(drag.startPitch + (event.clientY - drag.startY) * PITCH_DEG_PER_PX);
+    if (!drag) return;
+    const dxPx = event.clientX - drag.startX;
+    const dyPx = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dxPx, dyPx) < DRAG_THRESHOLD_PX) return;
+    drag.moved = true;
+    if (drag.mode === 'orbit') {
+      onChange(orbitScriptCamera(drag.base, -dxPx * ORBIT_DEG_PER_PX));
+      return;
     }
+    const sample = samplePrevizScript(drag.base, time);
+    const figure = sample.figures.find((item) => item.id === drag.id);
+    if (!figure) return;
+    const placement = placementFromSample(sample.camera, aspect);
+    const delta = dragDeltaOnGround(
+      {
+        yaw: sample.camera.yaw,
+        elevation: sample.camera.elevation,
+        depth: depthAlongView(placement, { x: figure.x, y: CHEST_HEIGHT, z: figure.z }),
+        fov: placement.fov,
+        frameHeight: frameRect(size.width, size.height, aspect).height,
+      },
+      dxPx,
+      dyPx
+    );
+    onChange(translateFigureTrack(drag.base, drag.id, delta.dx, delta.dz));
   };
 
   const onPointerUp = (event: React.PointerEvent<HTMLElement>) => {
+    if (dragRef.current?.mode === 'move') stageRef.current?.setHighlight(null);
     dragRef.current = null;
-    setOrbiting(false);
+    setDragging(null);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
-  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, orbiting };
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, dragging };
 }

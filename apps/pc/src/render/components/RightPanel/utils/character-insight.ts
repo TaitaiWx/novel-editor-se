@@ -17,8 +17,8 @@ export function inferCharacterCamp(
   relations: CharacterRelation[]
 ): CharacterCamp {
   const role = character.role.toLowerCase();
-  if (/主角|主人公|男主|女主/.test(role)) return 'protagonist';
-  if (/反派|对立|宿敌|敌/.test(role)) return 'antagonist';
+  if (/\u4e3b\u89d2|\u4e3b\u4eba\u516c|\u7537\u4e3b|\u5973\u4e3b/.test(role)) return 'protagonist';
+  if (/\u53cd\u6d3e|\u5bf9\u7acb|\u5bbf\u654c|\u654c/.test(role)) return 'antagonist';
   const hostile = relations.filter(
     (item) =>
       (item.sourceId === character.id || item.targetId === character.id) && item.tone === 'rival'
@@ -35,9 +35,10 @@ export function inferCharacterCamp(
 export function inferRelationStage(note: string): string {
   const text = note.trim();
   if (!text) return '未标注阶段';
-  if (/(前期|初识|开端|早期)/.test(text)) return '前期';
-  if (/(中期|升级|加深|矛盾)/.test(text)) return '中期';
-  if (/(后期|决裂|和解|终局|结局)/.test(text)) return '后期';
+  if (/(\u524d\u671f|\u521d\u8bc6|\u5f00\u7aef|\u65e9\u671f)/.test(text)) return '前期';
+  if (/(\u4e2d\u671f|\u5347\u7ea7|\u52a0\u6df1|\u77db\u76fe)/.test(text)) return '中期';
+  if (/(\u540e\u671f|\u51b3\u88c2|\u548c\u89e3|\u7ec8\u5c40|\u7ed3\u5c40)/.test(text))
+    return '后期';
   return '阶段未定义';
 }
 

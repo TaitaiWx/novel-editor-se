@@ -263,3 +263,47 @@ export const POSE_PRESETS: readonly PosePreset[] = [
 export function poseById(id: string): PosePreset {
   return POSE_PRESETS.find((pose) => pose.id === id) ?? POSE_PRESETS[0];
 }
+
+/** 步态（迈步摆臂）影响的关节 */
+export const GAIT_JOINTS: readonly JointName[] = [
+  'leftUpperArm',
+  'leftForearm',
+  'rightUpperArm',
+  'rightForearm',
+  'leftThigh',
+  'leftShin',
+  'leftFoot',
+  'rightThigh',
+  'rightShin',
+  'rightFoot',
+];
+
+/**
+ * 步态周期里的关节角度（弧度）：phase 随走过的距离增长（2π = 左右各一步）。
+ * 左腿向前时右臂向前（对侧摆臂）；腿向前摆的半个周期里膝盖弯曲（抬脚），落地后伸直。
+ */
+export function gaitJoints(
+  kind: 'walk' | 'run',
+  phase: number
+): Partial<Record<JointName, JointRotation>> {
+  const swing = Math.sin(phase);
+  const lift = Math.cos(phase);
+  const run = kind === 'run';
+  const thigh = run ? 42 : 24;
+  const arm = run ? 48 : 20;
+  const knee = run ? 75 : 32;
+  const kneeBase = run ? 22 : 5;
+  const forearm = run ? -88 : -14;
+  return {
+    leftThigh: r(-thigh * swing, 0, 3),
+    rightThigh: r(thigh * swing, 0, -3),
+    leftShin: r(kneeBase + knee * Math.max(0, lift)),
+    rightShin: r(kneeBase + knee * Math.max(0, -lift)),
+    leftFoot: r(-8 * Math.max(0, lift)),
+    rightFoot: r(-8 * Math.max(0, -lift)),
+    leftUpperArm: r(arm * swing, 0, 6),
+    rightUpperArm: r(-arm * swing, 0, -6),
+    leftForearm: r(forearm),
+    rightForearm: r(forearm),
+  };
+}

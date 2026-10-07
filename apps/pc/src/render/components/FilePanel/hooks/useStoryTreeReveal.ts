@@ -15,6 +15,8 @@ interface UseStoryTreeRevealOptions {
   characterGenerationStatus: AssistantArtifactGenerationStatus | null;
   /** 收到外部定位请求时关闭搜索 */
   closeSearch: () => void;
+  /** 定位目标是否在「资料」分区（按文件树判断，不按目录名匹配） */
+  isMaterialPath?: (path: string) => boolean;
 }
 
 /**
@@ -30,7 +32,10 @@ export function useStoryTreeReveal({
   revealFileRequest,
   characterGenerationStatus,
   closeSearch,
+  isMaterialPath,
 }: UseStoryTreeRevealOptions) {
+  const isMaterialPathRef = useRef(isMaterialPath);
+  isMaterialPathRef.current = isMaterialPath;
   const [revealPath, setRevealPath] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSections>({
     story: false,
@@ -123,7 +128,7 @@ export function useStoryTreeReveal({
     if (!revealFileRequest?.path) return;
     closeSearch();
     // 资料里的文件（例如场景视频的成片）展开「资料」分区，其余展开「正文」
-    const section = /[\\/]资料([\\/]|$)/.test(revealFileRequest.path) ? 'materials' : 'story';
+    const section = isMaterialPathRef.current?.(revealFileRequest.path) ? 'materials' : 'story';
     setCollapsedSections((prev) => (prev[section] ? { ...prev, [section]: false } : prev));
     setExpandedStoryDirs((prev) => {
       const next = new Set(prev);

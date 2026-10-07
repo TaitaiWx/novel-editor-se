@@ -19,7 +19,9 @@ const {
   registerVideoSceneHandlers,
   isAllowedSceneMediaName,
   sceneImageFileName,
+  detectVideoContainer,
   MAX_SCENE_IMAGE_BYTES,
+  MAX_PREVIZ_VIDEO_BYTES,
 } = await import('../../../src/main/handlers/video-scene');
 
 // macOS 的临时目录经 /var → /private/var 符号链接，主进程返回的是真实路径
@@ -262,5 +264,110 @@ describe('video-scene-write-image', () => {
       });
     }
     expect(existsSync(sceneDir)).toBe(false);
+  });
+});
+
+describe('预演视频 video-scene-write-media', () => {
+  // ftyp 盒：size(4) + 'ftyp' + brand
+  const MP4 = new Uint8Array([
+    0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0,
+  ]);
+  const WEBM = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]);
+  type WriteResult = { ok: true; data: { fileName: string; relativePath: string } };
+  const write = (patch: Record<string, unknown> = {}) =>
+    call<WriteResult | { ok: false; error: { message: string } }>('video-scene-write-media', {
+      ...ref,
+      kind: 'previz-video',
+      shotIndex: 3,
+      ext: 'mp4',
+      data: MP4,
+      ...patch,
+    });
+
+  it('按文件头识别 MP4 / WebM', () => {
+    expect(detectVideoContainer(MP4)).toBe('mp4');
+    expect(detectVideoContainer(WEBM)).toBe('webm');
+    expect(
+      detectVideoContainer(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]))
+    ).toBe(null);
+    expect(detectVideoContainer(new Uint8Array([0, 0]))).toBeNull();
+  });
+
+  it('写入 镜头N-预演.mp4（覆盖），换成 WebM 时删除旧 MP4；预演视频可经 read-file 读取', async () => {
+    const first = (await write()) as WriteResult;
+    expect(first).toEqual({
+      ok: true,
+      data: {
+        fileName: '镜头3-预演.mp4',
+        relativePath: '资料/视频/001-启程/第一场 清晨/镜头3-预演.mp4',
+      },
+    });
+    const updated = new Uint8Array([...MP4, 1, 2, 3]);
+    await write({ data: updated });
+    expect(Array.from(await readFile(path.join(sceneDir, '镜头3-预演.mp4')))).toEqual(
+      Array.from(updated)
+    );
+    expect(isAllowedSceneMediaName('镜头3-预演.mp4')).toBe(true);
+    expect(isAllowedSceneMediaName('镜头3-预演.png')).toBe(false);
+    const read = await call<{ ok: true; data: Uint8Array }>('video-scene-read-file', {
+      ...ref,
+      fileName: '镜头3-预演.mp4',
+    });
+    expect(Array.from(read.data)).toEqual(Array.from(updated));
+
+    const webm = (await write({ ext: 'webm', data: WEBM })) as WriteResult;
+    expect(webm.data.fileName).toBe('镜头3-预演.webm');
+    expect(existsSync(path.join(sceneDir, '镜头3-预演.mp4'))).toBe(false);
+  });
+
+  it('同名文件是指向作品目录外的符号链接时只替换链接，不写穿', async () => {
+    const target = path.join(await mkdtemp(path.join(os.tmpdir(), 'scene-outside-')), 'x.mp4');
+    await writeFile(target, 'outside');
+    await mkdir(sceneDir, { recursive: true });
+    await symlink(target, path.join(sceneDir, '镜头3-预演.mp4'));
+    expect((await write()).ok).toBe(true);
+    expect(await readFile(target, 'utf-8')).toBe('outside');
+    expect((await lstat(path.join(sceneDir, '镜头3-预演.mp4'))).isSymbolicLink()).toBe(false);
+  });
+
+  it('拒绝：文件头与格式不符、空内容、超过 60MB、未知类型 / 格式、无效镜头序号、越界场景名', async () => {
+    expect(await write({ data: WEBM })).toMatchObject({
+      ok: false,
+      error: { message: '视频内容与格式不符' },
+    });
+    expect(
+      await write({ data: new TextEncoder().encode('<html>not a video</html>') })
+    ).toMatchObject({ ok: false, error: { message: '视频内容与格式不符' } });
+    expect(await write({ data: new Uint8Array() })).toMatchObject({
+      ok: false,
+      error: { message: '视频内容为空' },
+    });
+    const huge = new Uint8Array(MAX_PREVIZ_VIDEO_BYTES + 1);
+    huge.set(MP4);
+    expect(await write({ data: huge })).toMatchObject({
+      ok: false,
+      error: { message: '预演视频过大' },
+    });
+    expect(await write({ kind: 'animatic' })).toMatchObject({
+      ok: false,
+      error: { message: '不支持的媒体类型' },
+    });
+    expect(await write({ ext: 'mov' })).toMatchObject({
+      ok: false,
+      error: { message: '只支持 MP4 / WebM 视频' },
+    });
+    for (const shotIndex of [0, 2.5, 1000, '3']) {
+      expect(await write({ shotIndex })).toMatchObject({
+        ok: false,
+        error: { message: '无效的镜头序号' },
+      });
+    }
+    expect(existsSync(sceneDir)).toBe(false);
+    const escaped = await write({ scene: '../../../../outside' });
+    if (escaped.ok) {
+      // 场景名清洗为单个路径段：仍落在作品目录内
+      expect(escaped.data.relativePath.startsWith('资料/视频/001-启程/')).toBe(true);
+    }
+    expect(existsSync(path.join(outside, '镜头3-预演.mp4'))).toBe(false);
   });
 });

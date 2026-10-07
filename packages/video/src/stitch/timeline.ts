@@ -1,8 +1,10 @@
-// 改编自 video-maker/packages/video-core/src/timeline.ts（同一作者的项目），删去 WebGPU / 音频 / 叠加轨
+// 改编自 video-maker/packages/video-core/src/timeline.ts（同一作者的项目），删去 WebGPU / 叠加轨（声音见 audio-*.ts）
 import type { Timeline, TimelineClip } from './types';
 
 /** 时间轴总时长：所有片段的最晚结束时间（毫秒） */
-export function timelineDurationMs(timeline: Pick<Timeline, 'clips'>): number {
+export function timelineDurationMs(timeline: {
+  clips: readonly Pick<TimelineClip, 'durationMs' | 'startMs'>[];
+}): number {
   let end = 0;
   let accumulated = 0;
   for (const clip of timeline.clips) {
@@ -29,14 +31,22 @@ interface PositionedClip {
   startMs: number;
 }
 
-function positionClips(clips: readonly TimelineClip[]): PositionedClip[] {
+/** 各片段在时间轴上的起点（毫秒）：有 startMs 用 startMs，否则接在上一片段之后（画面与声音共用） */
+export function clipStartTimes(
+  clips: readonly Pick<TimelineClip, 'durationMs' | 'startMs'>[]
+): number[] {
   let accumulated = 0;
+  return clips.map((clip) => {
+    const startMs = clip.startMs ?? accumulated;
+    accumulated = startMs + clip.durationMs;
+    return startMs;
+  });
+}
+
+function positionClips(clips: readonly TimelineClip[]): PositionedClip[] {
+  const starts = clipStartTimes(clips);
   return clips
-    .map((clip) => {
-      const startMs = clip.startMs ?? accumulated;
-      accumulated = startMs + clip.durationMs;
-      return { clip, startMs };
-    })
+    .map((clip, index) => ({ clip, startMs: starts[index] ?? 0 }))
     .sort((a, b) => a.startMs - b.startMs);
 }
 

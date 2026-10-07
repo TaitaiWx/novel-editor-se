@@ -4,6 +4,7 @@ import type { FileNode, FileInfo, FileInfoBatchEntry } from '../../types';
 import { isImeComposing } from '../../utils/ime';
 import { buildFileTooltip, describeFileName, formatFileSize } from './fileDisplay';
 import { getFileIcon } from './fileIcons';
+import { NOVEL_EDITOR_PATH_MIME } from '../../utils/referencePane';
 import styles from './styles.module.scss';
 
 export interface ContextMenuEvent {
@@ -30,6 +31,34 @@ interface FileTreeProps {
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
   revealPath?: string | null;
+  /**
+   * 外部「在资料中定位」请求：展开全部祖先目录、滚动到该行并高亮一段时间。
+   * 树里暂时没有该文件时（新生成的文件、文件树尚未刷新）先调用 onRevealMissing，刷新后继续定位。
+   */
+  revealRequest?: { path: string; id: string } | null;
+  onRevealMissing?: (path: string) => void;
+}
+
+/** 定位高亮持续时间（毫秒） */
+export const FILE_TREE_REVEAL_HIGHLIGHT_MS = 2400;
+/** 树里一直找不到要定位的文件时，最多等待这么久（等待文件树刷新） */
+export const FILE_TREE_REVEAL_TIMEOUT_MS = 8000;
+
+function samePath(left: string, right: string): boolean {
+  const fix = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '');
+  return fix(left) === fix(right);
+}
+
+/** 树中与 targetPath 相同的节点路径（兼容分隔符差异）；不存在时为 null */
+export function findTreePath(nodes: FileNode[], targetPath: string): string | null {
+  for (const node of nodes) {
+    if (samePath(node.path, targetPath)) return node.path;
+    if (node.type === 'directory' && node.children) {
+      const found = findTreePath(node.children, targetPath);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 const sortNodes = (nodes: FileNode[]): FileNode[] => {
@@ -41,7 +70,7 @@ const sortNodes = (nodes: FileNode[]): FileNode[] => {
   });
 };
 
-function findAncestorDirectoryPaths(
+export function findAncestorDirectoryPaths(
   nodes: FileNode[],
   targetPath: string,
   ancestors: string[] = []
@@ -152,6 +181,8 @@ const FileTreeItem: React.FC<{
   creatingType?: 'file' | 'directory' | null;
   onInlineCreate?: (type: 'file' | 'directory', name: string) => void;
   onCancelCreate?: () => void;
+  revealedPath?: string | null;
+  registerRow?: (path: string, element: HTMLDivElement | null) => void;
 }> = React.memo(
   ({
     node,
@@ -171,8 +202,11 @@ const FileTreeItem: React.FC<{
     creatingType,
     onInlineCreate,
     onCancelCreate,
+    revealedPath,
+    registerRow,
   }) => {
     const isSelected = selectedFile === node.path;
+    const isRevealed = revealedPath === node.path;
     const fileInfo = fileInfoMap?.get(node.path) ?? null;
     const isCreateTarget =
       !!creatingType && node.type === 'directory' && node.path === createTargetPath;
@@ -181,7 +215,14 @@ const FileTreeItem: React.FC<{
 
     // 行内重命名：双击名称或选中行按 F2 进入，Enter 提交、Esc 取消、失焦提交
     const [renaming, setRenaming] = useState(false);
-    const rowRef = useRef<HTMLDivElement>(null);
+    const rowRef = useRef<HTMLDivElement | null>(null);
+    const setRowRef = useCallback(
+      (element: HTMLDivElement | null) => {
+        rowRef.current = element;
+        registerRow?.(node.path, element);
+      },
+      [node.path, registerRow]
+    );
     const startRename = (event: React.SyntheticEvent) => {
       if (!onRenameNode) return;
       event.preventDefault();
@@ -217,9 +258,20 @@ const FileTreeItem: React.FC<{
     return (
       <div className={`${styles.fileTreeItem} ${isFile ? styles.leaf : ''}`}>
         <div
-          ref={rowRef}
-          className={`${styles.itemHeader} ${styles[node.type]} ${isSelected ? styles.selected : ''}`}
+          ref={setRowRef}
+          className={`${styles.itemHeader} ${styles[node.type]} ${isSelected ? styles.selected : ''} ${
+            isRevealed ? styles.revealed : ''
+          }`}
+          data-path={node.path}
+          data-revealed={isRevealed ? 'true' : undefined}
           tabIndex={0}
+          draggable={isFile && !renaming}
+          onDragStart={(event) => {
+            if (!isFile) return;
+            // 拖到参考窗格等处：携带绝对路径（不设 text/plain，避免拖进正文插入路径文字）
+            event.dataTransfer.effectAllowed = 'copy';
+            event.dataTransfer.setData(NOVEL_EDITOR_PATH_MIME, node.path);
+          }}
           aria-keyshortcuts={onRenameNode ? 'F2' : undefined}
           onClick={handleClick}
           onKeyDown={(event) => {
@@ -323,6 +375,8 @@ const FileTreeItem: React.FC<{
                 creatingType={creatingType}
                 onInlineCreate={onInlineCreate}
                 onCancelCreate={onCancelCreate}
+                revealedPath={revealedPath}
+                registerRow={registerRow}
               />
             ))}
           </div>
@@ -349,6 +403,8 @@ const FileTree: React.FC<FileTreeProps> = ({
   revealPath,
   onBackgroundContextMenu,
   onRenameNode,
+  revealRequest,
+  onRevealMissing,
 }) => {
   const sortedFiles = useMemo(() => sortNodes(files), [files]);
   const [fileInfoMap, setFileInfoMap] = useState<Map<string, FileInfo>>(new Map());
@@ -374,6 +430,87 @@ const FileTree: React.FC<FileTreeProps> = ({
       return next;
     });
   }, [createTargetPath, revealPath, sortedFiles]);
+
+  // ─── 外部定位请求：展开祖先 → 滚动到行 → 高亮 ───────────────────────
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const registerRow = useCallback((path: string, element: HTMLDivElement | null) => {
+    if (element) rowRefs.current.set(path, element);
+    else rowRefs.current.delete(path);
+  }, []);
+  const [revealedPath, setRevealedPath] = useState<string | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<string | null>(null);
+  const pendingRevealRef = useRef<{
+    path: string;
+    id: string;
+    since: number;
+    refreshRequested: boolean;
+  } | null>(null);
+  const onRevealMissingRef = useRef(onRevealMissing);
+  onRevealMissingRef.current = onRevealMissing;
+
+  useEffect(() => {
+    if (!revealRequest?.path) return;
+    pendingRevealRef.current = {
+      path: revealRequest.path,
+      id: revealRequest.id,
+      since: Date.now(),
+      refreshRequested: false,
+    };
+  }, [revealRequest?.id, revealRequest?.path]);
+
+  useEffect(() => {
+    const pending = pendingRevealRef.current;
+    if (!pending) return;
+    const treePath = findTreePath(sortedFiles, pending.path);
+    if (treePath) {
+      pendingRevealRef.current = null;
+      setExpandedDirs((prev) => {
+        const ancestors = findAncestorDirectoryPaths(sortedFiles, treePath).filter(
+          (path) => path !== treePath
+        );
+        if (ancestors.every((path) => prev.has(path))) return prev;
+        const next = new Set(prev);
+        ancestors.forEach((path) => next.add(path));
+        return next;
+      });
+      setScrollTarget(treePath);
+      return;
+    }
+    if (Date.now() - pending.since > FILE_TREE_REVEAL_TIMEOUT_MS) {
+      pendingRevealRef.current = null;
+      return;
+    }
+    // 文件树里还没有（例如刚生成的成片）：请求刷新一次，刷新后 sortedFiles 变化会再次进入这里
+    if (!pending.refreshRequested) {
+      pending.refreshRequested = true;
+      onRevealMissingRef.current?.(pending.path);
+    }
+  }, [revealRequest?.id, sortedFiles]);
+
+  useEffect(() => {
+    if (!scrollTarget) return;
+    let innerFrame = 0;
+    const outerFrame = window.requestAnimationFrame(() => {
+      innerFrame = window.requestAnimationFrame(() => {
+        const row = rowRefs.current.get(scrollTarget);
+        if (!row) return;
+        row.scrollIntoView?.({ block: 'center', inline: 'nearest' });
+        row.focus({ preventScroll: true });
+        setRevealedPath(scrollTarget);
+        setScrollTarget(null);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(outerFrame);
+      window.cancelAnimationFrame(innerFrame);
+    };
+  }, [expandedDirs, scrollTarget]);
+
+  useEffect(() => {
+    if (!revealedPath) return;
+    const timer = window.setTimeout(() => setRevealedPath(null), FILE_TREE_REVEAL_HIGHLIGHT_MS);
+    return () => window.clearTimeout(timer);
+  }, [revealedPath]);
 
   const visibleFilePaths = useMemo(
     () => (showFileSizes ? collectVisibleFilePaths(sortedFiles, expandedDirs) : []),
@@ -496,6 +633,8 @@ const FileTree: React.FC<FileTreeProps> = ({
             creatingType={creatingType}
             onInlineCreate={onInlineCreate}
             onCancelCreate={onCancelCreate}
+            revealedPath={revealedPath}
+            registerRow={registerRow}
           />
           {selectedRootPath === file.path && creatingType && onInlineCreate && onCancelCreate && (
             <InlineCreateInput

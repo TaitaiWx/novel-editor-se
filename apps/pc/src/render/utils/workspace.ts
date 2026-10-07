@@ -85,17 +85,19 @@ export function stripStoryFileExtension(name: string): string {
 }
 
 export function isDraftLikeStoryName(name: string): boolean {
-  return /(draft|sample|test|outline|note|草稿|样稿|测试|片段|提纲|灵感)/i.test(name);
+  return /(draft|sample|test|outline|note|\u8349\u7a3f|\u6837\u7a3f|\u6d4b\u8bd5|\u7247\u6bb5|\u63d0\u7eb2|\u7075\u611f)/i.test(
+    name
+  );
 }
 
 export function isChapterLikeStoryName(name: string): boolean {
-  return /(^第[一二两三四五六七八九十百千万零〇\d]+[章幕节回篇集])|(^chapter\s*\d+)|(^scene\s*\d+)/i.test(
+  return /(^\u7b2c[\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+[\u7ae0\u5e55\u8282\u56de\u7bc7\u96c6])|(^chapter\s*\d+)|(^scene\s*\d+)/i.test(
     stripStoryFileExtension(name)
   );
 }
 
 export function isVolumeLikeStoryName(name: string): boolean {
-  return /(^第[一二两三四五六七八九十百千万零〇\d]+卷)|(^volume\s*\d+)|(^part\s*\d+)|(^act\s*\d+)|(^卷[\s_-]?\d+)/i.test(
+  return /(^\u7b2c[\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007\d]+\u5377)|(^volume\s*\d+)|(^part\s*\d+)|(^act\s*\d+)|(^\u5377[\s_-]?\d+)/i.test(
     stripStoryFileExtension(name)
   );
 }
@@ -105,14 +107,14 @@ function extractStoryOrder(name: string, type: 'volume' | 'chapter'): number | n
   const patterns =
     type === 'volume'
       ? [
-          /^第([\d一二两三四五六七八九十百千万零〇]+)卷/i,
+          /^\u7b2c([\d\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007]+)\u5377/i,
           /^volume\s*(\d+)/i,
           /^part\s*(\d+)/i,
           /^act\s*(\d+)/i,
-          /^卷[\s_-]?(\d+)/i,
+          /^\u5377[\s_-]?(\d+)/i,
         ]
       : [
-          /^第([\d一二两三四五六七八九十百千万零〇]+)[章幕节回篇集]/i,
+          /^\u7b2c([\d\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u96f6\u3007]+)[\u7ae0\u5e55\u8282\u56de\u7bc7\u96c6]/i,
           /^chapter\s*(\d+)/i,
           /^scene\s*(\d+)/i,
         ];

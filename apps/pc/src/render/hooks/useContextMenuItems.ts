@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { referenceItemFor, requestOpenReference } from '@/render/utils/referencePane';
 import { isStoryFilePath } from '@/render/utils/workspace';
+import { exportChoicesFor, exportMediaWithToast } from '@/render/utils/mediaExport';
 import type { WorkspaceEntityActions } from './useWorkspaceEntityActions';
 import type { WorkspaceState } from './state/useWorkspaceState';
 import type { EntitiesState } from './state/useEntitiesState';
@@ -36,6 +37,7 @@ export type UseContextMenuItemsContext = Pick<
   Pick<WorkspaceState, 'folderPath'> &
   Pick<EntitiesState, 'workspaceCharacters' | 'workspaceLoreEntries'> &
   Pick<UiState, 'contextMenu'> &
+  Partial<Pick<UiState, 'toast'>> &
   Pick<
     FileOperations,
     | 'handleClearMaterials'
@@ -113,6 +115,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     refreshCurrentFolder,
     workspaceCharacters,
     workspaceLoreEntries,
+    toast,
   } = ctx;
 
   const contextMenuItems = useMemo(() => {
@@ -270,6 +273,17 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
       ...(reference
         ? [
             menuItem('在编辑器旁边打开', () => requestOpenReference({ items: [reference] })),
+            // 单独导出：图片可转 PNG / JPEG / WebP，视频按原格式
+            ...exportChoicesFor(node.path).map((choice) =>
+              menuItem(
+                reference.kind === 'video' ? `导出 ${choice.label}…` : `导出为 ${choice.label}…`,
+                () =>
+                  void exportMediaWithToast(
+                    { sourcePath: node.path, format: choice.format },
+                    toast ?? null
+                  )
+              )
+            ),
             menuItem('', () => {}, { separator: true }),
           ]
         : []),
@@ -364,6 +378,7 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     refreshCurrentFolder,
     workspaceCharacters,
     workspaceLoreEntries,
+    toast,
   ]);
 
   return {

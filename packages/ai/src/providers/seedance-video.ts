@@ -18,6 +18,13 @@
  *   旧版 1.0 模型只认文本命令（`--ratio 16:9 --duration 5 …` 追加在提示词后），
  *   通过 paramStyle 切换，默认 'body'
  * - 成片地址为 24 小时有效的签名地址，fetchResult 每次重新查询
+ *
+ * 声音（文档未写明的假设，未用真实 Key 联调）：
+ * - 公开文档中 Seedance 1.5 pro 起支持顶层 `generate_audio: boolean`（生成与画面同步的
+ *   对白 / 音效，有声成片为带 AAC 音轨的 MP4）；其他模型是否接受该字段文档未写明
+ * - 只有调用方显式传入 `withAudio` 时才发送 `generate_audio`（缺省不发，沿用厂商默认），
+ *   且只在 paramStyle 为 'body' 时发送（文本命令格式没有对应写法）
+ * - 成片按原始字节下载落盘，不转码，音轨原样保留
  */
 import { AIError, classifyHttpError } from '../errors';
 import { createHttpClient, NO_RETRY } from '../http';
@@ -101,6 +108,7 @@ export function buildSeedanceSubmitBody(
   };
   if (paramStyle === 'body') {
     for (const [key, value] of params) body[key] = value;
+    if (request.withAudio !== undefined) body.generate_audio = request.withAudio;
   }
   return body;
 }

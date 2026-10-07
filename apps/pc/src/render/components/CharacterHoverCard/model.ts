@@ -48,7 +48,7 @@ const SUMMARY_MAX = 48;
 export function oneLine(text: string, max = SUMMARY_MAX): string {
   const compact = text.replace(/\s+/g, ' ').trim();
   if (!compact) return '';
-  const firstSentence = /^(.+?[。！？!?])/.exec(compact)?.[1] ?? compact;
+  const firstSentence = /^(.+?[\u3002\uff01\uff1f!?])/.exec(compact)?.[1] ?? compact;
   const chars = Array.from(firstSentence);
   return chars.length > max ? `${chars.slice(0, max).join('')}…` : firstSentence;
 }

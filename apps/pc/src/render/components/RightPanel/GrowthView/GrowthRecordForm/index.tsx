@@ -56,7 +56,11 @@ export interface GrowthRecordFormProps {
 }
 
 function parseNumber(text: string): number | null {
-  const normalized = text.trim().replace(/[＋]/g, '+').replace(/[－—]/g, '-').replace(/\s+/g, '');
+  const normalized = text
+    .trim()
+    .replace(/[\uff0b]/g, '+')
+    .replace(/[\uff0d\u2014]/g, '-')
+    .replace(/\s+/g, '');
   if (!normalized) return null;
   const value = Number(normalized);
   return Number.isFinite(value) ? value : null;

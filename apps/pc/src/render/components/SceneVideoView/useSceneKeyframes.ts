@@ -18,7 +18,7 @@ export interface UseSceneKeyframesOptions {
 }
 
 /**
- * 首帧 / 预演：保存采用的首帧与预演截图到场景目录；按画面描述 + 人物参考图 + 预演构图生成首帧候选
+ * 首帧 / 预演：保存采用的首帧、预演第一帧与预演视频到场景目录；按画面描述 + 人物参考图 + 预演构图生成首帧候选
  */
 export function useSceneKeyframes({
   state,
@@ -61,6 +61,29 @@ export function useSceneKeyframes({
     [chapter, refreshFiles, scene, workPath]
   );
 
+  /** 保存预演视频（镜头N-预演.mp4，覆盖写入），返回相对作品目录的路径 */
+  const writePrevizVideo = useCallback(
+    async (shot: Shot, data: Uint8Array, ext: 'mp4' | 'webm'): Promise<string> => {
+      const ipc = window.electron?.ipcRenderer;
+      const number = shotNumber(shot);
+      if (!ipc || !workPath || number === null) throw new Error('没有打开项目');
+      const result = await ipc.invoke('video-scene-write-media', {
+        workPath,
+        chapter,
+        scene,
+        kind: 'previz-video',
+        shotIndex: number,
+        ext,
+        data,
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      void refreshFiles();
+      notifyWorkspaceFilesChanged();
+      return result.data.relativePath;
+    },
+    [chapter, refreshFiles, scene, workPath]
+  );
+
   const generateKeyframes = useCallback(
     async (shot: Shot): Promise<string[]> => {
       const ipc = window.electron?.ipcRenderer;
@@ -79,5 +102,5 @@ export function useSceneKeyframes({
     [looks, references, state, workPath]
   );
 
-  return { writeSceneImage, generateKeyframes };
+  return { writeSceneImage, writePrevizVideo, generateKeyframes };
 }

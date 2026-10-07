@@ -2,6 +2,7 @@
  * 图集的读写动作（经 IPC）：上传本地图片、保存 AI 候选图、删除图片
  */
 import type { EntityKind, MediaItem, MediaKind } from '@novel-editor/core/entity-media';
+import { notifyWorkspaceFilesChanged } from '../../utils/workspaceFiles';
 
 let idSeq = 0;
 function newId(): string {
@@ -43,6 +44,8 @@ export async function saveImage(input: SaveImageInput): Promise<MediaItem> {
     model: input.model,
   });
   if (!result.ok) throw new Error(result.error);
+  // 资料树与参考窗格据此刷新（参考窗格会重新读取被覆盖的图片）
+  notifyWorkspaceFilesChanged();
   return {
     id: newId(),
     path: result.data.relativePath,
@@ -59,4 +62,5 @@ export async function deleteImage(workPath: string, path: string): Promise<void>
   if (!ipc) return;
   const result = await ipc.invoke('entity-image-delete', workPath, path);
   if (!result.ok) throw new Error(result.error);
+  notifyWorkspaceFilesChanged();
 }
