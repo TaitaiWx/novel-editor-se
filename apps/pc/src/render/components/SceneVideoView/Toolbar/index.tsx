@@ -14,8 +14,6 @@ export interface ToolbarProps {
   onChange: (updater: (prev: SceneVideoState) => SceneVideoState) => void;
   videoProviders: readonly AIProviderInfo[];
   servicesLoaded: boolean;
-  /** 场景里有人物带形象图时才显示「形象图作首帧」 */
-  hasAvatar: boolean;
   saveText: string;
   saveTone: 'idle' | 'ok' | 'error';
   estimateText: string;
@@ -33,7 +31,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onChange,
   videoProviders,
   servicesLoaded,
-  hasAvatar,
   saveText,
   saveTone,
   estimateText,
@@ -174,21 +171,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
               </Tooltip>
             )}
           </>
-        )}
-        {hasAvatar && (
-          <Tooltip content="把人物的形象图作为首帧参考（模型支持时），人物更稳定">
-            <label className={styles.toggle}>
-              <input
-                type="checkbox"
-                checked={state.useAvatarReference}
-                onChange={(event) => {
-                  const useAvatarReference = event.target.checked;
-                  onChange((prev) => ({ ...prev, useAvatarReference }));
-                }}
-              />
-              形象图作首帧
-            </label>
-          </Tooltip>
         )}
       </div>
 

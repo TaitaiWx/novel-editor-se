@@ -4,7 +4,7 @@ import {
   notifyWorkspaceFilesChanged,
   requestRevealInFilePanel,
 } from '@/render/utils/workspaceFiles';
-import { insertBeatIntoChapterOutline } from '../RightPanel/VolumePlanView/volumeSources';
+import { referenceItemFor, requestOpenReference } from '@/render/utils/referencePane';
 import SceneCanvas from './SceneCanvas';
 import { CharacterNode, OutputNode, SceneNode, ShotNode } from './nodes';
 import { CharacterInspector, OutputInspector, SceneInspector, ShotInspector } from './Inspector';
@@ -17,7 +17,6 @@ import {
   chosenVersionFor,
   estimateSceneCost,
   moveShot,
-  outlineLinkEntry,
   removeShot,
   replaceStoryboardShots,
   shotProgress,
@@ -30,10 +29,20 @@ import { useSceneVideoDoc, type SaveStatus } from './useSceneVideoDoc';
 import { useSceneVideoTasks } from './useSceneVideoTasks';
 import { useVideoServices } from './useVideoServices';
 import { useResolvedAvatars } from './useResolvedAvatars';
+import { useSceneKeyframes } from './useSceneKeyframes';
+import { useOutlineAutoLink } from './useOutlineAutoLink';
+import PrevizDialog from './Previz';
+import { useImageServices } from '../EntityGallery/useImageServices';
+import { dataUrlToBytes } from '../EntityGallery/mediaActions';
 import styles from './styles.module.scss';
 
 export interface SceneVideoCharacter extends CharacterBrief {
+  /** 主要形象图（相对作品目录或 data URL），小圆头像用 */
   avatar?: string;
+  /** 三视图（相对作品目录），画布人物节点显示 */
+  turnaround?: string;
+  /** 生成视频的人物参考图：三视图优先，其次主要形象图（相对作品目录） */
+  referencePaths?: string[];
 }
 
 export interface SceneVideoViewProps {
@@ -100,6 +109,8 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
   const [splitting, setSplitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [stitchProgress, setStitchProgress] = useState<number | null>(null);
+  const [previzShotId, setPrevizShotId] = useState<string | null>(null);
+  const imageServices = useImageServices();
   const [message, setMessage] = useState<Message>(null);
 
   const provider =
@@ -107,6 +118,19 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     services.videoProviders[0] ??
     null;
   const avatars = useResolvedAvatars(characters, workPath);
+  const references = useMemo(
+    () =>
+      Object.fromEntries(
+        characters
+          .filter((item) => item.referencePaths?.length)
+          .map((item) => [item.name, item.referencePaths ?? []])
+      ),
+    [characters]
+  );
+  const characterByName = useMemo(
+    () => new Map(characters.map((item) => [item.name, item])),
+    [characters]
+  );
   const sceneCharacters = useMemo(
     () => characters.map((item) => ({ name: item.name, avatar: avatars[item.name] })),
     [avatars, characters]
@@ -127,6 +151,17 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     },
     [doc.chapter, scene, workPath]
   );
+
+  // ─── 首帧 / 预演 ───────────────────────────────────────────────────
+  const { writeSceneImage, generateKeyframes } = useSceneKeyframes({
+    state,
+    characters,
+    references,
+    workPath,
+    chapter: doc.chapter,
+    scene,
+    refreshFiles,
+  });
 
   // ─── 拆分镜 ─────────────────────────────────────────────────────────
 
@@ -191,7 +226,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           shots,
           providerId: provider.id,
           model: state.model ?? provider.model,
-          avatars,
+          references,
         });
         setMessage(
           result.errors.length
@@ -205,7 +240,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         setSubmitting(false);
       }
     },
-    [avatars, provider, state, submitShots]
+    [provider, references, state, submitShots]
   );
 
   // ─── 样片（自动合成） ───────────────────────────────────────────────
@@ -268,24 +303,8 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     void stitch(signature);
   }, [files, state, stitch, stitchProgress, stitchSupported, tasks, workPath]);
 
-  // ─── 章纲（自动记录一次） ───────────────────────────────────────────
-
-  const linkingRef = useRef(false);
-  useEffect(() => {
-    const ipc = window.electron?.ipcRenderer;
-    if (!ipc || !state || state.outlineLinked || !workPath || !dbReady || linkingRef.current)
-      return;
-    const hasVideo = state.storyboard.shots.some((shot) => chosenVersionFor(state, shot, files));
-    if (!hasVideo) return;
-    linkingRef.current = true;
-    const entry = outlineLinkEntry(state, files);
-    void insertBeatIntoChapterOutline(ipc, workPath, chapterPath, entry)
-      .then(() => updateState((prev) => ({ ...prev, outlineLinked: true })))
-      .catch(() => undefined)
-      .finally(() => {
-        linkingRef.current = false;
-      });
-  }, [chapterPath, dbReady, files, state, updateState, workPath]);
+  // ─── 章纲（第一个成片出现后自动记录一次） ───────────────────────────
+  useOutlineAutoLink({ state, files, workPath, chapterPath, dbReady, updateState });
 
   // ─── 画布 ───────────────────────────────────────────────────────────
 
@@ -328,6 +347,19 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     [doc.dir]
   );
 
+  /** 在编辑器旁边的参考窗格里看成片 / 样片 */
+  const openBeside = useCallback(
+    (fileName: string) => {
+      if (!doc.dir) return;
+      const reference = referenceItemFor(
+        joinPath(doc.dir, fileName),
+        `${state?.scene ?? ''} · ${fileName}`
+      );
+      if (reference) requestOpenReference({ items: [reference] });
+    },
+    [doc.dir, state?.scene]
+  );
+
   const labelFor = useCallback((node: CanvasNode) => {
     switch (node.kind) {
       case 'character':
@@ -344,7 +376,15 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
   const renderNode = (node: CanvasNode): React.ReactNode => {
     if (!state) return null;
     if (node.kind === 'character') {
-      return <CharacterNode name={node.name ?? ''} avatar={avatarOf(node.name ?? '')} />;
+      const character = characterByName.get(node.name ?? '');
+      return (
+        <CharacterNode
+          name={node.name ?? ''}
+          avatar={avatarOf(node.name ?? '')}
+          turnaround={character?.turnaround}
+          workPath={workPath}
+        />
+      );
     }
     if (node.kind === 'scene') {
       return (
@@ -386,6 +426,8 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         canGenerate={!blocked && !submitting}
         generateBlockedReason={blocked}
         readFile={readFile}
+        keyframe={state.keyframes[entry.shot.id]}
+        workPath={workPath}
         onGenerate={() => void submit([entry.shot])}
       />
     );
@@ -397,6 +439,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
 
   const selectedNode = layout.nodes.find((node) => node.id === selectedId) ?? null;
   const closeInspector = () => setSelectedId(null);
+  const previzShot = previzShotId ? (shotById.get(previzShotId) ?? null) : null;
   let inspector: React.ReactNode = null;
   if (selectedNode?.kind === 'scene') {
     inspector = (
@@ -417,6 +460,9 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
       <CharacterInspector
         name={name}
         avatar={avatarOf(name)}
+        turnaround={characterByName.get(name)?.turnaround}
+        referenceCount={characterByName.get(name)?.referencePaths?.length ?? 0}
+        workPath={workPath}
         onClose={closeInspector}
         onRemove={() => {
           setSelectedId(null);
@@ -433,6 +479,27 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
       const shots = state.storyboard.shots;
       inspector = (
         <ShotInspector
+          keyframe={{
+            workPath,
+            keyframe: state.keyframes[entry.shot.id],
+            previz: state.previz[entry.shot.id],
+            imageReady: imageServices.providers.length > 0,
+            onOpenPreviz: () => setPrevizShotId(entry.shot.id),
+            onGenerate: () => generateKeyframes(entry.shot),
+            onAdopt: async (dataUrl) => {
+              const path = await writeSceneImage('keyframe', entry.shot, dataUrlToBytes(dataUrl));
+              updateState((prev) => ({
+                ...prev,
+                keyframes: { ...prev.keyframes, [entry.shot.id]: path },
+              }));
+            },
+            onClear: () =>
+              updateState((prev) => {
+                const keyframes = { ...prev.keyframes };
+                delete keyframes[entry.shot.id];
+                return { ...prev, keyframes };
+              }),
+          }}
           state={state}
           shot={entry.shot}
           index={entry.index}
@@ -456,6 +523,7 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
             setSelectedId(null);
             updateState((prev) => removeShot(prev, entry.shot.id));
           }}
+          onOpenBeside={openBeside}
           onCancelTask={(id) =>
             void cancelTask(id).then((error) => error && setMessage({ tone: 'error', text: error }))
           }
@@ -477,12 +545,12 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         outlineLinked={Boolean(state.outlineLinked)}
         onStitch={() => void stitch(null)}
         onRevealFile={(fileName) => revealInMaterials(fileName)}
+        onOpenBeside={openBeside}
         onClose={closeInspector}
       />
     );
   }
 
-  const hasAvatar = state.characters.some((name) => Boolean(avatarOf(name)));
   const saveText =
     doc.saveStatus === 'error' && doc.saveError
       ? `${SAVE_LABELS.error}：${doc.saveError}`
@@ -495,7 +563,6 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         onChange={updateState}
         videoProviders={services.videoProviders}
         servicesLoaded={services.loaded}
-        hasAvatar={hasAvatar}
         saveText={saveText}
         saveTone={doc.saveStatus === 'saved' ? 'ok' : doc.saveStatus === 'error' ? 'error' : 'idle'}
         estimateText={estimate.text}
@@ -538,6 +605,25 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         />
         {inspector}
       </div>
+      {previzShot && (
+        <PrevizDialog
+          shotLabel={`镜头 ${previzShot.index + 1}`}
+          shotSize={previzShot.shot.shotSize}
+          characters={
+            previzShot.shot.characters?.length ? previzShot.shot.characters : state.characters
+          }
+          aspectRatio={state.aspectRatio}
+          onSave={async (png) => {
+            const path = await writeSceneImage('previz', previzShot.shot, png);
+            updateState((prev) => ({
+              ...prev,
+              previz: { ...prev.previz, [previzShot.shot.id]: path },
+            }));
+            setMessage({ tone: 'success', text: '预演截图已保存，生成首帧时会按它的构图' });
+          }}
+          onClose={() => setPrevizShotId(null)}
+        />
+      )}
     </div>
   );
 };

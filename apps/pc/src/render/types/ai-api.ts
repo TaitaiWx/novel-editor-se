@@ -97,4 +97,9 @@ export interface AIInvokeOverloads {
     channel: 'video-scene-write-animatic',
     payload: VideoSceneAnimaticPayload
   ): Promise<AIIpcResult<{ fileName: string; path: string }>>;
+  /** 首帧（采用的候选）/ 预演截图：保存到场景目录，返回相对作品目录的路径 */
+  invoke(
+    channel: 'video-scene-write-image',
+    payload: VideoSceneRef & { kind: 'keyframe' | 'previz'; shotIndex: number; data: Uint8Array }
+  ): Promise<AIIpcResult<{ fileName: string; relativePath: string }>>;
 }

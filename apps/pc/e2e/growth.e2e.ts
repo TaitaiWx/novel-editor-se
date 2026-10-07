@@ -12,6 +12,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   GROWTH_HELP,
+  openCharacterOverview,
   GROWTH_SECTION,
   GROWTH_TITLE,
   openCharacterGrowth,
@@ -78,7 +79,7 @@ describe('成长档案：首次使用', () => {
     );
 
     // 首次使用：文件面板「成长档案」分区打开总览标签，给出用途说明与「开始使用」
-    await page.click('[aria-label="打开成长档案总览"]');
+    await openCharacterOverview(page, '成长');
     await page.waitForTarget({ text: '开始使用', within: GROWTH_WORKSPACE, exact: true });
     await captureForReview(page, 'growth-v2-setup');
     await page.click({ text: '开始使用', within: GROWTH_WORKSPACE, exact: true });
@@ -87,7 +88,7 @@ describe('成长档案：首次使用', () => {
     });
 
     // 总览空状态：新建成长卡 / 查看使用说明
-    await page.click('[aria-label="打开成长档案总览"]');
+    await openCharacterOverview(page, '成长');
     await page.waitForTarget({ text: '还没有成长卡', within: GROWTH_WORKSPACE, exact: true });
     await captureForReview(page, 'growth-v2-overview-empty');
     await page.click({ text: '查看使用说明', within: GROWTH_WORKSPACE, exact: true });
@@ -239,7 +240,7 @@ describe('成长档案：首次使用', () => {
     expect(await page.exists(`${SEL.workspaceTree} section[aria-label="成长档案"]`)).toBe(false);
 
     // 新建成长卡：从成长总览
-    await page.click('[aria-label="打开成长档案总览"]');
+    await openCharacterOverview(page, '成长');
     await page.click({ text: '+ 新建成长卡', within: GROWTH_WORKSPACE, exact: true });
     await answerChainedPrompt(page, '新建成长卡', '白芷');
     await page.waitForTarget({ text: '成长 · 白芷', exact: true });
@@ -297,8 +298,7 @@ describe('成长档案：首次使用', () => {
     await captureForReview(page, 'character-growth-tab');
 
     // 总览：卡片网格 + 提醒圆点
-    await page.click('[aria-label="打开成长档案总览"]');
-    await page.waitForTarget({ text: '成长档案', within: '[class*="tabBar"]', exact: true });
+    await openCharacterOverview(page, '成长');
     await page.waitForTarget('[aria-label="打开 白芷 的成长卡"]');
     await page.waitForTarget('[aria-label="打开 林舟 的成长卡"]');
     await captureForReview(page, 'growth-v2-overview');
@@ -352,8 +352,8 @@ describe('成长档案：首次使用', () => {
     await page.waitForTarget('[data-testid="entity-gallery"]');
     await page.waitForTarget({ text: '本地上传', within: '[data-testid="entity-gallery"]' });
     await page.waitForTarget({
-      text: '建议先生成一张「三视图」',
-      within: '[data-testid="entity-gallery"]',
+      text: '点击上传图片，或把图片拖到这里',
+      within: '[data-testid="entity-gallery-dropzone"]',
     });
     await captureForReview(page, 'character-gallery-empty');
 

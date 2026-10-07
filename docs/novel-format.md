@@ -1,6 +1,6 @@
 # 小说文档格式设计：Markdown + 指令（Novel Markdown）
 
-> 状态：设计稿，只描述格式、解析 / 渲染 / 性能策略、迁移与导出，不含实现。
+> 状态：第一期已实现（front-matter、`:::scene` 场景容器、`::video` 视频卡片、行内 `:char` 统计口径、`ne lint`；代码在 core `novel-format.ts` 与 `TextEditor/live-preview/novel-directives.ts`）。本文其余部分（人物链接、导出转换、增量解析等）仍是设计稿。
 > 相关：`docs/roadmap-ai-creative.md`（人物悬停卡片、场景视频）、`packages/basic-algorithm/src/outline/extract-acts.ts`（现有「第X幕 / 第X场」识别）、`apps/pc/src/render/components/TextEditor/live-preview/`（现有 Markdown 实时渲染）。
 
 ## 0. 结论

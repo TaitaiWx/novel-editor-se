@@ -120,7 +120,7 @@ describe('FilePanel', () => {
     expect(screen.queryByText('林舟')).toBeNull();
   });
 
-  it('角色与成长档案合为一体：人物行带等级徽章；只有成长卡的条目单独列出；头部有成长总览', () => {
+  it('角色与成长档案合为一体：人物行带等级徽章；只有成长卡的条目单独列出；头部是人物总览', () => {
     const onOpenGrowth = vi.fn();
     const sheet = (name: string, level: number) => ({
       name,
@@ -145,7 +145,8 @@ describe('FilePanel', () => {
     expect(within(section).getByText('只有成长档案')).toBeTruthy();
     fireEvent.click(within(section).getByText('沈砚'));
     expect(onOpenGrowth).toHaveBeenCalledWith('沈砚');
-    fireEvent.click(within(section).getByLabelText('打开成长档案总览'));
+    // 头部是人物总览（人物维度）；没有 onOpenCharacters 时回退为成长总览
+    fireEvent.click(within(section).getByLabelText('打开人物总览'));
     expect(onOpenGrowth).toHaveBeenLastCalledWith(null);
     // 新建人物
     fireEvent.click(within(section).getByLabelText('新建人物'));
@@ -153,9 +154,11 @@ describe('FilePanel', () => {
     unmount();
 
     // 未提供 onOpenGrowth：没有成长相关入口
-    renderPanel();
-    expect(screen.queryByLabelText('打开成长档案总览')).toBeNull();
+    const onOpenCharacters = vi.fn();
+    renderPanel({ onOpenCharacters });
     expect(screen.queryByText('只有成长档案')).toBeNull();
+    fireEvent.click(screen.getByLabelText('打开人物总览'));
+    expect(onOpenCharacters).toHaveBeenCalled();
   });
 
   it('人物与设定行显示封面头像（图集中的形象图 / 概念图），没有图时显示首字', async () => {

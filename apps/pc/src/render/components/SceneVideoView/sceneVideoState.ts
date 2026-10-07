@@ -5,6 +5,7 @@
  * 镜头编号：镜头 id 固定为 shot-<N>，N 只增不减（nextShotNumber），成片文件名 镜头N-vX.mp4 用的就是 N，
  * 因此作者调整顺序、删除镜头、重新生成分镜后，已生成的成片仍然对应原来的镜头，不会串号。
  */
+import { isSafeMediaPath } from '@novel-editor/core/entity-media';
 import {
   ASPECT_RATIOS,
   STORYBOARD_MAX_SHOTS,
@@ -52,6 +53,10 @@ export interface SceneVideoState {
   chosenVersions: Record<string, string>;
   /** 画布上作者拖动过的节点位置（未拖动的节点自动排布） */
   canvas: SceneCanvasState;
+  /** 镜头 id → 采用的首帧图（相对作品目录）；生成视频时作为首帧 */
+  keyframes: Record<string, string>;
+  /** 镜头 id → 预演截图（3D 摆拍，相对作品目录）；生成首帧时作为构图参考 */
+  previz: Record<string, string>;
   /** 最近一次自动合成样片时各镜头选用的版本签名（未变化时不重复合成） */
   animaticSignature?: string;
   /** 已自动在本章章纲里记录这一场的视频（只记录一次） */
@@ -96,8 +101,22 @@ export function createSceneVideoState(input: CreateSceneStateInput, now: Date): 
     selectedShotIds: [],
     chosenVersions: {},
     canvas: { positions: {} },
+    keyframes: {},
+    previz: {},
     updatedAt: now.toISOString(),
   };
+}
+
+/** 镜头 id → 相对路径的映射：只保留存在的镜头与安全的相对路径 */
+function parseShotImageMap(raw: unknown, ids: ReadonlySet<string>): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!isRecord(raw)) return result;
+  for (const [id, value] of Object.entries(raw)) {
+    if (!ids.has(id) || typeof value !== 'string') continue;
+    const path = value.trim();
+    if (isSafeMediaPath(path)) result[id] = path;
+  }
+  return result;
 }
 
 const CANVAS_COORD_LIMIT = 100_000;
@@ -217,6 +236,8 @@ export function parseSceneVideoState(raw: unknown): SceneVideoState | null {
       : [],
     chosenVersions: chosen,
     canvas: parseCanvasState(raw.canvas),
+    keyframes: parseShotImageMap(raw.keyframes, ids),
+    previz: parseShotImageMap(raw.previz, ids),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
   if (typeof raw.model === 'string' && raw.model) state.model = raw.model;
@@ -237,6 +258,8 @@ export function replaceStoryboardShots(state: SceneVideoState, shots: Shot[]): S
   return {
     ...state,
     canvas: { ...state.canvas, positions },
+    keyframes: {},
+    previz: {},
     storyboard: { ...state.storyboard, shots: renumbered.shots },
     nextShotNumber: renumbered.next,
     selectedShotIds: renumbered.shots.map((shot) => shot.id),
@@ -266,9 +289,15 @@ export function removeShot(state: SceneVideoState, id: string): SceneVideoState 
   delete chosen[id];
   const positions = { ...state.canvas.positions };
   delete positions[id];
+  const keyframes = { ...state.keyframes };
+  delete keyframes[id];
+  const previz = { ...state.previz };
+  delete previz[id];
   return {
     ...state,
     canvas: { ...state.canvas, positions },
+    keyframes,
+    previz,
     storyboard: {
       ...state.storyboard,
       shots: state.storyboard.shots.filter((shot) => shot.id !== id),

@@ -5,6 +5,13 @@
   background-color: #1e1e1e;
   min-width: 0;
 
+  .contentRow {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+  }
+
   .contentPanelContent {
     flex: 1;
     overflow: hidden;

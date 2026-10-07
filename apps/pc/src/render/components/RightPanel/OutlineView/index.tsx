@@ -21,6 +21,7 @@ import { useOutlineVersionCenter } from './useOutlineVersionCenter';
 import { OutlineVersionsPanel } from './OutlineVersionsPanel';
 import { OutlineAiPresetPanel } from './OutlineAiPresetPanel';
 import OutlineToolbar from './OutlineToolbar';
+import PlanGuide, { OUTLINE_GUIDE } from '../PlanGuide';
 import PlanVariantPicker from '../PlanVariants';
 import type { PersistedOutlineNodeInput } from '@/render/types/electron-api';
 import type { OutlineAiStyle } from '../outline-import';
@@ -375,8 +376,13 @@ export const OutlineView: React.FC<{
                 ? `可为「${scopeLabel}」导入、生成或重建独立章纲`
                 : `可为「${scopeLabel}」导入、生成或重建独立${outlineScopeText}`}
             </span>
-            <div style={{ marginTop: 10 }}>{toolbar}</div>
-            {variantPicker}
+            <div className={styles.outlineDivider} role="separator" />
+            <div className={styles.outlineToolbarRow}>
+              <PlanGuide guide={OUTLINE_GUIDE} label="章纲" />
+              {toolbar}
+              {variantPicker}
+            </div>
+            <div className={styles.outlineDivider} role="separator" />
             {showAiPresetPanel && aiConfig.ready && renderAiPresetPanel()}
             {statusMessage && <div className={styles.outlineImportStatus}>{statusMessage}</div>}
             {versions.length > 0 && renderVersions()}
@@ -443,11 +449,21 @@ export const OutlineView: React.FC<{
             </button>
           </div>
         )}
-        {isOutlineMode && toolbar}
-        {isOutlineMode && variantPicker}
-        {isOutlineMode && showAiPresetPanel && aiConfig.ready && renderAiPresetPanel()}
+        {isOutlineMode && (
+          <>
+            <div className={styles.outlineDivider} role="separator" />
+            <div className={styles.outlineToolbarRow}>
+              <PlanGuide guide={OUTLINE_GUIDE} label="章纲" />
+              {toolbar}
+              {variantPicker}
+              {showAiPresetPanel && aiConfig.ready && renderAiPresetPanel()}
+            </div>
+            <div className={styles.outlineDivider} role="separator" />
+          </>
+        )}
         {statusMessage && <div className={styles.outlineImportStatus}>{statusMessage}</div>}
         {isOutlineMode && renderVersions()}
+        {isOutlineMode && <div className={styles.outlineDivider} role="separator" />}
         {outlineEntries.map((entry, i) => (
           <OutlineEntryItem
             key={entry.cacheKey}

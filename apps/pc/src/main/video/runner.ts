@@ -10,6 +10,7 @@
 import { randomUUID } from 'crypto';
 import path from 'path';
 import { AIError, toAIError, type VideoProvider } from '@novel-editor/ai';
+import { loadReferenceImages } from '../media-files';
 import {
   buildPromptRecord,
   checkVideoBudget,
@@ -54,6 +55,8 @@ export interface VideoRunnerDeps {
   now?(): number;
   createId?(): string;
   log?(message: string, error?: unknown): void;
+  /** 读取作品内的图片为 data URL（首帧 / 人物参考图；测试注入，默认 media-files.loadReferenceImages） */
+  loadImages?(workPath: string, paths: unknown, limit?: number): Promise<string[]>;
   /** 定时器（测试注入） */
   setTimer?(callback: () => void, ms: number): unknown;
   clearTimer?(handle: unknown): void;
@@ -71,6 +74,9 @@ export interface VideoSubmitInput {
   aspectRatio?: string;
   resolution?: string;
   firstFrameImage?: string;
+  /** 作品内的首帧图 / 人物参考图（相对作品目录），提交时读取 */
+  firstFramePath?: string;
+  referencePaths?: string[];
 }
 
 const MIN_WAKE_MS = 500;
@@ -195,6 +201,15 @@ export class VideoTaskRunner {
     try {
       const provider = this.deps.getProvider(task.providerId);
       const params = task.params;
+      // 作品内的首帧图 / 人物参考图只在提交时读取（任务表只存相对路径，不存大段 base64）
+      const loadImages = this.deps.loadImages ?? loadReferenceImages;
+      const [firstFrameFromPath] =
+        typeof params.firstFramePath === 'string'
+          ? await loadImages(task.workPath, [params.firstFramePath], 1)
+          : [];
+      const referenceImages = Array.isArray(params.referencePaths)
+        ? await loadImages(task.workPath, params.referencePaths)
+        : [];
       const { remoteTaskId } = await provider.submitTask({
         prompt: task.prompt,
         model: task.model,
@@ -202,7 +217,9 @@ export class VideoTaskRunner {
         aspectRatio: typeof params.aspectRatio === 'string' ? params.aspectRatio : undefined,
         resolution: typeof params.resolution === 'string' ? params.resolution : undefined,
         firstFrameImage:
-          typeof params.firstFrameImage === 'string' ? params.firstFrameImage : undefined,
+          firstFrameFromPath ??
+          (typeof params.firstFrameImage === 'string' ? params.firstFrameImage : undefined),
+        ...(referenceImages.length ? { referenceImages } : {}),
       });
       this.apply(task, { type: 'submitted', remoteTaskId });
     } catch (error) {
@@ -344,6 +361,8 @@ export class VideoTaskRunner {
     if (input.aspectRatio) params.aspectRatio = input.aspectRatio;
     if (input.resolution) params.resolution = input.resolution;
     if (input.firstFrameImage) params.firstFrameImage = input.firstFrameImage;
+    if (input.firstFramePath) params.firstFramePath = input.firstFramePath;
+    if (input.referencePaths?.length) params.referencePaths = input.referencePaths;
     const task = createVideoTask(
       {
         id: this.deps.createId?.() ?? randomUUID(),

@@ -13,6 +13,7 @@ import { growthWorldCommands } from './growth-world';
 import { chapterCommands, novelCommands } from './novel';
 import { projectCommands } from './project';
 import { statsCommands } from './stats';
+import { lintCommands } from './lint';
 import { videoCommands } from './video';
 
 export const commands: CommandSpec[] = [];
@@ -29,6 +30,7 @@ commands.push(
   ...novelCommands,
   ...chapterCommands,
   ...statsCommands,
+  ...lintCommands,
   ...[...growthCommands, ...growthWorldCommands].map(withNovelOption),
   ...aiCommands,
   ...videoCommands,

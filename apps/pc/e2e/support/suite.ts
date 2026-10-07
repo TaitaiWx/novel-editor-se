@@ -96,6 +96,22 @@ export async function openCharacterGrowth(page: Page, name: string): Promise<voi
   await page.waitForTarget({ text: name, within: GROWTH_TITLE, exact: true });
 }
 
+export const CHARACTER_OVERVIEW = '[data-testid="character-overview"]';
+/** 文件面板「角色」头部的「人物总览」：人物维度（人物 / 成长 / 关系），切到指定分页 */
+export async function openCharacterOverview(
+  page: Page,
+  tab: '人物' | '成长' | '关系' = '人物'
+): Promise<void> {
+  await page.click('[aria-label="打开人物总览"]');
+  await page.waitForTarget(CHARACTER_OVERVIEW);
+  await page.click({
+    text: tab,
+    within: `${CHARACTER_OVERVIEW} [role="tablist"]`,
+    exact: true,
+  });
+  await page.waitForTarget(`${CHARACTER_OVERVIEW} [role="tabpanel"][aria-label="${tab}"]`);
+}
+
 /**
  * 截图供人工检查样式：设置 NOVEL_EDITOR_E2E_SCREENSHOT_DIR 时额外复制一份到该目录
  * （默认只写入 e2e/.artifacts/）

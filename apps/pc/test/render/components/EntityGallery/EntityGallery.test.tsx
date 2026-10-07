@@ -90,39 +90,97 @@ afterEach(() => {
 });
 
 describe('EntityGallery（人物 / 设定图集）', () => {
-  it('空图集引导先生成三视图；本地上传多张：按所选类型保存，第一张自动成为封面', async () => {
+  it('空图集：点击即上传（可多选），都存为形象图，第一张自动成为主要形象图', async () => {
     const { mock, onChange } = setup();
-    expect(screen.getByText(/建议先生成一张「三视图」/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('上传为'), { target: { value: 'outfit' } });
+    expect(screen.queryByLabelText('上传为')).toBeNull();
+    const dropzone = screen.getByTestId('entity-gallery-dropzone');
+    expect(dropzone.textContent).toContain('点击上传图片，或把图片拖到这里');
+    const input = screen.getByTestId('entity-gallery-input') as HTMLInputElement;
+    const clicked = vi.spyOn(input, 'click');
+    fireEvent.click(dropzone);
+    expect(clicked).toHaveBeenCalled();
     const files = [
       new File([new Uint8Array([1])], 'a.png', { type: 'image/png' }),
       new File([new Uint8Array([2])], 'b.png', { type: 'image/png' }),
     ];
-    fireEvent.change(screen.getByTestId('entity-gallery-input'), { target: { files } });
+    fireEvent.change(input, { target: { files } });
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     const saves = mock.invoke.mock.calls.filter(([channel]) => channel === 'entity-image-save');
     expect(saves).toHaveLength(2);
     expect(saves[0][1]).toBe('/w');
     expect(saves[0][2]).toMatchObject({ entity: 'character', name: '林舟' });
     const change = onChange.mock.calls[0][0] as { media: MediaItem[]; cover: string };
-    expect(change.media.map((entry) => entry.kind)).toEqual(['outfit', 'outfit']);
+    expect(change.media.map((entry) => entry.kind)).toEqual(['portrait', 'portrait']);
     expect(change.cover).toBe(change.media[0].path);
   });
 
-  it('AI 生成：类型 + 画风 + 补一句 → 4 张候选（带参考图）→ 选 2 张保存（含提示词）', async () => {
+  it('拖入图片上传，非图片文件被忽略', async () => {
+    const { mock, onChange } = setup();
+    const gallery = screen.getByTestId('entity-gallery');
+    const files = [
+      new File([new Uint8Array([1])], 'a.png', { type: 'image/png' }),
+      new File(['x'], 'note.txt', { type: 'text/plain' }),
+    ];
+    fireEvent.drop(gallery, { dataTransfer: { files, types: ['Files'] } });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const saves = mock.invoke.mock.calls.filter(([channel]) => channel === 'entity-image-save');
+    expect(saves).toHaveLength(1);
+  });
+
+  it('右键菜单：设为三视图 / 主要形象图、在编辑器旁边打开', async () => {
+    const existing = [item('p', 'portrait'), item('q', 'portrait')];
+    const { onChange } = setup({ items: existing, cover: existing[0].path });
+    expect(screen.getByText('主要形象图')).toBeTruthy();
+    const tiles = screen.getAllByRole('listitem');
+    fireEvent.contextMenu(tiles[1]);
+    const menu = screen.getByRole('menu');
+    // 已经是形象图：该项不可用，点击不改动
+    fireEvent.click(within(menu).getByText('设为形象图'));
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.contextMenu(screen.getAllByRole('listitem')[1]);
+    fireEvent.click(within(screen.getByRole('menu')).getByText('设为三视图'));
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith({
+        media: [existing[0], { ...existing[1], kind: 'turnaround' }],
+        cover: existing[0].path,
+      })
+    );
+    fireEvent.contextMenu(screen.getAllByRole('listitem')[1]);
+    fireEvent.click(within(screen.getByRole('menu')).getByText('设为主要形象图'));
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith({ media: existing, cover: existing[1].path })
+    );
+    const opened = vi.fn();
+    window.addEventListener('novel-editor:open-reference', opened);
+    fireEvent.contextMenu(screen.getAllByRole('listitem')[0]);
+    fireEvent.click(within(screen.getByRole('menu')).getByText('在编辑器旁边打开'));
+    expect(opened).toHaveBeenCalledTimes(1);
+    const detail = (opened.mock.calls[0][0] as CustomEvent).detail as {
+      items: Array<{ path: string; kind: string }>;
+      index: number;
+    };
+    expect(detail.items.map((entry) => entry.path)).toEqual([
+      '/w/资料/图集/人物/林舟/p.png',
+      '/w/资料/图集/人物/林舟/q.png',
+    ]);
+    expect(detail.index).toBe(0);
+    window.removeEventListener('novel-editor:open-reference', opened);
+  });
+
+  it('AI 生成：三视图 + 画风 + 补一句 → 4 张候选（带参考图）→ 选 2 张保存（含提示词）', async () => {
     const existing = [item('t', 'turnaround'), item('p', 'portrait')];
     const { mock, onChange, buildPrompt } = setup({ items: existing, cover: existing[1].path });
     const aiButton = await screen.findByRole('button', { name: /AI 生成/ });
     await waitFor(() => expect((aiButton as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(aiButton);
     const panel = await screen.findByRole('region', { name: 'AI 生成图片' });
-    fireEvent.click(within(panel).getByRole('radio', { name: '服装' }));
+    fireEvent.click(within(panel).getByRole('radio', { name: '三视图' }));
     fireEvent.change(within(panel).getByLabelText('画风'), { target: { value: '水墨' } });
     fireEvent.change(within(panel).getByLabelText('补充一句（可不填）'), {
       target: { value: '雪夜' },
     });
     expect(within(panel).getByText(/带 2 张参考图保持一致/)).toBeTruthy();
-    fireEvent.click(within(panel).getByRole('button', { name: '生成 4 张服装' }));
+    fireEvent.click(within(panel).getByRole('button', { name: '生成 4 张三视图' }));
     const listbox = await within(panel).findByRole('listbox', { name: '候选图' });
     const candidates = within(listbox).getAllByRole('option');
     expect(candidates).toHaveLength(3);
@@ -131,8 +189,8 @@ describe('EntityGallery（人物 / 设定图集）', () => {
     )?.[1];
     expect(request).toMatchObject({
       workPath: '/w',
-      prompt: '水墨|outfit|林舟|雪夜',
-      aspectRatio: '3:4',
+      prompt: '水墨|turnaround|林舟|雪夜',
+      aspectRatio: '16:9',
       count: 4,
       references: [existing[0].path, existing[1].path],
     });
@@ -145,26 +203,28 @@ describe('EntityGallery（人物 / 设定图集）', () => {
     const saves = mock.invoke.mock.calls.filter(([channel]) => channel === 'entity-image-save');
     expect(saves).toHaveLength(2);
     expect(saves[0][2]).toMatchObject({
-      prompt: '水墨|outfit|林舟|雪夜',
+      prompt: '水墨|turnaround|林舟|雪夜',
       providerId: 'seedream-image',
       model: 'seedream-test',
     });
     const change = onChange.mock.calls[0][0] as { media: MediaItem[]; cover: string };
     expect(
-      change.media.slice(0, 2).every((entry) => entry.kind === 'outfit' && entry.source === 'ai')
+      change.media
+        .slice(0, 2)
+        .every((entry) => entry.kind === 'turnaround' && entry.source === 'ai')
     ).toBe(true);
     // 已有封面保持不变
     expect(change.cover).toBe(existing[1].path);
     await waitFor(() => expect(screen.queryByRole('region', { name: 'AI 生成图片' })).toBeNull());
   });
 
-  it('设为封面、删除（同时删除文件）、查看大图；分组显示', async () => {
+  it('设为主要形象图、删除（同时删除文件）、查看大图；旧类型归入形象图分组', async () => {
     const existing = [item('p', 'portrait'), item('o', 'outfit')];
     const { mock, onChange } = setup({ items: existing, cover: existing[0].path });
     expect(screen.getByRole('heading', { name: /形象图/ })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /服装/ })).toBeTruthy();
-    expect(screen.getByText('封面')).toBeTruthy();
-    fireEvent.click(screen.getAllByLabelText('设为封面')[0]);
+    expect(screen.queryByRole('heading', { name: /服装/ })).toBeNull();
+    expect(screen.getByText('主要形象图')).toBeTruthy();
+    fireEvent.click(screen.getAllByLabelText('设为主要形象图')[0]);
     await waitFor(() =>
       expect(onChange).toHaveBeenLastCalledWith({ media: existing, cover: existing[1].path })
     );

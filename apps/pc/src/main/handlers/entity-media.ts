@@ -12,7 +12,7 @@
  */
 import { ipcMain } from 'electron';
 import { createHash } from 'crypto';
-import { mkdir, readFile, realpath, rename, stat, unlink, writeFile } from 'fs/promises';
+import { mkdir, rename, unlink, writeFile } from 'fs/promises';
 import path from 'path';
 import {
   ENTITY_MEDIA_ROOT,
@@ -24,44 +24,21 @@ import { toAIError, type SerializedAIError } from '@novel-editor/ai';
 import { getAIService } from '../ai/runtime';
 import { resolveInsideWork } from '../video/download';
 import { assertWorkDir, detectImageExtension, sanitizeAvatarBaseName } from './character-avatar';
+import {
+  MAX_ENTITY_IMAGE_BYTES,
+  MAX_REFERENCE_IMAGES,
+  MIME_BY_EXT,
+  loadReferenceImages,
+  resolveExistingInsideWork,
+} from '../media-files';
+
+export { loadReferenceImages, resolveExistingInsideWork };
 import { getWorkspaceRootForSender } from './session';
 
-export const MAX_ENTITY_IMAGE_BYTES = 10 * 1024 * 1024;
-export const MAX_REFERENCE_IMAGES = 4;
+export { MAX_ENTITY_IMAGE_BYTES, MAX_REFERENCE_IMAGES };
 const MAX_PROMPT_CHARS = 2000;
 
-const MIME_BY_EXT: Record<string, string> = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-};
-
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
-
-function isInside(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-/**
- * 读取 / 删除用：作品内已存在的文件（不创建任何目录）。按 realpath 校验，
- * 文件或任一级目录是指向作品目录之外的符号链接时拒绝；文件不存在时返回 null
- */
-export async function resolveExistingInsideWork(
-  workPath: string,
-  relativeFile: string
-): Promise<string | null> {
-  if (!isSafeMediaPath(relativeFile)) throw new Error('无效的图片路径');
-  const root = path.resolve(workPath);
-  const target = path.resolve(root, ...relativeFile.split('/'));
-  if (!isInside(root, target)) throw new Error('图片路径不在作品目录内');
-  const realTarget = await realpath(target).catch(() => null);
-  if (!realTarget) return null;
-  const realRoot = await realpath(root);
-  if (!isInside(realRoot, realTarget)) throw new Error('图片经符号链接指向了作品目录之外');
-  return realTarget;
-}
 
 function toBytes(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) return value;
@@ -168,27 +145,6 @@ export async function deleteEntityImage(
     if (error.code !== 'ENOENT') throw error;
   });
   await unlink(target.replace(/\.[^.]+$/, '.prompt.json')).catch(() => undefined);
-}
-
-/** 参考图：作品目录内的图片 → data URL（最多 4 张，每张 ≤10MB） */
-export async function loadReferenceImages(
-  workPath: string,
-  references: unknown
-): Promise<string[]> {
-  if (!Array.isArray(references)) return [];
-  const result: string[] = [];
-  for (const ref of references.slice(0, MAX_REFERENCE_IMAGES)) {
-    if (typeof ref !== 'string' || !isSafeMediaPath(ref)) continue;
-    const file = await resolveExistingInsideWork(workPath, ref).catch(() => null);
-    if (!file) continue;
-    const info = await stat(file).catch(() => null);
-    if (!info?.isFile() || info.size > MAX_ENTITY_IMAGE_BYTES) continue;
-    const bytes = new Uint8Array(await readFile(file));
-    const ext = detectImageExtension(bytes);
-    if (!ext) continue;
-    result.push(`data:${MIME_BY_EXT[ext]};base64,${Buffer.from(bytes).toString('base64')}`);
-  }
-  return result;
 }
 
 export interface ImageGeneratePayload {

@@ -93,21 +93,23 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
 
   return (
     <section className={styles.aiPanel} aria-label="AI 生成图片">
-      <div className={styles.kindRow} role="radiogroup" aria-label="图片类型">
-        {kinds.map((item) => (
-          <Tooltip key={item.kind} content={item.hint}>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={kind === item.kind}
-              className={kind === item.kind ? styles.kindActive : styles.kind}
-              onClick={() => setKind(item.kind)}
-            >
-              {item.label}
-            </button>
-          </Tooltip>
-        ))}
-      </div>
+      {kinds.length > 1 && (
+        <div className={styles.kindRow} role="radiogroup" aria-label="图片类型">
+          {kinds.map((item) => (
+            <Tooltip key={item.kind} content={item.hint}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={kind === item.kind}
+                className={kind === item.kind ? styles.kindActive : styles.kind}
+                onClick={() => setKind(item.kind)}
+              >
+                {item.label}
+              </button>
+            </Tooltip>
+          ))}
+        </div>
+      )}
       <div className={styles.aiOptions}>
         <select
           className={styles.select}

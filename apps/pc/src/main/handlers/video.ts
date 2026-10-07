@@ -1,3 +1,4 @@
+import { isSafeMediaPath } from '@novel-editor/core/entity-media';
 /**
  * 场景视频任务 IPC：video-task-submit / list / cancel / retry，video-settings-get / set
  *
@@ -93,6 +94,21 @@ export function sanitizeSubmitPayload(raw: unknown): Omit<VideoTaskSubmitPayload
   if (firstFrameImage && !/^(https?:\/\/|data:image\/)/i.test(firstFrameImage)) {
     throw badRequest('首帧图只支持 http(s) 地址或 data URL');
   }
+  const relativeImage = (value: unknown, label: string): string | undefined => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value !== 'string' || !isSafeMediaPath(value) || value.length > 500) {
+      throw badRequest(`无效的${label}路径`);
+    }
+    return value;
+  };
+  const firstFramePath = relativeImage(payload.firstFramePath, '首帧图');
+  let referencePaths: string[] | undefined;
+  if (payload.referencePaths !== undefined) {
+    if (!Array.isArray(payload.referencePaths) || payload.referencePaths.length > 4) {
+      throw badRequest('参考图最多 4 张');
+    }
+    referencePaths = payload.referencePaths.map((item) => relativeImage(item, '参考图') as string);
+  }
   return {
     providerId: text(payload.providerId, '视频服务', 64),
     model: optionalText(payload.model, '模型', 200),
@@ -104,6 +120,8 @@ export function sanitizeSubmitPayload(raw: unknown): Omit<VideoTaskSubmitPayload
     aspectRatio: optionalText(payload.aspectRatio, '画面比例', 16),
     resolution: optionalText(payload.resolution, '分辨率', 16),
     firstFrameImage,
+    ...(firstFramePath ? { firstFramePath } : {}),
+    ...(referencePaths?.length ? { referencePaths } : {}),
   };
 }
 

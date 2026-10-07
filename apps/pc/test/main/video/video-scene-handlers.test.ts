@@ -1,5 +1,5 @@
 import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,9 +15,12 @@ vi.mock('electron', () => ({
   },
 }));
 
-const { registerVideoSceneHandlers, isAllowedSceneMediaName } = await import(
-  '../../../src/main/handlers/video-scene'
-);
+const {
+  registerVideoSceneHandlers,
+  isAllowedSceneMediaName,
+  sceneImageFileName,
+  MAX_SCENE_IMAGE_BYTES,
+} = await import('../../../src/main/handlers/video-scene');
 
 // macOS 的临时目录经 /var → /private/var 符号链接，主进程返回的是真实路径
 const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'ne-video-scene-')));
@@ -149,5 +152,115 @@ describe('场景视频工作区 IPC', () => {
     expect(
       await call('video-scene-write-animatic', { ...ref, ext: 'mp4', data: new Uint8Array() })
     ).toMatchObject({ ok: false, error: { message: '样片内容为空' } });
+  });
+});
+
+describe('video-scene-write-image', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9]);
+  type WriteResult = { ok: true; data: { fileName: string; relativePath: string } };
+
+  it('文件名：首帧带时间戳，预演每个镜头固定一张', () => {
+    const date = new Date(2026, 9, 7, 9, 5, 3);
+    expect(sceneImageFileName('keyframe', 3, 'png', date)).toBe('镜头3-首帧-20261007-090503.png');
+    expect(sceneImageFileName('previz', 3, 'jpg', date)).toBe('镜头3-预演.jpg');
+  });
+
+  it('首帧图写入场景目录，返回相对作品目录的路径', async () => {
+    const result = await call<WriteResult>('video-scene-write-image', {
+      ...ref,
+      kind: 'keyframe',
+      shotIndex: 2,
+      data: PNG,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.data.fileName).toMatch(/^镜头2-首帧-\d{8}-\d{6}\.png$/);
+    expect(result.data.relativePath).toBe(`资料/视频/001-启程/第一场 清晨/${result.data.fileName}`);
+    expect(Array.from(await readFile(path.join(sceneDir, result.data.fileName)))).toEqual(
+      Array.from(PNG)
+    );
+  });
+
+  it('预演图同一镜头覆盖写入，扩展名按文件头识别', async () => {
+    const first = await call<WriteResult>('video-scene-write-image', {
+      ...ref,
+      kind: 'previz',
+      shotIndex: 1,
+      data: PNG,
+    });
+    expect(first.data).toEqual({
+      fileName: '镜头1-预演.png',
+      relativePath: '资料/视频/001-启程/第一场 清晨/镜头1-预演.png',
+    });
+    const updated = new Uint8Array([...PNG, 4, 5]);
+    await call('video-scene-write-image', { ...ref, kind: 'previz', shotIndex: 1, data: updated });
+    expect(Array.from(await readFile(path.join(sceneDir, '镜头1-预演.png')))).toEqual(
+      Array.from(updated)
+    );
+    const jpg = await call<WriteResult>('video-scene-write-image', {
+      ...ref,
+      kind: 'previz',
+      shotIndex: 1,
+      data: JPG,
+    });
+    expect(jpg.data.fileName).toBe('镜头1-预演.jpg');
+  });
+
+  it('同名文件是指向作品目录外的符号链接时只替换链接，不写穿到外部文件', async () => {
+    const outside = path.join(await mkdtemp(path.join(os.tmpdir(), 'scene-outside-')), 'x.png');
+    await writeFile(outside, 'outside');
+    await mkdir(sceneDir, { recursive: true });
+    await symlink(outside, path.join(sceneDir, '镜头5-预演.png'));
+    const result = await call<WriteResult>('video-scene-write-image', {
+      ...ref,
+      kind: 'previz',
+      shotIndex: 5,
+      data: PNG,
+    });
+    expect(result.ok).toBe(true);
+    expect(await readFile(outside, 'utf-8')).toBe('outside');
+    const written = path.join(sceneDir, '镜头5-预演.png');
+    expect((await lstat(written)).isSymbolicLink()).toBe(false);
+    expect(Array.from(await readFile(written))).toEqual(Array.from(PNG));
+  });
+
+  it('拒绝非图片内容、空内容、过大、未知类型与无效镜头序号', async () => {
+    const write = (patch: Record<string, unknown>) =>
+      call('video-scene-write-image', {
+        ...ref,
+        kind: 'keyframe',
+        shotIndex: 1,
+        data: PNG,
+        ...patch,
+      });
+    expect(await write({ data: new TextEncoder().encode('<script>') })).toMatchObject({
+      ok: false,
+      error: { message: '只支持 PNG / JPEG / GIF / WebP 图片' },
+    });
+    expect(await write({ data: new Uint8Array() })).toMatchObject({
+      ok: false,
+      error: { message: '图片内容为空' },
+    });
+    expect(await write({ data: 'iVBORw0KGgo=' })).toMatchObject({
+      ok: false,
+      error: { message: '图片内容为空' },
+    });
+    const huge = new Uint8Array(MAX_SCENE_IMAGE_BYTES + 1);
+    huge.set(PNG);
+    expect(await write({ data: huge })).toMatchObject({
+      ok: false,
+      error: { message: '图片过大' },
+    });
+    expect(await write({ kind: 'video' })).toMatchObject({
+      ok: false,
+      error: { message: '不支持的图片类型' },
+    });
+    for (const shotIndex of [0, 1.5, 1000, '1']) {
+      expect(await write({ shotIndex })).toMatchObject({
+        ok: false,
+        error: { message: '无效的镜头序号' },
+      });
+    }
+    expect(existsSync(sceneDir)).toBe(false);
   });
 });

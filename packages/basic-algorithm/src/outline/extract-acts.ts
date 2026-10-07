@@ -1,5 +1,6 @@
 import { extractOutline } from './extract-outline';
 import type { ActNode, SceneNode } from './types';
+import { isDirectiveLine, sceneContainerTitle } from './novel-markers';
 
 /**
  * 幕/场景的正则
@@ -42,11 +43,14 @@ export function extractActs(text: string): ActNode[] {
       continue;
     }
 
-    // 检测场景
+    // 检测场景：「第X场」标题，或小说格式的场景容器 :::scene{title=…}
     const sceneMatch = trimmed.match(RE_SCENE);
-    if (sceneMatch) {
+    const containerTitle = sceneMatch ? null : sceneContainerTitle(trimmed);
+    if (sceneMatch || containerTitle !== null) {
       currentScene = {
-        title: (sceneMatch[1] + ' ' + (sceneMatch[2] || '')).trim(),
+        title: sceneMatch
+          ? (sceneMatch[1] + ' ' + (sceneMatch[2] || '')).trim()
+          : (containerTitle ?? ''),
         line: lineNum,
         preview: '',
       };
@@ -63,6 +67,9 @@ export function extractActs(text: string): ActNode[] {
       }
       continue;
     }
+
+    // 其他指令行（:::、::video 等）不作为预览
+    if (isDirectiveLine(trimmed)) continue;
 
     // 为当前场景填充预览文本
     if (currentScene && !currentScene.preview && trimmed.length > 0) {

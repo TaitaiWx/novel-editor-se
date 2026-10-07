@@ -63,6 +63,32 @@ describe('text stats', () => {
     expect(stats.lines).toBe(4);
     expect(stats.paragraphs).toBe(3);
   });
+
+  it('小说格式：front-matter 与指令行不计字数，行内指令只计方括号文字', () => {
+    const marked = [
+      '---',
+      'title: 港口夜雨',
+      'pov: linzhou',
+      '---',
+      ':::scene{#s-1 title=港口 pov=林舟}',
+      '他喊:char[阿舟]{id=linzhou}。',
+      '::video[开场]{src="资料/视频/a.mp4"}',
+      ':::',
+    ].join('\n');
+    const plain = ['', '', '', '', '', '他喊阿舟。', '', ''].join('\n');
+    expect(analyzeContentStats(marked)).toEqual({ lineCount: 8, charCount: 5 });
+    expect(analyzeContentStats(marked)).toEqual(analyzeContentStats(plain));
+    const stats = computeTextStats(marked);
+    expect(stats.chars).toBe(5);
+    expect(stats.cjkChars).toBe(4);
+    expect(stats.words).toBe(0);
+    expect(stats.paragraphs).toBe(1);
+    expect(stats.lines).toBe(8);
+  });
+
+  it('正文里的「12:30」「3:2」不被当成标记', () => {
+    expect(analyzeContentStats('12:30 到港，比例 3:2')).toEqual({ lineCount: 1, charCount: 13 });
+  });
 });
 
 describe('glob', () => {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   CHARACTER_MEDIA_KINDS,
+  COVER_LABEL,
+  LORE_MEDIA_KINDS,
+  characterReferencePaths,
+  normalizeMediaKind,
+  setMediaKind,
   addMediaItems,
   buildCharacterImagePrompt,
   buildLoreFolderTree,
@@ -66,11 +71,45 @@ describe('图集', () => {
     expect(removeMediaItem(items, 'c').map((entry) => entry.id)).toEqual(['a', 'b']);
     const groups = groupMediaItems([...items, item('z', 'concept')], CHARACTER_MEDIA_KINDS);
     expect(groups.map((group) => [group.option.label, group.items.length])).toEqual([
-      ['形象图', 1],
+      ['形象图', 3],
       ['三视图', 1],
-      ['服装', 1],
-      ['其他', 1],
     ]);
+  });
+
+  it('只有「形象图 / 三视图」两类：旧类型归为形象图，设定只有「图片」', () => {
+    expect(CHARACTER_MEDIA_KINDS.map((option) => option.label)).toEqual(['形象图', '三视图']);
+    expect(LORE_MEDIA_KINDS.map((option) => option.label)).toEqual(['图片']);
+    expect(normalizeMediaKind('character', 'outfit')).toBe('portrait');
+    expect(normalizeMediaKind('character', 'turnaround')).toBe('turnaround');
+    expect(normalizeMediaKind('lore', 'portrait')).toBe('concept');
+    expect(COVER_LABEL).toEqual({ character: '主要形象图', lore: '封面' });
+  });
+
+  it('右键改类型：只改指定一张，id 不存在时原样返回', () => {
+    const items = [item('a', 'portrait'), item('b', 'portrait')];
+    const next = setMediaKind(items, 'b', 'turnaround');
+    expect(next.map((entry) => entry.kind)).toEqual(['portrait', 'turnaround']);
+    expect(items[1].kind).toBe('portrait');
+    expect(setMediaKind(items, 'x', 'turnaround')).toEqual(items);
+  });
+
+  it('视频参考图：三视图优先，再主要形象图，去重，最多 limit 张', () => {
+    const items = [
+      item('p1', 'portrait'),
+      item('t1', 'turnaround'),
+      item('p2', 'portrait'),
+      item('t2', 'turnaround'),
+    ];
+    expect(characterReferencePaths(items, items[2].path)).toEqual([
+      items[1].path,
+      items[3].path,
+      items[2].path,
+    ]);
+    expect(characterReferencePaths(items, items[1].path, 2)).toEqual([
+      items[1].path,
+      items[3].path,
+    ]);
+    expect(characterReferencePaths([], undefined)).toEqual([]);
   });
 
   it('封面：选过且仍存在 > 第一张形象图 / 概念图 > 第一张；空图集沿用旧头像', () => {

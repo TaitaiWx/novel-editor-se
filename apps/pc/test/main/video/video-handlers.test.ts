@@ -195,4 +195,45 @@ describe('参数校验', () => {
       firstFrameImage: 'data:image/png;base64,AA',
     });
   });
+
+  it('作品内首帧图 / 参考图路径：只收相对作品目录的安全路径，参考图最多 4 张', () => {
+    expect(() => sanitizeSubmitPayload({ ...payload(), firstFramePath: '../x.png' })).toThrow(
+      '无效的首帧图路径'
+    );
+    expect(() => sanitizeSubmitPayload({ ...payload(), firstFramePath: '/etc/x.png' })).toThrow(
+      '无效的首帧图路径'
+    );
+    expect(() => sanitizeSubmitPayload({ ...payload(), firstFramePath: 42 })).toThrow(
+      '无效的首帧图路径'
+    );
+    expect(() =>
+      sanitizeSubmitPayload({ ...payload(), firstFramePath: `资料/${'a'.repeat(600)}.png` })
+    ).toThrow('无效的首帧图路径');
+    expect(() =>
+      sanitizeSubmitPayload({ ...payload(), referencePaths: ['资料/a.png', '../x.png'] })
+    ).toThrow('无效的参考图路径');
+    expect(() => sanitizeSubmitPayload({ ...payload(), referencePaths: '资料/a.png' })).toThrow(
+      '参考图最多 4 张'
+    );
+    expect(() =>
+      sanitizeSubmitPayload({
+        ...payload(),
+        referencePaths: ['a.png', 'b.png', 'c.png', 'd.png', 'e.png'],
+      })
+    ).toThrow('参考图最多 4 张');
+
+    const accepted = sanitizeSubmitPayload({
+      ...payload(),
+      firstFramePath: '资料/视频/001-启程/第一场/镜头1-首帧-20261007-090000.png',
+      referencePaths: ['资料/人物头像/林舟-1.png', '资料/人物头像/苏晴-2.jpg'],
+    });
+    expect(accepted).toMatchObject({
+      firstFramePath: '资料/视频/001-启程/第一场/镜头1-首帧-20261007-090000.png',
+      referencePaths: ['资料/人物头像/林舟-1.png', '资料/人物头像/苏晴-2.jpg'],
+    });
+    // 空值不出现在结果中
+    const empty = sanitizeSubmitPayload({ ...payload(), firstFramePath: '', referencePaths: [] });
+    expect(empty).not.toHaveProperty('firstFramePath');
+    expect(empty).not.toHaveProperty('referencePaths');
+  });
 });

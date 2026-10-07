@@ -6,6 +6,7 @@ import {
   type UseContextMenuItemsContext,
 } from '@/render/hooks/useContextMenuItems';
 import type { FileNode } from '@/render/types';
+import { REFERENCE_OPEN_EVENT, type OpenReferenceDetail } from '@/render/utils/referencePane';
 
 /** 除数据字段外，其余回调一律用 vi.fn() 占位 */
 function setup(node: FileNode | null, overrides: Record<string, unknown> = {}) {
@@ -84,5 +85,30 @@ describe('useContextMenuItems', () => {
     });
     lore.items.find((item) => item.label === '重命名')?.onClick();
     expect(lore.handlers.get('handleRenameLoreNode')).toHaveBeenCalledWith(3);
+  });
+
+  it.each([
+    ['/p/资料/地图.png', '地图.png', 'image'],
+    ['/p/资料/视频/镜头1-v1.mp4', '镜头1-v1.mp4', 'video'],
+  ] as const)('图片 / 视频文件菜单第一项是「在编辑器旁边打开」（%s）', (filePath, name, kind) => {
+    const listener = vi.fn();
+    window.addEventListener(REFERENCE_OPEN_EVENT, listener);
+    const { items } = setup({ name, path: filePath, type: 'file' });
+    expect(items[0].label).toBe('在编辑器旁边打开');
+    expect(items[1].separator).toBe(true);
+    items[0].onClick();
+    expect(listener).toHaveBeenCalledTimes(1);
+    const detail = (listener.mock.calls[0][0] as CustomEvent<OpenReferenceDetail>).detail;
+    expect(detail.items).toEqual([{ path: filePath, title: name, kind }]);
+    window.removeEventListener(REFERENCE_OPEN_EVENT, listener);
+  });
+
+  it.each<FileNode>([
+    { name: '001-启程.md', path: '/p/novels/001-启程.md', type: 'file' },
+    { name: '图集.png', path: '/p/资料/图集.png', type: 'directory', children: [] },
+  ])('非媒体文件与文件夹没有「在编辑器旁边打开」（$name）', (node) => {
+    const { items } = setup(node);
+    expect(items.some((item) => item.label === '在编辑器旁边打开')).toBe(false);
+    expect(items[0].label).toBe('重命名');
   });
 });

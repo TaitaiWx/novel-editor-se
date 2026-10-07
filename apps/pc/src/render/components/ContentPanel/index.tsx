@@ -12,6 +12,7 @@ import type {
 } from '../TextEditor';
 import SettingsButton from '../SettingsButton';
 import LoadingSpinner from '../LoadingSpinner';
+import ReferencePane from '../ReferencePane';
 import styles from './styles.module.scss';
 
 const TextEditor = lazy(() => import('../TextEditor'));
@@ -333,59 +334,63 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
         />
       )}
       <Suspense fallback={contentFallback}>
-        <div className={styles.contentPanelContent}>
-          {specialContent ? (
-            <div className={styles.specialContentHost}>{specialContent}</div>
-          ) : isChangelog ? (
-            <ChangelogViewer />
-          ) : isSpreadsheet ? (
-            <SpreadsheetViewer filePath={activeTab} settingsComponent={settingsComponent} />
-          ) : isPresentation ? (
-            <PresentationViewer filePath={activeTab} settingsComponent={settingsComponent} />
-          ) : isDocument ? (
-            <DocumentViewer filePath={activeTab} settingsComponent={settingsComponent} />
-          ) : isPreviewableResource && viewMode === 'preview' ? (
-            <ResourceViewer filePath={activeTab} settingsComponent={settingsComponent} />
-          ) : isPreviewableResource && !isTextBackedPreviewResource ? (
-            <BinaryContentViewer filePath={activeTab} settingsComponent={settingsComponent} />
-          ) : (
-            <TextEditor
-              filePath={activeTab}
-              virtualContent={virtualContent}
-              reloadToken={reloadToken}
-              focusMode={focusMode}
-              wordWrap={wordWrap}
-              showLineNumbers={showLineNumbers}
-              showThousandCharMarkers={showThousandCharMarkers}
-              thousandCharMarkerStep={thousandCharMarkerStep}
-              encoding={encoding}
-              characterHighlights={characterHighlights}
-              scrollToLine={scrollToLine}
-              transientHighlightLine={transientHighlightLine}
-              replaceLineRequest={replaceLineRequest}
-              inlineDiff={inlineDiff}
-              editorViewRef={editorViewRef}
-              viewportSnapshots={viewportSnapshots}
-              onViewportSnapshotChange={onViewportSnapshotChange}
-              onContentChange={onContentChange}
-              onCursorChange={onCursorChange}
-              onSaveUntitled={onSaveUntitled}
-              onScrollProcessed={onScrollProcessed}
-              onTransientHighlightProcessed={onTransientHighlightProcessed}
-              emptyStateActions={emptyStateActions}
-              assist={editorAssist}
-              settingsComponent={
-                editorHeaderActions ? (
-                  <>
-                    {editorHeaderActions}
-                    {settingsComponent}
-                  </>
-                ) : (
-                  settingsComponent
-                )
-              }
-            />
-          )}
+        <div className={styles.contentRow}>
+          <div className={styles.contentPanelContent}>
+            {specialContent ? (
+              <div className={styles.specialContentHost}>{specialContent}</div>
+            ) : isChangelog ? (
+              <ChangelogViewer />
+            ) : isSpreadsheet ? (
+              <SpreadsheetViewer filePath={activeTab} settingsComponent={settingsComponent} />
+            ) : isPresentation ? (
+              <PresentationViewer filePath={activeTab} settingsComponent={settingsComponent} />
+            ) : isDocument ? (
+              <DocumentViewer filePath={activeTab} settingsComponent={settingsComponent} />
+            ) : isPreviewableResource && viewMode === 'preview' ? (
+              <ResourceViewer filePath={activeTab} settingsComponent={settingsComponent} />
+            ) : isPreviewableResource && !isTextBackedPreviewResource ? (
+              <BinaryContentViewer filePath={activeTab} settingsComponent={settingsComponent} />
+            ) : (
+              <TextEditor
+                filePath={activeTab}
+                virtualContent={virtualContent}
+                reloadToken={reloadToken}
+                focusMode={focusMode}
+                wordWrap={wordWrap}
+                showLineNumbers={showLineNumbers}
+                showThousandCharMarkers={showThousandCharMarkers}
+                thousandCharMarkerStep={thousandCharMarkerStep}
+                encoding={encoding}
+                characterHighlights={characterHighlights}
+                scrollToLine={scrollToLine}
+                transientHighlightLine={transientHighlightLine}
+                replaceLineRequest={replaceLineRequest}
+                inlineDiff={inlineDiff}
+                editorViewRef={editorViewRef}
+                viewportSnapshots={viewportSnapshots}
+                onViewportSnapshotChange={onViewportSnapshotChange}
+                onContentChange={onContentChange}
+                onCursorChange={onCursorChange}
+                onSaveUntitled={onSaveUntitled}
+                onScrollProcessed={onScrollProcessed}
+                onTransientHighlightProcessed={onTransientHighlightProcessed}
+                emptyStateActions={emptyStateActions}
+                assist={editorAssist}
+                settingsComponent={
+                  editorHeaderActions ? (
+                    <>
+                      {editorHeaderActions}
+                      {settingsComponent}
+                    </>
+                  ) : (
+                    settingsComponent
+                  )
+                }
+              />
+            )}
+          </div>
+          {/* 参考窗格：在编辑器旁边看图片 / 视频；专注模式下隐藏 */}
+          <ReferencePane hidden={focusMode} />
         </div>
       </Suspense>
     </div>

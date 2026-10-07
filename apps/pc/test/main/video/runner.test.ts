@@ -385,6 +385,77 @@ describe('VideoTaskRunner', () => {
     await runner.submit({ ...input, shotIndex: 2 });
     expect(timers.length).toBe(before);
   });
+
+  it('提交时读取作品内的首帧图与参考图，任务参数只存相对路径', async () => {
+    const loadImages = vi.fn(async (_work: string, paths: unknown, limit?: number) =>
+      (paths as string[]).slice(0, limit ?? 4).map((item) => `data:image/png;base64,${item}`)
+    );
+    const { runner, repo, provider } = createRunner({ deps: { loadImages } });
+    runner.start();
+    await runner.submit({
+      ...input,
+      firstFrameImage: 'https://img/legacy.png',
+      firstFramePath: '资料/首帧.png',
+      referencePaths: ['资料/人物头像/林舟.png', '资料/人物头像/苏晴.png'],
+    });
+    expect(repo.get('t1')?.params).toMatchObject({
+      firstFramePath: '资料/首帧.png',
+      referencePaths: ['资料/人物头像/林舟.png', '资料/人物头像/苏晴.png'],
+    });
+    await runner.tick();
+    expect(loadImages).toHaveBeenCalledWith(work, ['资料/首帧.png'], 1);
+    expect(loadImages).toHaveBeenCalledWith(work, [
+      '资料/人物头像/林舟.png',
+      '资料/人物头像/苏晴.png',
+    ]);
+    expect(provider.submitTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // 作品内首帧优先于旧的 data URL / 网址
+        firstFrameImage: 'data:image/png;base64,资料/首帧.png',
+        referenceImages: [
+          'data:image/png;base64,资料/人物头像/林舟.png',
+          'data:image/png;base64,资料/人物头像/苏晴.png',
+        ],
+      })
+    );
+    runner.stop();
+  });
+
+  it('首帧文件读取不到时回退到旧的首帧地址；没有参考图时不带 referenceImages', async () => {
+    const loadImages = vi.fn(async () => [] as string[]);
+    const { runner, provider } = createRunner({ deps: { loadImages } });
+    runner.start();
+    await runner.submit({
+      ...input,
+      firstFrameImage: 'https://img/legacy.png',
+      firstFramePath: '资料/missing.png',
+      referencePaths: ['资料/missing.png'],
+    });
+    await runner.tick();
+    const request = (provider.submitTask.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
+    expect(request.firstFrameImage).toBe('https://img/legacy.png');
+    expect(request).not.toHaveProperty('referenceImages');
+    runner.stop();
+  });
+
+  it('默认读取器：从作品目录读出真实图片为 data URL', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7]);
+    await mkdir(path.join(work, '资料'), { recursive: true });
+    await writeFile(path.join(work, '资料', '首帧.png'), png);
+    const { runner, provider } = createRunner();
+    runner.start();
+    await runner.submit({
+      ...input,
+      firstFramePath: '资料/首帧.png',
+      referencePaths: ['资料/首帧.png', '资料/missing.png'],
+    });
+    await runner.tick();
+    const expected = `data:image/png;base64,${png.toString('base64')}`;
+    expect(provider.submitTask).toHaveBeenCalledWith(
+      expect.objectContaining({ firstFrameImage: expected, referenceImages: [expected] })
+    );
+    runner.stop();
+  });
 });
 
 describe('落盘路径安全', () => {

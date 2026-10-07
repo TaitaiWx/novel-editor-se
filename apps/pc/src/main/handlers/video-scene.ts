@@ -1,14 +1,15 @@
 /**
- * 场景视频工作区 IPC：video-scene-load / save / read-file / write-animatic
+ * 场景视频工作区 IPC：video-scene-load / save / read-file / write-animatic / write-image
  *
  * 场景目录固定为 <作品>/资料/视频/<章>/<场景>/（@novel-editor/video 的 videoSceneLayout），
  * 渲染进程只能传入 作品目录 + 章 / 场景名称 + 文件名，主进程负责：
  * - 作品目录必须是存在的绝对路径，且位于该窗口打开的项目内（assertWorkPath）
  * - 章 / 场景名称清洗为单个路径段，路径解析后（含符号链接）不得逃出作品目录
- * - 读写的文件名只允许 分镜.json / 分镜.md / 镜头N-vX.<ext> / 样片-*.mp4|webm
+ * - 读写的文件名只允许 分镜.json / 分镜.md / 镜头N-vX.<ext> / 样片-*.mp4|webm /
+ *   镜头N-首帧-<时间>.<图片> / 镜头N-预演.png（首帧候选采用后保存；预演截图每个镜头一张，覆盖写入）
  */
 import { ipcMain } from 'electron';
-import { readdir, readFile, realpath, stat, writeFile } from 'fs/promises';
+import { readdir, readFile, realpath, rm, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import { AIError, toAIError } from '@novel-editor/ai';
 import {
@@ -24,6 +25,25 @@ import type {
   VideoSceneSaveResult,
 } from '../../shared/ai';
 import { resolveInsideWork, writeJsonFile } from '../video/download';
+import { detectImageExtension } from './character-avatar';
+
+/** 首帧 / 预演图片上限 */
+export const MAX_SCENE_IMAGE_BYTES = 15 * 1024 * 1024;
+
+/** 首帧：镜头3-首帧-20261007-153000.png；预演：镜头3-预演.png */
+export function sceneImageFileName(
+  kind: 'keyframe' | 'previz',
+  shotIndex: number,
+  ext: string,
+  date: Date
+): string {
+  if (kind === 'previz') return `镜头${shotIndex}-预演.${ext}`;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const stamp = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(
+    date.getHours()
+  )}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  return `镜头${shotIndex}-首帧-${stamp}.${ext}`;
+}
 
 /** 分镜.json 上限（作者编辑的文本，正常远小于此） */
 const MAX_STATE_BYTES = 2 * 1024 * 1024;
@@ -182,6 +202,38 @@ export function registerVideoSceneHandlers(deps: VideoSceneHandlerDeps): void {
         throw badRequest('样片保存失败（可能同名文件已存在），请稍后再试');
       }
       return { fileName, path: target };
+    })
+  );
+
+  ipcMain.handle('video-scene-write-image', (event, raw: unknown) =>
+    guard(async (): Promise<{ fileName: string; relativePath: string }> => {
+      const scene = await resolveScene(raw, deps, event?.sender?.id);
+      const payload = raw as { kind?: unknown; shotIndex?: unknown; data?: unknown };
+      if (payload.kind !== 'keyframe' && payload.kind !== 'previz') {
+        throw badRequest('不支持的图片类型');
+      }
+      const shotIndex = payload.shotIndex;
+      if (
+        typeof shotIndex !== 'number' ||
+        !Number.isInteger(shotIndex) ||
+        shotIndex < 1 ||
+        shotIndex > 999
+      ) {
+        throw badRequest('无效的镜头序号');
+      }
+      if (!(payload.data instanceof Uint8Array) || payload.data.byteLength === 0) {
+        throw badRequest('图片内容为空');
+      }
+      if (payload.data.byteLength > MAX_SCENE_IMAGE_BYTES) throw badRequest('图片过大');
+      const ext = detectImageExtension(payload.data);
+      if (!ext) throw badRequest('只支持 PNG / JPEG / GIF / WebP 图片');
+      const fileName = sceneImageFileName(payload.kind, shotIndex, ext, new Date());
+      const relativePath = `${scene.layout.dir}/${fileName}`;
+      const target = await resolveInsideWork(scene.workPath, relativePath);
+      // 预演截图同名覆盖：先删除旧文件（若是符号链接只删链接本身），避免写穿到作品目录之外
+      await rm(target, { force: true });
+      await writeFile(target, payload.data, { flag: 'wx' });
+      return { fileName, relativePath };
     })
   );
 }

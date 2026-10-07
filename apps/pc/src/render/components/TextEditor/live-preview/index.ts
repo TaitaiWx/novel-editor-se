@@ -10,6 +10,7 @@ import type { LivePreviewBuildOptions } from './build-decorations';
 import { createLivePreviewField, createViewportSync, refreshLivePreview } from './field';
 import { resolveImageSource } from './image-loader';
 import { livePreviewTheme } from './theme';
+import { novelDirectivePreview } from './novel-directives';
 
 export type { LivePreviewBuildOptions } from './build-decorations';
 
@@ -35,6 +36,8 @@ export function markdownLivePreview(options: LivePreviewBuildOptions): Extension
     field,
     createViewportSync(field),
     livePreviewTheme,
+    // 小说格式指令：场景条、视频卡片
+    novelDirectivePreview(options.filePath),
     EditorView.domEventHandlers({
       mousedown(event, view) {
         if (!(event.metaKey || event.ctrlKey) || event.button !== 0) return false;

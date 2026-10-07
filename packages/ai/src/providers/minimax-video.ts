@@ -93,6 +93,9 @@ function assertOk(base: BaseResp | undefined): void {
   if (error) throw error;
 }
 
+/** 主体参考图上限（H3 文档为最多 9 张；为控制请求体大小只带前 4 张） */
+export const MINIMAX_REFERENCE_LIMIT = 4;
+
 /** MiniMax 只支持 6 / 10 秒 */
 export function normalizeMinimaxDuration(durationSec: number | undefined): number | undefined {
   if (durationSec === undefined || !Number.isFinite(durationSec)) return undefined;
@@ -113,6 +116,12 @@ export function buildMinimaxSubmitBody(
   if (duration !== undefined) body.duration = duration;
   if (request.resolution) body.resolution = request.resolution.toUpperCase();
   if (request.firstFrameImage) body.first_frame_image = request.firstFrameImage;
+  if (request.lastFrameImage) body.last_frame_image = request.lastFrameImage;
+  // 人物参考（主体参考 / subject reference）：未用真实 Key 联调，字段名按公开文档，见 MINIMAX_REFERENCE_LIMIT
+  const references = (request.referenceImages ?? []).slice(0, MINIMAX_REFERENCE_LIMIT);
+  if (references.length > 0) {
+    body.subject_reference = [{ type: 'character', image: references }];
+  }
   return body;
 }
 

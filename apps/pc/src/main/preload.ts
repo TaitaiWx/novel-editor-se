@@ -231,6 +231,7 @@ contextBridge.exposeInMainWorld('electron', {
         'video-scene-save',
         'video-scene-read-file',
         'video-scene-write-animatic',
+        'video-scene-write-image',
       ];
       if (validChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);

@@ -133,14 +133,59 @@ afterEach(() => {
   uninstallElectronMock();
 });
 
+/** 人物总览的「关系」分页：人物编辑列表与关系网络 */
+function openRelations() {
+  fireEvent.click(screen.getByRole('tab', { name: '关系' }));
+}
+
 describe('CharactersView', () => {
-  it('无项目时显示空的人物中枢', () => {
+  it('无项目时显示空的人物总览；「关系」分页里是人物编辑与关系网络', () => {
     uninstallElectronMock();
     render(<CharactersView folderPath={null} content="" />);
-    expect(screen.getByText('人物与关系')).toBeTruthy();
+    expect(screen.getByTestId('character-overview')).toBeTruthy();
     expect(screen.getAllByText('人物 0').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('阵营 0').length).toBeGreaterThan(0);
+    openRelations();
     expect(screen.getByText(/暂无角色/)).toBeTruthy();
+  });
+
+  it('人物总览：每个人物一张卡片（设计完成度、图片数、等级、待补充提示），点击打开人物', async () => {
+    installDb({
+      rows: [
+        {
+          ...seedRows[0],
+          attributes: JSON.stringify({
+            design: { appearance: '黑发', personality: '倔强' },
+            media: [
+              { id: 'm', path: '资料/图集/人物/林舟/a.png', kind: 'turnaround', source: 'ai' },
+            ],
+          }),
+        },
+        seedRows[1],
+      ],
+    });
+    const onOpenCharacter = vi.fn();
+    render(
+      <CharactersView
+        folderPath="/novel"
+        content=""
+        growthLevels={{ 林舟: 4 }}
+        onOpenCharacter={onOpenCharacter}
+        renderGrowthOverview={() => <div data-testid="growth-overview-embed" />}
+      />
+    );
+    const lin = await screen.findByRole('button', { name: '打开人物 林舟' });
+    expect(lin.textContent).toContain('Lv.4');
+    expect(lin.textContent).toContain('设计 2/5 · 图片 1');
+    expect(lin.textContent).not.toContain('缺三视图');
+    const bai = screen.getByRole('button', { name: '打开人物 白芷' });
+    expect(bai.textContent).toContain('缺人物设计');
+    expect(bai.textContent).toContain('缺三视图');
+    expect(bai.textContent).toContain('没有成长档案');
+    fireEvent.click(lin);
+    expect(onOpenCharacter).toHaveBeenCalledWith(1);
+    expect(screen.getByText('有三视图 1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '成长' }));
+    expect(screen.getByTestId('growth-overview-embed')).toBeTruthy();
   });
 
   it('加载人物、通知 onCharactersChange、统计阵营与热度', async () => {
@@ -159,8 +204,7 @@ describe('CharactersView', () => {
         expect.arrayContaining([expect.objectContaining({ name: '林舟' })])
       )
     );
-    expect(screen.getAllByText(/^关系 \d+$/).length).toBeGreaterThan(0);
-    expect(Number(screen.getByText(/阵营 \d/).textContent?.replace(/\D/g, ''))).toBeGreaterThan(0);
+    openRelations();
     expect(screen.getByTestId('graph-heat').textContent).toContain('林舟');
   });
 
@@ -174,6 +218,7 @@ describe('CharactersView', () => {
     });
     render(<CharactersView folderPath="/novel" content="" />);
     expect((await screen.findAllByText('人物 3')).length).toBeGreaterThan(0);
+    openRelations();
     await waitFor(() => expect(screen.getByTestId('graph-relations').textContent).not.toBe('0'));
     const total = Number(screen.getByTestId('graph-relations').textContent);
     expect(screen.getByTestId('graph-stages').textContent).not.toBe('');
@@ -187,6 +232,7 @@ describe('CharactersView', () => {
     const { mock } = installDb({ rows: seedRows });
     render(<CharactersView folderPath="/novel" content="" />);
     await screen.findAllByText('人物 2');
+    openRelations();
     fireEvent.click(screen.getByRole('button', { name: '+ 添加' }));
     fireEvent.change(screen.getByPlaceholderText('角色名称'), { target: { value: '墨渊' } });
     fireEvent.change(screen.getByPlaceholderText('角色定位 (主角/配角/反派...)'), {
@@ -214,6 +260,7 @@ describe('CharactersView', () => {
     const { mock } = installDb({ rows: seedRows });
     render(<CharactersView folderPath="/novel" content="" />);
     await screen.findAllByText('人物 2');
+    openRelations();
     fireEvent.click(screen.getAllByTitle('删除角色')[0]);
     expect((await screen.findAllByText('人物 1')).length).toBeGreaterThan(0);
     expect(mock.invoke).toHaveBeenCalledWith('db-character-delete', expect.any(Number));
@@ -223,6 +270,7 @@ describe('CharactersView', () => {
     installDb({ rows: seedRows });
     render(<CharactersView folderPath="/novel" content="" />);
     await screen.findAllByText('人物 2');
+    openRelations();
     fireEvent.change(screen.getByPlaceholderText('快速筛选人物、定位、描述或别名'), {
       target: { value: '不存在的人' },
     });
@@ -233,6 +281,7 @@ describe('CharactersView', () => {
     installDb({ rows: seedRows });
     render(<CharactersView folderPath="/novel" content="   " />);
     await screen.findAllByText('人物 2');
+    openRelations();
     fireEvent.click(screen.getByRole('button', { name: 'AI 生成人物图' }));
     expect(await screen.findByText('正文为空，无法生成角色图谱')).toBeTruthy();
   });

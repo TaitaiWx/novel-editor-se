@@ -38,14 +38,15 @@ export interface CanvasViewport {
 }
 
 export const NODE_WIDTH: Record<CanvasNodeKind, number> = {
-  character: 176,
+  character: 200,
   scene: 300,
   shot: 248,
   output: 272,
 };
 
 const NODE_HEIGHT: Record<CanvasNodeKind, number> = {
-  character: 48,
+  // 标题行 + 16:9 三视图
+  character: 156,
   scene: 240,
   shot: 250,
   output: 230,

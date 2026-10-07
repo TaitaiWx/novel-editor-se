@@ -14,6 +14,7 @@ import { useCharacterTimeline } from './useCharacterTimeline';
 import { useCharacterCurrentState } from './useCharacterCurrentState';
 import { CharacterListPanel } from './CharacterListPanel';
 import { CharacterDetailWorkspace } from './CharacterDetailWorkspace';
+import { CharacterOverview } from './CharacterOverview';
 
 /** 按人物名或别名查找成长卡等级 */
 function resolveGrowthLevel(
@@ -39,6 +40,11 @@ export const CharactersView: React.FC<{
   onOpenGrowthSheet?: (characterName: string) => void;
   /** 人物详情「成长档案」分页：嵌入该人物的成长档案 */
   renderGrowth?: (characterName: string) => React.ReactNode;
+  /** 人物总览「成长」分页：嵌入成长总览 */
+  renderGrowthOverview?: () => React.ReactNode;
+  /** 人物总览里打开某个人物（工作区标签） */
+  onOpenCharacter?: (characterId: number) => void;
+  onCreateCharacter?: () => void;
 }> = React.memo(
   ({
     folderPath,
@@ -49,6 +55,9 @@ export const CharactersView: React.FC<{
     growthLevels,
     onOpenGrowthSheet,
     renderGrowth,
+    renderGrowthOverview,
+    onOpenCharacter,
+    onCreateCharacter,
   }) => {
     const debouncedContent = useDebounce(content, 300);
     const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(null);
@@ -197,9 +206,6 @@ export const CharactersView: React.FC<{
     const focusedHeat = focusedCharacter
       ? estimateAppearanceHeat(debouncedContent, focusedCharacter.name)
       : 0;
-    const activeCampCount = Object.values(clusteredCharacters).filter(
-      (items) => items.length > 0
-    ).length;
     const focusedTimelineEditedCount = focusedTimeline.filter((item) =>
       hasTimelineOverride(item)
     ).length;
@@ -230,22 +236,22 @@ export const CharactersView: React.FC<{
     }
 
     return (
-      <div className={styles.objectWorkspace}>
-        <section className={styles.workspaceHero}>
-          <div className={styles.workspaceEyebrow}>人物中枢</div>
-          <h2 className={styles.workspaceTitle}>人物与关系</h2>
-          <p className={styles.workspaceDesc}>
-            在这里集中维护出场人物、阵营关系和正文热度，保证章节里的角色关系始终清楚。
-          </p>
-          <div className={styles.workspaceMetaRow}>
-            <span className={styles.workspaceChip}>人物 {characters.length}</span>
-            <span className={styles.workspaceChip}>关系 {links.length}</span>
-            <span className={styles.workspaceChip}>阵营 {activeCampCount}</span>
-          </div>
-        </section>
-        <section className={styles.workspaceCardShell}>{cardsView}</section>
-        <section className={styles.workspaceCardShell}>{graphView}</section>
-      </div>
+      <CharacterOverview
+        characters={characters}
+        levelOf={(character) => resolveGrowthLevel(growthLevels, character)}
+        workPath={folderPath}
+        onOpenCharacter={(id) =>
+          onOpenCharacter ? onOpenCharacter(id) : setSelectedCharacterId(id)
+        }
+        onCreateCharacter={onCreateCharacter}
+        renderGrowthOverview={renderGrowthOverview}
+        relationsView={
+          <>
+            <section className={styles.workspaceCardShell}>{cardsView}</section>
+            <section className={styles.workspaceCardShell}>{graphView}</section>
+          </>
+        }
+      />
     );
   }
 );

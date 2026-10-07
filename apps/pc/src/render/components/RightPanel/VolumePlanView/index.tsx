@@ -22,6 +22,7 @@ import { CURRENT_DOCUMENT_PATH, useVolumeSources } from './useVolumeSources';
 import { useVolumePlanState } from './useVolumePlanState';
 import { describeVariant, useVolumePlanGenerate } from './useVolumePlanGenerate';
 import PlanVariantPicker from '../PlanVariants';
+import PlanGuide, { VOLUME_GUIDE } from '../PlanGuide';
 import { insertBeatIntoChapterOutline } from './volumeSources';
 import { requestOpenSceneVideo } from '../../SceneVideoView/events';
 import { EMPTY_VOLUME_PLAN, mergeBeatOrder, resolveVolumeTarget } from './volumePlanState';
@@ -219,6 +220,8 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
                   .join(' · ')}
           </span>
         </div>
+
+        <PlanGuide guide={VOLUME_GUIDE} label="卷纲" />
 
         <form
           className={styles.intentRow}

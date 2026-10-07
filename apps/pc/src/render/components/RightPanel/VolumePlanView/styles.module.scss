@@ -256,18 +256,19 @@ $line: rgba(255, 255, 255, 0.07);
   }
 }
 
-// 总览条：每一幕一段，宽度按章数
+// 总览条：每一幕一段，宽度按章数；幕多时自动折行（每段至少能看清几个字）
 .overview {
   display: flex;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 3px;
   min-width: 0;
-  height: 20px;
 }
 
 .overviewSlot {
   display: flex;
   flex-basis: 0;
-  min-width: 0;
+  min-width: 72px;
+  height: 22px;
 }
 
 .overviewSegment {

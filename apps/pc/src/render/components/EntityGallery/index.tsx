@@ -14,16 +14,20 @@ import {
   VscTrash,
 } from 'react-icons/vsc';
 import {
+  COVER_LABEL,
   addMediaItems,
   groupMediaItems,
   removeMediaItem,
   resolveCover,
+  setMediaKind,
   type EntityKind,
   type MediaItem,
   type MediaKind,
   type MediaKindOption,
 } from '@novel-editor/core/entity-media';
 import Tooltip from '../Tooltip';
+import ContextMenu from '../ContextMenu';
+import { joinWorkPath, requestOpenReference } from '../../utils/referencePane';
 import AiImagePanel, { CANDIDATE_COUNT, type AiImageRequest } from './AiImagePanel';
 import { MediaImage } from './MediaTile';
 import { dataUrlToBytes, deleteImage, saveImage } from './mediaActions';
@@ -67,7 +71,9 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
   onChange,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [uploadKind, setUploadKind] = useState<MediaKind>(kinds[0]?.kind ?? 'other');
+  const uploadKind: MediaKind = kinds[0]?.kind ?? 'other';
+  const [menu, setMenu] = useState<{ x: number; y: number; item: MediaItem } | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [viewing, setViewing] = useState<MediaItem | null>(null);
   const [error, setError] = useState('');
@@ -75,6 +81,8 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
   const services = useImageServices();
   const currentCover = resolveCover(items, cover, legacyCover);
   const groups = useMemo(() => groupMediaItems(items, kinds), [items, kinds]);
+  const groupKindOf = (item: MediaItem): MediaKind =>
+    kinds.some((option) => option.kind === item.kind) ? item.kind : uploadKind;
   const references = useMemo(
     () =>
       referenceKinds
@@ -88,13 +96,14 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
     await onChange({ media, cover: resolveCover(media, nextCover ?? cover) });
   };
 
-  const upload = async (files: FileList | null) => {
-    if (!files?.length || !workPath) return;
+  const upload = async (files: FileList | File[] | null) => {
+    const list = files ? Array.from(files).filter((file) => /^image\//.test(file.type)) : [];
+    if (list.length === 0 || !workPath) return;
     setBusy(true);
     setError('');
     try {
       const added: MediaItem[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of list) {
         added.push(
           await saveImage({
             workPath,
@@ -176,23 +185,27 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
       : '还没有配置图片服务：在设置中心「AI → 更多 AI 服务」填写 Seedream / MiniMax / Grok 图片的 Key';
 
   return (
-    <section className={styles.gallery} aria-label={`${name} 的图集`} data-testid="entity-gallery">
+    <section
+      className={styles.gallery}
+      aria-label={`${name} 的图集`}
+      data-testid="entity-gallery"
+      onDragOver={(event) => {
+        if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(event) => {
+        if (!event.dataTransfer?.files?.length) return;
+        event.preventDefault();
+        setDragging(false);
+        void upload(event.dataTransfer.files);
+      }}
+    >
       <header className={styles.toolbar}>
         <span className={styles.count}>{items.length} 张</span>
         <span className={styles.spacer} />
-        <select
-          className={styles.select}
-          aria-label="上传为"
-          value={uploadKind}
-          onChange={(event) => setUploadKind(event.target.value as MediaKind)}
-        >
-          {kinds.map((item) => (
-            <option key={item.kind} value={item.kind}>
-              上传为{item.label}
-            </option>
-          ))}
-        </select>
-        <Tooltip content="从本地选择图片（可多选），保存到 资料/图集/">
+        <Tooltip content="从本地选择图片（可多选，也可以直接拖进来），上传后右键可以设为三视图 / 主要形象图">
           <button
             type="button"
             className={styles.button}
@@ -256,14 +269,20 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
       )}
 
       {items.length === 0 ? (
-        <div className={styles.empty}>
-          <p>还没有图片。</p>
-          <p className={styles.muted}>
+        <button
+          type="button"
+          className={`${styles.empty} ${dragging ? styles.emptyDragging : ''}`}
+          disabled={!workPath || busy}
+          onClick={() => inputRef.current?.click()}
+          data-testid="entity-gallery-dropzone"
+        >
+          <span className={styles.emptyTitle}>点击上传图片，或把图片拖到这里</span>
+          <span className={styles.muted}>
             {entity === 'character'
-              ? '建议先生成一张「三视图」：之后的形象图、服装和场景视频都会参考它，人物不容易崩。'
-              : '加一张概念图，写作和做场景视频时都能直接参考。'}
-          </p>
-        </div>
+              ? '上传后右键可以设为「三视图」或「主要形象图」。建议准备一张三视图：生成视频时人物不容易崩。'
+              : '上传后右键可以设为封面，写作和做场景视频时都能直接参考。'}
+          </span>
+        </button>
       ) : (
         groups.map((group) => (
           <div key={group.option.kind} className={styles.group}>
@@ -275,7 +294,15 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
               {group.items.map((item) => {
                 const isCover = item.path === currentCover;
                 return (
-                  <li key={item.id} className={styles.tile} data-kind={item.kind}>
+                  <li
+                    key={item.id}
+                    className={styles.tile}
+                    data-kind={group.option.kind}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setMenu({ x: event.clientX, y: event.clientY, item });
+                    }}
+                  >
                     <button
                       type="button"
                       className={styles.tileImage}
@@ -284,14 +311,22 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
                     >
                       <MediaImage path={item.path} workPath={workPath} alt={group.option.label} />
                     </button>
-                    {isCover && <span className={styles.coverBadge}>封面</span>}
+                    {isCover && <span className={styles.coverBadge}>{COVER_LABEL[entity]}</span>}
                     {item.source === 'ai' && <span className={styles.aiBadge}>AI</span>}
                     <span className={styles.tileActions}>
-                      <Tooltip content={isCover ? '当前封面（形象图）' : '设为封面（形象图）'}>
+                      <Tooltip
+                        content={
+                          isCover
+                            ? `当前${COVER_LABEL[entity]}`
+                            : `设为${COVER_LABEL[entity]}（右键还有更多）`
+                        }
+                      >
                         <button
                           type="button"
                           className={styles.iconButton}
-                          aria-label={isCover ? '当前封面' : '设为封面'}
+                          aria-label={
+                            isCover ? `当前${COVER_LABEL[entity]}` : `设为${COVER_LABEL[entity]}`
+                          }
                           aria-pressed={isCover}
                           onClick={() => void commit([...items], item.path)}
                         >
@@ -315,6 +350,48 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
             </ul>
           </div>
         ))
+      )}
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: `设为${COVER_LABEL[entity]}`,
+              disabled: menu.item.path === currentCover,
+              onClick: () => void commit([...items], menu.item.path),
+            },
+            ...(kinds.length > 1
+              ? kinds.map((option) => ({
+                  label: `设为${option.label}`,
+                  disabled: groupKindOf(menu.item) === option.kind,
+                  onClick: () =>
+                    void commit(setMediaKind(items, menu.item.id, option.kind), currentCover),
+                }))
+              : []),
+            { label: '', onClick: () => undefined, separator: true },
+            {
+              label: '在编辑器旁边打开',
+              disabled: !workPath,
+              onClick: () => {
+                if (!workPath) return;
+                requestOpenReference({
+                  items: items.map((entry) => ({
+                    path: joinWorkPath(workPath, entry.path),
+                    title: `${name} · ${kinds.find((option) => option.kind === groupKindOf(entry))?.label ?? '图片'}`,
+                    kind: 'image' as const,
+                  })),
+                  index: items.findIndex((entry) => entry.id === menu.item.id),
+                });
+              },
+            },
+            { label: '查看大图', onClick: () => setViewing(menu.item) },
+            { label: '', onClick: () => undefined, separator: true },
+            { label: '删除', danger: true, onClick: () => void remove(menu.item) },
+          ]}
+        />
       )}
 
       {viewing && (

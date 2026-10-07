@@ -6,9 +6,11 @@ import {
   createSeedanceVideoProvider,
   mapMinimaxStatus,
   mapSeedanceStatus,
+  MINIMAX_REFERENCE_LIMIT,
   MINIMAX_VIDEO_DEFAULTS,
   minimaxBaseRespError,
   normalizeMinimaxDuration,
+  SEEDANCE_REFERENCE_LIMIT,
   SEEDANCE_VIDEO_DEFAULTS,
 } from '../src';
 import { instantSleep, jsonResponse, mockFetch } from './helpers';
@@ -319,5 +321,68 @@ describe('seedance-video', () => {
       kind: 'invalid-response',
     });
     expect(() => createSeedanceVideoProvider({ apiKey: '' })).toThrow(/火山方舟/);
+  });
+});
+
+describe('人物参考图 / 尾帧', () => {
+  const refs = ['data:image/png;base64,R1', 'data:image/png;base64,R2', 'https://img/r3.png'];
+  const many = Array.from({ length: 6 }, (_, i) => `https://img/r${i + 1}.png`);
+
+  it('MiniMax：subject_reference 与 last_frame_image 写入请求体', async () => {
+    const { fetch, requests } = mockFetch(jsonResponse({ task_id: 't-9', base_resp: ok }));
+    const provider = createMinimaxVideoProvider({ apiKey: 'mm', fetch });
+    await provider.submitTask({
+      prompt: 'p',
+      firstFrameImage: 'https://img/first.png',
+      lastFrameImage: 'https://img/last.png',
+      referenceImages: refs,
+    });
+    expect(requests[0].body).toMatchObject({
+      first_frame_image: 'https://img/first.png',
+      last_frame_image: 'https://img/last.png',
+      subject_reference: [{ type: 'character', image: refs }],
+    });
+  });
+
+  it('MiniMax：参考图超过上限只取前几张；没有参考图时不带字段', () => {
+    expect(MINIMAX_REFERENCE_LIMIT).toBe(4);
+    const body = buildMinimaxSubmitBody({ prompt: 'p', referenceImages: many }, 'm');
+    expect(body.subject_reference).toEqual([
+      { type: 'character', image: many.slice(0, MINIMAX_REFERENCE_LIMIT) },
+    ]);
+    const plain = buildMinimaxSubmitBody({ prompt: 'p', referenceImages: [] }, 'm');
+    expect(plain).not.toHaveProperty('subject_reference');
+    expect(plain).not.toHaveProperty('last_frame_image');
+  });
+
+  it('Seedance：首帧 / 尾帧 / 参考图依次追加到 content', async () => {
+    const { fetch, requests } = mockFetch(jsonResponse({ id: 'cgt-9' }));
+    const provider = createSeedanceVideoProvider({ apiKey: 'ark', fetch });
+    await provider.submitTask({
+      prompt: 'p',
+      firstFrameImage: 'https://img/first.png',
+      lastFrameImage: 'https://img/last.png',
+      referenceImages: refs,
+    });
+    const body = requests[0].body as { content: unknown[] };
+    expect(body.content).toEqual([
+      { type: 'text', text: 'p' },
+      { type: 'image_url', image_url: { url: 'https://img/first.png' }, role: 'first_frame' },
+      { type: 'image_url', image_url: { url: 'https://img/last.png' }, role: 'last_frame' },
+      ...refs.map((url) => ({ type: 'image_url', image_url: { url }, role: 'reference_image' })),
+    ]);
+  });
+
+  it('Seedance：参考图超过上限只取前几张', () => {
+    expect(SEEDANCE_REFERENCE_LIMIT).toBe(4);
+    const body = buildSeedanceSubmitBody({ prompt: 'p', referenceImages: many }, 'm') as {
+      content: Array<{ role?: string; image_url?: { url: string } }>;
+    };
+    const references = body.content.filter((item) => item.role === 'reference_image');
+    expect(references.map((item) => item.image_url?.url)).toEqual(
+      many.slice(0, SEEDANCE_REFERENCE_LIMIT)
+    );
+    const plain = buildSeedanceSubmitBody({ prompt: 'p' }, 'm') as { content: unknown[] };
+    expect(plain.content).toHaveLength(1);
   });
 });

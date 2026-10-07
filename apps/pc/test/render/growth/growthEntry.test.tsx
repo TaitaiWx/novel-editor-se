@@ -291,7 +291,7 @@ describe('CharacterSection（角色与成长档案合一）', () => {
     expect(screen.getByText('经验 400 · 第 3 章')).toBeTruthy();
     fireEvent.click(screen.getByText('阿尔'));
     expect(props.onOpenGrowth).toHaveBeenCalledWith('阿尔');
-    fireEvent.click(screen.getByLabelText('打开成长档案总览'));
+    fireEvent.click(screen.getByLabelText('打开人物总览'));
     expect(props.onOpenGrowth).toHaveBeenCalledWith(null);
     fireEvent.click(screen.getByLabelText('新建人物'));
     expect(props.onCreateCharacter).toHaveBeenCalledTimes(1);

@@ -42,6 +42,8 @@ export const SEEDANCE_VIDEO_DEFAULTS = {
   timeoutMs: 60_000,
 } as const;
 
+export const SEEDANCE_REFERENCE_LIMIT = 4;
+
 export const SEEDANCE_ENDPOINTS = {
   tasks: '/contents/generations/tasks',
 } as const;
@@ -81,6 +83,17 @@ export function buildSeedanceSubmitBody(
       image_url: { url: request.firstFrameImage },
       role: 'first_frame',
     });
+  }
+  if (request.lastFrameImage) {
+    content.push({
+      type: 'image_url',
+      image_url: { url: request.lastFrameImage },
+      role: 'last_frame',
+    });
+  }
+  // 人物参考图（role: reference_image，Seedance 2.0 起支持，最多 9 张；未用真实 Key 联调）
+  for (const url of (request.referenceImages ?? []).slice(0, SEEDANCE_REFERENCE_LIMIT)) {
+    content.push({ type: 'image_url', image_url: { url }, role: 'reference_image' });
   }
   const body: Record<string, unknown> = {
     model: request.model?.trim() || defaultModel,

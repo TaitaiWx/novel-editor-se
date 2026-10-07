@@ -73,6 +73,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onOpenCharacterNode,
     onOpenLoreNode,
     onOpenLore,
+    onOpenCharacters,
     onDeleteCharacterNode,
     onDeleteLoreNode,
     onRenameCharacterNode,
@@ -405,6 +406,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       onDeleteCharacter={onDeleteCharacterNode}
                       onCreateCharacter={onCreateCharacter}
                       onOpenGrowth={onOpenGrowth}
+                      onOpenOverview={onOpenCharacters}
                       onContextMenu={emitObjectContextMenu}
                     />
                   )}

@@ -32,9 +32,11 @@ import {
 } from './support/fixture';
 import { PRIMARY_MODIFIER, type Page } from './support/page';
 import {
+  CHARACTER_OVERVIEW,
   GROWTH_SECTION,
   GROWTH_TITLE,
   openCharacterGrowth,
+  openCharacterOverview as openCharacterOverviewIn,
   GROWTH_WORKSPACE,
   captureForReview as captureShot,
   ensureSidebarOpen as ensureSidebarOpenIn,
@@ -308,17 +310,30 @@ describe('小说编辑器 GUI', () => {
     await page.waitForTarget(`${GROWTH_WORKSPACE} [aria-label="需要留意"]`);
     await captureForReview('sample-growth-sheet');
 
-    await page.click('[aria-label="打开成长档案总览"]');
+    await openCharacterOverviewIn(page, '成长');
     await page.waitForTarget('[aria-label="打开 林舟 的成长卡"]');
     await page.waitForTarget('[aria-label="打开 苏晴 的成长卡"]');
     await captureForReview('sample-growth-overview');
 
     // 人物与设定：来自 .novel-editor/seed.json，首次打开项目时写入数据库
+    // 人物总览（人物维度）：每个人物一张卡片，「关系」分页里是人物编辑与关系网络
     await contextMenuAction(page, '角色', '查看详情');
-    await page.waitForTarget({ text: '人物与关系' });
+    await page.waitForTarget(CHARACTER_OVERVIEW);
+    await page.click({
+      text: '人物',
+      within: `${CHARACTER_OVERVIEW} [role="tablist"]`,
+      exact: true,
+    });
     for (const name of ['林舟', '苏晴', '白鸦', '秦伯']) {
-      await page.waitForTarget({ text: name, exact: true });
+      await page.waitForTarget(`${CHARACTER_OVERVIEW} [aria-label="打开人物 ${name}"]`);
     }
+    await captureForReview('sample-character-overview');
+    await page.click({
+      text: '关系',
+      within: `${CHARACTER_OVERVIEW} [role="tablist"]`,
+      exact: true,
+    });
+    await page.waitForTarget({ text: '秦伯', within: `${CHARACTER_OVERVIEW} [role="tabpanel"]` });
     await captureForReview('sample-characters');
     await contextMenuAction(page, '设定', '查看详情');
     await page.waitForTarget({ text: '星河大陆', exact: true });
@@ -520,7 +535,7 @@ describe('小说编辑器 GUI', () => {
 
     // 人物 / 设定中枢通过文件树右键「查看详情」打开
     await contextMenuAction(page, '角色', '查看详情');
-    await page.waitForTarget({ text: '人物与关系' });
+    await page.waitForTarget(CHARACTER_OVERVIEW);
     await contextMenuAction(page, '设定', '查看详情');
     await page.waitForTarget({ text: '设定' });
 
@@ -1327,6 +1342,72 @@ describe('小说编辑器 GUI', () => {
     expect(tail.wideOverflowX).toBe('auto');
     expect(tail.editorOverflow).toBeLessThanOrEqual(1);
     await captureForReview('latex-demo-tail');
+  });
+
+  it('10.2 小说格式与参考窗格：场景条 / 视频卡片就地渲染；资料图片在编辑器旁边打开；章纲有使用说明', async () => {
+    await ensureSidebarOpen();
+    await openProjectDocs(page);
+    await page.click({ text: '小说格式示例', within: SEL.projectNotes, exact: true });
+    await waitForEditorText(page, '这一篇演示「小说格式」的写法');
+    // :::scene 渲染为场景条（「场景 · 港口」），::video 渲染为视频卡片
+    await page.waitFor(
+      () =>
+        Array.from(document.querySelectorAll('.cm-content .cm-lp-scene')).some((el) =>
+          el.textContent?.includes('港口')
+        ),
+      { message: '场景条已渲染' }
+    );
+    await page.waitForTarget('.cm-content .cm-lp-video');
+    expect(
+      await page.evaluate<string>(
+        () => document.querySelector('.cm-content .cm-lp-video')?.textContent ?? ''
+      )
+    ).toContain('林舟离港');
+    await captureForReview('novel-format-demo');
+    // 示例路径不存在：单击后标记为找不到，不打开参考窗格
+    await page.click('.cm-content .cm-lp-video');
+    await page.waitForTarget('.cm-content .cm-lp-video-missing');
+    expect(await page.exists('[data-testid="reference-pane"]')).toBe(false);
+
+    // 资料里的图片：右键「在编辑器旁边打开」→ 编辑器右侧的参考窗格
+    await selectWork(page, FIXTURE_WORK);
+    await page.click({ text: '素材', within: SECTION_MATERIALS, exact: true });
+    await page.waitForTarget(`${SECTION_MATERIALS} [title^="场景截图.png"]`);
+    await page.rightClick(`${SECTION_MATERIALS} [title^="场景截图.png"]`);
+    await page.click({ text: '在编辑器旁边打开', within: SEL.menu, exact: true });
+    await page.waitFor(
+      () =>
+        (
+          document.querySelector(
+            '[data-testid="reference-pane"] [data-testid="reference-image"]'
+          ) as HTMLImageElement | null
+        )?.src.startsWith('blob:') ?? false,
+      { timeout: 10_000, message: '参考窗格显示图片' }
+    );
+    // 编辑器仍可见（并排，不是替换）
+    expect(await page.exists('.cm-editor')).toBe(true);
+    await captureForReview('reference-pane-image');
+    await page.click('[data-testid="reference-pane"] [aria-label="关闭参考"]');
+    await page.waitForGone('[data-testid="reference-pane"]');
+
+    // 章纲：摘要 +「怎么用」三步说明，减轻学习负担
+    await openChapter('001-启程', '林舟背起行囊');
+    await ensureRightPanelOpen(page);
+    await switchStorylineMode(page, '章纲');
+    await page.waitForTarget(`${SEL.storyline} [data-testid="plan-guide"]`);
+    await page.click(`${SEL.storyline} button[aria-label="章纲怎么用"]`);
+    const steps = await page.waitFor<number>(
+      () => {
+        const panel = Array.from(document.querySelectorAll('[aria-label="章纲怎么用"]')).find(
+          (el) => el.tagName !== 'BUTTON'
+        );
+        const count = panel?.querySelectorAll('li').length ?? 0;
+        return count > 0 ? count : null;
+      },
+      { message: '章纲使用说明弹出' }
+    );
+    expect(steps).toBe(3);
+    await page.press('Escape');
   });
 
   it('11. 单实例：第二次启动把文件夹转发给已有窗口', async () => {

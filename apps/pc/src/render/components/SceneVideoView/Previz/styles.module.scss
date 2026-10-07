@@ -1,0 +1,249 @@
+$muted: var(--ui-fg-muted);
+$accent: #569cd6;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 100%);
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--ui-border-strong);
+  background: #232323;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 46px;
+  padding: 0 10px 0 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.hint {
+  flex: 1;
+  font-size: 12px;
+  color: $muted;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: $muted;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--ui-fg-primary);
+  }
+}
+
+.body {
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+  padding: 16px;
+}
+
+.frame {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  max-height: 70vh;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #1b1c1f;
+  cursor: grab;
+  touch-action: none;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: $muted;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+  }
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: $muted;
+
+  select,
+  input {
+    flex: 1;
+  }
+
+  select {
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--ui-fg-primary);
+    font: inherit;
+  }
+}
+
+.segment {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+
+  button {
+    flex: 1;
+    height: 24px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: $muted;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+}
+
+.segmentActive {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: var(--ui-fg-primary) !important;
+}
+
+.figureList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.figure,
+.figureActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.figureActive {
+  border-color: rgba($accent, 0.6);
+  background: rgba($accent, 0.16);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.poses {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.pose,
+.poseActive {
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.poseActive {
+  border-color: rgba($accent, 0.6);
+  background: rgba($accent, 0.18);
+  color: #e6f0fa;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: #e8a29a;
+}
+
+.primary {
+  margin-top: auto;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba($accent, 0.4);
+  background: rgba($accent, 0.2);
+  color: #d6e6f5;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

@@ -1,6 +1,7 @@
 /**
  * 零输入推导卷纲：章节标题 + 正文里的「第X幕 / 第X场」标记 + 小标题 + 已有章纲 → 幕 → 章 → 关键节拍
  */
+import { isDirectiveLine, sceneContainerTitle } from '../outline/novel-markers';
 import {
   STRUCTURE_TEMPLATES,
   allocateChapters,
@@ -54,7 +55,7 @@ export function firstSentence(line: string, max = BEAT_TEXT_MAX): string {
 }
 
 function isStructuralLine(line: string): boolean {
-  return RE_ACT.test(line) || RE_SCENE.test(line) || RE_HEADING.test(line);
+  return RE_ACT.test(line) || RE_SCENE.test(line) || RE_HEADING.test(line) || isDirectiveLine(line);
 }
 
 interface ChapterSegment {
@@ -142,9 +143,13 @@ function parseChapter(source: VolumeChapterSource): ChapterSegment[] {
       });
       return;
     }
+    // 场景：「第X场」标题，或小说格式的场景容器 :::scene{title=…}
     const sceneMatch = trimmed.match(RE_SCENE);
-    if (sceneMatch) {
-      const title = `${sceneMatch[1]} ${sceneMatch[2] || ''}`.trim();
+    const containerTitle = sceneMatch ? null : sceneContainerTitle(trimmed);
+    if (sceneMatch || containerTitle !== null) {
+      const title = sceneMatch
+        ? `${sceneMatch[1]} ${sceneMatch[2] || ''}`.trim()
+        : (containerTitle ?? '场景');
       const beat: VolumeBeat = {
         key: uniqueKey(`${base}#scene:${title}`, used),
         title,

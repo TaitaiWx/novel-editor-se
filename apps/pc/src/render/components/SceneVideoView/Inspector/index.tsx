@@ -13,8 +13,10 @@ import {
 import type { VideoTask } from '@/render/types/ai-api';
 import Tooltip from '../../Tooltip';
 import CharacterAvatar from '../../CharacterAvatar';
+import { MediaImage } from '../../EntityGallery/MediaTile';
 import MediaPlayer, { type ReadSceneFile } from '../media/MediaPlayer';
 import TaskList from '../media/TaskList';
+import KeyframeSection, { type KeyframeSectionProps } from './KeyframeSection';
 import {
   SCENE_VIDEO_STYLES,
   animaticFiles,
@@ -205,18 +207,26 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
 export const CharacterInspector: React.FC<{
   name: string;
   avatar?: string;
+  turnaround?: string;
+  referenceCount: number;
+  workPath: string | null;
   onRemove: () => void;
   onClose: () => void;
-}> = ({ name, avatar, onRemove, onClose }) => (
+}> = ({ name, avatar, turnaround, referenceCount, workPath, onRemove, onClose }) => (
   <Panel title="人物" onClose={onClose}>
     <div className={styles.characterHead}>
-      <CharacterAvatar name={name} src={avatar ?? null} size={56} />
+      <CharacterAvatar name={name} src={avatar ?? null} size={40} />
       <strong>{name}</strong>
     </div>
+    {turnaround && (
+      <div className={styles.turnaround}>
+        <MediaImage path={turnaround} workPath={workPath} alt={`${name} 的三视图`} />
+      </div>
+    )}
     <p className={styles.muted}>
-      {avatar
-        ? '人物的形象图会作为参考：在顶部打开「形象图作首帧」后，提交给支持首帧的视频模型。'
-        : '这个人物还没有形象图。在人物详情里添加后，生成的画面更容易保持一致。'}
+      {referenceCount > 0
+        ? `生成这一场的镜头时，自动带上 ${name} 的 ${referenceCount} 张参考图（三视图优先），外貌、服装等人物设计也会自动写进提示词。`
+        : `${name} 还没有三视图或形象图。在人物详情 → 图集里上传或生成一张三视图，生成的画面更容易保持一致。`}
     </p>
     <button type="button" className={styles.button} onClick={onRemove}>
       从这一场移除
@@ -239,6 +249,10 @@ export interface ShotInspectorProps {
   onRemove: () => void;
   onCancelTask: (id: string) => void;
   onRetryTask: (id: string) => void;
+  /** 在参考窗格（编辑器旁边）打开某个成片 */
+  onOpenBeside?: (fileName: string) => void;
+  /** 首帧 / 预演（可选步骤） */
+  keyframe?: Omit<KeyframeSectionProps, 'label'>;
   onClose: () => void;
 }
 
@@ -255,6 +269,8 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
   onRemove,
   onCancelTask,
   onRetryTask,
+  onOpenBeside,
+  keyframe,
   onClose,
 }) => {
   const label = `镜头 ${index + 1}`;
@@ -378,9 +394,24 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
         />
       </label>
 
+      {keyframe && <KeyframeSection label={label} {...keyframe} />}
+
       {versions.length > 0 && (
         <div className={styles.field}>
-          <span className={styles.label}>版本（样片使用「选用」的版本）</span>
+          <span className={styles.labelRow}>
+            <span className={styles.label}>版本（样片使用「选用」的版本）</span>
+            {onOpenBeside && previewFile && (
+              <Tooltip content="在编辑器旁边打开，边看边写">
+                <button
+                  type="button"
+                  className={styles.linkButton}
+                  onClick={() => onOpenBeside(previewFile)}
+                >
+                  在旁边看
+                </button>
+              </Tooltip>
+            )}
+          </span>
           <MediaPlayer
             readFile={readFile}
             fileName={previewFile}
@@ -452,6 +483,8 @@ export const OutputInspector: React.FC<{
   outlineLinked: boolean;
   onStitch: () => void;
   onRevealFile: (fileName: string) => void;
+  /** 在参考窗格（编辑器旁边）打开 */
+  onOpenBeside?: (fileName: string) => void;
   onClose: () => void;
 }> = ({
   files,
@@ -462,6 +495,7 @@ export const OutputInspector: React.FC<{
   outlineLinked,
   onStitch,
   onRevealFile,
+  onOpenBeside,
   onClose,
 }) => {
   const animatics = animaticFiles(files);
@@ -513,6 +547,18 @@ export const OutputInspector: React.FC<{
                   定位
                 </button>
               </Tooltip>
+              {onOpenBeside && (
+                <Tooltip content="在编辑器旁边打开，边看边写">
+                  <button
+                    type="button"
+                    className={styles.linkButton}
+                    aria-label={`在旁边看 ${fileName}`}
+                    onClick={() => onOpenBeside(fileName)}
+                  >
+                    在旁边看
+                  </button>
+                </Tooltip>
+              )}
             </li>
           ))}
         </ul>

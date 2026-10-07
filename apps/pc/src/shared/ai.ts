@@ -83,6 +83,10 @@ export interface VideoTaskSubmitPayload {
   aspectRatio?: string;
   resolution?: string;
   firstFrameImage?: string;
+  /** 作品内的首帧图（相对作品目录，提交时由主进程读取；优先于 firstFrameImage） */
+  firstFramePath?: string;
+  /** 作品内的人物参考图（三视图 / 主要形象图，相对作品目录，最多 4 张） */
+  referencePaths?: string[];
 }
 
 export interface VideoSettingsInfo {

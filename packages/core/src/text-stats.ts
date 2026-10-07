@@ -4,7 +4,11 @@
  * analyzeContentStats / buildThousandCharMarkers 的口径与 GUI 状态栏
  * (apps/pc/src/render/utils/contentStats.ts) 保持一致：只跳过换行、回车、Tab 和半角空格。
  * GUI 通过 @novel-editor/core/text-stats 直接复用这里的实现。
+ *
+ * 小说格式（Novel Markdown）：front-matter 与指令行（:::scene、::video 等）不计字数，
+ * 行内指令只计方括号里的文字（stripNovelMarkup 保持行数不变，行号与编辑器一致）。
  */
+import { stripNovelMarkup } from './novel-format';
 
 export interface ContentStats {
   lineCount: number;
@@ -36,10 +40,11 @@ function isCountableCharCode(code: number): boolean {
   return code !== 10 && code !== 13 && code !== 9 && code !== 32;
 }
 
-export function analyzeContentStats(content: string): ContentStats {
-  if (!content) {
+export function analyzeContentStats(rawContent: string): ContentStats {
+  if (!rawContent) {
     return { lineCount: 0, charCount: 0 };
   }
+  const content = stripNovelMarkup(rawContent);
 
   let lineCount = 1;
   let charCount = 0;
@@ -60,12 +65,13 @@ export function analyzeContentStats(content: string): ContentStats {
 }
 
 export function buildThousandCharMarkers(
-  content: string,
+  rawContent: string,
   milestoneStep = 1000
 ): ThousandCharMarker[] {
-  if (!content || !Number.isFinite(milestoneStep) || milestoneStep <= 0) {
+  if (!rawContent || !Number.isFinite(milestoneStep) || milestoneStep <= 0) {
     return [];
   }
+  const content = stripNovelMarkup(rawContent);
 
   const markers: ThousandCharMarker[] = [];
   let currentLine = 1;
@@ -113,11 +119,12 @@ const WORD_REGEX = /[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*/g;
 
 export function computeTextStats(content: string): TextStats {
   const { lineCount, charCount } = analyzeContentStats(content);
-  const paragraphs = content ? content.split(/\r?\n/).filter((line) => line.trim()).length : 0;
+  const plain = stripNovelMarkup(content);
+  const paragraphs = plain ? plain.split(/\r?\n/).filter((line) => line.trim()).length : 0;
   return {
     chars: charCount,
-    cjkChars: content.match(CJK_REGEX)?.length ?? 0,
-    words: content.match(WORD_REGEX)?.length ?? 0,
+    cjkChars: plain.match(CJK_REGEX)?.length ?? 0,
+    words: plain.match(WORD_REGEX)?.length ?? 0,
     lines: lineCount,
     paragraphs,
     bytes: Buffer.byteLength(content, 'utf-8'),

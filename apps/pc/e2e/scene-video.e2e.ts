@@ -325,4 +325,66 @@ describe('场景视频', () => {
       await ensureSidebarOpen(page);
     }
   }, 120_000);
+  it('人物节点提示缺三视图；成片在编辑器旁边打开；3D 预演截图保存为首帧构图', async () => {
+    const { page, fixture } = suite;
+    // 示例人物还没有三视图：画布人物节点给出提示（生成视频时三视图会自动作为参考图）
+    await page.waitForTarget({ text: '缺三视图', within: '[data-testid="scene-canvas"]' });
+
+    // 检查器「在旁边看」：成片在编辑器右侧的参考窗格里播放，可缩成小卡片、关闭
+    await page.click('[role="group"][aria-label="镜头 1"] p');
+    await page.click({ text: '在旁边看', within: '[data-testid="scene-inspector"]', exact: true });
+    await page.waitFor(
+      () =>
+        (
+          document.querySelector(
+            '[data-testid="reference-pane"] [data-testid="reference-video"]'
+          ) as HTMLVideoElement | null
+        )?.src.startsWith('blob:') ?? false,
+      { timeout: 15_000, message: '参考窗格播放成片' }
+    );
+    await captureForReview(page, 'reference-pane-video');
+    await page.click('[data-testid="reference-pane"] [aria-label="缩成小卡片"]');
+    await page.waitForTarget('[data-testid="reference-mini"]');
+    await page.click('[data-testid="reference-mini"] [aria-label="关闭参考"]');
+    await page.waitForGone('[data-testid="reference-mini"]');
+
+    // 首帧：3D 预演（木偶小人摆位）→ 截图作为构图，落盘为 镜头1-预演.png
+    await page.waitForTarget('[data-testid="keyframe-section"]');
+    await page.click({ text: '3D 预演', within: '[data-testid="keyframe-section"]', exact: true });
+    await page.waitForTarget('[data-testid="previz-dialog"]');
+    const ready = await page.waitFor<'canvas' | 'unsupported'>(
+      () => {
+        const dialog = document.querySelector('[data-testid="previz-dialog"]');
+        if (dialog?.textContent?.includes('当前环境不支持 3D 预演')) return 'unsupported';
+        const canvas = dialog?.querySelector(
+          '[data-testid="previz-canvas"]'
+        ) as HTMLCanvasElement | null;
+        return canvas && canvas.width > 0 ? 'canvas' : null;
+      },
+      { timeout: 15_000, message: '3D 预演画布就绪' }
+    );
+    if (ready === 'unsupported') {
+      // 没有 WebGL 的环境（部分 CI）：给出提示即可
+      await page.click('[aria-label="关闭预演"]');
+      await page.waitForGone('[data-testid="previz-dialog"]');
+      return;
+    }
+    await page.click({ text: '坐', within: '[role="radiogroup"][aria-label="姿势"]', exact: true });
+    await captureForReview(page, 'scene-video-previz');
+    await page.click({ text: '截图作为构图', within: '[data-testid="previz-dialog"]' });
+    await page.waitForGone('[data-testid="previz-dialog"]', 15_000);
+    const previzFile = fixture.resolve(...SCENE_DIR, '镜头1-预演.png');
+    await page.waitUntil(() => existsSync(previzFile), { message: '镜头1-预演.png 已落盘' });
+    const png = await readFile(previzFile);
+    expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
+    await page.waitForTarget('[data-testid="keyframe-section"] img[alt$="预演截图"]', 10_000);
+    await page.waitUntil(
+      async () => {
+        const raw = await readFile(fixture.resolve(...SCENE_DIR, '分镜.json'), 'utf-8');
+        const state = JSON.parse(raw) as { previz?: Record<string, string> };
+        return Object.values(state.previz ?? {}).some((value) => value.endsWith('镜头1-预演.png'));
+      },
+      { timeout: 10_000, message: '分镜.json 记录了预演截图' }
+    );
+  }, 60_000);
 });

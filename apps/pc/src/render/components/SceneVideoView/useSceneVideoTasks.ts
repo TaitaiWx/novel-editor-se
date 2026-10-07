@@ -14,8 +14,8 @@ export interface SubmitShotsInput {
   shots: readonly Shot[];
   providerId: string;
   model?: string;
-  /** 人物名 → 头像（data URL / http 地址），作者勾选「头像作首帧参考」时使用 */
-  avatars?: Readonly<Record<string, string>>;
+  /** 人物名 → 参考图（三视图优先，其次主要形象图；相对作品目录），提交时自动带上 */
+  references?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface SubmitShotsResult {
@@ -31,13 +31,18 @@ function upsert(tasks: VideoTask[], task: VideoTask): VideoTask[] {
   return next;
 }
 
-function firstFrameFor(shot: Shot, input: SubmitShotsInput): string | undefined {
-  if (!input.state.useAvatarReference || !input.avatars) return undefined;
-  for (const name of shot.characters ?? input.state.characters) {
-    const avatar = input.avatars[name];
-    if (avatar && /^(https?:\/\/|data:image\/)/i.test(avatar)) return avatar;
-  }
-  return undefined;
+export const SHOT_REFERENCE_LIMIT = 4;
+
+/** 镜头的人物参考图：镜头里的人物（没有标注时用整场的出场人物），每人三视图优先，去重后最多 4 张 */
+export function referencePathsFor(
+  shot: Shot,
+  state: Pick<SceneVideoState, 'characters'>,
+  references: Readonly<Record<string, readonly string[]>> | undefined
+): string[] {
+  if (!references) return [];
+  const names = shot.characters?.length ? shot.characters : state.characters;
+  const paths = names.flatMap((name) => references[name] ?? []);
+  return Array.from(new Set(paths)).slice(0, SHOT_REFERENCE_LIMIT);
 }
 
 /**
@@ -104,7 +109,14 @@ export function useSceneVideoTasks(ref: SceneTaskRef | null, onTaskFinished?: ()
           prompt,
           durationSec: shot.durationSec,
           aspectRatio: input.state.aspectRatio,
-          firstFrameImage: firstFrameFor(shot, input),
+          ...(() => {
+            const referencePaths = referencePathsFor(shot, input.state, input.references);
+            return referencePaths.length ? { referencePaths } : {};
+          })(),
+          // 作者采用过首帧时，视频从这张首帧开始（人物与构图更稳）
+          ...(input.state.keyframes?.[shot.id]
+            ? { firstFramePath: input.state.keyframes[shot.id] }
+            : {}),
         })
         .catch((error: unknown) => ({
           ok: false as const,

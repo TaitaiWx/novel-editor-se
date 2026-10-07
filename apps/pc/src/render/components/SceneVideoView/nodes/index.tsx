@@ -4,6 +4,7 @@ import type { Shot } from '@novel-editor/video';
 import Tooltip from '../../Tooltip';
 import CharacterAvatar from '../../CharacterAvatar';
 import { useSceneMediaUrl, type ReadSceneFile } from '../media/MediaPlayer';
+import { MediaImage } from '../../EntityGallery/MediaTile';
 import type { ShotProgress } from '../sceneVideoState';
 import styles from './styles.module.scss';
 
@@ -14,15 +15,30 @@ function ratioStyle(aspectRatio: string): React.CSSProperties {
 
 // ─── 人物 ───────────────────────────────────────────────────────────────
 
-export const CharacterNode: React.FC<{ name: string; avatar?: string }> = ({ name, avatar }) => (
-  <div className={styles.character}>
-    <CharacterAvatar name={name} src={avatar ?? null} size={28} />
-    <span className={styles.characterName}>{name}</span>
-    {!avatar && (
-      <Tooltip content="人物详情里添加形象图后，可作为首帧参考，画面更稳定">
-        <span className={styles.characterHint}>缺形象</span>
-      </Tooltip>
-    )}
+/** 人物节点：标题行（头像 + 名字）+ 三视图（生成视频时自动作为人物参考图） */
+export const CharacterNode: React.FC<{
+  name: string;
+  avatar?: string;
+  turnaround?: string;
+  workPath: string | null;
+}> = ({ name, avatar, turnaround, workPath }) => (
+  <div className={styles.characterCard}>
+    <div className={styles.character}>
+      <CharacterAvatar name={name} src={avatar ?? null} size={24} />
+      <span className={styles.characterName}>{name}</span>
+      {!turnaround && (
+        <Tooltip content="人物详情 → 图集里上传或生成一张三视图，生成视频时人物不容易崩">
+          <span className={styles.characterHint}>缺三视图</span>
+        </Tooltip>
+      )}
+    </div>
+    <div className={styles.turnaround} data-testid="character-turnaround">
+      {turnaround ? (
+        <MediaImage path={turnaround} workPath={workPath} alt={`${name} 的三视图`} />
+      ) : (
+        <span className={styles.thumbText}>{avatar ? '用主要形象图作参考' : '没有参考图'}</span>
+      )}
+    </div>
   </div>
 );
 
@@ -99,6 +115,9 @@ export interface ShotNodeProps {
   /** 不能生成的原因（tooltip） */
   generateBlockedReason?: string;
   readFile: ReadSceneFile;
+  /** 采用的首帧（相对作品目录）：还没有成片时显示在缩略图位置 */
+  keyframe?: string;
+  workPath?: string | null;
   onGenerate: () => void;
 }
 
@@ -110,6 +129,8 @@ export const ShotNode: React.FC<ShotNodeProps> = ({
   canGenerate,
   generateBlockedReason,
   readFile,
+  keyframe,
+  workPath = null,
   onGenerate,
 }) => {
   const label = `镜头 ${index + 1}`;
@@ -161,9 +182,12 @@ export const ShotNode: React.FC<ShotNodeProps> = ({
           <span className={`${styles.thumbText} ${styles.thumbFailed}`}>
             生成失败：{progress.text}
           </span>
+        ) : keyframe ? (
+          <MediaImage path={keyframe} workPath={workPath} alt={`${label} 首帧`} />
         ) : (
           <span className={styles.thumbText}>{shot.camera || '未生成'}</span>
         )}
+        {progress.kind !== 'done' && keyframe && <span className={styles.versionBadge}>首帧</span>}
         {progress.kind === 'done' && (
           <span className={styles.versionBadge}>
             v{progress.version}

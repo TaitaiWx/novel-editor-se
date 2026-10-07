@@ -153,6 +153,75 @@ describe('状态持久化', () => {
     expect(renumberShots([shot('a'), shot('b')], 7).next).toBe(9);
   });
 
+  it('首帧 / 预演截图：只保留存在的镜头与安全的相对路径，并随 JSON 往返', () => {
+    const parsed = parseSceneVideoState({
+      schemaVersion: 1,
+      chapter: '001',
+      scene: '雪夜',
+      storyboard: {
+        shots: [
+          { id: 'shot-1', description: 'a' },
+          { id: 'shot-2', description: 'b' },
+        ],
+      },
+      keyframes: {
+        'shot-1': ' 资料/视频/001/雪夜/首帧-1.png ',
+        'shot-2': '../外面.png',
+        ghost: '资料/a.png',
+      },
+      previz: {
+        'shot-1': '/etc/passwd',
+        'shot-2': '资料/视频/001/雪夜/预演-2.png',
+        'shot-3': '资料/b.png',
+      },
+    });
+    expect(parsed?.keyframes).toEqual({ 'shot-1': '资料/视频/001/雪夜/首帧-1.png' });
+    expect(parsed?.previz).toEqual({ 'shot-2': '资料/视频/001/雪夜/预演-2.png' });
+    expect(parseSceneVideoState(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
+
+    const rejected = parseSceneVideoState({
+      schemaVersion: 1,
+      chapter: '001',
+      scene: '雪夜',
+      storyboard: { shots: [{ id: 'shot-1', description: 'a' }] },
+      keyframes: { 'shot-1': 'C:/x.png' },
+      previz: { 'shot-1': '资料//a.png' },
+    });
+    expect(rejected?.keyframes).toEqual({});
+    expect(rejected?.previz).toEqual({});
+    for (const value of ['', '   ', 7, null]) {
+      const state = parseSceneVideoState({
+        schemaVersion: 1,
+        chapter: '001',
+        scene: '雪夜',
+        storyboard: { shots: [{ id: 'shot-1', description: 'a' }] },
+        keyframes: { 'shot-1': value },
+        previz: 'not-a-map',
+      });
+      expect(state?.keyframes).toEqual({});
+      expect(state?.previz).toEqual({});
+    }
+    expect(baseState().keyframes).toEqual({});
+    expect(baseState().previz).toEqual({});
+  });
+
+  it('删除镜头时移除它的首帧 / 预演；重新生成分镜时全部清空', () => {
+    let state = replaceStoryboardShots(baseState(), [shot('a'), shot('b')]);
+    state = {
+      ...state,
+      keyframes: { 'shot-1': '资料/k1.png', 'shot-2': '资料/k2.png' },
+      previz: { 'shot-1': '资料/p1.png', 'shot-2': '资料/p2.png' },
+    };
+    const removed = removeShot(state, 'shot-1');
+    expect(removed.keyframes).toEqual({ 'shot-2': '资料/k2.png' });
+    expect(removed.previz).toEqual({ 'shot-2': '资料/p2.png' });
+    // 不修改原状态
+    expect(state.keyframes['shot-1']).toBe('资料/k1.png');
+    const replaced = replaceStoryboardShots(removed, [shot('c')]);
+    expect(replaced.keyframes).toEqual({});
+    expect(replaced.previz).toEqual({});
+  });
+
   it('排序与编辑', () => {
     const state = replaceStoryboardShots(baseState(), [shot('a'), shot('b'), shot('c')]);
     const moved = moveShot(state.storyboard.shots, 'shot-3', 'shot-1');

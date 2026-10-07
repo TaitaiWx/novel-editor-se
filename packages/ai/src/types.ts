@@ -68,6 +68,10 @@ export interface VideoGenerationRequest {
   resolution?: string;
   /** 首帧参考图：http(s) URL 或 data URL（base64） */
   firstFrameImage?: string;
+  /** 尾帧（首尾帧夹住动作，模型支持时） */
+  lastFrameImage?: string;
+  /** 人物参考图（三视图 / 主要形象图，保持人物一致；模型支持时） */
+  referenceImages?: readonly string[];
   seed?: number;
   watermark?: boolean;
 }

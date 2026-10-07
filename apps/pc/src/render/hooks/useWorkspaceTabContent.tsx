@@ -1,4 +1,9 @@
-import { parseCharacterDesign, resolveCover } from '@novel-editor/core/entity-media';
+import {
+  characterReferencePaths,
+  isSafeMediaPath,
+  parseCharacterDesign,
+  resolveCover,
+} from '@novel-editor/core/entity-media';
 import React, { useMemo, lazy } from 'react';
 import { DEFAULT_CHARACTER_HIGHLIGHT_COLOR } from '@/render/components/RightPanel/utils';
 import {
@@ -160,11 +165,15 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
         // 人物设计里的外貌 / 服装优先（保持各镜头人物一致），没有时用简介；参考图用图集封面
         const design = parseCharacterDesign(item.design);
         const look = [design.appearance, design.outfit].filter(Boolean).join('；');
+        const turnaround = item.media?.find((media) => media.kind === 'turnaround')?.path;
         return {
           name: item.name,
           aliases: item.aliases,
           avatar: resolveCover(item.media, item.avatar),
           appearance: look || item.description,
+          ...(turnaround ? { turnaround } : {}),
+          // 视频参考图只能是作品内的图片文件（旧版 data URL 头像不作参考）
+          referencePaths: characterReferencePaths(item.media, item.avatar).filter(isSafeMediaPath),
         };
       }),
     [workspaceCharacters]
@@ -197,6 +206,23 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
           content={editorContent}
           onCharactersChange={syncWorkspaceCharacters}
           onOpenSourceLocation={handleOpenSourceLocation}
+          growthLevels={growthLevels}
+          onOpenCharacter={(id) => openFileInTab(createCharacterWorkspaceTab({ id }))}
+          renderGrowthOverview={() => (
+            <GrowthView
+              key={`growth-overview-embedded-${scopePath ?? ''}`}
+              folderPath={scopePath}
+              dbReady={dbReady}
+              currentChapter={growthChapter}
+              embedded
+              onNavigateCharacter={handleOpenGrowth}
+              onCreateSheet={
+                handleCreateGrowthSheet
+                  ? (options) => void handleCreateGrowthSheet(options)
+                  : undefined
+              }
+            />
+          )}
         />
       ),
       [WORKSPACE_TAB_LORE]: (

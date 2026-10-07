@@ -29,11 +29,15 @@ export interface MediaKindOption {
   aspectRatio: string;
 }
 
+/**
+ * 人物只分两类：三视图（生成视频时保持人物不崩的参考）与形象图（其余所有图：立绘、服装、表情、背景…）；
+ * 形象图里选一张作为「主要形象图」（封面）。旧数据中的其他类型一律按形象图显示
+ */
 export const CHARACTER_MEDIA_KINDS: readonly MediaKindOption[] = [
   {
     kind: 'portrait',
     label: '形象图',
-    hint: '半身或全身立绘，作为人物的主形象',
+    hint: '立绘、服装、表情、场景里的人物都算形象图；选一张作为主要形象图',
     aspectRatio: '3:4',
   },
   {
@@ -42,16 +46,29 @@ export const CHARACTER_MEDIA_KINDS: readonly MediaKindOption[] = [
     hint: '正面 / 侧面 / 背面同一张图，生成视频时用来保持人物不崩',
     aspectRatio: '16:9',
   },
-  { kind: 'outfit', label: '服装', hint: '同一人物的不同服装 / 装备', aspectRatio: '3:4' },
-  { kind: 'expression', label: '表情', hint: '喜怒哀乐等表情特写', aspectRatio: '1:1' },
-  { kind: 'background', label: '背景', hint: '人物在常出现的场景里', aspectRatio: '16:9' },
 ];
 
+/** 设定只有一类「图片」，选一张作为封面 */
 export const LORE_MEDIA_KINDS: readonly MediaKindOption[] = [
-  { kind: 'concept', label: '概念图', hint: '地点 / 物品 / 势力的整体样貌', aspectRatio: '16:9' },
-  { kind: 'background', label: '场景', hint: '可以作为场景视频背景的画面', aspectRatio: '16:9' },
-  { kind: 'other', label: '细节', hint: '纹样、器物、地图局部等细节', aspectRatio: '1:1' },
+  {
+    kind: 'concept',
+    label: '图片',
+    hint: '地点 / 物品 / 势力的样貌，也可作为场景视频的背景',
+    aspectRatio: '16:9',
+  },
 ];
+
+/** 旧类型归并到当前的分类（人物：三视图之外都是形象图；设定：都是图片） */
+export function normalizeMediaKind(entity: EntityKind, kind: MediaKind): MediaKind {
+  if (entity === 'lore') return 'concept';
+  return kind === 'turnaround' ? 'turnaround' : 'portrait';
+}
+
+/** 封面在界面上的叫法 */
+export const COVER_LABEL: Record<EntityKind, string> = {
+  character: '主要形象图',
+  lore: '封面',
+};
 
 export const IMAGE_STYLES = ['写实', '国漫', '水墨', '厚涂插画', '电影感'] as const;
 
@@ -157,25 +174,39 @@ export function resolveCover(
   return (preferred ?? list[0]).path;
 }
 
-/** 按类型分组（保持类型选项的顺序，未知类型放最后） */
+/** 按类型分组（保持类型选项的顺序；不在选项里的旧类型归入第一个选项） */
 export function groupMediaItems(
   items: readonly MediaItem[],
   options: readonly MediaKindOption[]
 ): Array<{ option: MediaKindOption; items: MediaItem[] }> {
-  const known = options.map((option) => ({
-    option,
-    items: items.filter((item) => item.kind === option.kind),
-  }));
-  const knownKinds = new Set(options.map((option) => option.kind));
-  const rest = items.filter((item) => !knownKinds.has(item.kind));
-  const groups = known.filter((group) => group.items.length > 0);
-  if (rest.length > 0) {
-    groups.push({
-      option: { kind: 'other', label: '其他', hint: '', aspectRatio: '1:1' },
-      items: rest,
-    });
-  }
-  return groups;
+  if (options.length === 0) return [];
+  const known = new Set(options.map((option) => option.kind));
+  const kindOf = (item: MediaItem) => (known.has(item.kind) ? item.kind : options[0].kind);
+  return options
+    .map((option) => ({ option, items: items.filter((item) => kindOf(item) === option.kind) }))
+    .filter((group) => group.items.length > 0);
+}
+
+/** 改一张图的类型（右键「设为三视图 / 设为形象图」） */
+export function setMediaKind(
+  items: readonly MediaItem[],
+  id: string,
+  kind: MediaKind
+): MediaItem[] {
+  return items.map((item) => (item.id === id ? { ...item, kind } : item));
+}
+
+/** 生成视频用的人物参考图：三视图优先，其次主要形象图（最多 limit 张） */
+export function characterReferencePaths(
+  items: readonly MediaItem[] | undefined,
+  cover: string | undefined,
+  limit = 3
+): string[] {
+  const list = items ?? [];
+  const turnarounds = list.filter((item) => item.kind === 'turnaround').map((item) => item.path);
+  const main = resolveCover(list, cover);
+  const paths = [...turnarounds, ...(main ? [main] : [])];
+  return Array.from(new Set(paths)).slice(0, limit);
 }
 
 // ─── 人物设计 ───────────────────────────────────────────────────────────

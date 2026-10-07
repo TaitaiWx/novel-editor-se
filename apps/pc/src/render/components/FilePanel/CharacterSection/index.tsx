@@ -66,6 +66,8 @@ interface CharacterSectionProps {
   onCreateCharacter: () => void;
   /** 打开成长档案：传人物名为单个成长卡，null 为总览；未提供时不显示成长相关入口 */
   onOpenGrowth?: (characterName?: string | null) => void;
+  /** 打开人物总览（人物维度：人物 / 成长 / 关系） */
+  onOpenOverview?: () => void;
   onContextMenu: (event: React.MouseEvent, target: ObjectContextMenuTarget) => void;
 }
 
@@ -89,6 +91,7 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
   onDeleteCharacter,
   onCreateCharacter,
   onOpenGrowth,
+  onOpenOverview,
   onContextMenu,
 }) => {
   const [helpOpen, setHelpOpen] = useState(false);
@@ -126,18 +129,18 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
                     <AiOutlineQuestionCircle />
                   </button>
                 </Tooltip>
-                <Tooltip content="成长总览：所有角色的等级、提醒与被遗忘的配角" position="top">
-                  <button
-                    type="button"
-                    className={styles.headerAction}
-                    onClick={() => onOpenGrowth(null)}
-                    aria-label="打开成长档案总览"
-                  >
-                    <AiOutlineAppstore />
-                  </button>
-                </Tooltip>
               </>
             )}
+            <Tooltip content="人物总览：每个人物的形象、设计、成长与关系" position="top">
+              <button
+                type="button"
+                className={styles.headerAction}
+                onClick={() => (onOpenOverview ? onOpenOverview() : onOpenGrowth?.(null))}
+                aria-label="打开人物总览"
+              >
+                <AiOutlineAppstore />
+              </button>
+            </Tooltip>
             <Tooltip content="新建人物" position="top">
               <button
                 type="button"

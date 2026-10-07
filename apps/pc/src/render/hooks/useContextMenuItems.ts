@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { referenceItemFor, requestOpenReference } from '@/render/utils/referencePane';
 import { isStoryFilePath } from '@/render/utils/workspace';
 import type { WorkspaceEntityActions } from './useWorkspaceEntityActions';
 import type { WorkspaceState } from './state/useWorkspaceState';
@@ -263,7 +264,15 @@ export function useContextMenuItems(ctx: UseContextMenuItemsContext) {
     const node = contextMenu.target.node;
     const pasteTargetDir =
       node.type === 'directory' ? node.path : node.path.substring(0, node.path.lastIndexOf('/'));
+    const reference = node.type === 'file' ? referenceItemFor(node.path) : null;
     const items = [
+      // 图片 / 视频：在编辑器旁边的参考窗格里看，边看边写
+      ...(reference
+        ? [
+            menuItem('在编辑器旁边打开', () => requestOpenReference({ items: [reference] })),
+            menuItem('', () => {}, { separator: true }),
+          ]
+        : []),
       menuItem('重命名', () => void handleRename(node.path)),
       menuItem('', () => {}, { separator: true }),
       menuItem('复制', () => handleCopyFile(node.path)),
