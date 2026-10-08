@@ -207,7 +207,10 @@ describe('getShortcutConfigs', () => {
     expect(byId('saveAs')).toBe('Cmd+Shift+S');
     expect(byId('exportProject')).toBe('Cmd+Shift+E');
     expect(byId('toggleFullscreen')).toBe('Ctrl+Cmd+F');
-    expect(byId('toggleDevTools')).toBe('Cmd+Alt+I');
+    expect(configs.find((c) => c.id === 'toggleDevTools')).toMatchObject({
+      accelerator: 'Cmd+Alt+I',
+      devOnly: true,
+    });
     expect(configs.find((c) => c.id === 'reload')).toMatchObject({
       accelerator: 'Cmd+R',
       devOnly: true,
@@ -221,7 +224,15 @@ describe('getShortcutConfigs', () => {
     expect(configs.map((c) => c.id)).not.toContain('reload');
     expect(configs.map((c) => c.id)).not.toContain('hide');
     expect(configs.map((c) => c.id)).not.toContain('toggleFullscreen');
-    expect(configs.find((c) => c.id === 'toggleDevTools')?.accelerator).toBe('Ctrl+Shift+I');
+    // 生产版本没有开发者工具快捷键
+    expect(configs.map((c) => c.id)).not.toContain('toggleDevTools');
+  });
+
+  it('开发模式 Windows/Linux 的开发者工具是 Ctrl+Shift+I', async () => {
+    const { getShortcutConfigs } = await loadFresh('linux', false);
+    expect(getShortcutConfigs().find((c) => c.id === 'toggleDevTools')?.accelerator).toBe(
+      'Ctrl+Shift+I'
+    );
   });
 
   it('同一平台内加速键不重复', async () => {
@@ -284,9 +295,13 @@ describe('getAllShortcuts', () => {
     expect(new Set(descriptions).size).toBe(descriptions.length);
   });
 
-  it('开发者工具快捷键归入「视图」分类', async () => {
-    const { getAllShortcuts } = await loadFresh('linux', true);
-    expect(getAllShortcuts().find((s) => s.accelerator === 'Ctrl+Shift+I')?.category).toBe('视图');
+  it('快捷键总览不列出开发者工具（开发与生产版本都不列）', async () => {
+    for (const packaged of [true, false]) {
+      const { getAllShortcuts } = await loadFresh('linux', packaged);
+      const list = getAllShortcuts();
+      expect(list.some((s) => s.description.includes('开发者工具'))).toBe(false);
+      expect(list.some((s) => s.accelerator === 'Ctrl+Shift+I')).toBe(false);
+    }
   });
 });
 

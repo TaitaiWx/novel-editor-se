@@ -198,6 +198,25 @@ describe('成长档案：首次使用', () => {
     await page.waitForTarget(GROWTH_HELP);
     await page.press('Escape');
     await page.waitForGone(GROWTH_HELP);
+
+    // 文件面板「角色」的「?」：角色使用说明（人物设计 / 图集 / 成长 / 经历 / 关系 / 正文），底部切到成长档案说明
+    const CHARACTER_HELP = '[role="dialog"][aria-label="角色使用说明"]';
+    await page.click('section[aria-label="角色"] [aria-label="角色使用说明"]');
+    await page.waitForTarget(CHARACTER_HELP);
+    const characterHelpText = await page.evaluate<string>(
+      (sel: string) => document.querySelector(sel)?.textContent ?? '',
+      CHARACTER_HELP
+    );
+    for (const title of ['人物设计与声音', '图集与形象图', '经历与状态', '关系与高亮', '正文里的人物']) {
+      expect(characterHelpText).toContain(title);
+    }
+    await page.click({ text: '图集与形象图', within: CHARACTER_HELP, exact: true });
+    await page.waitForTarget({ text: '主要形象图', within: CHARACTER_HELP });
+    await captureForReview(page, 'character-help');
+    await page.click({ text: '成长档案说明', within: CHARACTER_HELP, exact: true });
+    await page.waitForTarget({ text: '3 步上手', within: GROWTH_HELP, exact: true });
+    await page.press('Escape');
+    await page.waitForGone(GROWTH_HELP);
   });
 
   it('2. 「⋯」菜单同步人物卡 / 设定到记忆文件夹', async () => {

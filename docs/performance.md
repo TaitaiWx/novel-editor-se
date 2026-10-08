@@ -1,92 +1,41 @@
-# 性能优化审计报告
+# 性能
 
-## 审计结论
+记录渲染进程的性能要点、已经做过的优化、基准测试和后续方向。新增功能时请沿用这里的约定（只处理可见范围、懒加载、ref 读取最新值）。
 
-项目整体性能达到业界良好水平，核心组件均遵循了 React + CodeMirror 6 的最佳实践。以下是各模块的详细评估和已实施的优化。
+相关代码与基准：
 
-## 各组件性能评级
+- 编辑器：`apps/pc/src/render/components/TextEditor/`（`editor-runtime.ts` 懒加载、`writing-decorations.ts`、`live-preview/`、`assist/`）
+- 文件树：`apps/pc/src/render/components/FileTree/index.tsx`
+- 基准：`apps/pc/test/render/components/TextEditor/live-preview-view.test.ts`（10 万行 / 5MB 文档，每视口构建中位数 < 16ms）、`latex-demo.test.ts`
 
-| 组件             | 评级           | 说明                                                  |
-| ---------------- | -------------- | ----------------------------------------------------- |
-| TextEditor (CM6) | 优秀           | Compartment 动态重配、Ref 回调避免重建、viewport 装饰 |
-| RightPanel       | 优秀           | 所有解析结果 useMemo、所有回调 useCallback            |
-| LoadingSpinner   | 完美           | 纯 CSS 动画 + GPU 加速 transform，零 JS 开销          |
-| ContentPanel     | 良好           | 干净的透传组件，无额外计算                            |
-| FileTree         | 良好（已优化） | React.memo + useMemo 排序，增量文件信息获取           |
-| FilePanel        | 良好           | 新增文件搜索使用 useMemo 过滤                         |
-| App.tsx          | 良好           | useCallback 覆盖所有回调，useRef 存储最新值           |
+## 编辑器（CodeMirror 6）
 
-## 已实施的优化
+| 约定                                         | 说明                                                                                     |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| EditorView 只创建一次                        | 切换文件替换文档内容；配置变化用 Compartment / `appendConfig` 重配，不销毁重建           |
+| 只处理可见范围                               | 写作装饰、人物高亮、人物悬停识别只扫 viewport；实时渲染只构建「可见范围 + 余量」内的顶层块 |
+| 增量更新                                     | 实时渲染在文档 / 选区变化时只重建受影响的块；IME 组字期间只映射位置不重建               |
+| 渲染缓存与预算                               | KaTeX 结果按源码 LRU 缓存；widget 渲染有每帧预算（`render-cache.ts` `hasRenderBudget`），超出的下一帧再渲染 |
+| 懒加载                                       | 语言包、实时渲染（KaTeX 单独分包）、AI 辅助经 `editor-runtime.ts` 动态导入；DiffEditor、版本历史等用 `React.lazy`；three.js 只在 3D 预演时动态导入 |
+| ref 回调                                     | 编辑器回调与 AI 辅助配置经 ref 读取最新值，避免闭包过期与重复挂载扩展                   |
+| 大文件提示                                   | 超过 500KB 显示提示                                                                       |
+| 人物识别缓存                                 | 悬停卡片按「文档版本 → 行」缓存识别结果；人物高亮正则按名字长度倒序一次编译，人物列表变化时才重建 |
 
-### 1. 写作装饰正则缓存 (`writing-decorations.ts`)
+## React
 
-**优化前**：每次击键触发 `buildDecorations`，每次都重新编译人物名称正则 `new RegExp(...)`。
+- 文件树行 `React.memo`；排序 / 过滤 / 解析结果 `useMemo`，回调 `useCallback`
+- 文件信息增量获取：只对 `fileInfoMap` 里没有的新路径批量请求（`get-file-info-batch`），删除的路径从 map 清理，卸载后用 `cancelled` 标志丢弃结果
+- `App.tsx` 只做组合，状态与逻辑拆到 hooks，面板状态放 ref，减少不必要的重渲染
+- 动画用 CSS（transform / opacity），不用 JS 驱动
 
-**优化后**：正则在扩展创建时预编译一次（`buildCharRegex`），ViewPlugin 实例整个生命周期内复用。仅当通过 Compartment 重配置更换扩展时才重建正则。
+## 自动保存
 
-### 2. FileTree 增量文件信息获取 (`FileTree/index.tsx`)
+2 秒防抖、内容未变不写盘、写作日志写入不阻塞保存，详见 [autosave-optimization.md](autosave-optimization.md)。
 
-**优化前**：`files` prop 任何变化都重新获取所有文件的 FileInfo（100 个文件 = 100 次 IPC 调用）。
+## 后续方向（目前无需）
 
-**优化后**：
-
-- 仅获取 `fileInfoMap` 中尚不存在的新增路径
-- 已有路径的 FileInfo 直接复用
-- 不再存在的路径从 map 中清理
-- 添加 `cancelled` 标志防止组件卸载后 setState
-
-### 3. 专注模式居中 (`App.module.scss`)
-
-编辑区内容最大宽度限制为 800px 并居中显示，减少大屏幕下的阅读宽度，符合排版最佳实践。
-
-## 架构级性能分析
-
-### CodeMirror 6 集成 — 业界最佳实践
-
-| 实践                                     | 状态 |
-| ---------------------------------------- | ---- |
-| 单次 EditorView 创建 + useEffect cleanup | ✅   |
-| Compartment 动态重配置（避免销毁重建）   | ✅   |
-| ViewPlugin 仅在 viewport 范围内构建装饰  | ✅   |
-| Ref 回调替代 state 传递（避免闭包过期）  | ✅   |
-| 大文件阈值警告（500KB）                  | ✅   |
-| 懒加载语言支持                           | ✅   |
-
-### React 性能模式
-
-| 实践                                | 状态 |
-| ----------------------------------- | ---- |
-| 树形组件 React.memo（FileTreeItem） | ✅   |
-| useMemo 缓存排序/过滤/解析结果      | ✅   |
-| useCallback 稳定化回调              | ✅   |
-| useRef 存储面板状态避免闭包重渲染   | ✅   |
-| CSS 动画替代 JS 动画                | ✅   |
-
-### 自动保存策略
-
-- 2 秒防抖延迟，避免频繁写盘
-- 卸载时同步保存未持久化内容
-- 仅在内容实际变化时触发（对比原始内容）
-
-## 潜在优化方向（未来）
-
-### 1. Context API 替代 prop drilling
-
-当前 App.tsx → FilePanel → FileTree → FileTreeItem 的 prop 链路较深。对于 1000+ 文件的项目，可考虑 Context API 减少中间组件的重渲染。
-
-**影响**：中等（主要影响文件树操作后的渲染帧数）
-**优先级**：低（当前 React.memo 已缓解大部分问题）
-
-### 2. 虚拟滚动
-
-当文件树或大纲面板节点超过 500 个时，可引入 `react-window` 进行虚拟化。
-
-**影响**：仅影响超大项目，当前小说项目通常不超过 200 个文件
-**优先级**：低
-
-### 3. Web Worker 大纲提取
-
-对于超长文本（100 万字+），大纲提取可移至 Web Worker 中异步执行，避免阻塞主线程。
-
-**影响**：仅影响极大文件
-**优先级**：低（当前 O(n) 算法足够快）
+| 方向                         | 触发条件                                 |
+| ---------------------------- | ---------------------------------------- |
+| 文件树 / 大纲虚拟滚动        | 单层节点超过约 500 个                    |
+| 用 Context 减少文件树 prop 链 | 1000+ 文件的项目出现明显重渲染            |
+| 大纲提取移到 Web Worker      | 单文件百万字级，`extractOutline` 阻塞输入 |

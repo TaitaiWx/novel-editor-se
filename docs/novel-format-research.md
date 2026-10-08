@@ -1,6 +1,8 @@
-# 自定义小说格式：调研结论（2026-10）
+# Novel Markdown 调研结论（2026-10）
 
-> 状态：调研完成，**尚未实现**。设计稿见 `docs/novel-format.md`；本文件记录调研结论、推荐的第一期范围与待决问题，确认后再动手。
+Novel Markdown（小说文档格式）动手前的调研记录：外部工具兼容性、解析方案、第一期范围与风险。属于背景资料，当前格式与实现状态以 [novel-format.md](novel-format.md) 为准。
+
+> 状态：第一期已实现（front-matter、`:::scene`、`::video` / `::image` / `::audio`、`:char` 显示、字数口径、`ne lint`）。与下文推荐不同的落地决定：指令按行识别（没有写 Lezer 扩展）；媒体经 `read-file-binary` 读成 blob 地址（没有做 Range 自定义协议）；视频 `src` 相对作品目录；场景不跨章、平铺不嵌套；`ne fmt` 与导出转换尚未实现。
 
 ## 结论
 
@@ -8,9 +10,9 @@
 - 通用指令（generic directives）至今**没有进入 CommonMark 规范**（2014 年起的提案仍在讨论），事实标准是 remark-directive / MyST / Pandoc，三者都用 `:::` 容器。
 - npm 上**没有现成的 Lezer 指令扩展**，需要自己写。`@lezer/markdown` 的 composite 块是逐行判断「是否继续」的，做成对的 `:::…:::` 很别扭，且删除一个闭合行会让整篇结构重排。
   - 推荐做法：把 `:::scene{…}` 与 `:::` 解析成两种「标记行」（不做嵌套语法节点），由 core 的块索引第二遍计算场景范围。工作量与现有 `math-syntax.ts`（约 120 行）相当，未闭合的容器也不会吞掉后文。
-- 字数口径要改：`packages/core/src/text-stats.ts` 现在统计全部非空白字符，front-matter 与指令语法会被算进字数；状态栏、写作日志、`ne stats` 需要共用一个「去掉标记再统计」的函数。
+- 字数口径要改：`packages/core/src/text-stats.ts` 现在统计全部非空白字符，front-matter 与指令语法会被算进字数；状态栏、写作日志、`ne stats` 需要共用一个「去掉标记再统计」的函数。（已实现：core `stripNovelMarkup`。）
 - 视频嵌入需要新的资源通道：现在的 `read-file-binary` 把整个文件读成 base64，不适合视频；需要一个只读、校验路径在作品目录内、支持 Range 的 `protocol.handle` 自定义协议（例如 `ne-asset://`）。
-- 导出层（`core/export.ts`，txt / md / docx）用正则去 Markdown 语法，不认识指令，需要同步处理；目前没有 epub。
+- 导出层（`core/export.ts`，txt / md / docx）用正则去 Markdown 语法，不认识指令，需要同步处理；目前没有 epub。（尚未实现。）
 
 ## 语法在其他工具里的显示
 

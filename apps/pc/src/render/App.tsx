@@ -224,7 +224,6 @@ const App: React.FC = () => {
               setShowSettingsCenter(true);
             }}
             onShowShortcuts={() => setShowShortcuts(true)}
-            onShowAbout={() => setShowAboutDialog(true)}
             onOpenSampleData={handleOpenSampleData}
             onOpenAIAssistant={() => setShowAIAssistant(true)}
             onExportProject={handleExportProject}

@@ -1023,6 +1023,21 @@ describe('小说编辑器 GUI', () => {
     await page.click('[aria-label="关闭设置"]');
     await page.waitForGone({ text: '设置中心', exact: true });
 
+    // 标题栏齿轮菜单不再重复「关于小说编辑器」（入口在应用菜单、状态栏版本面板与设置中心）
+    await page.click('[aria-label="打开设置"]');
+    await page.waitForTarget({ text: '软件设置', exact: true });
+    await page.waitForTarget({ text: '打开示例项目', exact: true });
+    expect(
+      await page.evaluate<boolean>(() =>
+        Array.from(document.querySelectorAll('button')).some(
+          (button) => button.textContent?.trim() === '关于小说编辑器'
+        )
+      )
+    ).toBe(false);
+    // 再次点击齿轮收起菜单
+    await page.click('[aria-label="打开设置"]');
+    await page.waitForGone({ text: '软件设置', exact: true });
+
     // 状态栏版本面板 →「关于…」→ 关于小窗口
     await page.click({ text: `v${pkg.version}`, exact: true });
     await page.click({ text: '关于…', exact: true });

@@ -307,11 +307,43 @@ describe('CharacterSection（角色与成长档案合一）', () => {
     expect(screen.getByRole('note').textContent).toContain('成长档案');
     fireEvent.click(screen.getAllByText('新建人物').at(-1) as HTMLElement);
     expect(props.onCreateCharacter).toHaveBeenCalled();
-    fireEvent.click(screen.getByLabelText('角色与成长档案使用说明'));
-    expect(screen.getByRole('dialog', { name: '成长档案使用说明' })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('角色使用说明'));
+    expect(screen.getByRole('dialog', { name: '角色使用说明' })).toBeTruthy();
     fireEvent.click(screen.getByLabelText('关闭使用说明'));
     fireEvent.click(screen.getByText('怎么用？'));
-    expect(screen.getByRole('dialog', { name: '成长档案使用说明' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: '角色使用说明' })).toBeTruthy();
+  });
+
+  // 回归：「角色」的使用说明曾经只有成长档案的内容
+  it('角色使用说明覆盖人物详情各分页，底部可切到成长档案说明', () => {
+    renderSection();
+    fireEvent.click(screen.getByLabelText('角色使用说明'));
+    const dialog = screen.getByRole('dialog', { name: '角色使用说明' });
+    for (const title of [
+      '人物设计与声音',
+      '图集与形象图',
+      '成长档案',
+      '经历与状态',
+      '关系与高亮',
+      '正文里的人物',
+    ]) {
+      expect(dialog.textContent).toContain(title);
+    }
+    expect(dialog.textContent).not.toContain('重新查看引导');
+    fireEvent.click(screen.getByText('成长档案说明'));
+    const growth = screen.getByRole('dialog', { name: '成长档案使用说明' });
+    expect(growth.textContent).toContain('3 步上手');
+    expect(growth.textContent).toContain('重新查看引导');
+    fireEvent.click(screen.getByLabelText('关闭使用说明'));
+    // 再次打开时回到角色说明
+    fireEvent.click(screen.getByLabelText('角色使用说明'));
+    expect(screen.getByRole('dialog', { name: '角色使用说明' })).toBeTruthy();
+  });
+
+  it('没有成长档案入口时也能打开角色使用说明', () => {
+    renderSection({ onOpenGrowth: undefined });
+    fireEvent.click(screen.getByLabelText('角色使用说明'));
+    expect(screen.getByRole('dialog', { name: '角色使用说明' })).toBeTruthy();
   });
 
   it('筛选无结果与折叠', () => {

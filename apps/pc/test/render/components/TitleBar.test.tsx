@@ -55,7 +55,6 @@ describe('TitleBar', () => {
       onOpenSettings: vi.fn(),
       onShowShortcuts: vi.fn(),
       onOpenSampleData: vi.fn(),
-      onShowAbout: vi.fn(),
       onExportProject: vi.fn(),
     };
     render(<TitleBar {...fns} />);
@@ -64,7 +63,6 @@ describe('TitleBar', () => {
       ['设置中心', fns.onOpenSettings],
       ['键盘快捷键', fns.onShowShortcuts],
       ['打开示例项目', fns.onOpenSampleData],
-      ['关于小说编辑器', fns.onShowAbout],
       ['导出项目', fns.onExportProject],
     ];
     for (const [label, fn] of cases) {
@@ -75,13 +73,22 @@ describe('TitleBar', () => {
     }
   });
 
+  // 「关于」在应用菜单、状态栏版本面板与设置中心「关于」分区，齿轮菜单里不再重复
+  it('设置菜单不包含「关于小说编辑器」', () => {
+    render(
+      <TitleBar onOpenSettings={vi.fn()} onExportProject={vi.fn()} onOpenSampleData={vi.fn()} />
+    );
+    fireEvent.click(screen.getByLabelText('打开设置'));
+    expect(screen.getByText('打开示例项目')).toBeTruthy();
+    expect(screen.queryByText(/关于/)).toBeNull();
+  });
+
   it('设置菜单只显示提供了回调的可选项', () => {
     render(<TitleBar />);
     fireEvent.click(screen.getByLabelText('打开设置'));
     expect(screen.getByText('软件设置')).toBeTruthy();
     expect(screen.queryByText('设置中心')).toBeNull();
     expect(screen.queryByText('导出项目')).toBeNull();
-    expect(screen.queryByText('关于小说编辑器')).toBeNull();
     // 没有回调时点击快捷键项也不抛错
     expect(() => fireEvent.click(screen.getByText('键盘快捷键'))).not.toThrow();
   });

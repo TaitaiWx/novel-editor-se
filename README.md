@@ -13,7 +13,7 @@
 
 ## 示例作品集
 
-首次启动会自动打开示例作品集（源文件在 [apps/pc/sample-data](apps/pc/sample-data)）：一部分两卷的 6 章小说《星河旅人》、短篇《剑与诗》、设定笔记、预置的成长档案（林舟 / 苏晴）、人物与设定卡、可预览的图片 / PDF / 音频 / Office 文件。打开根目录的 `欢迎使用.md`，按里面的步骤 1～2 步就能体验每个功能。它同时也是 GUI E2E 测试的 fixture，修改方式见 agents.md「示例作品集」。
+首次启动会自动打开示例作品集（源文件在 [apps/pc/sample-data](apps/pc/sample-data)）：一部分两卷的 6 章小说《星河旅人》、短篇《剑与诗》、设定笔记、预置的成长档案（林舟 / 苏晴）、人物与设定卡、可预览的图片 / PDF / 音频 / Office 文件。打开根目录的 `欢迎使用.md`，按里面的步骤 1～2 步就能体验每个功能。它同时也是 GUI E2E 测试的 fixture，修改后需运行 `pnpm exec tsx apps/pc/scripts/sample-content-hash.mts --bump` 递增示例版本（`apps/pc/test/main/sample-data.test.ts` 会校验）。
 
 ## 键盘快捷键
 
@@ -80,7 +80,7 @@ packages/
   components/       # 共享 UI 组件
 ```
 
-完整的技术规范、目录约定与命令说明见 [agents.md](agents.md)。
+设计与流程文档见 [docs/README.md](docs/README.md)。
 
 ## 技术栈
 

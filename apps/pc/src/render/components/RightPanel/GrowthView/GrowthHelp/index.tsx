@@ -1,23 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import OverlayPortal from '../../../OverlayPortal';
-import {
-  GROWTH_GUIDE_SECTIONS,
-  GROWTH_GUIDE_SUMMARY,
-  GROWTH_QUICK_START,
-  GROWTH_GUIDE_TITLE,
-  GROWTH_TOUR_STORAGE_KEY,
-  type GuideBlock,
-  type GrowthGuideSectionId,
-} from '../growthGuide';
+import type { GuideBlock, GuideContent } from '../../../../utils/guideContent';
+import { GROWTH_GUIDE, GROWTH_TOUR_STORAGE_KEY } from '../growthGuide';
 import styles from './styles.module.scss';
 
 interface GrowthHelpProps {
   open: boolean;
   onClose: () => void;
+  /** 显示的说明（默认成长档案；角色分区传角色使用说明） */
+  guide?: GuideContent;
+  /** 底部操作：提供时替换默认的「重新查看引导」（例如角色说明切换到成长档案说明） */
+  footerAction?: { hint: string; label: string; onClick: () => void };
   /** 重新播放首次引导；未提供时（例如从文件面板打开）改为「下次打开成长卡时显示」 */
   onStartTour?: () => void;
   /** 打开后滚动到该章节 */
-  section?: GrowthGuideSectionId | null;
+  section?: string | null;
 }
 
 function Block({ block }: { block: GuideBlock }) {
@@ -62,9 +59,17 @@ function Block({ block }: { block: GuideBlock }) {
 }
 
 /**
- * 成长档案「使用说明」抽屉：从右侧滑出，正文来自 growthGuide.ts（与 docs/growth-guide.md 同源）
+ * 「使用说明」抽屉：从右侧滑出。默认是成长档案（growthGuide.ts，与 docs/growth-guide.md 同源），
+ * 角色分区传入角色使用说明（CharactersView/characterGuide.ts）
  */
-export const GrowthHelp: React.FC<GrowthHelpProps> = ({ open, onClose, onStartTour, section }) => {
+export const GrowthHelp: React.FC<GrowthHelpProps> = ({
+  open,
+  onClose,
+  guide = GROWTH_GUIDE,
+  footerAction,
+  onStartTour,
+  section,
+}) => {
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [tourQueued, setTourQueued] = useState(false);
 
@@ -73,11 +78,13 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({ open, onClose, onStartTo
       setTourQueued(false);
       return;
     }
-    const target = section ? bodyRef.current?.querySelector(`#growth-guide-${section}`) : null;
+    const target = section
+      ? bodyRef.current?.querySelector(`#${guide.anchorPrefix}-${section}`)
+      : null;
     if (target instanceof HTMLDetailsElement) target.open = true;
     if (target instanceof HTMLElement) target.scrollIntoView?.({ block: 'start' });
     else bodyRef.current?.scrollTo?.({ top: 0 });
-  }, [open, section]);
+  }, [open, section, guide]);
 
   const replayTour = () => {
     if (onStartTour) {
@@ -96,14 +103,9 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({ open, onClose, onStartTo
   return (
     <OverlayPortal open={open} onClose={onClose} closeOnEscape className={styles.layer}>
       <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
-      <aside
-        className={styles.drawer}
-        role="dialog"
-        aria-modal="true"
-        aria-label={GROWTH_GUIDE_TITLE}
-      >
+      <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label={guide.title}>
         <header className={styles.header}>
-          <h2 className={styles.title}>{GROWTH_GUIDE_TITLE}</h2>
+          <h2 className={styles.title}>{guide.title}</h2>
           <button
             type="button"
             className={styles.close}
@@ -114,18 +116,22 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({ open, onClose, onStartTo
           </button>
         </header>
         <div ref={bodyRef} className={styles.body}>
-          <p className={styles.summary}>{GROWTH_GUIDE_SUMMARY}</p>
+          <p className={styles.summary}>{guide.summary}</p>
           <section className={styles.quickStart} aria-label="3 步上手">
             <h3 className={styles.sectionTitle}>3 步上手</h3>
             <ol className={styles.steps}>
-              {GROWTH_QUICK_START.map((item) => (
+              {guide.quickStart.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ol>
           </section>
           <h4 className={styles.moreTitle}>需要时再看</h4>
-          {GROWTH_GUIDE_SECTIONS.map((item) => (
-            <details key={item.id} id={`growth-guide-${item.id}`} className={styles.details}>
+          {guide.sections.map((item) => (
+            <details
+              key={item.id}
+              id={`${guide.anchorPrefix}-${item.id}`}
+              className={styles.details}
+            >
               <summary className={styles.detailsSummary}>{item.title}</summary>
               <div className={styles.detailsBody}>
                 {item.blocks.map((block, index) => (
@@ -136,12 +142,25 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({ open, onClose, onStartTo
           ))}
         </div>
         <footer className={styles.footer}>
-          <span className={styles.footerHint}>
-            {tourQueued ? '下次打开成长卡时会重新显示引导' : '也可以在终端用 ne growth --help 查看'}
-          </span>
-          <button type="button" className={styles.footerButton} onClick={replayTour}>
-            重新查看引导
-          </button>
+          {footerAction ? (
+            <>
+              <span className={styles.footerHint}>{footerAction.hint}</span>
+              <button type="button" className={styles.footerButton} onClick={footerAction.onClick}>
+                {footerAction.label}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className={styles.footerHint}>
+                {tourQueued
+                  ? '下次打开成长卡时会重新显示引导'
+                  : '也可以在终端用 ne growth --help 查看'}
+              </span>
+              <button type="button" className={styles.footerButton} onClick={replayTour}>
+                重新查看引导
+              </button>
+            </>
+          )}
         </footer>
       </aside>
     </OverlayPortal>

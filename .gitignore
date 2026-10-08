@@ -56,3 +56,13 @@ apps/pc/dist.retired-*/
 
 # pnpm dev / start 用的本地化 Electron 副本（macOS 菜单栏显示「小说编辑器」）
 apps/pc/.electron-dev/
+004-test-bignovel.txt
+
+# 本地协作说明与待办（只留在本机，不上传）
+agents.md
+AGENTS.md
+todo.md
+
+# 各处打开项目时产生的本机数据（示例作品集的配置 / 种子 / 版本需要随仓库分发，单独放行）
+.novel-editor/
+!apps/pc/sample-data/.novel-editor/

@@ -1,7 +1,35 @@
-# 小说文档格式设计：Markdown + 指令（Novel Markdown）
+# 小说文档格式（Novel Markdown）
 
-> 状态：第一期已实现（front-matter、`:::scene` 场景容器、`::video` 视频卡片、行内 `:char` 统计口径、`ne lint`；代码在 core `novel-format.ts` 与 `TextEditor/live-preview/novel-directives.ts`）。本文其余部分（人物链接、导出转换、增量解析等）仍是设计稿。
-> 相关：`docs/roadmap-ai-creative.md`（人物悬停卡片、场景视频）、`packages/basic-algorithm/src/outline/extract-acts.ts`（现有「第X幕 / 第X场」识别）、`apps/pc/src/render/components/TextEditor/live-preview/`（现有 Markdown 实时渲染）。
+在 Markdown（CommonMark + GFM + `$` 公式）之上加 YAML front-matter 与通用指令（generic directives），扩展名仍为 `.md`。本文是格式设计稿，并标注哪些已经实现；调研背景见 [novel-format-research.md](novel-format-research.md)。
+
+相关代码：
+
+- 纯函数（GUI / CLI 共用）：`packages/core/src/novel-format.ts`（`parseFrontMatter`、`parseDirectiveLine` / `parseDirectiveAttributes`、`stripNovelMarkup`、`extractNovelScenes`、`lintNovelMarkup`、`imageDirectiveSource` / `videoDirectiveSource` / `audioDirectiveSource`）；结构行规则 `structure-rules.ts`
+- 编辑器渲染：`apps/pc/src/render/components/TextEditor/live-preview/novel-directives.ts`、`media-loader.ts`、`media-figure.tsx`
+- 大纲 / 卷纲识别场景容器：`packages/basic-algorithm/src/outline/novel-markers.ts`
+- CLI：`apps/cli/src/commands/lint.ts`（`ne lint`）
+- 示例：示例作品集根目录 `小说格式示例.md`、`声音示例.md`
+- 测试：`apps/pc/test/render/components/TextEditor/novel-directives.test.ts`、`packages/core/test/novel-format.test.ts`
+
+## 实现状态
+
+| 内容 | 状态 | 说明 |
+|---|---|---|
+| front-matter | ✅ 解析 | 只支持本章元数据需要的最小 YAML 子集；字数统计跳过（编辑器里按普通文本显示） |
+| `:::scene{#id title=… pov=…}` … `:::` | ✅ | **平铺、不嵌套**；未闭合时在下一个场景、≤2 级标题或章 / 幕结构行处结束；编辑器显示场景条；目录 / 卷纲识别为「场景」 |
+| `::video` / `::image` / `::audio` | ✅ | 就地显示播放器 / 图片 / 音频播放条，可「在旁边看 / 听」（参考窗格）；`src` 相对作品目录，从文件所在目录逐级向上查找 |
+| `:char[文字]{id=…}` | ✅ 显示与统计 | 显示称呼（人物色、虚下划线），字数只计方括号里的文字；指向人物卡的链接、出场统计未做 |
+| 结构行（第一章 / Chapter 1 / 第一幕 / Act II …） | ✅ | 不需要 `#`，规则可配置，见 [outline-algorithm.md](outline-algorithm.md) |
+| 字数口径 | ✅ | `stripNovelMarkup`：去掉 front-matter 与指令行（行数不变），状态栏、写作日志、`ne stats` 共用 |
+| `ne lint [path] [--strict]` | ✅ | 未闭合场景、多余 `:::`、重复场景 id、媒体指令缺少 `src` |
+| `:::act` 容器 | ❌ | 幕继续用「第X幕」结构行 |
+| `::character`、`:note` / `:::note`、`:ref`、`::growth` | ❌ | 设计稿 |
+| 自定义资源协议（Range 读取视频） | ❌ | 目前经 `read-file-binary` 读成 blob 地址并缓存 |
+| 块索引 / 增量哈希、`ne fmt`、`ne scene list`、`ne refs` | ❌ | 设计稿 |
+| 导出转换（txt / md / docx 去指令、epub / pdf） | ❌ | `core/export.ts` 尚不识别指令 |
+| 编辑器内的指令错误标记 | ❌ | 目前只有 `ne lint` |
+
+以下各节是原始设计，标注「已实现」之外的部分仍待实施。
 
 ## 0. 结论
 
@@ -21,7 +49,7 @@
 3. **对 AI 友好**：指令是可读的纯文本，AI 生成、修改、`ne file write` 都不需要特殊 API；`ne lint` 能给出机器可读的错误。
 4. **降级优雅**：不认识指令的工具看到的是 `::video{src="…"}` 一行原文，而不是乱码或丢内容。
 
-扩展名：保持 `.md`。识别依据是项目配置（`.novel-editor/config.json` 的 `documentFormat: "novel-md/1"`）或文件 front-matter 的 `novel: 1`，不靠扩展名；这样 Git 平台、外部编辑器、操作系统的「打开方式」都不受影响。
+扩展名：保持 `.md`，Git 平台、外部编辑器、操作系统的「打开方式」都不受影响。（设计曾考虑用项目配置 `documentFormat` 或 front-matter `novel: 1` 标记格式版本；**实际实现不做标记，所有 .md 都识别指令**。）
 
 ## 1. 语法
 
@@ -71,7 +99,7 @@ tags: [离乡, 伏笔-星图]
 
 - `#id` 是稳定标识：大纲面板拖动调整顺序、场景视频、AI 摘要缓存都按 id 关联，改标题不丢关联
 - 与现有约定兼容：没有容器指令时，`extract-acts.ts` 继续按「第X幕 / 第X场」标题识别；`ne fmt --scenes` 可把标题约定一键转换为容器（见 §5）
-- 容器嵌套只允许 `act > scene`，其他容器（`note`）可以出现在任意位置
+- 容器嵌套只允许 `act > scene`，其他容器（`note`）可以出现在任意位置（**已实现的第一期只有平铺的 `:::scene`，没有 `:::act`**）
 - **未闭合的容器**：在下一个同级容器开始、或 ≤ 2 级标题处结束，并在开始行显示错误标记（与 `$$` 在空行处结束同一思路），绝不吞掉后面整篇文档
 
 ### 1.3 人物引用（悬停卡片）
@@ -101,7 +129,7 @@ tags: [离乡, 伏笔-星图]
 ::video[港口离别]{src="资料/视频/s-1-1-港口.mp4" poster="资料/视频/s-1-1-港口.jpg" scene=s-1-1 start=0 end=12}
 ```
 
-- 与 `roadmap-ai-creative.md` 的「场景视频」工作区对接：生成完成后插入这一行，`scene` 指回场景 id
+- 与 [roadmap-ai-creative.md](roadmap-ai-creative.md) 的「场景视频」工作区对接：生成完成后插入这一行，`scene` 指回场景 id
 - 正文只存路径与元数据，视频文件不进 Git（建议 `.gitignore` 忽略 `资料/视频/*.mp4`，或用 Git LFS）
 
 ### 1.6 批注与修订
@@ -137,6 +165,8 @@ tags: [离乡, 伏笔-星图]
 ## 2. 解析
 
 ### 2.1 语法层：`@lezer/markdown` 扩展
+
+> 实际实现：第一期没有写 Lezer 扩展，指令按**行**识别（core `parseDirectiveLine` 等纯函数），编辑器在实时渲染的可见范围内逐行处理；下文是后续需要语法树时的方案。
 
 与 `live-preview/math-syntax.ts` 相同的方式新增 `directive-syntax.ts`（不依赖 DOM / KaTeX，可随 markdown 语言包加载，core 也能用）：
 
@@ -252,8 +282,10 @@ AI 通过 CLI 写作时直接输出指令文本（例如场景容器、`:char` �
 
 ## 8. 分期
 
+> 已完成：第 1 期（属性解析 + `ne lint`）、第 2 期的 `:::scene` 场景条与大纲识别（`:char` 只做了显示）、第 3 期的 `::image` / `::video`（另加 `::audio`，未做自定义资源协议与 `::character`）。
+
 1. 语法扩展 + 属性解析 + `ne lint`（只读，不改变任何渲染）
-2. `:char` 悬停卡片（与 `roadmap-ai-creative.md` 第 1 期合并）、`:::scene` 场景条、大纲面板读取场景 id
+2. `:char` 悬停卡片（与 [roadmap-ai-creative.md](roadmap-ai-creative.md) 第 1 期合并）、`:::scene` 场景条、大纲面板读取场景 id
 3. `::image` / `::character` / `::video` widget、自定义资源协议
 4. `ne fmt` 迁移、导出器中间结构、docx / epub 导出
 5. 块索引常驻 daemon、AI 场景摘要缓存

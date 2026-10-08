@@ -1,169 +1,55 @@
-# SQLite 存储层设计 (`@novel-editor/store`)
+# SQLite 存储层（`@novel-editor/store`）
 
-## 概述
+`packages/store` 基于 better-sqlite3 提供项目级结构化存储：作品、人物、设定、大纲、创意卡、设置、版本快照、视频任务等。本文说明数据库位置、作品作用域、表结构与导入导出。
 
-`packages/store/` 包封装了基于 `better-sqlite3` 的 SQLite 持久化层，为小说编辑器提供结构化数据存储。
+相关代码：
 
-## 当前状态
+- 连接与表结构：`packages/store/src/db/connection.ts`（`initDatabase`，WAL）、`db/schema.ts`（建表 + 增量迁移 `migrateTables`）
+- 各表操作：`db/novels.ts`、`characters.ts`、`world-settings.ts`、`outlines.ts`、`story-ideas.ts`、`settings.ts`、`stats.ts`、`ai-cache.ts`、`video-tasks.ts`；版本快照 `versioning.ts`
+- 作品作用域与旧数据迁移：`db/work-scope.ts`；种子数据：`db/seed.ts`（`seedProjectData`）；导入导出：`db/export-import.ts`
+- 主进程 IPC：`apps/pc/src/main/handlers/database/`、`handlers/database.ts`、`handlers/versioning.ts`（通道均以 `db-` 开头，白名单在 `preload.ts`）
+- 原生模块：better-sqlite3 由 `electron-rebuild` 针对 Electron ABI 重建（`apps/pc` postinstall），本地补丁 `patches/better-sqlite3@12.10.0.patch`
 
-**已接入应用主流程，并成为默认持久化与版本存储层。**
-
-### 已实现的部分
-
-1. **数据库初始化**：`initDatabase(dbDir)` 按项目创建/切换 SQLite 文件，启用 WAL 模式
-2. **业务表 + 版本表**：除作品/角色/设定等表外，新增 `version_snapshots`、`version_entries`、`version_blobs`
-3. **完整 CRUD 操作**：`novelOps`、`characterOps`、`statsOps`、`settingsOps`、`versionOps`
-4. **IPC 通道已注册**：主进程和 preload 已接入 store 相关通道
-5. **导入/导出**：支持包含版本快照在内的完整数据库 JSON 导入导出
-
-### 集成方式
-
-应用打开任意项目文件夹时，会自动在项目内创建隐藏目录 `.novel-editor/`，并把数据库放在其中：
+## 位置与作用域
 
 ```text
 <project>/
-├─ chapter-01.md
-├─ notes/
+├─ novels/<作品>/...
 └─ .novel-editor/
-   └─ novel-editor.db
+   └─ novel-editor.db      # 一个项目一个库（.gitignore 忽略，示例作品集不随包分发数据库）
 ```
 
-这样既保证项目级隔离，也不污染用户可见文件树。
+- 每部作品一条 `novels` 记录（`folder_path` = 作品目录的绝对路径）；`*-by-folder` IPC 传作品路径即按作品读写。项目根的记录只承载版本快照与写作统计
+- 普通文件夹（没有 `ne init`）整体视为一部作品
+- 打开项目时（`db-init`）：只有一部作品且它还没有内容时，项目根记录下的旧人物 / 设定 / 大纲整体改挂到该作品（`migrateProjectContentToWork`）；其他情况不动，旧数据作为「未归属」作用域继续可见
+- 示例作品集的人物 / 设定 / 大纲来自 `.novel-editor/seed.json`：`db-init` 后 `seedProjectData` 只在某作品还没有记录时写入，绝不覆盖用户数据
 
 ## 表结构
 
-### novels — 作品/项目
+| 表                    | 用途                                   | 要点                                                                                     |
+| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `novels`              | 作品 / 项目                            | `folder_path` 唯一                                                                       |
+| `characters`          | 人物                                   | `attributes` 为 JSON（别名、头像、人物设计、声音、图集等）、`sort_order`                 |
+| `world_settings`      | 设定资料库                             | `category`、`tags`（JSON）、`attributes`（JSON：分类目录、封面、图集；迁移补列）         |
+| `outlines`            | 章纲 / 卷纲 / 作品大纲（树形）         | `scope_kind`（project / volume / chapter）+ `scope_path`、`parent_id`、`anchor_text`、`line_hint` |
+| `outline_versions`    | 大纲版本中心                           | `source`（import / rebuild / ai / manual）、`tree_json`、可关联创意卡                    |
+| `story_idea_cards`    | 灵感 / 三签创意卡                      | 题眼 / 冲突 / 变形签等字段、`status`                                                     |
+| `story_idea_outputs`  | 创意卡衍生候选                         | `type`（logline / scene_hook / outline_direction）                                       |
+| `settings`            | 键值设置                               | 设置中心 JSON、卷纲覆盖层等；AI Key 不在这里（见 [roadmap-ai-creative.md](roadmap-ai-creative.md)） |
+| `ai_cache`            | AI 结果缓存                            | `(cache_key, type)` 主键                                                                 |
+| `video_tasks`         | 场景视频任务                           | `data_json` 存完整任务对象，状态机在 `@novel-editor/video`                               |
+| `version_snapshots` / `version_entries` / `version_blobs` | 版本快照 | 见 [version-management.md](version-management.md)                                        |
+| `writing_stats`       | 历史遗留，GUI 不读写                   | 每日写作统计以 `.novel-editor/writing-log.json` 为准（core `writing-log.ts`，GUI 与 CLI 共用） |
+| `acts` / `scenes`     | 历史遗留，只在导出时带出               | 幕 / 场现在从正文实时提取（[outline-algorithm.md](outline-algorithm.md)）                |
 
-| 字段        | 类型        | 说明           |
-| ----------- | ----------- | -------------- |
-| id          | INTEGER PK  | 自增主键       |
-| name        | TEXT        | 作品名         |
-| description | TEXT        | 简介           |
-| folder_path | TEXT UNIQUE | 对应文件夹路径 |
-| created_at  | TEXT        | 创建时间       |
-| updated_at  | TEXT        | 更新时间       |
+新增列一律在 `migrateTables` 里用 `hasColumn` 判断后 `ALTER TABLE`，保证旧库可直接打开。
 
-### characters — 角色
+## 导入导出
 
-| 字段        | 类型       | 说明                          |
-| ----------- | ---------- | ----------------------------- |
-| id          | INTEGER PK | 自增主键                      |
-| novel_id    | INTEGER FK | 所属作品                      |
-| name        | TEXT       | 角色名                        |
-| role        | TEXT       | 角色定位                      |
-| description | TEXT       | 描述                          |
-| attributes  | TEXT       | JSON 格式属性（技能、等级等） |
-| sort_order  | INTEGER    | 排序                          |
+`exportAllData` / `importData`（IPC `db-export` / `db-import`、`db-export-to-file` / `db-import-from-file`）把整个库导出为 JSON，包含作品、人物、设定、大纲及其版本、创意卡与版本快照（含 Blob）。`seed.json` 沿用同一行结构，路径相对项目根。
 
-### acts — 幕/剧结构
+## 选型
 
-| 字段        | 类型       | 说明     |
-| ----------- | ---------- | -------- |
-| id          | INTEGER PK | 自增主键 |
-| novel_id    | INTEGER FK | 所属作品 |
-| title       | TEXT       | 幕标题   |
-| description | TEXT       | 描述     |
-| sort_order  | INTEGER    | 排序     |
-
-### scenes — 场景
-
-| 字段       | 类型       | 说明         |
-| ---------- | ---------- | ------------ |
-| id         | INTEGER PK | 自增主键     |
-| act_id     | INTEGER FK | 所属幕       |
-| title      | TEXT       | 场景标题     |
-| summary    | TEXT       | 摘要         |
-| file_path  | TEXT       | 对应文件路径 |
-| sort_order | INTEGER    | 排序         |
-
-### outlines — 大纲
-
-| 字段       | 类型              | 说明                 |
-| ---------- | ----------------- | -------------------- |
-| id         | INTEGER PK        | 自增主键             |
-| novel_id   | INTEGER FK        | 所属作品             |
-| title      | TEXT              | 标题                 |
-| content    | TEXT              | 内容                 |
-| parent_id  | INTEGER FK (self) | 父节点，支持树形结构 |
-| sort_order | INTEGER           | 排序                 |
-
-### world_settings — 设定资料库
-
-| 字段     | 类型       | 说明                         |
-| -------- | ---------- | ---------------------------- |
-| id       | INTEGER PK | 自增主键                     |
-| novel_id | INTEGER FK | 所属作品                     |
-| category | TEXT       | 分类（规则、技能、世界观等） |
-| title    | TEXT       | 条目标题                     |
-| content  | TEXT       | 正文                         |
-| tags     | TEXT       | JSON 标签数组                |
-
-### writing_stats — 写作统计
-
-> 历史遗留表，GUI 目前不写入也不读取。每日写作统计（GUI 保存与 CLI 写入）统一记录在 `<project>/.novel-editor/writing-log.json`（`@novel-editor/core` writing-log），`ne stats today/history` 读取该文件。
-
-| 字段             | 类型       | 说明           |
-| ---------------- | ---------- | -------------- |
-| id               | INTEGER PK | 自增主键       |
-| novel_id         | INTEGER FK | 所属作品       |
-| date             | TEXT       | 日期           |
-| word_count       | INTEGER    | 字数           |
-| duration_seconds | INTEGER    | 写作时长（秒） |
-
-### settings — 用户设置
-
-| 字段  | 类型    | 说明   |
-| ----- | ------- | ------ |
-| key   | TEXT PK | 设置键 |
-| value | TEXT    | 设置值 |
-
-### version_snapshots — 版本快照
-
-| 字段        | 类型       | 说明         |
-| ----------- | ---------- | ------------ |
-| id          | INTEGER PK | 自增主键     |
-| novel_id    | INTEGER FK | 所属项目     |
-| message     | TEXT       | 版本说明     |
-| total_files | INTEGER    | 快照文件数   |
-| total_bytes | INTEGER    | 快照总字节数 |
-| created_at  | TEXT       | 创建时间     |
-
-### version_entries — 快照文件索引
-
-| 字段          | 类型       | 说明             |
-| ------------- | ---------- | ---------------- |
-| snapshot_id   | INTEGER FK | 所属快照         |
-| relative_path | TEXT       | 项目内相对路径   |
-| content_hash  | TEXT FK    | 引用的 Blob 哈希 |
-| byte_size     | INTEGER    | 文件大小         |
-| is_binary     | INTEGER    | 是否为二进制资源 |
-| mime_type     | TEXT       | MIME 类型        |
-
-### version_blobs — 去重内容仓库
-
-| 字段         | 类型    | 说明             |
-| ------------ | ------- | ---------------- |
-| content_hash | TEXT PK | SHA-256 内容哈希 |
-| content      | BLOB    | 文件原始内容     |
-| byte_size    | INTEGER | 原始字节数       |
-| is_binary    | INTEGER | 是否为二进制     |
-| mime_type    | TEXT    | MIME 类型        |
-
-## 技术选型说明
-
-### 为什么选择 SQLite + better-sqlite3
-
-1. **同步 API**：`better-sqlite3` 是同步的，避免了 `node-sqlite3` 的回调/Promise 嵌套，代码简洁
-2. **性能**：WAL 模式提供优秀的读写并发性能，远超 JSON 文件读写
-3. **零配置**：嵌入式数据库，无需额外安装或运行数据库服务
-4. **Electron 友好**：作为 native addon，项目已通过 `electron-rebuild` 固化 Electron ABI 重建流程
-5. **事务支持**：批量操作可用事务保证原子性
-
-### 版本存储策略
-
-为兼顾性能和复杂素材支持，当前采用：
-
-1. **全文件快照语义**：每次保存版本都记录完整文件清单，恢复逻辑简单可靠。
-2. **内容去重**：相同文件内容只存一次 Blob，避免图片和二进制资源重复入库。
-3. **自动忽略内部目录**：`.novel-editor/`、`.git/`、`node_modules/`、构建目录不会被纳入快照。
-4. **文本/二进制分流**：文本直接进入 DiffEditor，图片支持左右版本对比，PDF 支持多页缩略图和页码跳转，音频支持双播放器预览，其他二进制资源展示元信息对比。
+- better-sqlite3 同步 API，代码简单；WAL 模式读写性能好
+- 嵌入式、零配置，事务保证批量写入与快照原子性
+- 原生模块的 ABI 重建已固化在安装流程中

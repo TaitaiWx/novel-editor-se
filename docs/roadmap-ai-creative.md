@@ -1,146 +1,103 @@
-# AI 创作能力规划：人物悬停卡片 · 场景视频 · Grok 续写
+# AI 创作能力：模型配置 · 人物悬停卡片 · 续写 · 场景视频
 
-> 状态：设计已确认。**第一期基础设施已完成**（见下方「0.1 实现状态」）；人物悬停卡片、Grok 续写界面、场景视频工作区在后续分期实现。
+本文记录 AI 相关功能的设计取舍与实现状态：AI 基础设施（模型列表、密钥、流式、任务队列）、人物悬停卡片、续写、场景视频（分镜 / 生成 / 样片 / 声音 / 3D 预演）与参考窗格。各期均已实现，剩余事项见文末「待做与未验证」。
 
+相关代码：
 
-## 0. 先做的基础设施（三个功能共用）
+- `packages/ai`：Provider 抽象与注册表（`types.ts`、`registry.ts`）、内置实现（`providers/`：`openai-compatible`、`grok`、`image.ts`、`minimax-video`、`seedance-video`、`speech.ts`）、`sse.ts` / `http.ts` / `errors.ts`、上下文组装（`context/`）、提示词（`prompts/`：续写、分镜、预演、动作）、`motion.ts`
+- `packages/video`：分镜模型与校验、任务状态机与队列、落盘布局、费用、声音模型（`audio.ts`）、预演脚本（`previz*.ts`）、样片拼接 `./stitch`（仅渲染进程）
+- 主进程：`apps/pc/src/main/ai/`（`provider-config.ts` 模型列表、`model-migration.ts` 旧版迁移、`credential-store.ts` 密钥、`service.ts` 默认模型与请求、`model-actions.ts`）、`main/video/`（`runner.ts`、`download.ts`）、`handlers/ai.ts`、`ai-providers.ts`、`video.ts`、`video-scene.ts`、`scene-audio.ts`、`character-avatar.ts`
+- 协议与类型：`apps/pc/src/shared/ai.ts`、`shared/ai-models.ts`（服务商预设）、`render/types/ai-api.ts`
+- 渲染进程：设置中心 `AppSettingsCenter/AiSection`；编辑器辅助 `TextEditor/assist/`、`hooks/useEditorAssist.ts`、`utils/continuationService.ts`；场景视频 `components/SceneVideoView/`；参考窗格 `components/ReferencePane/`
+- CLI：`apps/cli/src/commands/ai.ts`、`video.ts`
 
-现状：`apps/pc/src/main/handlers/ai.ts` 只有一个 OpenAI 兼容的 `/chat/completions` 非流式调用，API Key 明文保存在设置里。三个新功能都依赖下面这层：
+## 1. 基础设施
 
-| 模块 | 内容 |
-|---|---|
-| **Provider 注册表**（main） | `AIProvider { id, kind: 'text' \| 'video', capabilities, invoke / stream / submitTask / pollTask }`。首批：`openai-compatible`（现有）、`grok`（xAI，OpenAI 兼容接口，`https://api.x.ai/v1`）、`minimax-video`、`seedance-video`（火山引擎方舟）。设置中心按 Provider 分组配置 |
-| **密钥安全** | 改用 Electron `safeStorage` 加密保存 API Key；渲染进程永远拿不到明文，只通过 IPC 发起请求 |
-| **流式输出** | 新增 `ai-stream` 通道（MessagePort 推送 token），支持中途取消（AbortController） |
-| **异步任务队列**（视频） | main 进程持久化任务表（SQLite）：提交 → 轮询 → 下载 → 落盘；应用重启后恢复轮询；失败可重试；并发与费用上限可配置 |
-| **上下文组装器**（core） | 统一从 章正文 / 章纲 / 卷纲 / 人物卡 / 设定 / 成长档案 组装提示词上下文，按 token 预算裁剪；GUI 与 CLI 共用，CLI 增加 `ne ai continue` / `ne video …` |
+### 模型列表（按能力）
 
-### 0.1 实现状态（第一期 · 基础设施）
+- 设置中心「AI」：最上方「启用 AI 功能」总开关；文本 / 图片 / 视频 / 语音四个能力各一张**模型列表**，可添加多个模型、设默认、测试连接、编辑、停用、删除（Key 一并删除）
+- 配置存 `userData/ai-providers.json`（schemaVersion 2，应用全局、不随项目）：`models[]`（`{ id, capability, vendor, label, preset?, baseUrl?, model?, enabled, temperature?, maxTokens?, contextTokens?, pricePerSecond?, voice?, … }`）+ 每个能力的默认模型 `defaults` + 视频队列设置
+- `vendor` 是协议实现（openai-compatible / grok / seedream-image / minimax-image / grok-image / minimax-video / seedance-video / openai-speech / minimax-speech）；OpenAI、DeepSeek、xAI Grok、通义、Kimi、智谱、Ollama 等只是**服务商预设**（`AI_MODEL_PRESETS`，预填协议、地址、推荐模型，每个预设上方注明核对的官方文档与日期）
+- 默认模型由主进程 `AIService.resolveDefaultId(capability)` 统一决定：作者选定的 > 第一个已保存 Key 且启用的 > 第一个；省略模型的请求（续写、成长推演、章纲、配音、出图等）都走它
+- 「沿用已保存的 Key」：同协议 + 同地址的模型可在主进程内复制 Key
+- 旧版（schemaVersion 1 的内置服务 + 自定义服务）第一次读取时迁移，原文件备份为 `ai-providers.v1.json`，id / 名称 / 参数 / Key 不变
 
-| 模块 | 位置 | 状态 |
-|---|---|---|
-| Provider 抽象 + 注册表 | `packages/ai`（`TextProvider` complete / stream、`VideoProvider` submit / poll / fetchResult，AbortSignal） | ✅ |
-| openai-compatible / grok | `packages/ai/src/providers/`（原 `handlers/ai.ts` 逻辑迁入，行为不变；Grok 走 `https://api.x.ai/v1`） | ✅ |
-| minimax-video / seedance-video | 同上；接口与假设写在文件头和 `*_ENDPOINTS` 常量 | ✅（按公开文档映射，未用真实 Key 联调） |
-| SSE 解析 / 重试退避 / 错误规范化 | `packages/ai/src/{sse,http,errors}.ts` | ✅ |
-| 上下文组装器 + 续写 / 分镜提示词 | `@novel-editor/ai/context`、`@novel-editor/ai/prompts` | ✅ |
-| 分镜模型、任务状态机、队列、落盘布局、费用钩子 | `packages/video` | ✅ |
-| 样片拼接（渲染进程，WebCodecs） | `@novel-editor/video/stitch`（改编自 video-maker 的 video-core） | ✅（界面待第三期） |
-| safeStorage 密钥 + 明文 Key 迁移 | `apps/pc/src/main/ai/` | ✅ |
-| 流式通道 | `ai-stream-start / cancel` + `ai-stream-event`（webContents.send，只推给发起窗口） | ✅ |
-| 视频任务队列（SQLite + 后台轮询 + 重启恢复 + 落盘） | store `video_tasks` + `apps/pc/src/main/video/` | ✅ |
-| 设置中心按 Provider 配置 | `AppSettingsCenter/AiSection`（只写 Key、测试连接） | ✅ |
-| CLI | `ne ai continue`、`ne video storyboard`、`ne video validate` | ✅ |
+### 安全
 
-实现说明与偏差：
-- 流式通道使用 `webContents.send` 推送（每个流有 streamId），没有用 MessagePort：片段量小、只需单向推送，且便于按窗口清理
-- 视频任务表在当前项目的数据库里（与作品同在），打开项目时恢复轮询；成片地址是签名地址，下载前重新获取
-- 落盘为 `镜头N-vX.mp4` + 同名 `镜头N-vX.prompt.json`（每个版本一份，可复现），而不是每个场景一个 prompt.json
-- 费用：不内置任何厂商价格，作者在设置中心填写「每秒单价」后才做预估与每日 / 单次上限检查
-- 厂商接口假设（待真实 Key 联调确认）：MiniMax 默认国内站 `https://api.minimax.cn`、duration 只取 6 / 10 秒、没有取消接口；Seedance 默认北京区 `https://ark.cn-beijing.volces.com/api/v3`，参数放在请求体顶层（旧版 1.0 模型可切换为文本命令 `--ratio …`），取消用 `DELETE /contents/generations/tasks/{id}`
+- API Key 用 Electron `safeStorage` 按模型 id 加密存于 `userData/ai-credentials.json`（0600）；系统没有可用钥匙串时以受限权限文件保存并在设置中心提示
+- 渲染进程永远拿不到明文：只能写入，读取只返回 `configured`；Key 不进设置 JSON、日志、`*.prompt.json` 或错误信息。旧设置 JSON 里的明文 Key 打开数据库时迁移进安全存储
+- 主进程校验渲染进程传入的消息、模型、地址（只允许 http(s)、不含账号密码）、作品目录与镜头参数
 
-## 1. 人物悬停卡片（体量最小，建议第一期）
+### 流式与任务
 
-**交互**
-- 正文中出现人物名或别名（已有「人物高亮」规则识别）时，鼠标悬停 300ms 弹出小卡片；移开或按 Esc 关闭；键盘光标停在人名上按 ⌘K / Ctrl+K 也可打开。
-- 卡片内容（自上而下，信息少时自动收缩）：头像（无头像显示首字圆标）、姓名与别名、分类与阵营、一句话简介、当前状态（最近 1–2 条）、成长档案（Lv.N、经验条，没有成长卡则不显示）、最近出场章节。
-- 卡片底部 2–3 个轻量操作：「打开人物」「记一笔」（复用成长档案的记一笔弹层，章节自动填当前章）「在正文中高亮全部」。
-- 不打断写作：卡片不抢焦点，输入时不弹出；IME 组字时不触发。
+- 文本：`ai-complete`、`ai-stream-start / cancel`，片段经 `ai-stream-event`（`webContents.send`，按 streamId，只推给发起窗口，每窗口最多 4 个并发流，窗口关闭自动取消）。没有用 MessagePort：片段小、单向推送、便于按窗口清理
+- HTTP：超时 + 取消、确定性指数退避，只重试限流 / 网络 / 超时 / 5xx；视频提交不重试（避免重复扣费）；错误统一为 `AIError.kind`
+- 视频任务：表 `video_tasks`（当前项目数据库）+ `main/video/runner.ts`：提交 → 轮询 → 后台下载（下载前重新获取签名地址，先写 `.part` 再改名，原样保存字节、不转码），打开数据库后恢复轮询；状态机 `queued → submitted → running → succeeded / failed / cancelled`
+- 费用：不内置价格，作者在视频模型上填「每秒单价」后才做预估与上限检查
 
-**实现要点**
-- CodeMirror `hoverTooltip` + 现有人物识别（`writing-decorations`），只在可见区域匹配；人物数据走当前作品范围（work-scope）。
-- 头像：人物卡已有 `avatar` 字段，支持从本地图片设置（存到 `<作品>/资料/人物头像/`）。
+### CLI
 
-**实现状态（第二期）** ✅：`TextEditor/assist/character-hover.ts`（hoverTooltip + ⌘K 固定卡片 + 高亮全部）、`components/CharacterHoverCard`、`components/EditorGrowthRecord`；头像 `character-avatar-save` → `<作品>/资料/人物头像/`。「最近出场章节」实现为「上次出场」：从当前章往前逐章查找（找到即停，最多 200 章），不含当前章。
+`ne ai continue`、`ne video storyboard`、`ne video validate`。CLI 不保存密钥，Key 读环境变量 `NOVEL_EDITOR_<PROVIDER>_API_KEY`（如 `NOVEL_EDITOR_GROK_API_KEY`，可选 `_BASE_URL` / `_MODEL`）；没有 Key 或 `--prompt-only` 时只输出提示词与 JSON Schema 交给 AI agent。视频生成只在 GUI 中进行。
 
-## 2. 场景视频：文字转视频（MiniMax / Seedance）
+## 2. 人物悬停卡片
 
-生成视频需要的输入多（背景、人物、剧情、镜头），不能挤在侧边栏的小卡片里。设计为一个**独立的工作区标签「场景视频」**，从正文发起，三栏布局：
+- 正文里的人物名 / 别名悬停 300ms 弹出卡片；输入中、IME 组字时不弹；Esc 关闭；⌘K / Ctrl+K 打开光标处人物
+- 卡片：头像或首字圆标、别名、分类 · 阵营、一句话简介、最近 2 条状态、成长卡 Lv / 经验条、上次出场章节（从当前章往前逐章查找，找到即停）
+- 操作：打开人物、记一笔（复用成长档案表单，章节默认当前章）、高亮全部（8 秒或 Esc 清除）
+- 代码：`TextEditor/assist/character-hover.ts`、`components/CharacterHoverCard`、`components/EditorGrowthRecord`；人物形象图经 `character-avatar-save` 存到 `<作品>/资料/人物头像/`
 
-```
-┌ 输入（左） ───────────┬ 分镜（中） ─────────────┬ 预览与任务（右） ──────┐
-│ 场景来源：第三幕 / 第一场 │ 镜头 1  远景 · 6s        │ ▶ 当前预览            │
-│  （自动截取场景正文，可改）│  月夜雪原，林舟独立…      │ 任务队列              │
-│ 背景 / 地点：雾林（来自设定）│ 镜头 2  中景 · 4s        │  · 镜头1 生成中 42%    │
-│ 人物：林舟 苏晴（头像作参考图）│  狼王从雾中现身…        │  · 镜头2 排队          │
-│ 风格：写实 / 国漫 / 水墨     │ ＋ 添加镜头              │ 历史版本 · 对比        │
-│ 比例 16:9 · 时长 · 模型      │ [AI 生成分镜]            │ 费用预估 / 已用额度     │
-└──────────────────────┴────────────────────┴────────────────────┘
-                          [生成选中镜头]  [全部生成]
-```
+## 3. 续写
 
-**流程**
-1. **发起**：在正文选中一段，或在「卷纲 / 章纲」的场景条目上点「生成场景视频」，自动带入场景正文、所在章、出场人物、地点。
-2. **补全输入**：左栏全部预填，作者只需检查；人物头像、设定图自动作为参考图（模型支持时）；缺什么就用浅色提示「补一张林舟的形象图效果更好」，而不是阻止。
-3. **分镜**：用文本模型把场景拆成 3–6 个镜头（景别、时长、画面描述、运镜），作者可增删改、拖动排序。分镜是可编辑的文本，先审后生成，避免浪费额度。
-4. **生成**：按镜头提交异步任务，右栏显示进度；可只重生成某一镜头；每次生成保留版本，可并排对比。
-5. **落盘**：视频保存到 `<作品>/资料/视频/<章>/<场景>/镜头N-vX.mp4`，附带 `prompt.json`（输入、模型、参数、费用），可复现；成片可回链到章纲场景卡片上。
+- **行内续写**：`Alt+\` 请求，幽灵文字流式出现；Tab 采纳（单独一步撤销）、Esc 放弃、`Alt+]` 换一个版本（最多 3 个后轮换）；从不自动触发，移动光标或输入即取消
+- **续写面板**（文件栏「续写」）：长度（一句 / 一段 / 约 500 字）、方向（顺着写 / 制造冲突 / 收束本章 / 自由输入）、遵循章纲、模型；结果以「建议」高亮插在光标处（采纳 / 放弃 / 换一个），可展开查看本次上下文与 token 数
+- 与最初设计的差异：建议采纳前**不进入文档**（widget），放弃不留撤销记录，自动保存与写作日志只看到采纳后的正文
+- 上下文：前文（按所选模型的上下文长度裁剪）、当前章章纲、人物卡、成长档案摘要与核心规则；`assembleWritingContext` 按预算确定性裁剪，GUI 与 CLI 同一实现
 
-**注意事项**
-- 费用控制：提交前显示预估费用；设置每日 / 单任务上限；默认只生成选中镜头。
-- 内容安全与失败：厂商拒绝时显示原因，并给出改写建议，不吞掉错误。
-- 离线可用：没有配置视频服务时，「场景视频」仍可用来写分镜脚本（导出为 Markdown 分镜表）。
+## 4. 场景视频
 
-### 2.1 实现状态（第三期 · 场景视频工作区）
+工作区标签 `__workspace__:scene-video:<章路径>#<场景>`。入口：编辑器文件栏「场景视频」、应用菜单「编辑 → 场景视频…」（⌥⌘V / Ctrl+Alt+V）、卷纲「场景」节拍、资料里的场景目录 `资料/视频/<章>/<场景>/`（单击即打开这一场的画布；`分镜.json` 是内部数据，不在资料树显示）。带入范围：选区 > 指定场景 > 光标所在「第X场」> 整章。
 
-已实现：工作区标签 `__workspace__:scene-video:<章路径>#<场景>`（`apps/pc/src/render/components/SceneVideoView/`），入口为编辑器文件栏「场景视频」、应用菜单「编辑 → 场景视频…」（⌥⌘V / Ctrl+Alt+V）、卷纲场景节拍，以及在资料里单击这一场的 `分镜.json`。
+**画布取代了最初的三栏设计**：人物 → 场景 → 镜头 1…N → 样片，可平移 / 缩放 / 拖动节点，单击节点在右侧检查器编辑。尽量去掉手动步骤：
 
-**第二版（画布）取代了最初的三栏设计**：人物 → 场景 → 镜头 1…N → 样片 的节点画布（平移 / 缩放 / 拖动节点，单击节点在右侧检查器编辑）。手动步骤尽量去掉：打开即自动拆分镜；分镜.json 与 分镜.md 自动保存在资料里（没有「导出」）；「生成 N 个镜头」只提交缺成片的镜头；全部镜头完成后自动合成样片；第一个成片出现后自动回链章纲；写入后资料面板自动刷新，「在资料中查看」直接定位。细节见 AGENTS.md「场景视频（工作区标签）」。
+- 打开时没有分镜就自动拆分（有文本模型用 AI，否则按段落）
+- 每次修改自动写 `分镜.json` 与可读的 `分镜.md`（没有「导出」）
+- 「生成 N 个镜头」只提交缺成片、没有进行中任务、且有画面描述的镜头
+- 全部镜头都有成片后自动合成样片（WebCodecs，保留各成片声音并混入配乐 / 对白 / 音效）
+- 第一个成片出现后自动在本章章纲追加「场景视频 · <场景>」
+- 写入后资料面板自动刷新，「在资料中查看」直接定位
 
-偏差：编辑器暂无自定义右键菜单，「选中文字 → 场景视频」走文件栏按钮 / 菜单 / 快捷键；章纲回链写入章纲条目（标题「场景视频 · <场景>」+ 文件相对路径）。
+落盘：`<作品>/资料/视频/<章>/<场景>/镜头N-vX.mp4` + 同名 `镜头N-vX.prompt.json`（每个版本一份，可复现）。镜头 id 固定为 `shot-<N>` 且只增不减，排序 / 删除后已有成片不会串号。
 
-## 3. Grok 续写
+### 人物一致性与首帧
 
-**交互**
-- **行内续写（Copilot 式）**：在段末按 ⌥/Alt + \\ 请求续写，灰色幽灵文字流式出现；Tab 接受、Esc 放弃、⌥] 换一个版本。默认不自动触发，避免打扰。
-- **续写面板**：编辑器工具栏「续写」按钮打开轻量弹层：长度（一句 / 一段 / 约 500 字）、方向（顺着写 / 制造冲突 / 收束本章，可自由输入一句）、是否遵循章纲。结果以「建议」形式插在光标处并高亮，可一键撤销（单次撤销即可整体回退）。
-- **上下文**：前文（按 token 预算截取）、本章章纲、出场人物卡与当前状态、成长档案（防止战力崩溃）、作者的核心规则；在弹层里可展开查看「这次带了哪些上下文」。
+- 路线：先定参考图，再图生视频。人物图集有「形象图 / 三视图」，提交视频时按镜头出场人物附带参考图（三视图优先，每镜最多 4 张）；MiniMax 映射为 `subject_reference`，Seedance 为 `reference_image`
+- 首帧（4 选 1）：用图片模型按画面描述 + 人物三视图 + 预演第一帧出 4 张，采用的随视频任务提交
+- 商用视频接口基本不支持骨骼 / 深度图控制动作，因此「预演」只作为构图与动作参考
 
-**实现要点**
-- Grok 走 Provider 注册表的 `grok` 文本 Provider（OpenAI 兼容），流式输出；模型、温度在设置中心配置。
-- 生成内容先进入「建议」状态（CodeMirror decoration），接受后才成为正文，便于撤销与写作统计区分。
+### 3D 预演
 
-**实现状态（第二期）** ✅：`TextEditor/assist/continuation*.ts`（状态机 + 幽灵文字 / 建议 widget + 快捷键）、`components/ContinuationButton`（续写面板）、`utils/continuationService.ts`（上下文组装 → `ai-stream-start`）。与设计的差异：「建议」以高亮 widget 显示在光标处、采纳时才写入文档（而不是先插入再撤销），因此放弃不会留下撤销记录，写作统计天然只计采纳的正文；采纳本身是单独一步撤销。
+- 主界面是**描述**：输入镜头动作与走位，选文本模型，「生成预演」。AI 返回 `PrevizScript`（`packages/video/src/previz.ts`，第 2 版：人物 / 道具及其关键帧、姿势、AI 直接写的关节轨迹 `motion.tracks`、视线、手部目标、机位关键帧）；没有 AI 或解析失败时用确定性默认脚本
+- three.js 舞台（动态导入）里的木偶是代码拼出的关节几何体，姿势是手写预设，**不使用外部模型或动作文件**；`motion.generate` 描述可交给 `MotionProvider`（目前无内置实现）或追加一次文本请求生成轨迹
+- 「保存预演视频」逐帧确定性渲染并用 WebCodecs 编码，保存 `镜头N-预演.mp4` + 第一帧 `镜头N-预演.png`
 
-## 4. 分期建议
+### 声音
 
-| 期 | 内容 | 依赖 |
-|---|---|---|
-| 一 | 基础设施：Provider 注册表、safeStorage、流式通道；人物悬停卡片 | 无 |
-| 二 | Grok 续写（行内 + 面板） | 流式通道、上下文组装器 |
-| 三 | 场景视频：分镜编辑（可离线）→ MiniMax / Seedance 异步任务、预览、版本 | 任务队列、Provider |
+- 场景级：配音语言、背景音乐（本地文件，音量 / 淡入淡出）、环境音、对白时自动压低配乐；镜头级：对白（说话人 / 台词 / 情绪）与音效
+- 配音用语音模型（OpenAI 兼容 `/audio/speech`、MiniMax `t2a_v2`），写入 `镜头N-台词-<id>.mp3|wav`
+- 视频模型支持声音时（目前 Seedance 的 `generate_audio`）可开「生成声音」，提示词附上对白与音效
+- 背景音乐的 AI 生成只预留了 `MusicProvider` 接口
 
-每期都需配套：UT（Provider 适配与上下文裁剪用 mock HTTP，任务队列状态机）、E2E（用本地 mock 服务模拟厂商接口，验证提交 → 进度 → 落盘 → 预览完整流程）。
+## 5. 参考窗格（写作时看图 / 视频）
 
-## 5. 人物一致性与「预演」（第一期已实现：参考图 → 首帧 4 选 1 → 3D 预演）
+媒体是为写作服务的，放在编辑器旁边而不是「大纲」面板：
 
-目标：降低门槛——作者不填专业参数，靠「挑图」快速设计；生成的视频人物不崩。
+- 文件栏「参考」开关窗格，自动列出本章引用的图片 / 视频、本章场景视频的镜头与样片、当前作品人物图，按来源分组；资料 / 图集 / 场景视频 / 正文指令都可「在旁边打开」
+- 可拖宽、排序、从资料树或系统拖入、拖到正文插入 `::image` / `::video` 指令、「缩成小卡片」悬浮在右下角；磁盘文件变化自动刷新
+- 「大纲」面板只做结构（目录 / 章纲 / 卷纲）
 
-**已完成（本期）**
-- 人物设计字段（外貌 / 服装 / 性格 / 背景 / 说话方式，`attributes.design`），续写上下文与场景视频分镜都会读取
-- 人物 / 设定图集（`资料/图集/人物|设定/<名>/`，本地上传或 AI 生成，挑一张作封面）；AI 出图类型含「三视图」，生成新图时自动带已有的三视图 / 形象图作参考图
-- 图片服务：Seedream（火山方舟，多参考图）、MiniMax image-01（人物参考）、Grok 图片（无参考图）；接口按公开文档映射，**未用真实 Key 联调**
+## 待做与未验证
 
-**调研结论**
-- 人物一致性最可靠的路线是「先定参考图，再图生视频」：三视图 / 形象图 → 每个镜头先生成一张首帧图（人物参考 + 地点图）→ 首帧 + 人物参考图生成视频。只靠文字描述做不到稳定。
-- 主力组合：出图 Seedream 4.x（最多 14 张参考图、可一次出一组风格一致的图）；视频 MiniMax H3 / Seedance 2.0（首尾帧 + 最多 9 张参考图）。模型版本更新快，默认模型名必须可配置。
-- Blender 式「骨骼 / 深度图控制动作」：商用接口基本不支持（Kling 动作控制需要一段参考视频；Wan VACE 开源方案需要本机显卡 + ComfyUI，不适合内置）。
-- 因此「预演」做成**构图摆拍 → 首帧图**：three.js 在渲染进程里摆小人（预设姿势：站 / 走 / 坐 / 跑 / 拔剑 / 对峙 / 拥抱 / 倒地）与机位（按景别），截图交给出图接口按构图重绘成首帧，可选尾帧夹住动作；运镜写进提示词。注意小人模型授权：mannequin.js 是 GPL-3.0，不能打包，改用 CC0 的骨骼模型（如 Quaternius）。
-
-**建议的实现顺序（每步一键，★ 表示作者挑图）**
-1. 视频请求增加 `referenceImages` / `lastFrameImage`，场景视频自动带出场人物的三视图（MiniMax / Seedance 映射，需真实 Key 联调）
-2. 画布在「镜头」前加「首帧」节点：人物参考 + 地点图（设定图集）+ 景别 → ★ 从 4 张里挑首帧
-3. 预演节点：three.js 摆拍（姿势 + 机位预设，拖动站位）→ 截图作为首帧构图参考
-4. 费用预估把出图也算进去（每镜首帧 + 视频）
-
-## 6. 写作时查看图片 / 视频（参考窗格已实现：停靠 / 小卡片；弹出为独立窗口待做）
-
-问题：生成的视频 / 图片是为写作服务的，写的时候需要在旁边看，而不是塞进「大纲」面板。
-
-**建议：编辑器「参考窗格」（分栏），不放进大纲**
-- 在资料、图集、场景视频画布里对任意图片 / 视频选「在旁边打开」（或 ⌥ 点击）：编辑器右侧分出一个参考窗格，左边写、右边看；窗格内可切换多张参考（缩略条），视频可逐帧 / 循环播放
-- 窗格可以「固定为小卡片」：缩成右下角的浮动小播放器 / 小图，写作时不占地方
-- 「大纲」面板保持只做结构（目录 / 章纲 / 卷纲），不混入媒体
-- 大纲弹出为独立窗口后：独立窗口里同样可以放参考窗格（上下布局：上面大纲、下面参考卡片），适合双屏——主屏写作，副屏看大纲 + 参考
-
-待你确认：分栏（编辑器右侧）还是大纲面板上下布局（下面小卡片）？确认后实现。
+- **未用真实 Key 联调**：MiniMax / Seedance 视频、Seedream / MiniMax / Grok 图片、OpenAI / MiniMax 语音的字段映射按公开文档实现，假设写在各 `providers/*.ts` 文件头与 `*_ENDPOINTS` / `*_DEFAULTS` 常量里
+- 「大纲」弹出为独立窗口后，独立窗口里还没有参考窗格（适合双屏：主屏写作、副屏看大纲 + 参考）
+- 编辑器没有自定义右键菜单，「选中文字 → 场景视频」走文件栏按钮 / 菜单 / 快捷键
+- `MotionProvider`、`MusicProvider` 只有接口，没有内置实现

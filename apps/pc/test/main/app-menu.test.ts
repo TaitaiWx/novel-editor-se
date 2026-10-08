@@ -281,6 +281,38 @@ describe('应用菜单（macOS）', () => {
     expect(win.setFullScreen).toHaveBeenCalledWith(true);
   });
 
+  it('生产版本的任何菜单里都没有开发者工具，也没有对应加速键', async () => {
+    for (const platform of ['darwin', 'win32', 'linux'] as const) {
+      const all = flatten(await buildMenu(platform, true));
+      expect(all.some((entry) => entry.label?.includes('开发者工具')), platform).toBe(false);
+      expect(
+        all.some((entry) =>
+          ['CommandOrControl+Alt+I', 'CommandOrControl+Shift+I'].includes(entry.accelerator ?? '')
+        ),
+        platform
+      ).toBe(false);
+    }
+  });
+
+  it('生产版本只有设置 NOVEL_EDITOR_ENABLE_DEVTOOLS=1 时帮助菜单才有开发者工具（内部排查）', async () => {
+    process.env.NOVEL_EDITOR_ENABLE_DEVTOOLS = '1';
+    try {
+      const help = menu(await buildMenu('darwin', true), '帮助');
+      expect(labels(help)).toContain('切换开发者工具');
+    } finally {
+      delete process.env.NOVEL_EDITOR_ENABLE_DEVTOOLS;
+    }
+  });
+
+  it('生产版本直接调用 toggleDevTools 不会打开开发者工具', async () => {
+    await buildMenu('darwin', true);
+    const win = createWindow();
+    state.focused = win;
+    const { toggleDevTools } = await import('../../src/main/shortcuts/devtools');
+    toggleDevTools();
+    expect(win.webContents.openDevTools).not.toHaveBeenCalled();
+  });
+
   it('窗口菜单：最小化 / 缩放 / 前置全部窗口', async () => {
     const template = await buildMenu('darwin', true);
     expect(template.find((t) => t.label === '窗口')?.role).toBe('windowMenu');
@@ -294,17 +326,9 @@ describe('应用菜单（macOS）', () => {
     expect(item(windowMenu, '前置全部窗口').role).toBe('front');
   });
 
-  it('帮助菜单：快捷键说明 / 更新日志 / 上传日志 / 问题反馈 / 打包版开发者工具', async () => {
+  it('帮助菜单：快捷键说明 / 更新日志 / 上传日志 / 问题反馈（生产版本没有开发者工具）', async () => {
     const help = menu(await buildMenu('darwin', true), '帮助');
-    expect(labels(help)).toEqual([
-      '快捷键说明',
-      '更新日志',
-      '─',
-      '上传日志…',
-      '问题反馈',
-      '─',
-      '切换开发者工具',
-    ]);
+    expect(labels(help)).toEqual(['快捷键说明', '更新日志', '─', '上传日志…', '问题反馈']);
     item(help, '问题反馈').click?.();
     expect(state.openExternal).toHaveBeenCalledWith(
       'https://github.com/TaitaiWx/novel-editor-se/issues'

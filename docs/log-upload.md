@@ -1,9 +1,12 @@
 # 日志上传接口约定
 
-关于窗口的「上传日志」按钮，以及崩溃 / 未捕获异常时的自动上传，都会把一个 zip 日志包 POST 到同一个接口。
-目前还没有服务端：客户端已经预留了上传逻辑，未配置地址时自动走本地兜底。本文档是给后端实现用的接口约定。
+关于窗口（及设置中心「关于」）的「上传日志」按钮，以及崩溃 / 未捕获异常时的自动上传，都会把一个 zip 日志包 POST 到同一个接口。目前还没有服务端：未配置地址时客户端自动走本地兜底。本文是给后端实现用的接口约定，并说明客户端行为。
 
-客户端实现：`apps/pc/src/main/log-upload/`（`config.ts` 配置、`bundle.ts` 打包、`uploader.ts` 上传、`service.ts` 兜底、`crash-hooks.ts` 崩溃钩子）。
+相关代码：
+
+- 客户端：`apps/pc/src/main/log-upload/`（`config.ts` 地址与大小上限、`diagnostics.ts` 诊断信息、`bundle.ts` 白名单打包、`redact.ts` 脱敏、`uploader.ts` 上传、`service.ts` 兜底保存、`crash-hooks.ts` 崩溃钩子、`settings.ts` 清理旧开关文件）
+- 共享判断：`apps/pc/src/shared/log-upload.ts`（`shouldUploadCrashReport`）
+- IPC：`log-upload-run`（`apps/pc/src/main/handlers/log-upload.ts`）；界面：`apps/pc/src/render/components/AboutDialog`、设置中心 `AppSettingsCenter/AboutSection`（共用 `hooks/useLogUpload.ts`）
 
 ## 配置上传地址
 
@@ -65,7 +68,7 @@ X-Bundle-Sha256: <zip 内容的 SHA-256，十六进制>
 
 | 路径                             | 内容                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `diagnostics.json`               | 上传原因；应用名称 / 版本 / 发布通道 / 是否安装包 / 语言；更新通道、金丝雀计划、灰度分桶与比例；设备 ID；操作系统、架构、内核版本、内存与 CPU 数；Electron / Chromium / Node / V8 版本；首次运行时间、本次启动时间与运行时长、时区；数据目录（userData / 日志 / 示例项目 / 崩溃日志）；本包的文件清单、被截断与被跳过的文件 |
+| `diagnostics.json`               | 上传原因；应用名称 / 版本 / 发布通道 / 是否安装包 / 语言；更新通道与灰度分桶 / 比例（由版本号与服务端元数据决定，用户不可选）；设备 ID；操作系统、架构、内核版本、内存与 CPU 数；Electron / Chromium / Node / V8 版本；首次运行时间、本次启动时间与运行时长、时区；数据目录（userData / 日志 / 示例项目 / 崩溃日志）；本包的文件清单、被截断与被跳过的文件 |
 | `crash.json`                     | 仅 `crash`：崩溃类型（`uncaughtException` / `unhandledRejection` / `render-process-gone` / `child-process-gone`）、错误信息、堆栈、退出原因与退出码                                                                                                                                                                         |
 | `logs/*.log`                     | electron-log 日志目录（默认 `app.getPath('logs')`）下的 `.log` 文件，最近修改的优先                                                                                                                                                                                                                                         |
 | `state/updater-state.json`       | 自动更新状态（通道、灰度分桶、版本指针、回滚目标），用于排查更新 / 回退问题                                                                                                                                                                                                                                                 |

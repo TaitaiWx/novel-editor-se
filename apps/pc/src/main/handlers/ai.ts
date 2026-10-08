@@ -5,6 +5,7 @@
  * Provider 配置、流式输出见 ./ai-providers.ts；视频任务见 ./video.ts
  */
 import { ipcMain, BrowserWindow } from 'electron';
+import { devToolsAllowed } from '../devtools-policy';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -75,6 +76,7 @@ export function registerAIHandlers(): void {
         contextIsolation: true,
         preload: path.join(__dist_dir, 'preload.js'),
         webSecurity: true,
+        devTools: devToolsAllowed(),
       },
       backgroundColor: '#1e1e1e',
       title: 'AI 助手',
@@ -144,6 +146,7 @@ export function registerAIHandlers(): void {
           contextIsolation: true,
           preload: path.join(__dist_dir, 'preload.js'),
           webSecurity: true,
+          devTools: devToolsAllowed(),
         },
         backgroundColor: '#1e1e1e',
         title: '大纲',

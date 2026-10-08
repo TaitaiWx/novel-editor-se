@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { VscSettingsGear, VscSettings, VscFolderOpened, VscExport, VscInfo } from 'react-icons/vsc';
+import { VscSettingsGear, VscSettings, VscFolderOpened, VscExport } from 'react-icons/vsc';
 import { AiOutlineClose, AiOutlineEye, AiOutlineKey, AiOutlineRobot } from 'react-icons/ai';
 import appMarkUrl from '../../../../resources/branding/app-mark.svg';
 import WindowControls from '../WindowControls';
@@ -11,8 +11,6 @@ interface TitleBarProps {
   userInitials?: string;
   onToggleFocusMode?: () => void;
   onShowShortcuts?: () => void;
-  /** 打开「关于小说编辑器」对话框 */
-  onShowAbout?: () => void;
   onOpenSettings?: () => void;
   onAvatarClick?: () => void;
   onOpenSampleData?: () => void;
@@ -26,7 +24,6 @@ const TitleBar: React.FC<TitleBarProps> = ({
   userInitials = 'U',
   onToggleFocusMode,
   onShowShortcuts,
-  onShowAbout,
   onOpenSettings,
   onAvatarClick,
   onOpenSampleData,
@@ -148,18 +145,6 @@ const TitleBar: React.FC<TitleBarProps> = ({
                   >
                     <VscFolderOpened />
                     <span>打开示例项目</span>
-                  </button>
-                )}
-                {onShowAbout && (
-                  <button
-                    className={styles.settingsItem}
-                    onClick={() => {
-                      setSettingsOpen(false);
-                      onShowAbout();
-                    }}
-                  >
-                    <VscInfo />
-                    <span>关于小说编辑器</span>
                   </button>
                 )}
                 {onExportProject && (

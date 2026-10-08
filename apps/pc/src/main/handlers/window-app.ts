@@ -8,6 +8,7 @@ import { readFile, writeFile } from 'fs/promises';
 import path from 'path';
 import { getAllShortcuts } from '../shortcuts/getAllShortcuts';
 import { syncMenuShortcuts } from '../shortcuts/registerAllShortcuts';
+import { toggleDevTools } from '../shortcuts/devtools';
 import { MENU_SYNC_SHORTCUTS_CHANNEL } from '../../shared/app-menu';
 import { getDeviceId } from '../device-id';
 import {
@@ -70,13 +71,8 @@ export function registerWindowAppHandlers(): void {
     app.quit();
   });
 
-  ipcMain.handle('dev-tools-toggle', () => {
-    const window = BrowserWindow.getFocusedWindow();
-    if (window) {
-      if (window.webContents.isDevToolsOpened()) window.webContents.closeDevTools();
-      else window.webContents.openDevTools();
-    }
-  });
+  // 生产版本忽略（devtools-policy.ts）
+  ipcMain.handle('dev-tools-toggle', () => toggleDevTools());
 
   ipcMain.handle('window-toggle-fullscreen', () => {
     const window = BrowserWindow.getFocusedWindow();

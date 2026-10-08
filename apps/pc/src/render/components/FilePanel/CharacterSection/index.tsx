@@ -8,6 +8,8 @@ import {
 } from 'react-icons/ai';
 import { resolveCover } from '@novel-editor/core/entity-media';
 import { GrowthHelp } from '../../RightPanel/GrowthView/GrowthHelp';
+import { GROWTH_GUIDE } from '../../RightPanel/GrowthView/growthGuide';
+import { CHARACTER_GUIDE } from '../../RightPanel/CharactersView/characterGuide';
 import type { Character } from '../../RightPanel/types';
 import CharacterAvatar from '../../CharacterAvatar';
 import Tooltip from '../../Tooltip';
@@ -94,7 +96,8 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
   onOpenOverview,
   onContextMenu,
 }) => {
-  const [helpOpen, setHelpOpen] = useState(false);
+  // 使用说明：默认角色说明，底部可切到成长档案说明
+  const [help, setHelp] = useState<'character' | 'growth' | null>(null);
   const { byCharacter, orphans } = useMemo(
     () => splitGrowthSheets(characters, growthSheets),
     [characters, growthSheets]
@@ -117,20 +120,16 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
         onContextMenu={(event) => onContextMenu(event, { kind: 'characters-root' })}
         actions={
           <>
-            {onOpenGrowth && (
-              <>
-                <Tooltip content="使用说明：人物设计、图集与成长档案" position="top">
-                  <button
-                    type="button"
-                    className={styles.headerAction}
-                    onClick={() => setHelpOpen(true)}
-                    aria-label="角色与成长档案使用说明"
-                  >
-                    <AiOutlineQuestionCircle />
-                  </button>
-                </Tooltip>
-              </>
-            )}
+            <Tooltip content="使用说明：人物设计、图集、成长档案与关系" position="top">
+              <button
+                type="button"
+                className={styles.headerAction}
+                onClick={() => setHelp('character')}
+                aria-label="角色使用说明"
+              >
+                <AiOutlineQuestionCircle />
+              </button>
+            </Tooltip>
             <Tooltip content="人物总览：每个人物的形象、设计、成长与关系" position="top">
               <button
                 type="button"
@@ -232,21 +231,32 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
                     <AiOutlinePlus />
                     新建人物
                   </button>
-                  {onOpenGrowth && (
-                    <button
-                      type="button"
-                      className={styles.hintLink}
-                      onClick={() => setHelpOpen(true)}
-                    >
-                      怎么用？
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={styles.hintLink}
+                    onClick={() => setHelp('character')}
+                  >
+                    怎么用？
+                  </button>
                 </div>
               </div>
             ))}
         </div>
       )}
-      <GrowthHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <GrowthHelp
+        open={help !== null}
+        onClose={() => setHelp(null)}
+        guide={help === 'growth' ? GROWTH_GUIDE : CHARACTER_GUIDE}
+        footerAction={
+          help === 'growth'
+            ? undefined
+            : {
+                hint: '等级、经验、技能的详细用法',
+                label: '成长档案说明',
+                onClick: () => setHelp('growth'),
+              }
+        }
+      />
     </section>
   );
 };

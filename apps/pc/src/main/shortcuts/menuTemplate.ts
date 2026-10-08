@@ -10,6 +10,7 @@ import {
   type MenuShortcutBindings,
 } from '../../shared/app-menu';
 import { getMenuAccelerator, getShortcutConfigs } from './config';
+import { devToolsAllowed } from '../devtools-policy';
 import { toggleDevTools } from './devtools';
 import { newFile } from './newFile';
 import { openFolder } from './openFolder';
@@ -65,6 +66,7 @@ export function buildApplicationMenuTemplate(
 ): MenuItemConstructorOptions[] {
   const isMac = process.platform === 'darwin';
   const isDev = !app.isPackaged;
+  const allowDevTools = devToolsAllowed();
   const configs = getShortcutConfigs();
   const acc = (id: Parameters<typeof getMenuAccelerator>[1]) => getMenuAccelerator(configs, id);
 
@@ -185,7 +187,7 @@ export function buildApplicationMenuTemplate(
         ? [
             separator,
             withAccelerator({ label: '重新加载', click: reloadWindow }, acc('reload')),
-            { ...toggleDevToolsItem, label: '开发者工具' },
+            ...(allowDevTools ? [{ ...toggleDevToolsItem, label: '开发者工具' }] : []),
           ]
         : []),
     ],
@@ -213,8 +215,8 @@ export function buildApplicationMenuTemplate(
       separator,
       { label: '上传日志…', click: () => sendToRenderer(APP_MENU_EVENTS.uploadLogs) },
       { label: '问题反馈', click: () => void shell.openExternal(FEEDBACK_URL) },
-      // 打包版本的开发者工具入口放在帮助菜单（VS Code 同款），开发模式在视图菜单
-      ...(isDev ? [] : [separator, toggleDevToolsItem]),
+      // 生产版本不提供开发者工具；内部排查（NOVEL_EDITOR_ENABLE_DEVTOOLS=1）时放在帮助菜单
+      ...(!isDev && allowDevTools ? [separator, toggleDevToolsItem] : []),
       ...(isMac ? [] : [separator, checkUpdatesItem, aboutItem]),
     ],
   });

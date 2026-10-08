@@ -6,18 +6,14 @@
  * 默认只展示「3 步上手」，进阶说明折叠显示，每节一两句话加一个例子（都围绕主角林舟），避免学习负担。
  */
 
-export type GuideBlock =
-  | { kind: 'p'; text: string }
-  | { kind: 'list'; items: string[] }
-  | { kind: 'steps'; items: string[] }
-  | { kind: 'example'; text: string }
-  | { kind: 'faq'; items: Array<{ q: string; a: string }> };
+import {
+  renderGuideMarkdown,
+  type GuideContent,
+  type GuideSection as GenericGuideSection,
+} from '../../../utils/guideContent';
 
-export interface GuideSection {
-  id: GrowthGuideSectionId;
-  title: string;
-  blocks: GuideBlock[];
-}
+export type { GuideBlock } from '../../../utils/guideContent';
+export type GuideSection = GenericGuideSection<GrowthGuideSectionId>;
 
 export type GrowthGuideSectionId = 'level' | 'choices' | 'warnings' | 'simulate' | 'world' | 'faq';
 
@@ -28,7 +24,7 @@ export const GROWTH_GUIDE_SUMMARY =
 
 /** 默认展示的 3 步上手：读完这一段就能开始用，其余内容按需展开 */
 export const GROWTH_QUICK_START: string[] = [
-  '为主角建一张成长卡（左侧「成长档案」点 +）。',
+  '在左侧「角色」打开主角，切到「成长档案」建卡。',
   '每写完一章，点「记一笔」，填上获得的经验或新学的技能，按 Enter。',
   '出现淡色提醒时点开看看：战力涨太快，或某个配角很久没出场了。',
 ];
@@ -192,37 +188,20 @@ export const GROWTH_TOUR_STEPS: GrowthTourStep[] = [
   },
 ];
 
-// ─── Markdown 导出（docs/growth-guide.md） ─────────────────────────────────
+// ─── 抽屉内容与 Markdown 导出（docs/growth-guide.md） ────────────────────────
 
-function renderBlock(block: GuideBlock): string {
-  switch (block.kind) {
-    case 'p':
-      return block.text;
-    case 'list':
-      return block.items.map((item) => `- ${item}`).join('\n');
-    case 'steps':
-      return block.items.map((item, index) => `${index + 1}. ${item}`).join('\n');
-    case 'example':
-      return `> 例：${block.text}`;
-    case 'faq':
-      return block.items.map((item) => `**${item.q}**\n\n${item.a}`).join('\n\n');
-  }
-}
+export const GROWTH_GUIDE: GuideContent<GrowthGuideSectionId> = {
+  anchorPrefix: 'growth-guide',
+  title: GROWTH_GUIDE_TITLE,
+  summary: GROWTH_GUIDE_SUMMARY,
+  quickStart: GROWTH_QUICK_START,
+  sections: GROWTH_GUIDE_SECTIONS,
+};
 
 /** 生成 docs/growth-guide.md 的完整内容 */
 export function renderGrowthGuideMarkdown(): string {
-  const header = [
-    `# ${GROWTH_GUIDE_TITLE}`,
-    '',
-    '<!-- 由 apps/pc/src/render/components/RightPanel/GrowthView/growthGuide.ts 生成，请修改源文件后同步 -->',
-    '',
-    GROWTH_GUIDE_SUMMARY,
-  ].join('\n');
-  const quickStart = `## 3 步上手\n\n${GROWTH_QUICK_START.map(
-    (item, index) => `${index + 1}. ${item}`
-  ).join('\n')}`;
-  const sections = GROWTH_GUIDE_SECTIONS.map(
-    (section) => `## ${section.title}\n\n${section.blocks.map(renderBlock).join('\n\n')}`
+  return renderGuideMarkdown(
+    GROWTH_GUIDE,
+    'apps/pc/src/render/components/RightPanel/GrowthView/growthGuide.ts'
   );
-  return `${[header, quickStart, ...sections].join('\n\n')}\n`;
 }

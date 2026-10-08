@@ -5,6 +5,7 @@ import {
   startupRetryDelayMs,
 } from './startup-recovery';
 import { app, BrowserWindow, nativeImage } from 'electron';
+import { devToolsAllowed } from './devtools-policy';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
@@ -132,6 +133,7 @@ function getWindowConfig() {
       contextIsolation: true,
       preload: join(__dirname, 'preload.js'),
       webSecurity: true,
+      devTools: devToolsAllowed(),
       // E2E 下窗口可能被其他窗口遮挡，关闭后台节流保证定时器与渲染按时执行
       backgroundThrottling: !isE2ETestMode(),
     },

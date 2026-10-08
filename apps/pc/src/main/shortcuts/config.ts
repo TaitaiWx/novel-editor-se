@@ -1,5 +1,6 @@
 import { app } from 'electron';
 
+import { devToolsAllowed } from '../devtools-policy';
 import type { MenuCommandId, ShortcutConfig } from './types';
 
 /**
@@ -66,12 +67,6 @@ export const getShortcutConfigs = (): ShortcutConfig[] => {
           },
         ] satisfies ShortcutConfig[])
       : []),
-    {
-      id: 'toggleDevTools',
-      accelerator: isMac ? 'Cmd+Alt+I' : 'Ctrl+Shift+I',
-      description: '切换开发者工具',
-      category: '视图',
-    },
   ];
 
   if (!app.isPackaged) {
@@ -79,6 +74,16 @@ export const getShortcutConfigs = (): ShortcutConfig[] => {
       id: 'reload',
       accelerator: `${mod}+R`,
       description: '重新加载（开发模式）',
+      category: '视图',
+      devOnly: true,
+    });
+  }
+  // 生产版本没有开发者工具入口（菜单 / 快捷键 / IPC 都不提供，见 devtools-policy.ts）
+  if (devToolsAllowed()) {
+    configs.push({
+      id: 'toggleDevTools',
+      accelerator: isMac ? 'Cmd+Alt+I' : 'Ctrl+Shift+I',
+      description: '切换开发者工具',
       category: '视图',
       devOnly: true,
     });

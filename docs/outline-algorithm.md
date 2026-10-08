@@ -1,113 +1,73 @@
-# 大纲提取算法设计
+# 大纲提取算法
 
-## 概述
+`@novel-editor/basic-algorithm` 的大纲模块从正文提取标题目录（`extractOutline`）与幕 / 场结构（`extractActs`），供右侧「大纲」面板的目录、卷纲、大纲导入与场景视频使用。章 / 幕 / 场标题行的识别规则可由作者配置（「设置 → 正文结构」）。
 
-`@novel-editor/basic-algorithm` 包中的大纲提取模块（`packages/basic-algorithm/src/outline/`）提供两个核心功能：
+相关代码：
 
-1. **`extractOutline(text)`** — 从文本中提取多级标题大纲
-2. **`extractActs(text)`** — 从文本中提取幕/场景结构
+- `packages/basic-algorithm/src/outline/`：`extract-outline.ts`、`extract-acts.ts`、`novel-markers.ts`（`:::scene` 场景容器）、`types.ts`
+- 结构规则：`packages/core/src/structure-rules.ts`（`classifyStructureLine` / `compileStructureRules`，预设 `zh` / `en` / `numbered` + 自定义正则）、`structure-config.ts`（读写配置）
+- 卷纲推导：`packages/basic-algorithm/src/volume-plan/`（`deriveVolumeOutline` / `hasActMarkers`）
+- 使用方：`apps/pc/src/render/components/RightPanel/useOutlineEntries.ts`（目录）、`outline-import.ts` / `lore-import.ts`（导入）、`VolumePlanView/`（卷纲）；渲染进程当前规则来自 `utils/structureRules.ts`
+- 测试：`outline/*.test.ts`、`volume-plan/structure-classify.test.ts`、`packages/core/test/structure-rules.test.ts`
 
-## 为什么不使用 NLP？
+## 为什么用规则而不是 NLP
 
-### 1. 实时性要求
+- **实时**：每次输入都可能重算，需要毫秒级；NLP 推理通常几十到几百毫秒
+- **确定**：同样输入同样输出，大纲不会「闪烁」
+- **体积**：不引入模型文件与推理运行时
+- **够用**：小说 / 剧本的结构标记高度规范（第X章、Chapter 1、第X幕、Act I），规则准确率接近 100%，其余靠启发式兜底；作者还能用自定义正则补充
 
-编辑器需要在用户每次输入时重新计算大纲，延迟必须控制在毫秒级。NLP 模型（即使是轻量级的分词/命名实体识别）通常需要几十到几百毫秒，无法满足实时交互需求。
+## 结构规则（classify）
 
-### 2. 确定性
+两个函数都接受可选的 `classify: (line) => 'chapter' | 'act' | 'scene' | null`，通常传入 `(line) => classifyStructureLine(line, rules)`。basic-algorithm 不依赖 core，只约定签名；不传时行为与旧版一致（内置中文规则）。
 
-基于正则的规则引擎对相同输入始终产生相同输出。NLP 模型的概率性推断可能在不同运行间产生不同结果，导致大纲"闪烁"，影响用户体验。
+| 预设       | 识别                                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------- |
+| `zh`       | 第N章 / 回 / 卷 / 部 / 篇 / 集 / 节、序章 / 楔子 / 尾声 / 番外 … → 章；第N幕 → 幕；第N场 → 场（≤40 字） |
+| `en`       | Chapter 12 / XII / Twelve、Ch. 3、Part、Book、Prologue / Epilogue … → 章；Act 1 / Act I → 幕；Scene 1 → 场（不区分大小写，≤60 字） |
+| `numbered` | `1.` / `1、` / `001` → 章（默认关闭）                                                               |
 
-### 3. 部署成本
+预设都要求独占一行、不以句读结尾；默认启用 `zh` + `en`。自定义规则优先于预设，保存前做安全校验（长度、能否匹配空行、嵌套量词等）。
 
-NLP 方案需要：
+## extractOutline：多策略标题提取
 
-- 额外的模型文件（几十 MB 到几百 MB）
-- Python 运行时或 ONNX Runtime
-- GPU 加速支持
+单次遍历，每行命中第一条策略即跳到下一行，O(n)。
 
-这些对于 Electron 桌面应用来说，会显著增加安装包大小和内存占用。
+| 顺序 | 策略             | 规则                                       | 层级                            | `source`          |
+| ---- | ---------------- | ------------------------------------------ | ------------------------------- | ----------------- |
+| 1    | Markdown 标题    | `^#{1,6}\s+`                               | `#` 数量                        | `markdown`        |
+| 1.5  | 结构规则         | `classify(line)`                           | 章 / 幕 = 1，场 = 2             | `structure-rule`  |
+| 2    | 中文章节标记     | 第[数字]+[章幕节卷部回篇集]                | 章幕卷部 = 1，回集节篇 = 2      | `chinese-section` |
+| 3    | 数字编号         | `1.` / `1.2` / `1、`（排除日期行）         | 编号深度                        | `numbered`        |
+| 4    | 分隔线标题       | `--- 序章 ---`                             | 1                               | `separator`       |
+| 5    | 自定义正则       | `customPatterns`                           | 1                               | `heuristic`       |
+| 6    | 启发式           | 2–40 字的短行且上下都是空行                | 2                               | `heuristic`       |
 
-### 4. 中文写作的特殊性
+启发式排除：以标点开头、纯数字 / 标点、分隔线。源码正则里的汉字一律写成 `\uXXXX` 转义（仓库规范）。
 
-中文小说/剧本的结构标记（第X章、第X幕、第X场）是高度规范化的，正则匹配的准确率接近 100%。NLP 在这种场景下不会带来额外收益。
-
-### 5. 当前方案足够好
-
-对于结构化写作（小说、剧本、大纲），作者使用的标题格式是有限且规范的。正则规则可以覆盖 99% 的场景，剩余 1% 通过启发式检测兜底。
-
-## 算法详解
-
-### extractOutline — 多策略标题提取
-
-#### 检测策略（优先级从高到低）
-
-| 策略             | 正则                                  | 示例             | 匹配层级                     |
-| ---------------- | ------------------------------------- | ---------------- | ---------------------------- |
-| 1. Markdown 标题 | `^(#{1,6})\s+(.+)`                    | `## 第一章 开端` | `#` 数量 → level             |
-| 2. 中文章节标记  | `^(第[一二三...]+[章幕节卷部回篇集])` | `第三章 启程`    | 章/幕/卷/部=1, 回/集/节/篇=2 |
-| 3. 数字编号      | `^(\d+(?:\.\d+)*)[.、)\s]\s*(.+)`     | `1.2 人物登场`   | 数字深度 → level             |
-| 4. 分隔线标题    | `^[-*=]{3,}\s+(.+?)\s+[-*=]{3,}$`     | `--- 序章 ---`   | level = 1                    |
-| 5. 自定义正则    | 用户配置                              | 可扩展           | level = 1                    |
-| 6. 启发式检测    | 短行（≤40字）+ 上下空行包围           | 独立短行         | level = 2                    |
-
-#### 时间复杂度
-
-**O(n)**，单次遍历所有行。每行最多尝试 6 个正则匹配，匹配成功后立即 `continue` 跳到下一行。
-
-#### 启发式检测的排除规则
-
-为避免误判，启发式检测会排除：
-
-- 以中文标点开头的行（`，。！？、`）
-- 纯数字/纯标点行
-- 分隔线（`---`、`***`、`===`）
-
-### extractActs — 幕/场景提取
-
-专为剧本创作设计，识别 `第X幕` → `第X场` 的层级关系。
-
-#### 处理逻辑
-
-1. 遇到 `第X幕` → 创建新的 ActNode
-2. 遇到 `第X场` → 挂载到当前幕下
-3. 场景的首个非空行自动作为 `preview` 预览文本
-4. 如果场景出现在幕之前，自动创建"默认幕"
-
-## 类型定义
-
-```typescript
-interface OutlineNode {
-  level: number; // 标题层级 (1-6)
-  text: string; // 标题文本
-  line: number; // 行号 (1-based)
-  source: 'markdown' | 'chinese-section' | 'numbered' | 'separator' | 'heuristic';
-}
-
-interface ActNode {
-  title: string; // 幕标题
-  line: number; // 行号
-  scenes: SceneNode[]; // 下辖场景
-}
-
-interface SceneNode {
-  title: string; // 场景标题
-  line: number; // 行号
-  preview: string; // 内容预览（首行文字，≤80字）
-}
-```
-
-## 配置选项
-
-```typescript
+```ts
 interface OutlineOptions {
-  enableHeuristic?: boolean; // 是否启用启发式检测，默认 true
-  customPatterns?: RegExp[]; // 自定义正则，追加到内置规则之后
+  classify?: StructureClassifier; // 作者配置的结构规则
+  enableHeuristic?: boolean;      // 默认 true；目录视图传 false
+  customPatterns?: RegExp[];      // 追加在内置规则之后
 }
 ```
 
-## 未来扩展方向
+## extractActs：幕 / 场提取
 
-1. **大纲编辑**：支持在右侧面板拖拽调整大纲顺序，写回文件
-2. **大纲导航**：点击大纲节点跳转到对应行（已实现）
-3. **大纲导出**：将大纲导出为独立的 Markdown 文件
-4. **NLP 辅助**：在后台异步运行 NLP 模型，作为补充而非替代，标记可能遗漏的结构点
+1. 幕行（「第X幕」或 `classify` 判为 act）→ 新建幕
+2. 场行（「第X场」、`classify` 判为 scene，或小说格式场景容器 `:::scene{title=…}`）→ 挂到当前幕；场景出现在任何幕之前时自动建「默认幕」
+3. 场景下第一行非空、非指令的正文作为 `preview`（≤80 字）
+4. 全文没有幕 / 场标记时，按章节标题每 10 章生成一幕（只有一幕时标题为「全篇」），每章作为一个场景
+
+```ts
+interface ActNode { title: string; line: number; scenes: SceneNode[] }
+interface SceneNode { title: string; line: number; preview: string }
+```
+
+卷纲在此之上做跨章推导（幕 → 章 → 节拍，没有幕标记时按章数套三幕式 / 起承转合 / 英雄之旅模板），见 `volume-plan/derive.ts`。
+
+## 可能的方向
+
+- 超长文本（百万字级）把提取移到 Web Worker
+- 在后台用模型标注可能遗漏的结构点，只作补充、不替代规则

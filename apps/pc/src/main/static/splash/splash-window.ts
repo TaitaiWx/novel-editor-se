@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron';
+import { devToolsAllowed } from '../../devtools-policy';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -27,6 +28,7 @@ export function createSplashWindow(): BrowserWindow {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: devToolsAllowed(),
     },
   });
 

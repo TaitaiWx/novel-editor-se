@@ -1,142 +1,38 @@
-# 自动保存功能优化说明
+# 自动保存
 
-## 修复的问题
+编辑器在内容变化 2 秒后自动保存，切换文件和编辑器卸载时也会把未保存的内容写回原文件。本文说明保存时机、为什么全部基于 ref，以及主进程写盘时做的事。
 
-### 原始问题
+相关代码：
 
-在之前的实现中，文件切换时的自动保存逻辑存在严重 bug：
+- `apps/pc/src/render/components/TextEditor/hooks/useEditorSave.ts`：`AUTO_SAVE_DELAY = 2000`、`autoSaveFile` / `scheduleAutoSave` / `handleManualSave`
+- `TextEditor/hooks/useEditorFileLoader.ts`：切换文件前保存上一个文件
+- `TextEditor/index.tsx`：`flushEditorOnUnmount`（卸载时保存）
+- `TextEditor/editor-paths.ts`：`isPersistablePath`（排除未命名标签与更新日志）、`emitFileSaved`（`NOVEL_EDITOR_FILE_SAVED_EVENT`）
+- 主进程 `write-file`：`apps/pc/src/main/handlers/file-system.ts`
+- 测试：`apps/pc/test/render/components/TextEditor/hooks.test.tsx`，E2E `apps/pc/e2e/app.e2e.ts`（编辑与自动保存）
 
-- 当用户从文件A切换到文件B时，会把文件A的内容错误地保存到文件B
-- 这是因为 `useEffect` 清理函数执行时，`filePath` 已经变成了新文件路径
-- 导致内容覆盖和文件错乱
+## 保存时机
 
-### 解决方案
+| 时机                       | 行为                                                                 |
+| -------------------------- | -------------------------------------------------------------------- |
+| 内容变化                   | 2 秒防抖后保存；再次输入会重置计时                                   |
+| ⌘ / Ctrl + S               | 立即保存；内容未变时提示「文件已是最新状态」；未命名标签弹出另存为   |
+| 切换到另一个文件           | 加载新文件前先把上一个文件的改动写回**上一个文件的路径**             |
+| 编辑器卸载（关标签、退出） | 清理定时器，有改动则写回                                             |
 
-#### 1. 使用 ref 追踪当前文件状态
+都只在「路径可持久化（不是未命名标签 / 更新日志）、非只读、内容与磁盘原文不同」时写盘。保存成功后派发 `NOVEL_EDITOR_FILE_SAVED_EVENT`（`mode: 'auto' | 'manual'`），文件栏显示保存状态与上次保存时间。
 
-```typescript
-const currentFilePathRef = useRef<string | null>(null);
-const currentContentRef = useRef<string>('');
-const currentOriginalContentRef = useRef<string>('');
-```
+## 为什么用 ref
 
-#### 2. 修复自动保存逻辑
+早期实现在 `useEffect` 清理函数里按 state 里的 `filePath` 保存，切换文件时 `filePath` 已经是新文件，导致把 A 的内容写进 B。现在当前文件的路径、内容、磁盘原文都放在 ref（`currentFilePathRef` / `currentContentRef` / `currentOriginalContentRef`）里：
 
-- 自动保存现在使用 ref 中的路径和内容，而不是 state
-- 确保保存到正确的文件路径
+- 定时器触发时读取 ref 的最新值，保存的永远是「当时正在编辑的文件 + 它的内容」
+- 只有保存的仍是当前文件时才更新「已保存」状态，避免异步完成时把新文件标成已保存
+- 卸载时在调用那一刻读取 ref（而不是挂载时的快照）
 
-#### 3. 文件切换时的保存处理
+## 主进程写盘
 
-- 在 `useEffect` 中检测文件路径变化
-- 在加载新文件之前，先保存前一个文件的更改
-- 避免异步竞态条件
+`write-file` 在写入前后还会：
 
-#### 4. 组件卸载时的保存
-
-- 在组件卸载时检查是否有未保存的更改
-- 安全地保存当前文件内容
-
-## 核心改进
-
-### 文件切换保存逻辑
-
-```typescript
-useEffect(() => {
-  // 保存前一个文件的内容（如果有变化）
-  const savePreviousFile = async () => {
-    if (
-      currentFilePathRef.current &&
-      currentContentRef.current !== currentOriginalContentRef.current &&
-      !readOnly
-    ) {
-      try {
-        await window.electron.ipcRenderer.invoke(
-          'write-file',
-          currentFilePathRef.current,
-          currentContentRef.current
-        );
-      } catch (error) {
-        console.error('Failed to save previous file:', error);
-      }
-    }
-  };
-
-  // 如果文件路径变化，先保存前一个文件
-  if (filePath !== currentFilePathRef.current) {
-    savePreviousFile();
-  }
-
-  // 更新当前文件信息
-  currentFilePathRef.current = filePath;
-  currentContentRef.current = content;
-  currentOriginalContentRef.current = originalContent;
-}, [filePath, content, originalContent, readOnly]);
-```
-
-### 自动保存逻辑
-
-```typescript
-const autoSaveFile = useCallback(async () => {
-  const targetPath = currentFilePathRef.current;
-  const targetContent = currentContentRef.current;
-
-  if (!targetPath || readOnly || targetContent === currentOriginalContentRef.current) return;
-
-  setAutoSaving(true);
-  try {
-    await window.electron.ipcRenderer.invoke('write-file', targetPath, targetContent);
-    // 只有在保存的是当前文件时才更新状态
-    if (targetPath === filePath) {
-      setOriginalContent(targetContent);
-      setLastSaved(new Date());
-    }
-  } catch (error) {
-    console.error('Auto-save failed:', error);
-  } finally {
-    setAutoSaving(false);
-  }
-}, [filePath, readOnly]);
-```
-
-## 功能特性
-
-✅ **自动保存**：内容变更后2秒自动保存
-✅ **手动保存**：Ctrl/Cmd+S 强制保存
-✅ **文件切换安全**：切换文件时正确保存到原文件
-✅ **状态指示**：实时显示保存状态和最后保存时间
-✅ **错误处理**：所有保存操作都有错误处理
-✅ **组件卸载保存**：组件卸载时自动保存未保存的更改
-
-## 测试建议
-
-1. **基础功能测试**
-
-   - 打开文件，编辑内容，观察2秒后自动保存
-   - 使用 Ctrl/Cmd+S 手动保存
-   - 观察状态栏的保存指示
-
-2. **文件切换测试**
-
-   - 在文件A中编辑内容
-   - 切换到文件B
-   - 再切换回文件A，验证内容正确保存
-   - 检查文件B没有被错误覆盖
-
-3. **快速操作测试**
-
-   - 快速编辑多个文件
-   - 快速切换文件
-   - 验证每个文件的内容都正确保存
-
-4. **边界情况测试**
-   - 在自动保存期间切换文件
-   - 在未保存状态下关闭应用
-   - 网络/磁盘错误时的处理
-
-## 技术亮点
-
-- **无竞态条件**：使用 ref 避免异步状态问题
-- **安全的文件操作**：所有保存操作都有完整的错误处理
-- **用户体验优化**：静默自动保存，不干扰用户工作流
-- **状态同步**：UI状态与文件状态完全同步
-- **内存安全**：正确清理定时器和事件监听器
+- 拒绝写入软件内部数据与派生文件（`assertWritableByRenderer`，判定在 core `internal-data.ts`），这些文件只经专用 IPC 写入
+- 正文文件保存成功后按保存前后的字数差记入写作日志 `.novel-editor/writing-log.json`（`recordStoryFileSave`，内容未变不记，不阻塞保存）
