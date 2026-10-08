@@ -32,7 +32,29 @@ export interface AIProviderInfo {
   /** 视频服务：每秒单价（作者自行填写，用于费用预估） */
   pricePerSecond?: number;
   currency?: 'CNY' | 'USD';
+  /** 作者添加的 OpenAI 兼容文本 AI（id 形如 custom-text-<n>，可改名 / 删除） */
+  custom?: boolean;
+  /** 文本服务：是默认写作 AI（续写、分镜、预演、灵感、推演、ai-request 省略 providerId 时使用） */
+  isDefaultText?: boolean;
+  /** 默认写作 AI 是作者在设置中心选定的（false / 缺省 = 未选择，沿用内置默认） */
+  defaultTextChosen?: boolean;
+  /** 文本服务（内置默认除外，它的参数在设置中心 JSON）：温度 / 单次回复长度 / 上下文长度 */
+  temperature?: number;
+  maxTokens?: number;
+  contextTokens?: number;
+  /** 配音服务：未指定声音的台词使用的默认声音 */
+  voice?: string;
 }
+
+/** ai-providers-add-custom：添加一个 OpenAI 兼容的文本 AI（Key 可同时写入，只写不读） */
+export interface AICustomTextInput {
+  label: string;
+  baseUrl: string;
+  model?: string;
+  apiKey?: string;
+}
+
+export const BUILTIN_TEXT_PROVIDER_ID = 'openai-compatible';
 
 /** 写入 Provider 配置；apiKey 只写不读，clearKey 删除已保存的 Key */
 export interface AIProviderUpdate {
@@ -43,12 +65,20 @@ export interface AIProviderUpdate {
   model?: string;
   pricePerSecond?: number | null;
   currency?: 'CNY' | 'USD';
+  /** 只对自定义文本 AI 有效：改名 */
+  label?: string;
+  /** 文本服务参数（null 恢复默认） */
+  temperature?: number | null;
+  maxTokens?: number | null;
+  contextTokens?: number | null;
+  /** 配音服务的默认声音（空字符串恢复默认） */
+  voice?: string;
 }
 
 export type AIIpcResult<T> = { ok: true; data: T } | { ok: false; error: SerializedAIError };
 
 export interface AICompletePayload {
-  /** 省略时使用设置中心的默认 AI（openai-compatible） */
+  /** 省略时使用默认写作 AI（设置中心选定的文本 AI；未选择时为内置 openai-compatible） */
   providerId?: string;
   messages?: ChatMessage[];
   /** 兼容旧版 ai-request 的写法：prompt + systemPrompt + context */

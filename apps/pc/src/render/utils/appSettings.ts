@@ -52,6 +52,13 @@ export interface AISettings {
   apiKey: string;
   /** 主进程在读取设置时注入：安全存储中是否已有默认 AI 的 Key（派生字段，写入时被忽略） */
   hasApiKey?: boolean;
+  /**
+   * 主进程注入的派生字段（写入时被忽略）：作者选定的默认写作 AI 不是内置 OpenAI 兼容时，
+   * 它的 id / 名称 / 是否可用（已保存 Key 且未关闭）。缺省 = 默认写作 AI 就是本页的内置服务
+   */
+  defaultTextProviderId?: string;
+  defaultTextLabel?: string;
+  defaultTextReady?: boolean;
   temperature: number;
   contextTokens: number;
   maxTokens: number;
@@ -223,7 +230,11 @@ function normalizeParsedAISettings(parsed: ParsedSettingsDraft): Partial<AISetti
     hasOwnField(parsed, 'enabledExplicitlySet') ||
     (nestedAi ? hasOwnField(nestedAi, 'enabledExplicitlySet') : false);
 
-  const hasStoredCredential = Boolean(mergedAi.apiKey?.trim()) || mergedAi.hasApiKey === true;
+  // 默认写作 AI 是自己添加的服务时，它的 Key 同样算「已保存的密钥」（与主进程 parseDefaultTextSettings 一致）
+  const hasStoredCredential =
+    Boolean(mergedAi.apiKey?.trim()) ||
+    mergedAi.hasApiKey === true ||
+    (Boolean(mergedAi.defaultTextProviderId) && mergedAi.defaultTextReady === true);
 
   return {
     ...mergedAi,
@@ -285,6 +296,17 @@ export function mergeSettingsDraft(raw: string | null): SettingsDraft {
 export function getAIConfigStatus(settings: SettingsDraft): AIConfigStatus {
   const ai = settings.ai ?? DEFAULT_AI_SETTINGS;
   const enabled = Boolean(ai.enabled);
+  // 默认写作 AI 是自己添加的服务：地址 / 模型在它自己的配置里，只看总开关与它是否可用
+  if (ai.defaultTextProviderId) {
+    const ready = ai.defaultTextReady === true;
+    return {
+      enabled,
+      hasApiKey: ready,
+      hasBaseUrl: true,
+      hasModel: true,
+      ready: enabled && ready,
+    };
+  }
   // Key 保存在主进程安全存储中，渲染进程只知道 hasApiKey；草稿里刚填写还未保存的 Key 同样算已配置
   const hasApiKey = Boolean(ai.apiKey?.trim()) || ai.hasApiKey === true;
   const hasBaseUrl = Boolean(ai.baseUrl?.trim());

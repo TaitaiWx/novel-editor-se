@@ -304,6 +304,26 @@ describe('场景视频', () => {
     ).toContain('“舟哥！”');
     await captureForReview(page, 'scene-video-canvas');
 
+    // 风格与每镜时长：除了预设，还可以在列表底部手动填写，保存到 分镜.json
+    await page.click('[role="combobox"][aria-label="风格"]');
+    await page.click('input[aria-label="风格（自定义）"]');
+    await page.type('胶片颗粒、逆光、浅景深');
+    await page.press('Enter');
+    await page.click('[role="combobox"][aria-label="每镜时长"]');
+    await page.click('input[aria-label="每镜时长（自定义）"]');
+    await page.type('12');
+    await page.press('Enter');
+    await page.waitUntil(
+      async () => {
+        const raw = await readFile(fixture.resolve(...SCENE_DIR, '分镜.json'), 'utf-8').catch(
+          () => '{}'
+        );
+        const saved = JSON.parse(raw) as { style?: string; shotDurationSec?: number };
+        return saved.style === '胶片颗粒、逆光、浅景深' && saved.shotDurationSec === 12;
+      },
+      { timeout: 10_000, message: '自定义风格与时长已保存' }
+    );
+
     // 只生成镜头 1：直接点节点上的「生成」
     const generateShot1 = 'button[aria-label="生成镜头 1"]';
     await page.waitFor(

@@ -109,14 +109,16 @@ function requireKey(config: ProviderConfig, providerId: string, label: string): 
   return apiKey;
 }
 
+/** 声音选择：台词指定的声音 > 按性别的默认表 > 设置中心填写的默认声音 > 中性默认 */
 function defaultVoice(
   voice: SpeechVoice | undefined,
-  table: { female: string; male: string; neutral: string }
+  table: { female: string; male: string; neutral: string },
+  configured?: string
 ): string {
   if (voice?.providerVoiceId?.trim()) return voice.providerVoiceId.trim();
   if (voice?.gender === 'female') return table.female;
   if (voice?.gender === 'male') return table.male;
-  return table.neutral;
+  return configured?.trim() || table.neutral;
 }
 
 /** 校验厂商返回的字节确实是音频，并推算时长（WAV 可从文件头计算） */
@@ -157,12 +159,13 @@ export function speechInstructions(request: SpeechRequest): string {
 
 export function buildOpenAISpeechBody(
   request: SpeechRequest,
-  defaultModel: string
+  defaultModel: string,
+  configuredVoice?: string
 ): Record<string, unknown> {
   const model = request.model?.trim() || defaultModel;
   const body: Record<string, unknown> = {
     model,
-    voice: defaultVoice(request.voice, OPENAI_SPEECH_DEFAULTS.voices),
+    voice: defaultVoice(request.voice, OPENAI_SPEECH_DEFAULTS.voices, configuredVoice),
     input: trimText(request.text, 'openai-speech'),
     response_format: request.format ?? 'mp3',
   };
@@ -187,7 +190,7 @@ export function createOpenAISpeechProvider(config: ProviderConfig): SpeechProvid
     id,
     kind: 'speech',
     async synthesize(request, call: CallOptions = {}) {
-      const body = buildOpenAISpeechBody(request, model);
+      const body = buildOpenAISpeechBody(request, model, config.voice);
       const response = await client.stream('/audio/speech', body, {
         signal: call.signal,
         retry: NO_RETRY,
@@ -224,10 +227,11 @@ interface MinimaxSpeechResponse {
 
 export function buildMinimaxSpeechBody(
   request: SpeechRequest,
-  defaultModel: string
+  defaultModel: string,
+  configuredVoice?: string
 ): Record<string, unknown> {
   const voiceSetting: Record<string, unknown> = {
-    voice_id: defaultVoice(request.voice, MINIMAX_SPEECH_DEFAULTS.voices),
+    voice_id: defaultVoice(request.voice, MINIMAX_SPEECH_DEFAULTS.voices, configuredVoice),
     speed: 1,
     vol: 1,
     pitch: 0,
@@ -275,7 +279,7 @@ export function createMinimaxSpeechProvider(config: ProviderConfig): SpeechProvi
     sleep: config.sleep,
   });
   const run = async (request: SpeechRequest, call: CallOptions): Promise<SpeechResult> => {
-    const body = buildMinimaxSpeechBody(request, model);
+    const body = buildMinimaxSpeechBody(request, model, config.voice);
     const json = await client.json<MinimaxSpeechResponse>(
       'POST',
       MINIMAX_SPEECH_ENDPOINTS.t2a,

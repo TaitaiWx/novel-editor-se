@@ -2,23 +2,28 @@
  * AI Provider 配置 / 一次性补全 / 流式输出 IPC
  *
  * - ai-providers-list / get / set / test：设置中心「AI 服务」；Key 只写不读，返回值只有 configured
+ * - ai-providers-add-custom / remove-custom：自己添加的 OpenAI 兼容文本 AI（custom-text-<n>）；改名走 set { label }
+ * - ai-providers-set-default：选定默认写作 AI（null 恢复内置默认）；变化后广播 settings-updated，
+ *   让各窗口的 AI 可用状态（useAiConfig）重新读取
  * - ai-complete：一次性补全（可指定 providerId，例如 grok）
  * - ai-stream-start / ai-stream-cancel：流式补全，片段通过 webContents.send('ai-stream-event') 推送，
  *   只推给发起请求的窗口；窗口关闭时自动取消该窗口的所有流
  */
-import { ipcMain, type WebContents } from 'electron';
+import { BrowserWindow, ipcMain, type WebContents } from 'electron';
 import { randomUUID } from 'crypto';
 import { AIError, toAIError, type StreamChunk } from '@novel-editor/ai';
 import {
   AI_STREAM_EVENT,
   type AICompletePayload,
   type AICompleteResult,
+  type AICustomTextInput,
   type AIIpcResult,
   type AIProviderInfo,
   type AIProviderUpdate,
   type AIStreamEvent,
 } from '../../shared/ai';
 import { getAIService } from '../ai/runtime';
+import { SETTINGS_CENTER_KEY } from '../ai/settings-secrets';
 import type { AIService } from '../ai/service';
 
 const MAX_STREAMS_PER_SENDER = 4;
@@ -148,6 +153,20 @@ function toSender(webContents: WebContents): StreamSender {
   };
 }
 
+/** 默认写作 AI 的可用状态注入在设置中心 JSON 里：配置变化后通知各窗口重新读取 */
+function notifySettingsChanged(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('settings-updated', SETTINGS_CENTER_KEY);
+  }
+}
+
+/** 执行后通知（只在成功时） */
+async function guardAndNotify<T>(task: () => Promise<T> | T): Promise<AIIpcResult<T>> {
+  const result = await guard(task);
+  if (result.ok) notifySettingsChanged();
+  return result;
+}
+
 export function registerAIProviderHandlers(
   getService: () => AIService = getAIService,
   streams: AIStreamManager = new AIStreamManager(getService)
@@ -160,7 +179,24 @@ export function registerAIProviderHandlers(
     guard(() => getService().getProviderInfo(String(providerId)))
   );
   ipcMain.handle('ai-providers-set', (_event, providerId: unknown, update: AIProviderUpdate) =>
-    guard(() => getService().updateProvider(String(providerId), update))
+    guardAndNotify(() => getService().updateProvider(String(providerId), update))
+  );
+  ipcMain.handle(
+    'ai-providers-add-custom',
+    (_event, input: AICustomTextInput): Promise<AIIpcResult<AIProviderInfo>> =>
+      guardAndNotify(() => getService().addCustomTextProvider(input))
+  );
+  ipcMain.handle('ai-providers-remove-custom', (_event, providerId: unknown) =>
+    guardAndNotify(() => ({ removed: getService().removeCustomTextProvider(providerId) }))
+  );
+  ipcMain.handle(
+    'ai-providers-set-default',
+    (_event, providerId: unknown): Promise<AIIpcResult<AIProviderInfo[]>> =>
+      guardAndNotify(() => {
+        const service = getService();
+        service.setDefaultTextProvider(providerId);
+        return service.listProviders();
+      })
   );
   ipcMain.handle('ai-providers-test', (_event, providerId: unknown) =>
     guard(async () => {

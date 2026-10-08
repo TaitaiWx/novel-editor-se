@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AIProviderInfo, VideoSettingsInfo } from '@/render/types/ai-api';
+import { BUILTIN_TEXT_PROVIDER_ID, pickDefaultTextProvider } from '@/render/utils/textProviders';
 
-/** 默认文本服务（设置中心「AI」分区）；分镜优先用它，其次用其他已配置的文本服务 */
-export const DEFAULT_TEXT_PROVIDER_ID = 'openai-compatible';
+/** 内置默认文本服务；分镜优先用默认写作 AI（utils/textProviders），其次用其他已配置的文本服务 */
+export const DEFAULT_TEXT_PROVIDER_ID = BUILTIN_TEXT_PROVIDER_ID;
 
 export interface VideoServicesState {
   loaded: boolean;
@@ -20,9 +21,9 @@ const EMPTY: VideoServicesState = {
   settings: null,
 };
 
+/** 分镜 / 预演用的文本服务：默认写作 AI（选定的 > 内置默认 > 第一个可用的） */
 export function pickTextProvider(providers: readonly AIProviderInfo[]): string | null {
-  const ready = providers.filter((item) => item.kind === 'text' && item.configured && item.enabled);
-  return ready.find((item) => item.id === DEFAULT_TEXT_PROVIDER_ID)?.id ?? ready[0]?.id ?? null;
+  return pickDefaultTextProvider(providers)?.id ?? null;
 }
 
 /** 读取 AI / 视频服务配置（只有 configured 标记，不含任何密钥）；窗口重新获得焦点时刷新 */

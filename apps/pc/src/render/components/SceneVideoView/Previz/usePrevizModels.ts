@@ -1,6 +1,6 @@
 /**
  * 预演可用的 AI 模型：已配置 Key 且已启用的文本服务（与「AI 生成分镜」同一判断，useVideoServices.pickTextProvider），
- * 每个服务列出当前模型与可选模型；默认选设置中心的默认 AI（openai-compatible），其次第一个可用服务。
+ * 每个服务列出当前模型与可选模型；默认选默认写作 AI（utils/textProviders：选定的 > 内置 openai-compatible），其次第一个可用服务。
  * 只读 configured 标记，不涉及任何密钥。
  */
 import { useEffect, useMemo, useState } from 'react';

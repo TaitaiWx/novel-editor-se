@@ -46,6 +46,28 @@ describe('resolveContinuationProvider', () => {
     ).toEqual({ providerId: undefined, label: '默认 AI' });
   });
 
+  it('作者选定的默认写作 AI 优先于 Grok；选定的就是默认时省略 providerId', () => {
+    const all = [
+      provider('openai-compatible'),
+      provider('grok'),
+      provider('custom-text-1', {
+        label: 'Kimi',
+        custom: true,
+        isDefaultText: true,
+        defaultTextChosen: true,
+      }),
+    ];
+    expect(resolveContinuationProvider(all)).toEqual({ providerId: undefined, label: 'Kimi' });
+    // 显式选内置服务：默认已经不是它，必须带 id
+    expect(resolveContinuationProvider(all, 'openai-compatible')).toEqual({
+      providerId: 'openai-compatible',
+      label: '默认 AI',
+    });
+    // 选定的默认不可用：回到旧顺序
+    all[2] = { ...all[2], configured: false };
+    expect(resolveContinuationProvider(all)).toEqual({ providerId: 'grok', label: 'xAI Grok' });
+  });
+
   it('都没有配置 / 未启用 / 视频服务不算', () => {
     expect(
       resolveContinuationProvider([

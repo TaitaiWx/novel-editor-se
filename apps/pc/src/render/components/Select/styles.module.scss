@@ -179,3 +179,41 @@
   padding: 8px 10px;
   color: var(--ui-fg-muted);
 }
+
+// 「自定义」输入：列表底部，与选项之间有分隔线
+.custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 8px 4px;
+  border-top: 1px solid var(--ui-border-subtle);
+}
+
+.customLabel {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ui-fg-secondary, #9a9a9a);
+}
+
+.customInput {
+  flex: 1;
+  min-width: 120px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ui-fg-primary);
+  font: inherit;
+  font-size: 12px;
+
+  &:focus {
+    outline: 1px solid var(--ui-interaction-focus-ring);
+    outline-offset: -1px;
+  }
+}
+
+.customInvalid {
+  border-color: rgba(224, 138, 128, 0.7);
+}

@@ -1,20 +1,30 @@
+/**
+ * 设置中心「AI」：顶部独立的总开关，下面按能力分区（文本 / 图片 / 视频 / 语音），
+ * 每个服务一个可折叠面板，只显示这家需要的字段。
+ *
+ * - 文本：内置 OpenAI 兼容（参数在设置中心 JSON）+ Grok + 自己添加的 OpenAI 兼容服务（可多个），
+ *   其中一个是默认写作 AI（「设为默认」）
+ * - 展开状态记在 localStorage；没点过的：已配置或默认写作 AI 展开，其余收起
+ */
 import React from 'react';
 import { AiOutlineApi } from 'react-icons/ai';
-import type { AIPresetKey, AIProvider, SettingsDraft } from '../../../utils/appSettings';
-import { AI_PRESET_OPTIONS, type AIPresetOption } from '../constants';
+import type { AIPresetKey, SettingsDraft } from '../../../utils/appSettings';
+import type { AIProviderInfo } from '../../../types/ai-api';
+import { BUILTIN_TEXT_PROVIDER_ID } from '../../../types/ai-api';
+import type { AIPresetOption } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
-import NumberInput from '../../NumberInput';
-import Select, { type SelectOption } from '../../Select';
-import ApiKeyField from './ApiKeyField';
-import ProviderList from './ProviderList';
+import Switch from '../../Switch';
 import sharedStyles from '../styles.module.scss';
+import AddTextProvider from './AddTextProvider';
+import BuiltinTextForm from './BuiltinTextForm';
+import ProviderPanel from './ProviderPanel';
+import { useAiProviders } from './useAiProviders';
+import { useExpandedPanels } from './useExpandedPanels';
+import VendorForm from './VendorForm';
+import VoiceLanguageSetting from './VoiceLanguageSetting';
 import styles from './styles.module.scss';
 
-const PROVIDER_OPTIONS: SelectOption<AIProvider>[] = [
-  { value: 'openai-compatible', label: 'OpenAI 兼容' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'deepseek', label: 'DeepSeek' },
-];
+type ProviderKind = AIProviderInfo['kind'];
 
 interface AiSectionProps {
   aiSettings: SettingsDraft['ai'];
@@ -26,222 +36,170 @@ interface AiSectionProps {
   handleSaveAISettings: () => Promise<void>;
 }
 
-/** AI 设置分区 */
-const AiSection: React.FC<AiSectionProps> = ({
-  aiSettings,
-  activeAIPreset,
-  setSettings,
-  setAI,
-  applyAIPreset,
-  aiSaveStatus,
-  handleSaveAISettings,
-}) => (
-  <div className={sharedStyles.panel}>
-    <h4>
-      <AiOutlineApi />
-      <span>AI 设置</span>
-    </h4>
-    <p>统一配置 AI 服务、模型与回复参数，供写作辅助功能使用。</p>
+interface SectionDef {
+  kind: ProviderKind;
+  title: string;
+  description: string;
+}
 
-    <div className={sharedStyles.formSection}>
-      <div className={sharedStyles.formRow}>
+const SECTIONS: readonly SectionDef[] = [
+  {
+    kind: 'text',
+    title: '文本（写作 / 续写 / 分镜 / 预演）',
+    description: '写作功能的主力 AI。可以添加多家，选一个作为默认。',
+  },
+  { kind: 'image', title: '图片', description: '人物形象、三视图、设定图与场景视频的首帧。' },
+  { kind: 'video', title: '视频', description: '场景视频的镜头生成（异步任务，按厂商计费）。' },
+  { kind: 'speech', title: '语音（配音）', description: '场景视频的对白配音。' },
+];
+
+/** 主进程列表还没读到时，内置文本 AI 用设置草稿兜底显示 */
+function builtinFallback(ai: SettingsDraft['ai']): AIProviderInfo {
+  return {
+    id: BUILTIN_TEXT_PROVIDER_ID,
+    kind: 'text',
+    label: 'OpenAI 兼容',
+    description: '',
+    defaultBaseUrl: '',
+    defaultModel: '',
+    models: [],
+    configured: Boolean(ai.hasApiKey),
+    secureStorage: true,
+    enabled: ai.enabled,
+    baseUrl: ai.baseUrl,
+    model: ai.model,
+    isDefaultText: !ai.defaultTextProviderId,
+  };
+}
+
+const AiSection: React.FC<AiSectionProps> = (props) => {
+  const { aiSettings, setSettings } = props;
+  const api = useAiProviders();
+  const panels = useExpandedPanels();
+
+  const list = api.providers ?? [];
+  const builtin = list.find((item) => item.id === BUILTIN_TEXT_PROVIDER_ID);
+  const byKind = (kind: ProviderKind) =>
+    kind === 'text'
+      ? [
+          builtin ?? builtinFallback(aiSettings),
+          ...list.filter((item) => item.kind === 'text' && item.id !== BUILTIN_TEXT_PROVIDER_ID),
+        ]
+      : list.filter((item) => item.kind === kind);
+  const defaultText = byKind('text').find((item) => item.isDefaultText);
+
+  const refreshOne = async (id: string) => {
+    const result = await window.electron?.ipcRenderer.invoke('ai-providers-get', id);
+    if (result?.ok) api.replace(result.data);
+  };
+
+  const renderPanel = (info: AIProviderInfo) => {
+    const isBuiltin = info.id === BUILTIN_TEXT_PROVIDER_ID;
+    const configured = isBuiltin
+      ? Boolean(aiSettings.hasApiKey || aiSettings.apiKey?.trim())
+      : info.configured;
+    const enabled = isBuiltin ? aiSettings.enabled && info.enabled : info.enabled;
+    return (
+      <ProviderPanel
+        key={info.id}
+        info={info}
+        configured={configured}
+        enabled={enabled}
+        expanded={panels.isExpanded(info.id, configured || Boolean(info.isDefaultText))}
+        onToggleExpanded={(next) => panels.setExpanded(info.id, next)}
+        onToggleEnabled={(next) => void api.update(info.id, { enabled: next })}
+        enableDisabledReason={
+          isBuiltin && !aiSettings.enabled ? '先打开上方的「启用 AI 功能」' : undefined
+        }
+        onSetDefault={
+          info.kind === 'text' ? () => void api.setDefault(isBuiltin ? null : info.id) : undefined
+        }
+      >
+        {isBuiltin ? (
+          <BuiltinTextForm {...props} onKeyChanged={() => void refreshOne(info.id)} />
+        ) : (
+          <VendorForm
+            info={info}
+            onUpdate={(patch) => api.update(info.id, patch)}
+            onKeyChanged={() => void refreshOne(info.id)}
+            onRemove={
+              info.custom
+                ? () => {
+                    panels.forget(info.id);
+                    void api.removeCustom(info.id);
+                  }
+                : undefined
+            }
+          />
+        )}
+      </ProviderPanel>
+    );
+  };
+
+  return (
+    <div className={`${sharedStyles.panel} ${styles.aiPanel}`}>
+      <h4>
+        <AiOutlineApi />
+        <span>AI 设置</span>
+      </h4>
+      <p>按能力配置 AI 服务。Key 只保存在本机的系统钥匙串中，界面上不会再显示明文。</p>
+
+      <div className={styles.masterRow}>
         <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>启用 AI 功能</div>
-          <div className={sharedStyles.formDesc}>关闭后，AI 相关功能将不再发送请求。</div>
+          <div className={styles.masterTitle}>启用 AI 功能</div>
+          <div className={sharedStyles.formDesc}>
+            总开关。关闭后，写作功能的默认 AI（续写、分镜、灵感、推演等）不再发送请求。
+          </div>
         </div>
-        <button
-          className={`${sharedStyles.switchButton} ${aiSettings.enabled ? sharedStyles.enabled : ''}`}
-          onClick={() =>
+        <Switch
+          aria-label="启用 AI 功能"
+          checked={aiSettings.enabled}
+          onChange={(next) =>
             setSettings((prev) => ({
               ...prev,
-              ai: {
-                ...prev.ai,
-                enabled: !prev.ai.enabled,
-                enabledExplicitlySet: true,
-              },
+              ai: { ...prev.ai, enabled: next, enabledExplicitlySet: true },
             }))
           }
-        >
-          <span className={sharedStyles.switchThumb} />
-        </button>
-      </div>
-
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>服务预设</div>
-          <div className={sharedStyles.formDesc}>
-            选择常见服务后，自动填入推荐的接口地址和模型。
-          </div>
-        </div>
-        <Select<AIPresetKey>
-          block
-          size="lg"
-          aria-label="服务预设"
-          value={aiSettings.preset || 'openai-official'}
-          options={AI_PRESET_OPTIONS.map((preset) => ({ value: preset.key, label: preset.label }))}
-          onChange={(value) => applyAIPreset(value)}
         />
       </div>
 
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>服务类型</div>
-          <div className={sharedStyles.formDesc}>
-            用于匹配不同服务的接口协议。大多数服务选择 OpenAI 兼容即可。
-          </div>
-        </div>
-        <Select<AIProvider>
-          block
-          size="lg"
-          aria-label="服务类型"
-          value={aiSettings.provider}
-          options={PROVIDER_OPTIONS}
-          onChange={(value) => setAI('provider', value)}
-        />
-      </div>
+      {api.error && <div className={styles.statusError}>加载 AI 服务失败：{api.error}</div>}
 
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>接口地址</div>
-          <div className={sharedStyles.formDesc}>
-            填写服务提供方的 API 地址，例如 https://api.openai.com/v1
-          </div>
-        </div>
-        <input
-          className={sharedStyles.input}
-          value={aiSettings.baseUrl}
-          onChange={(e) => setAI('baseUrl', e.target.value)}
-          placeholder="https://api.openai.com/v1"
-        />
-      </div>
-
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>模型名称</div>
-          <div className={sharedStyles.formDesc}>可从推荐模型中选择，也可以手动填写。</div>
-        </div>
-        <div className={styles.dualInputGroup}>
-          <Select
-            block
-            size="lg"
-            aria-label="模型名称"
-            value={
-              activeAIPreset.models.includes(aiSettings.model) ? aiSettings.model : '__custom__'
-            }
-            options={[
-              ...activeAIPreset.models.map((model) => ({
-                value: model,
-                label: model === 'deepseek-chat' ? 'deepseek-chat / DeepSeek-V3.2' : model,
-              })),
-              ...(aiSettings.preset !== 'deepseek-official'
-                ? [{ value: '__custom__', label: '手动输入' }]
-                : []),
-            ]}
-            onChange={(newModel) => {
-              if (newModel === '__custom__') return;
-              setAI('model', newModel);
-              if (newModel === 'deepseek-reasoner') {
-                setAI('maxTokens', 65536);
-              } else if (newModel === 'deepseek-chat') {
-                setAI('maxTokens', 8192);
-              }
-            }}
-          />
-          <input
-            className={sharedStyles.input}
-            value={aiSettings.model}
-            onChange={(e) => setAI('model', e.target.value)}
-            placeholder={
-              aiSettings.preset === 'deepseek-official'
-                ? 'DeepSeek 官方预设模型（固定使用 V3.2 / Reasoner）'
-                : '例如：gpt-5.4-mini'
-            }
-            disabled={aiSettings.preset === 'deepseek-official'}
-          />
-        </div>
-      </div>
-
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>API Key</div>
-          <div className={sharedStyles.formDesc}>
-            由系统钥匙串加密保存在当前设备上，保存后不会再显示明文。
-          </div>
-        </div>
-        <ApiKeyField
-          providerId="openai-compatible"
-          configured={Boolean(aiSettings.hasApiKey || aiSettings.apiKey?.trim())}
-          onConfiguredChange={(configured) => setAI('hasApiKey', configured)}
-        />
-      </div>
-
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>温度</div>
-          <div className={sharedStyles.formDesc}>数值越高，回复越发散；数值越低，回复越稳定。</div>
-        </div>
-        <NumberInput
-          block
-          size="lg"
-          aria-label="温度"
-          min={0}
-          max={2}
-          step={0.1}
-          value={aiSettings.temperature}
-          onChange={(value) => setAI('temperature', value)}
-        />
-      </div>
-
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>上下文长度</div>
-          <div className={sharedStyles.formDesc}>用于控制单次请求可携带的上下文上限。</div>
-        </div>
-        <NumberInput
-          block
-          size="lg"
-          aria-label="上下文长度"
-          min={128000}
-          max={1000000}
-          step={10000}
-          value={aiSettings.contextTokens}
-          onChange={(value) => setAI('contextTokens', value)}
-        />
-      </div>
-
-      <div className={sharedStyles.formRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={sharedStyles.formLabel}>单次回复长度</div>
-          <div className={sharedStyles.formDesc}>
-            限制 AI 单次回复的最大长度。较长回复会消耗更多额度。
-          </div>
-        </div>
-        <NumberInput
-          block
-          size="lg"
-          aria-label="单次回复长度"
-          min={512}
-          max={65536}
-          step={128}
-          value={aiSettings.maxTokens}
-          onChange={(value) => setAI('maxTokens', value)}
-        />
-      </div>
+      {SECTIONS.map((section) => {
+        const items = byKind(section.kind);
+        if (section.kind !== 'text' && items.length === 0 && api.providers === null) return null;
+        return (
+          <section
+            key={section.kind}
+            className={styles.capability}
+            aria-labelledby={`ai-section-${section.kind}`}
+          >
+            <div className={styles.capabilityHeader}>
+              <h5 id={`ai-section-${section.kind}`} className={styles.capabilityTitle}>
+                {section.title}
+              </h5>
+              {section.kind === 'text' && defaultText && (
+                <span className={styles.capabilityMeta}>默认写作 AI：{defaultText.label}</span>
+              )}
+            </div>
+            <p className={styles.capabilityDesc}>{section.description}</p>
+            {section.kind === 'speech' && (
+              <div className={styles.sectionSetting}>
+                <VoiceLanguageSetting />
+              </div>
+            )}
+            <div className={styles.panelList}>{items.map(renderPanel)}</div>
+            {section.kind === 'text' && api.providers !== null && (
+              <AddTextProvider
+                onAdd={api.addCustom}
+                onAdded={(info) => panels.setExpanded(info.id, true)}
+              />
+            )}
+          </section>
+        );
+      })}
     </div>
-
-    <div className={styles.aiSaveRow}>
-      <button className={sharedStyles.primaryButton} onClick={handleSaveAISettings}>
-        保存 AI 配置
-      </button>
-      {aiSaveStatus && <span className={styles.aiSaveStatus}>{aiSaveStatus}</span>}
-    </div>
-
-    <h4 className={styles.subHeading}>
-      <span>更多 AI 服务</span>
-    </h4>
-    <p>续写（xAI Grok）与场景视频（MiniMax、Seedance）使用的服务，Key 同样只保存在本机钥匙串中。</p>
-    <ProviderList />
-  </div>
-);
+  );
+};
 
 export default AiSection;

@@ -237,4 +237,49 @@ describe('Select model', () => {
       findTypeaheadIndex([{ value: 'x', label: <b>节点</b>, textValue: '节点' }], '节', -1)
     ).toBe(0);
   });
+
+  it('custom：列表底部可手动填写，回车采用；不合法时标红不采用；当前值不在选项里时触发器显示该值', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <Select
+        aria-label="时长"
+        value="6"
+        options={[
+          { value: '4', label: '4 秒' },
+          { value: '6', label: '6 秒' },
+        ]}
+        custom={{
+          label: '自定义秒数',
+          normalize: (text) => (/^\d+$/.test(text.trim()) ? text.trim() : null),
+        }}
+        onChange={onChange}
+      />
+    );
+    fireEvent.click(screen.getByRole('combobox', { name: '时长' }));
+    const input = screen.getByLabelText('时长（自定义）') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'abc' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.change(input, { target: { value: '12' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith('12');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    rerender(
+      <Select
+        aria-label="时长"
+        value="12"
+        options={[{ value: '4', label: '4 秒' }]}
+        custom={{ label: '自定义秒数' }}
+        onChange={onChange}
+      />
+    );
+    expect(screen.getByRole('combobox', { name: '时长' }).textContent).toContain('12');
+    // 打开时输入框带出当前的自定义值；Esc 关闭
+    fireEvent.click(screen.getByRole('combobox', { name: '时长' }));
+    const again = screen.getByLabelText('时长（自定义）') as HTMLInputElement;
+    expect(again.value).toBe('12');
+    fireEvent.keyDown(again, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
 });

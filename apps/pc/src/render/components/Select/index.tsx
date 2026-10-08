@@ -56,6 +56,19 @@ export interface SelectProps<T extends string = string> {
   'data-testid'?: string;
   onBlur?: React.FocusEventHandler<HTMLButtonElement>;
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
+  /**
+   * 允许手动填写：列表底部出现输入框，回车采用。normalize 返回 null 表示不合法（不采用）。
+   * 当前值不在选项里时，触发器直接显示这个值
+   */
+  custom?: SelectCustomInput<T>;
+}
+
+export interface SelectCustomInput<T extends string = string> {
+  /** 输入框前的说明，例如「自定义」 */
+  label?: string;
+  placeholder?: string;
+  /** 把输入整理成值；不合法时返回 null */
+  normalize?: (text: string) => T | null;
 }
 
 interface PopupPosition {
@@ -98,6 +111,7 @@ function SelectInner<T extends string>(
     'data-testid': testId,
     onBlur,
     onFocus,
+    custom,
   }: SelectProps<T>,
   forwardedRef: React.ForwardedRef<HTMLButtonElement>
 ) {
@@ -347,8 +361,8 @@ function SelectInner<T extends string>(
         onBlur={onBlur}
         onFocus={onFocus}
       >
-        <span className={selected ? styles.value : styles.placeholder}>
-          {selected ? selected.label : placeholder}
+        <span className={selected || (custom && value) ? styles.value : styles.placeholder}>
+          {selected ? selected.label : custom && value ? value : placeholder}
         </span>
         <VscChevronDown className={styles.chevron} aria-hidden="true" />
       </button>
@@ -387,10 +401,72 @@ function SelectInner<T extends string>(
             renderOption(item)
           )
         )}
+        {custom && (
+          <CustomInput
+            key={open ? 'open' : 'closed'}
+            label={custom.label ?? '自定义'}
+            placeholder={custom.placeholder}
+            ariaLabel={`${ariaLabel ?? '选项'}（自定义）`}
+            initial={selected ? '' : value}
+            onSubmit={(text) => {
+              const next = custom.normalize ? custom.normalize(text) : (text.trim() as T);
+              if (!next) return false;
+              onChange(next);
+              closePopup();
+              triggerRef.current?.focus();
+              return true;
+            }}
+            onCancel={() => {
+              closePopup();
+              triggerRef.current?.focus();
+            }}
+          />
+        )}
       </OverlayPortal>
     </>
   );
 }
+
+/** 列表底部的「自定义」输入框：回车采用（不合法时提示），Esc 关闭；按键不冒泡到列表的键盘导航 */
+const CustomInput: React.FC<{
+  label: string;
+  placeholder?: string;
+  ariaLabel: string;
+  initial: string;
+  onSubmit: (text: string) => boolean;
+  onCancel: () => void;
+}> = ({ label, placeholder, ariaLabel, initial, onSubmit, onCancel }) => {
+  const [text, setText] = useState(initial);
+  const [invalid, setInvalid] = useState(false);
+  return (
+    <div className={styles.custom} role="group" aria-label={label}>
+      <span className={styles.customLabel}>{label}</span>
+      <input
+        className={invalid ? `${styles.customInput} ${styles.customInvalid}` : styles.customInput}
+        value={text}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        aria-invalid={invalid || undefined}
+        onMouseDown={(event) => event.stopPropagation()}
+        onChange={(event) => {
+          setText(event.target.value);
+          setInvalid(false);
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.nativeEvent.isComposing) return;
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            if (!onSubmit(text)) setInvalid(true);
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            onCancel();
+          }
+        }}
+      />
+    </div>
+  );
+};
 
 /** 泛型 forwardRef：保留 value 的字符串字面量类型 */
 const Select = React.forwardRef(SelectInner) as <T extends string = string>(

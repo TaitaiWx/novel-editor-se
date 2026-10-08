@@ -1,16 +1,16 @@
 /**
  * 主进程 AI 服务：Provider 注册表 + 安全密钥 + 非密钥配置的组合
  *
- * - 默认文本服务（openai-compatible）的地址 / 模型 / 温度 / 启用状态来自设置中心 JSON，Key 来自 CredentialStore
- * - 其他 Provider（grok、minimax-video、seedance-video）的配置来自 ProviderConfigStore
+ * - 内置默认文本服务（openai-compatible）的地址 / 模型 / 温度 / 启用状态来自设置中心 JSON，Key 来自 CredentialStore
+ * - 其他 Provider（grok、minimax-video、seedance-video…）与自定义文本 AI（custom-text-<n>）的配置来自 ProviderConfigStore
+ * - 默认写作 AI：作者在设置中心选定的文本服务（resolveDefaultTextProviderId，省略 providerId 的请求都走它）；
+ *   未选择时为内置 openai-compatible，与旧版完全一致
  * - invokeConfiguredAI 保持旧版签名、默认值与错误文案（成长推演、大纲导入等调用方无需改动）
  */
 import {
   AIError,
   createDefaultRegistry,
   toAIError,
-  type ChatMessage,
-  type CompletionRequest,
   type ProviderRegistry,
   type StreamChunk,
   type TextProvider,
@@ -18,10 +18,30 @@ import {
   type SpeechProvider,
   type VideoProvider,
 } from '@novel-editor/ai';
-import type { AICompletePayload, AIProviderInfo, AIProviderUpdate } from '../../shared/ai';
+import type {
+  AICompletePayload,
+  AICustomTextInput,
+  AIProviderInfo,
+  AIProviderUpdate,
+} from '../../shared/ai';
 import { assertProviderId, type CredentialStore } from './credential-store';
-import type { ProviderConfigStore } from './provider-config';
+import { isCustomTextId, syncCustomTextProviders } from './custom-text';
+import { normalizeBaseUrl, type ProviderConfigStore } from './provider-config';
+import {
+  isRecord,
+  parseDefaultTextSettings,
+  requestedProviderId,
+  toCompletionRequest,
+  type DefaultTextSettings,
+} from './request';
 import { DEFAULT_TEXT_PROVIDER_ID, SETTINGS_CENTER_KEY } from './settings-secrets';
+
+export {
+  legacyPayloadToMessages,
+  parseDefaultTextSettings,
+  sanitizeMessages,
+  toCompletionRequest,
+} from './request';
 
 export interface AIRequestPayload {
   prompt: string;
@@ -33,128 +53,21 @@ export interface AIRequestPayload {
 
 export type InvokeResult = { ok: true; text: string } | { ok: false; error: string };
 
-interface DefaultTextSettings {
-  enabled: boolean;
-  baseUrl: string;
-  model: string;
-  temperature?: number;
-  maxTokens?: number;
-}
-
 export interface AIServiceDeps {
   credentials: CredentialStore;
   configs: ProviderConfigStore;
   /** 读取设置中心 JSON（数据库未初始化时返回 undefined） */
   readSettings: () => string | undefined;
   registry?: ProviderRegistry;
+  clock?: () => Date;
 }
 
-const MAX_MESSAGES = 64;
-const MAX_MESSAGE_CHARS = 400_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** 解析设置中心 JSON 中的默认 AI 配置（兼容旧版顶层字段，与旧 normalizePersistedAISettings 一致） */
-export function parseDefaultTextSettings(
-  raw: string | undefined,
-  hasKey: boolean
-): DefaultTextSettings {
-  let parsed: Record<string, unknown> = {};
-  try {
-    const value = raw ? (JSON.parse(raw) as unknown) : {};
-    if (isRecord(value)) parsed = value;
-  } catch {
-    parsed = {};
-  }
-  const nested = isRecord(parsed.ai) ? parsed.ai : {};
-  const pick = (key: string): unknown => parsed[key] ?? nested[key];
-  const explicit =
-    typeof parsed.enabledExplicitlySet === 'boolean'
-      ? parsed.enabledExplicitlySet
-      : nested.enabledExplicitlySet === true;
-  const enabledRaw = typeof parsed.enabled === 'boolean' ? parsed.enabled : nested.enabled;
-  const legacyKey =
-    (typeof parsed.apiKey === 'string' && parsed.apiKey.trim()) ||
-    (typeof nested.apiKey === 'string' && nested.apiKey.trim());
-  const credential = hasKey || Boolean(legacyKey);
-  const str = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
-  const num = (value: unknown) => (typeof value === 'number' ? value : undefined);
-  return {
-    enabled: explicit ? Boolean(enabledRaw) : Boolean(enabledRaw) || credential,
-    baseUrl: str(pick('baseUrl')),
-    model: str(pick('model')),
-    temperature: num(pick('temperature')),
-    maxTokens: num(pick('maxTokens')),
-  };
-}
-
-/** 渲染进程传入的消息只保留白名单字段并限制体量 */
-export function sanitizeMessages(raw: unknown): ChatMessage[] {
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_MESSAGES) {
-    throw new AIError({ kind: 'bad-request', message: '无效的对话消息' });
-  }
-  let total = 0;
-  return raw.map((item) => {
-    if (!isRecord(item)) throw new AIError({ kind: 'bad-request', message: '无效的对话消息' });
-    const role = item.role;
-    const content = item.content;
-    if (
-      (role !== 'system' && role !== 'user' && role !== 'assistant') ||
-      typeof content !== 'string'
-    ) {
-      throw new AIError({ kind: 'bad-request', message: '无效的对话消息' });
-    }
-    total += content.length;
-    if (total > MAX_MESSAGE_CHARS) {
-      throw new AIError({ kind: 'bad-request', message: '请求内容过长，请缩减上下文' });
-    }
-    return { role, content };
-  });
-}
-
-/** 旧版 ai-request 的 prompt / systemPrompt / context 组装为消息（文案与旧实现一致） */
-export function legacyPayloadToMessages(payload: {
-  prompt?: unknown;
-  systemPrompt?: unknown;
-  context?: unknown;
-}): ChatMessage[] {
-  const prompt = typeof payload.prompt === 'string' ? payload.prompt : '';
-  const systemPrompt = typeof payload.systemPrompt === 'string' ? payload.systemPrompt : '';
-  const context = typeof payload.context === 'string' ? payload.context : '';
-  return [
-    ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
-    {
-      role: 'user' as const,
-      content: context ? `项目上下文:\n${context}\n\n用户请求:\n${prompt}` : prompt,
-    },
-  ];
-}
-
-function optionalNumber(value: unknown, min: number, max: number): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
-    ? value
-    : undefined;
-}
-
-/** AICompletePayload → CompletionRequest（白名单 + 范围校验） */
-export function toCompletionRequest(payload: AICompletePayload): CompletionRequest {
-  if (!isRecord(payload)) throw new AIError({ kind: 'bad-request', message: '无效的 AI 请求' });
-  const messages =
-    payload.messages !== undefined
-      ? sanitizeMessages(payload.messages)
-      : sanitizeMessages(legacyPayloadToMessages(payload));
-  const model =
-    typeof payload.model === 'string' && payload.model.trim()
-      ? payload.model.trim().slice(0, 200)
-      : undefined;
-  return {
-    messages,
-    model,
-    temperature: optionalNumber(payload.temperature, 0, 2),
-    maxTokens: optionalNumber(payload.maxTokens, 1, 1_000_000),
-  };
+/** 默认写作 AI 的摘要（注入设置中心 JSON，供渲染进程判断「AI 是否可用」） */
+export interface DefaultTextSummary {
+  id: string;
+  label: string;
+  /** 已保存 Key 且该服务未被关闭 */
+  ready: boolean;
 }
 
 export class AIService {
@@ -171,8 +84,15 @@ export class AIService {
     );
   }
 
+  /** 同步自定义文本 AI 到注册表 */
+  private sync(): void {
+    syncCustomTextProviders(this.registry, this.deps.configs);
+  }
+
   private descriptor(providerId: string) {
-    const descriptor = this.registry.get(assertProviderId(providerId));
+    const id = assertProviderId(providerId);
+    this.sync();
+    const descriptor = this.registry.get(id);
     if (!descriptor) {
       throw new AIError({
         kind: 'bad-request',
@@ -185,7 +105,89 @@ export class AIService {
 
   /** 设置中心列表：不含任何密钥 */
   listProviders(): AIProviderInfo[] {
+    this.sync();
     return this.registry.list().map((descriptor) => this.getProviderInfo(descriptor.id));
+  }
+
+  /** 默认写作 AI：作者选定且仍存在的文本服务，否则为内置 openai-compatible */
+  resolveDefaultTextProviderId(): string {
+    const chosen = this.deps.configs.getDefaultTextProviderId();
+    if (!chosen || chosen === DEFAULT_TEXT_PROVIDER_ID) return DEFAULT_TEXT_PROVIDER_ID;
+    this.sync();
+    return this.registry.get(chosen)?.kind === 'text' ? chosen : DEFAULT_TEXT_PROVIDER_ID;
+  }
+
+  /** 选定默认写作 AI；null / 空 / 内置 id 恢复为内置默认 */
+  setDefaultTextProvider(providerId: unknown): string {
+    if (providerId === null || providerId === undefined || providerId === '') {
+      this.deps.configs.setDefaultTextProviderId(undefined);
+      return DEFAULT_TEXT_PROVIDER_ID;
+    }
+    const descriptor = this.descriptor(String(providerId));
+    if (descriptor.kind !== 'text') {
+      throw new AIError({ kind: 'bad-request', message: `${descriptor.label} 不是文本服务` });
+    }
+    this.deps.configs.setDefaultTextProviderId(
+      descriptor.id === DEFAULT_TEXT_PROVIDER_ID ? undefined : descriptor.id
+    );
+    return descriptor.id;
+  }
+
+  /** 内置默认之外的默认写作 AI 摘要；未选择（或选的是内置默认）时返回 null */
+  describeDefaultText(): DefaultTextSummary | null {
+    const id = this.resolveDefaultTextProviderId();
+    if (id === DEFAULT_TEXT_PROVIDER_ID) return null;
+    const descriptor = this.descriptor(id);
+    const stored = this.deps.configs.get(id);
+    return {
+      id,
+      label: descriptor.label,
+      ready: this.deps.credentials.has(id) && stored.enabled !== false,
+    };
+  }
+
+  /** 添加自定义文本 AI（OpenAI 兼容）：名称 + 接口地址必填，模型 / Key 可选 */
+  addCustomTextProvider(input: AICustomTextInput): AIProviderInfo {
+    if (!isRecord(input)) throw new AIError({ kind: 'bad-request', message: '无效的配置' });
+    let baseUrl: string | undefined;
+    try {
+      baseUrl = normalizeBaseUrl(input.baseUrl);
+    } catch (error) {
+      throw new AIError({ kind: 'bad-request', message: toAIError(error).message });
+    }
+    if (!baseUrl) throw new AIError({ kind: 'bad-request', message: '请填写接口地址' });
+    const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+    if (apiKey.length > 4096) throw new AIError({ kind: 'bad-request', message: 'API Key 过长' });
+    const clock = this.deps.clock ?? (() => new Date());
+    let profile;
+    try {
+      profile = this.deps.configs.addCustomText(input.label, clock().toISOString());
+    } catch (error) {
+      throw new AIError({ kind: 'bad-request', message: toAIError(error).message });
+    }
+    try {
+      this.deps.configs.update(profile.id, {
+        baseUrl,
+        model: typeof input.model === 'string' ? input.model : undefined,
+      });
+      if (apiKey) this.deps.credentials.set(profile.id, apiKey);
+    } catch (error) {
+      // 地址 / 模型校验失败：撤销登记，不留半成品
+      this.deps.configs.removeCustomText(profile.id);
+      throw new AIError({ kind: 'bad-request', message: toAIError(error).message });
+    }
+    return this.getProviderInfo(profile.id);
+  }
+
+  /** 删除自定义文本 AI：同时删除它的 Key 与配置；它是默认写作 AI 时恢复内置默认 */
+  removeCustomTextProvider(providerId: unknown): boolean {
+    if (!isCustomTextId(providerId)) {
+      throw new AIError({ kind: 'bad-request', message: '只能删除自己添加的文本 AI' });
+    }
+    this.deps.credentials.delete(providerId);
+    const removed = this.deps.configs.removeCustomText(providerId);
+    this.sync();
+    return removed;
   }
 
   getProviderInfo(providerId: string): AIProviderInfo {
@@ -194,6 +196,8 @@ export class AIService {
     const isDefault = descriptor.id === DEFAULT_TEXT_PROVIDER_ID;
     const stored = this.deps.configs.get(descriptor.id);
     const defaults = isDefault ? this.defaultSettings() : null;
+    const defaultTextId = descriptor.kind === 'text' ? this.resolveDefaultTextProviderId() : '';
+    const isText = descriptor.kind === 'text';
     return {
       id: descriptor.id,
       kind: descriptor.kind,
@@ -206,30 +210,68 @@ export class AIService {
       ...(descriptor.supportsAudio ? { supportsAudio: true } : {}),
       configured,
       secureStorage: this.deps.credentials.isSecure(),
-      enabled: defaults ? defaults.enabled : (stored.enabled ?? configured),
+      enabled: defaults
+        ? defaults.enabled && stored.enabled !== false
+        : (stored.enabled ?? configured),
       baseUrl: (defaults ? defaults.baseUrl : stored.baseUrl) || descriptor.defaultBaseUrl,
       model: (defaults ? defaults.model : stored.model) || descriptor.defaultModel,
       ...(descriptor.kind === 'video'
         ? { pricePerSecond: stored.pricePerSecond, currency: stored.currency ?? 'CNY' }
         : {}),
+      ...(isCustomTextId(descriptor.id) ? { custom: true } : {}),
+      ...(isText && defaultTextId === descriptor.id
+        ? {
+            isDefaultText: true,
+            defaultTextChosen: Boolean(this.deps.configs.getDefaultTextProviderId()),
+          }
+        : {}),
+      ...(isText && !isDefault
+        ? {
+            temperature: stored.temperature,
+            maxTokens: stored.maxTokens,
+            contextTokens: stored.contextTokens,
+          }
+        : {}),
+      ...(descriptor.kind === 'speech' && stored.voice ? { voice: stored.voice } : {}),
     };
   }
 
-  /** 写入配置；apiKey 只写不读。openai-compatible 的地址 / 模型仍由设置中心 AI 分区保存 */
+  /**
+   * 写入配置；apiKey 只写不读。内置 openai-compatible 的地址 / 模型仍由设置中心 AI 分区保存，
+   * 这里只记它自己的启用开关；label（改名）只对自定义文本 AI 有效
+   */
   updateProvider(providerId: string, update: AIProviderUpdate): AIProviderInfo {
     const descriptor = this.descriptor(providerId);
     if (!isRecord(update)) throw new AIError({ kind: 'bad-request', message: '无效的配置' });
+    if (update.label !== undefined) {
+      if (!isCustomTextId(descriptor.id)) {
+        throw new AIError({ kind: 'bad-request', message: '只能给自己添加的文本 AI 改名' });
+      }
+      try {
+        this.deps.configs.renameCustomText(descriptor.id, update.label);
+      } catch (error) {
+        throw new AIError({ kind: 'bad-request', message: toAIError(error).message });
+      }
+    }
     if (update.clearKey === true) this.deps.credentials.delete(descriptor.id);
     if (typeof update.apiKey === 'string' && update.apiKey.trim()) {
       this.deps.credentials.set(descriptor.id, update.apiKey);
     }
-    if (descriptor.id !== DEFAULT_TEXT_PROVIDER_ID) this.deps.configs.update(descriptor.id, update);
+    if (descriptor.id !== DEFAULT_TEXT_PROVIDER_ID) {
+      this.deps.configs.update(descriptor.id, update);
+    } else if (typeof update.enabled === 'boolean') {
+      this.deps.configs.update(descriptor.id, { enabled: update.enabled });
+    }
     return this.getProviderInfo(descriptor.id);
   }
 
-  /** 取得可用的文本 Provider；未启用 / 未配置时抛出 not-configured（文案与旧版一致） */
-  getTextProvider(providerId: string = DEFAULT_TEXT_PROVIDER_ID): TextProvider {
-    const descriptor = this.descriptor(providerId);
+  /**
+   * 取得可用的文本 Provider；未启用 / 未配置时抛出 not-configured（文案与旧版一致）。
+   * 省略 providerId 时使用默认写作 AI；它不是内置默认时同样受「启用 AI 功能」总开关约束
+   */
+  getTextProvider(providerId?: string): TextProvider {
+    const useDefault = providerId === undefined;
+    const descriptor = this.descriptor(providerId ?? this.resolveDefaultTextProviderId());
     if (descriptor.kind !== 'text') {
       throw new AIError({
         kind: 'bad-request',
@@ -237,6 +279,7 @@ export class AIService {
         providerId,
       });
     }
+    providerId = descriptor.id;
     const apiKey = this.deps.credentials.get(descriptor.id) ?? '';
     if (descriptor.id === DEFAULT_TEXT_PROVIDER_ID) {
       const settings = this.defaultSettings();
@@ -244,6 +287,13 @@ export class AIService {
         throw new AIError({
           kind: 'not-configured',
           message: 'AI 功能未启用，请先在设置中心开启',
+          providerId,
+        });
+      }
+      if (this.deps.configs.get(descriptor.id).enabled === false) {
+        throw new AIError({
+          kind: 'not-configured',
+          message: `${descriptor.label} 未启用，请先在设置中心开启`,
           providerId,
         });
       }
@@ -269,6 +319,16 @@ export class AIService {
         maxTokens: settings.maxTokens,
       });
     }
+    if (
+      useDefault &&
+      !parseDefaultTextSettings(this.deps.readSettings(), Boolean(apiKey)).enabled
+    ) {
+      throw new AIError({
+        kind: 'not-configured',
+        message: 'AI 功能未启用，请先在设置中心开启',
+        providerId,
+      });
+    }
     const stored = this.deps.configs.get(descriptor.id);
     if (stored.enabled === false) {
       throw new AIError({
@@ -284,10 +344,19 @@ export class AIService {
         providerId,
       });
     }
+    if (isCustomTextId(descriptor.id) && !stored.baseUrl) {
+      throw new AIError({
+        kind: 'not-configured',
+        message: `${descriptor.label} 没有填写接口地址`,
+        providerId,
+      });
+    }
     return this.registry.createText(descriptor.id, {
       apiKey,
       baseUrl: stored.baseUrl,
       model: stored.model,
+      temperature: stored.temperature,
+      maxTokens: stored.maxTokens,
     });
   }
 
@@ -416,6 +485,7 @@ export class AIService {
       apiKey,
       baseUrl: stored.baseUrl,
       model: stored.model,
+      voice: stored.voice,
     });
   }
 
@@ -451,12 +521,12 @@ export class AIService {
   }
 
   async complete(payload: AICompletePayload, signal?: AbortSignal) {
-    const provider = this.getTextProvider(payload?.providerId ?? DEFAULT_TEXT_PROVIDER_ID);
+    const provider = this.getTextProvider(requestedProviderId(payload));
     return provider.complete(toCompletionRequest(payload), { signal });
   }
 
   stream(payload: AICompletePayload, signal?: AbortSignal): AsyncIterable<StreamChunk> {
-    const provider = this.getTextProvider(payload?.providerId ?? DEFAULT_TEXT_PROVIDER_ID);
+    const provider = this.getTextProvider(requestedProviderId(payload));
     return provider.stream(toCompletionRequest(payload), { signal });
   }
 

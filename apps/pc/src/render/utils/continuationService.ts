@@ -17,12 +17,18 @@ import type {
   AIStreamEvent,
   SerializedAIError,
 } from '@/shared/ai';
+import {
+  BUILTIN_TEXT_PROVIDER_ID,
+  chosenDefaultTextProvider,
+  isUsableTextProvider,
+  providerIdForRequest,
+} from './textProviders';
 import type {
   ContinuationContextSummary,
   ContinuationService,
 } from '../components/TextEditor/assist/types';
 
-export const DEFAULT_TEXT_PROVIDER_ID = 'openai-compatible';
+export const DEFAULT_TEXT_PROVIDER_ID = BUILTIN_TEXT_PROVIDER_ID;
 export const CONTINUATION_BUDGET = 6000;
 
 /** 续写需要的作品资料（当前章章纲、人物、成长档案、核心规则） */
@@ -52,30 +58,30 @@ export interface ContinuationDeps {
 }
 
 export interface ResolvedProvider {
-  /** undefined 表示设置中心的默认 AI */
+  /** undefined 表示默认写作 AI（由主进程解析） */
   providerId: string | undefined;
   label: string;
 }
 
-const isUsableText = (item: AIProviderInfo) =>
-  item.kind === 'text' && item.configured && item.enabled;
-
-/** 选择续写服务：指定的服务 > Grok > 默认 AI > 其他已配置的文本服务；都没有时返回 null */
+/**
+ * 选择续写服务：指定的服务 > 作者选定的默认写作 AI > Grok > 内置默认 AI > 其他已配置的文本服务；
+ * 都没有时返回 null（未选定默认写作 AI 时与旧版顺序一致）
+ */
 export function resolveContinuationProvider(
   providers: readonly AIProviderInfo[],
   preferred?: string
 ): ResolvedProvider | null {
-  const toResolved = (item: AIProviderInfo): ResolvedProvider => ({
-    providerId: item.id === DEFAULT_TEXT_PROVIDER_ID ? undefined : item.id,
-    label: item.label,
-  });
-  const pick = (id: string) => providers.find((item) => item.id === id && isUsableText(item));
+  const pick = (id: string) =>
+    providers.find((item) => item.id === id && isUsableTextProvider(item));
   const chosen =
     (preferred ? pick(preferred) : undefined) ??
+    chosenDefaultTextProvider(providers) ??
     pick('grok') ??
     pick(DEFAULT_TEXT_PROVIDER_ID) ??
-    providers.find(isUsableText);
-  return chosen ? toResolved(chosen) : null;
+    providers.find(isUsableTextProvider);
+  return chosen
+    ? { providerId: providerIdForRequest(providers, chosen), label: chosen.label }
+    : null;
 }
 
 export function summarizeContext(

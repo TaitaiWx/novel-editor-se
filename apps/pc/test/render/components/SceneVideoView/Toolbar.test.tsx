@@ -2,7 +2,10 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import Toolbar from '@/render/components/SceneVideoView/Toolbar';
+import Toolbar, {
+  normalizeCustomDuration,
+  normalizeCustomStyle,
+} from '@/render/components/SceneVideoView/Toolbar';
 import {
   createSceneVideoState,
   type SceneVideoState,
@@ -87,5 +90,35 @@ describe('场景视频工具栏 · 生成声音', () => {
     expect(screen.getByRole('switch', { name: '生成声音' }).getAttribute('aria-checked')).toBe(
       'false'
     );
+  });
+});
+
+describe('场景视频工具栏 · 自定义风格与时长', () => {
+  it('normalizeCustomStyle：去空白、限 80 字、空内容不采用', () => {
+    expect(normalizeCustomStyle('  胶片颗粒，  逆光  ')).toBe('胶片颗粒， 逆光');
+    expect(normalizeCustomStyle('   ')).toBeNull();
+    expect(Array.from(normalizeCustomStyle('字'.repeat(100)) ?? '')).toHaveLength(80);
+  });
+
+  it('normalizeCustomDuration：1–60 的整数秒', () => {
+    expect(normalizeCustomDuration('12')).toBe('12');
+    expect(normalizeCustomDuration('7.6')).toBe('8');
+    expect(normalizeCustomDuration('0')).toBeNull();
+    expect(normalizeCustomDuration('61')).toBeNull();
+    expect(normalizeCustomDuration('abc')).toBeNull();
+  });
+
+  it('风格与时长都可以在列表底部手动填写', () => {
+    const { onChange } = renderToolbar([videoProvider('seedance-video', true)]);
+    fireEvent.click(screen.getByRole('combobox', { name: '风格' }));
+    const style = screen.getByLabelText('风格（自定义）');
+    fireEvent.change(style, { target: { value: '胶片颗粒、逆光、浅景深' } });
+    fireEvent.keyDown(style, { key: 'Enter' });
+    expect(onChange.mock.calls.at(-1)?.[0](state).style).toBe('胶片颗粒、逆光、浅景深');
+    fireEvent.click(screen.getByRole('combobox', { name: '每镜时长' }));
+    const duration = screen.getByLabelText('每镜时长（自定义）');
+    fireEvent.change(duration, { target: { value: '12' } });
+    fireEvent.keyDown(duration, { key: 'Enter' });
+    expect(onChange.mock.calls.at(-1)?.[0](state).shotDurationSec).toBe(12);
   });
 });

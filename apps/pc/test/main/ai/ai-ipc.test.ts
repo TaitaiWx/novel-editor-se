@@ -251,6 +251,86 @@ describe('ai-providers-*', () => {
   });
 });
 
+describe('自定义文本 AI 与默认写作 AI（IPC）', () => {
+  it('add / list / set-default / remove；校验输入；Key 不出现在返回值里', async () => {
+    const added = await call<{ ok: boolean; data: Record<string, unknown> }>(
+      'ai-providers-add-custom',
+      null,
+      { label: '通义', baseUrl: 'https://qwen.test/v1', model: 'qwen-plus', apiKey: 'sk-qwen' }
+    );
+    expect(added).toMatchObject({
+      ok: true,
+      data: { id: 'custom-text-1', custom: true, configured: true },
+    });
+    expect(JSON.stringify(added)).not.toContain('sk-qwen');
+    for (const bad of [
+      null,
+      { label: '', baseUrl: 'https://a.test' },
+      { label: 'x', baseUrl: 'javascript:alert(1)' },
+      { label: 'x', baseUrl: 'https://user:pw@a.test' },
+      { label: 'x'.repeat(50), baseUrl: 'https://a.test' },
+    ]) {
+      expect(await call('ai-providers-add-custom', null, bad)).toMatchObject({
+        ok: false,
+        error: { kind: 'bad-request' },
+      });
+    }
+    const list = await call<{ ok: boolean; data: Array<Record<string, unknown>> }>(
+      'ai-providers-list',
+      null
+    );
+    expect(list.data.map((item) => item.id)).toContain('custom-text-1');
+    expect(JSON.stringify(list)).not.toContain('sk-qwen');
+
+    // 设为默认：返回新列表；设置 JSON 注入默认写作 AI 摘要
+    const setDefault = await call<{ ok: boolean; data: Array<Record<string, unknown>> }>(
+      'ai-providers-set-default',
+      null,
+      'custom-text-1'
+    );
+    expect(setDefault.ok).toBe(true);
+    expect(setDefault.data.find((item) => item.isDefaultText)?.id).toBe('custom-text-1');
+    settingsRows.set(
+      SETTINGS_KEY,
+      JSON.stringify({ ai: { enabled: true, enabledExplicitlySet: true } })
+    );
+    const read = JSON.parse(await call<string>('db-settings-get', null, SETTINGS_KEY));
+    expect(read.ai).toMatchObject({
+      defaultTextProviderId: 'custom-text-1',
+      defaultTextLabel: '通义',
+      defaultTextReady: true,
+    });
+
+    // ai-request（成长推演、灵感等）走默认写作 AI
+    fetchMock.mockImplementation(
+      async () => new Response(JSON.stringify({ choices: [{ message: { content: '通义回答' } }] }))
+    );
+    expect(await call('ai-request', null, { prompt: 'p' })).toEqual({ ok: true, text: '通义回答' });
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('https://qwen.test/v1/chat/completions');
+
+    expect(await call('ai-providers-set-default', null, 'seedance-video')).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('不是文本服务') },
+    });
+    expect(await call('ai-providers-set-default', null, '../x')).toMatchObject({ ok: false });
+
+    // 删除：只接受 custom-text-<n>；删除后默认恢复内置，Key 一并删除
+    expect(await call('ai-providers-remove-custom', null, 'grok')).toMatchObject({ ok: false });
+    expect(await call('ai-providers-remove-custom', null, 'custom-text-1')).toEqual({
+      ok: true,
+      data: { removed: true },
+    });
+    expect(runtime.getCredentialStore().get('custom-text-1')).toBeNull();
+    const after = await call<{ ok: boolean; data: Array<Record<string, unknown>> }>(
+      'ai-providers-list',
+      null
+    );
+    expect(after.data.find((item) => item.isDefaultText)?.id).toBe('openai-compatible');
+    const reread = JSON.parse(await call<string>('db-settings-get', null, SETTINGS_KEY));
+    expect(reread.ai.defaultTextProviderId).toBeUndefined();
+  });
+});
+
 describe('ai-stream-*', () => {
   it('片段推送给发起的窗口，最后 done', async () => {
     runtime.getCredentialStore().set('grok', 'xai');

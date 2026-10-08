@@ -10,6 +10,21 @@ import Tooltip from '../../Tooltip';
 import { SCENE_SHOT_DURATIONS, SCENE_VIDEO_STYLES, type SceneVideoState } from '../sceneVideoState';
 import styles from './styles.module.scss';
 
+/** 自定义风格：去掉首尾空白，限制 80 字；空内容不采用 */
+export function normalizeCustomStyle(text: string): string | null {
+  const value = text.trim().replace(/\s+/g, ' ');
+  if (!value) return null;
+  return Array.from(value).slice(0, 80).join('');
+}
+
+/** 自定义每镜时长：1–60 的整数秒（小数四舍五入），否则不采用 */
+export function normalizeCustomDuration(text: string): string | null {
+  const value = Number(text.trim());
+  if (!Number.isFinite(value)) return null;
+  const seconds = Math.round(value);
+  return seconds >= 1 && seconds <= 60 ? String(seconds) : null;
+}
+
 export interface ToolbarProps {
   state: SceneVideoState;
   onChange: (updater: (prev: SceneVideoState) => SceneVideoState) => void;
@@ -45,7 +60,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
 }) => {
   const provider =
     videoProviders.find((item) => item.id === state.providerId) ?? videoProviders[0] ?? null;
-  const presetStyle = (SCENE_VIDEO_STYLES as readonly string[]).includes(state.style);
   const generateLabel = submitting
     ? '提交中…'
     : pendingCount > 0
@@ -66,18 +80,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </div>
 
       <div className={styles.settings}>
-        <Tooltip content="画面风格（场景检查器里可以自定义）">
+        <Tooltip content="画面风格：选预设，或在列表底部写自己的风格（质感、光线、镜头语言等）">
           <Select
             className={styles.select}
             aria-label="风格"
-            value={presetStyle ? state.style : ''}
-            options={[
-              ...(presetStyle ? [] : [{ value: '', label: state.style }]),
-              ...SCENE_VIDEO_STYLES.map((style) => ({ value: style, label: style })),
-            ]}
-            onChange={(style) => {
-              if (style) onChange((prev) => ({ ...prev, style }));
+            value={state.style}
+            options={SCENE_VIDEO_STYLES.map((style) => ({ value: style, label: style }))}
+            custom={{
+              label: '自定义',
+              placeholder: '例如：胶片颗粒、逆光、浅景深',
+              normalize: normalizeCustomStyle,
             }}
+            onChange={(style) => onChange((prev) => ({ ...prev, style }))}
           />
         </Tooltip>
         <Tooltip content="画面比例">
@@ -95,7 +109,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
             }}
           />
         </Tooltip>
-        <Tooltip content="拆分镜时每个镜头的默认时长">
+        <Tooltip content="拆分镜时每个镜头的默认时长：选预设，或在列表底部填 1–60 秒">
           <Select
             className={styles.select}
             aria-label="每镜时长"
@@ -104,6 +118,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
               value: String(value),
               label: `每镜 ${value} 秒`,
             }))}
+            custom={{
+              label: '自定义秒数',
+              placeholder: '1–60',
+              normalize: normalizeCustomDuration,
+            }}
             onChange={(value) => {
               const shotDurationSec = Number(value);
               onChange((prev) => ({ ...prev, shotDurationSec }));

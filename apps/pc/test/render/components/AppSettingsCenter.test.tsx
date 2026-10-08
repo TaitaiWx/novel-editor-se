@@ -304,14 +304,15 @@ describe('AppSettingsCenter', () => {
     expect(await screen.findByText('清除失败: 磁盘被锁定')).toBeTruthy();
   });
 
-  it('AI：开关、预设、服务类型、地址、模型、密钥、数值', async () => {
+  it('AI：总开关、预设、地址、模型、密钥、数值', async () => {
     const mock = mockIpc();
     renderCenter({ initialTab: 'ai' });
     await waitFor(() =>
       expect(mock.invoke.mock.calls.some((c) => c[0] === 'db-settings-set')).toBe(true)
     );
 
-    fireEvent.click(switchFor('启用 AI 功能'));
+    // 总开关独立在最上方（不在服务面板里）
+    fireEvent.click(screen.getByRole('switch', { name: '启用 AI 功能' }));
     await waitFor(() => expect(lastSaved(mock).ai.enabled).toBe(true));
     expect(lastSaved(mock).ai.enabledExplicitlySet).toBe(true);
 
@@ -333,7 +334,6 @@ describe('AppSettingsCenter', () => {
     expect(getCombobox('模型名称').textContent).toBe('手动输入');
     chooseOption('模型名称', '手动输入');
 
-    chooseOption('服务类型', 'OpenAI');
     fireEvent.change(inputFor('接口地址'), { target: { value: 'https://x.test/v1' } });
     fireEvent.change(inputFor('模型名称'), { target: { value: 'my-model' } });
     // Key 只写不读：输入后点「保存 Key」交给主进程加密保存，草稿里只记录 hasApiKey
@@ -352,7 +352,6 @@ describe('AppSettingsCenter', () => {
     fireEvent.blur(inputFor('单次回复长度'));
     await waitFor(() => {
       const ai = lastSaved(mock).ai;
-      expect(ai.provider).toBe('openai');
       expect(ai.baseUrl).toBe('https://x.test/v1');
       expect(ai.model).toBe('my-model');
       expect(ai.apiKey).toBe('');

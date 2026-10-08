@@ -304,6 +304,40 @@
     return target;
   }
 
+  const SFX = { bell: renderBell, footsteps: renderFootsteps, sail: renderSail };
+
+  /**
+   * 场景混音：配乐（对白时压低）+ 环境音 + 音效 + 配音占位音。时间都是场景时间轴上的绝对秒数，
+   * 取 [from, from + length) 这一段，所以单个镜头的成片与整场样片里同一时刻的声音完全一致。
+   * spec: { from, length, cues: [{ at, gain, sfx?: 'bell'|'footsteps'|'sail', voice?: { pitch, seconds } }],
+   *         fadeIn, fadeOut }（淡入淡出只作用于配乐与环境音；整段首尾另有 10ms 防爆音）
+   */
+  function renderSceneMix(spec) {
+    const { from, length, cues } = spec;
+    const mix = buffer(length);
+    const duck = [];
+    for (const cue of cues) {
+      const source = cue.voice ? renderVoice(cue.voice.pitch, cue.voice.seconds) : SFX[cue.sfx]();
+      mixInto(mix, source, cue.at - from, cue.gain);
+      if (cue.voice) duck.push([cue.at, cue.at + cue.voice.seconds]);
+    }
+    const bgm = renderBgm();
+    const town = renderTown();
+    const offset = Math.round(from * SR);
+    for (let i = 0; i < mix.length; i += 1) {
+      const local = i / SR;
+      const t = from + local;
+      const ducked = duck.some(([a, b]) => t > a - 0.15 && t < b + 0.35);
+      const bed = Math.min(1, local / spec.fadeIn) * Math.min(1, (length - local) / spec.fadeOut);
+      mix[i] += bgm[(offset + i) % bgm.length] * 0.32 * (ducked ? 0.25 : 1) * bed;
+      mix[i] += town[(offset + i) % town.length] * 0.22 * bed;
+    }
+    let peak = 0;
+    for (const v of mix) peak = Math.max(peak, Math.abs(v));
+    if (peak > 0.9) for (let i = 0; i < mix.length; i += 1) mix[i] *= 0.9 / peak;
+    return fade(mix, 0.01, 0.01);
+  }
+
   function toBase64(bytes) {
     let binary = '';
     for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -363,6 +397,7 @@
     renderSail,
     renderVoice,
     mixInto,
+    renderSceneMix,
     feedAudio,
     encodeM4a,
     toBase64,

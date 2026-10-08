@@ -7,7 +7,7 @@
  *   以安全存储为准（作者最近一次填写的值），明文同样删除
  * - sanitizeSettingsForRenderer：db-settings-get 返回前去掉 apiKey，注入 ai.hasApiKey
  * - interceptSettingsWrite：db-settings-set 写入前把 apiKey 转存到 CredentialStore 并去掉，
- *   同时丢弃渲染进程回写的派生字段 hasApiKey（兼容尚未改造的旧入口）
+ *   同时丢弃渲染进程回写的派生字段（hasApiKey、默认写作 AI 摘要；兼容尚未改造的旧入口）
  * 迁移前「没有显式开关但填了 Key ⇒ 视为已启用」的推断在迁移时固化为 enabled + enabledExplicitlySet。
  */
 export const SETTINGS_CENTER_KEY = 'novel-editor:settings-center';
@@ -104,16 +104,39 @@ export function migratePlaintextApiKey(
   return { migrated: Boolean(key), conflict };
 }
 
-/** db-settings-get：去掉 Key，注入 ai.hasApiKey */
+/** 注入给渲染进程的派生字段（写入时丢弃） */
+const DERIVED_AI_FIELDS = [
+  'hasApiKey',
+  'defaultTextProviderId',
+  'defaultTextLabel',
+  'defaultTextReady',
+] as const;
+
+/**
+ * db-settings-get：去掉 Key，注入 ai.hasApiKey；默认写作 AI 不是内置 openai-compatible 时
+ * 再注入 defaultTextProviderId / defaultTextLabel / defaultTextReady（渲染进程据此判断 AI 是否可用）
+ */
 export function sanitizeSettingsForRenderer(
   raw: string | undefined,
-  hasApiKey: boolean
+  hasApiKey: boolean,
+  defaultText?: { id: string; label: string; ready: boolean } | null
 ): string | undefined {
   const settings = parse(raw);
   if (!settings) return raw;
   extractApiKey(settings);
-  const ai = isRecord(settings.ai) ? settings.ai : {};
-  settings.ai = { ...ai, hasApiKey };
+  const ai: JsonRecord = isRecord(settings.ai) ? { ...settings.ai } : {};
+  for (const field of DERIVED_AI_FIELDS) delete ai[field];
+  settings.ai = {
+    ...ai,
+    hasApiKey,
+    ...(defaultText
+      ? {
+          defaultTextProviderId: defaultText.id,
+          defaultTextLabel: defaultText.label,
+          defaultTextReady: defaultText.ready,
+        }
+      : {}),
+  };
   return JSON.stringify(settings);
 }
 
@@ -123,6 +146,9 @@ export function interceptSettingsWrite(value: string, secrets: SecretSink): stri
   if (!settings) return value;
   const { key } = extractApiKey(settings);
   if (key) secrets.set(DEFAULT_TEXT_PROVIDER_ID, key);
-  if (isRecord(settings.ai)) delete settings.ai.hasApiKey;
+  if (isRecord(settings.ai)) {
+    const ai = settings.ai;
+    for (const field of DERIVED_AI_FIELDS) delete ai[field];
+  }
   return JSON.stringify(settings);
 }

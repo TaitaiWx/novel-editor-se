@@ -8,6 +8,7 @@
 import type {
   AICompletePayload,
   AICompleteResult,
+  AICustomTextInput,
   AIIpcResult,
   AIProviderInfo,
   AIProviderUpdate,
@@ -33,6 +34,7 @@ export type {
   SpeechSynthesizeResult,
   AICompletePayload,
   AICompleteResult,
+  AICustomTextInput,
   AIIpcResult,
   AIProviderInfo,
   AIProviderUpdate,
@@ -48,7 +50,7 @@ export type {
   VideoTask,
   VideoTaskSubmitPayload,
 } from '../../shared/ai';
-export { AI_STREAM_EVENT, VIDEO_TASK_EVENT } from '../../shared/ai';
+export { AI_STREAM_EVENT, BUILTIN_TEXT_PROVIDER_ID, VIDEO_TASK_EVENT } from '../../shared/ai';
 
 export interface AIInvokeOverloads {
   invoke(channel: 'ai-providers-list'): Promise<AIIpcResult<AIProviderInfo[]>>;
@@ -62,6 +64,20 @@ export interface AIInvokeOverloads {
     channel: 'ai-providers-test',
     providerId: string
   ): Promise<AIIpcResult<{ latencyMs: number }>>;
+  /** 添加自己的 OpenAI 兼容文本 AI（返回分配的 custom-text-<n>） */
+  invoke(
+    channel: 'ai-providers-add-custom',
+    input: AICustomTextInput
+  ): Promise<AIIpcResult<AIProviderInfo>>;
+  invoke(
+    channel: 'ai-providers-remove-custom',
+    providerId: string
+  ): Promise<AIIpcResult<{ removed: boolean }>>;
+  /** 选定默认写作 AI（null 恢复内置默认），返回新的服务列表 */
+  invoke(
+    channel: 'ai-providers-set-default',
+    providerId: string | null
+  ): Promise<AIIpcResult<AIProviderInfo[]>>;
   invoke(
     channel: 'ai-complete',
     payload: AICompletePayload

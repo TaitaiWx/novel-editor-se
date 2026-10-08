@@ -9,6 +9,8 @@
   'use strict';
   const A = window.SampleArt;
   const ease = (v) => v * v * (3 - 2 * v);
+  /** 画面尺寸无关：以 640 × 360 为基准的缩放（首帧、成片、样片不论多大构图都一致） */
+  const unit = (width) => width / 640;
 
   /** 雨后清晨的天空与远山、晨雾 */
   function morningSky(ctx, width, height, horizon, t) {
@@ -21,14 +23,15 @@
     A.drawMountains(ctx, width, horizon - height * 0.06, A.rgba('#6f8494', 0.55), 31, height * 0.2);
     A.drawMountains(ctx, width, horizon, A.rgba('#4f6474', 0.75), 37, height * 0.12);
     // 晨雾：几条缓慢漂移的雾带
+    const u = unit(width);
     for (let i = 0; i < 3; i += 1) {
       const y = horizon - height * (0.02 + i * 0.05);
-      const fog = ctx.createLinearGradient(0, y - 18, 0, y + 18);
+      const fog = ctx.createLinearGradient(0, y - 18 * u, 0, y + 18 * u);
       fog.addColorStop(0, 'rgba(240, 240, 235, 0)');
       fog.addColorStop(0.5, `rgba(240, 240, 235, ${0.42 - i * 0.1})`);
       fog.addColorStop(1, 'rgba(240, 240, 235, 0)');
       ctx.fillStyle = fog;
-      ctx.fillRect(-40 + Math.sin(t * 2 + i) * 20, y - 18, width + 80, 36);
+      ctx.fillRect(-40 * u + Math.sin(t * 2 + i) * 20 * u, y - 18 * u, width + 80 * u, 36 * u);
     }
   }
 
@@ -45,7 +48,7 @@
     ctx.fillStyle = '#8a8478';
     ctx.fill();
     ctx.strokeStyle = 'rgba(40, 36, 30, 0.35)';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.max(1, unit(width) * 1.2);
     for (let row = 1; row < 9; row += 1) {
       const s = row / 9;
       const y = horizon + (height - horizon) * s * s;
@@ -63,7 +66,8 @@
   }
 
   /** 老槐树（湿漉漉地发亮） */
-  function oldTree(ctx, x, baseY, scale) {
+  function oldTree(ctx, x, baseY, size, width) {
+    const scale = size * unit(width);
     ctx.fillStyle = '#4a3a2c';
     ctx.beginPath();
     ctx.moveTo(x - 10 * scale, baseY);
@@ -82,7 +86,8 @@
   }
 
   /** 青石镇的屋檐与铁匠铺烟囱 */
-  function townHouses(ctx, width, baseY, scale) {
+  function townHouses(ctx, width, baseY, size) {
+    const scale = size * unit(width);
     const houses = [
       [0.04, 120, 70],
       [0.2, 100, 60],
@@ -127,9 +132,10 @@
       ctx.translate(-width / 2, -height / 2);
       const horizon = height * 0.5;
       morningSky(ctx, width, height, horizon, t);
-      townHouses(ctx, width, horizon + 8, 0.9);
-      stoneRoad(ctx, width, height, horizon + 8);
-      oldTree(ctx, width * 0.22, height * 0.82, 1.2);
+      const street = horizon + 8 * unit(width);
+      townHouses(ctx, width, street, 0.9);
+      stoneRoad(ctx, width, height, street);
+      oldTree(ctx, width * 0.22, height * 0.82, 1.2, width);
       const footY = height * (0.7 + 0.12 * ease(t));
       const H = height * (0.3 + 0.08 * ease(t));
       A.groundShadow(ctx, width * 0.55, footY, H * 0.25);
@@ -177,7 +183,7 @@
       ctx.fillStyle = '#6d7d62';
       ctx.fillRect(0, height * 0.7, width, height * 0.3);
       ctx.strokeStyle = '#b8ae96';
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 5 * unit(width);
       ctx.beginPath();
       ctx.moveTo(width * 0.1, height);
       ctx.quadraticCurveTo(width * 0.5, height * 0.78, width * 0.62, height * 0.7);
@@ -198,12 +204,14 @@
     ctx.fillRect(0, 0, width, horizon);
     ctx.fillStyle = '#3a3f47';
     ctx.fillRect(0, horizon, width, height - horizon);
+    // 预演最初按 384 宽设计：网格间距与线宽随画面等比放大
+    const k = width / 384;
     ctx.strokeStyle = 'rgba(200, 210, 220, 0.18)';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.max(1, k * 0.8);
     for (let i = -10; i <= 10; i += 1) {
       ctx.beginPath();
-      ctx.moveTo(width / 2 + i * 12, horizon);
-      ctx.lineTo(width / 2 + i * 90, height);
+      ctx.moveTo(width / 2 + i * 12 * k, horizon);
+      ctx.lineTo(width / 2 + i * 90 * k, height);
       ctx.stroke();
     }
     for (let row = 1; row < 10; row += 1) {
@@ -247,6 +255,7 @@
     ctx.fill();
     // 取景框与说明
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = Math.max(1, k);
     ctx.strokeRect(width * 0.06, height * 0.08, width * 0.88, height * 0.84);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.font = `${Math.round(height * 0.04)}px "PingFang SC", "Microsoft YaHei", sans-serif`;

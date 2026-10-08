@@ -3,7 +3,7 @@
  *
  * - 声音示例.md：::audio 就地显示为音频播放条（播放器的音频界面）并真正播放；「在旁边听」在参考窗格打开；
  *   全程没有「Failed to get file info」或读文件错误
- * - 预先做好的场景视频：资料 → 视频 → 001-启程 → 带场景标记的「第一场 清晨的青石镇」，单击打开画布：
+ * - 预先做好的场景视频：资料 → 视频 → 001-启程 → 带场景标记的「第一场 清晨的青石镇」，单击打开画布（成片 1280 × 720 且有音轨）：
  *   5 个镜头带 台词 / 音效 / 配乐 标记，首帧与成片缩略图、样片可见；镜头检查器有对白（说话人）与配音占位音、
  *   预演第一帧与预演视频；场景检查器显示配音语言与背景音乐。只打开不修改时不写回 分镜.json
  * - 英文作品 Starbound：「Chapter 1: The Harbor」「Act I」「Scene 1 — …」按英文结构规则显示为章 / 幕 / 场标题
@@ -197,6 +197,42 @@ describe('示例作品集展示', () => {
     await page.waitForTarget('img[alt="镜头 1 预演第一帧"]', 15_000);
     await page.waitForTarget('[data-testid="previz-video-preview"]', 15_000);
     await captureForReview(page, 'showcase-shot-inspector');
+
+    // 镜头 1 的成片：1280 × 720，带声音（播放一小段后播放器判定有音轨，不显示「无音轨」）
+    const shotPlayer = '[role="group"][aria-label="视频 镜头1-v1.mp4"]';
+    await page.waitFor(
+      (selector: string) =>
+        (document.querySelector<HTMLVideoElement>(`${selector} video`)?.readyState ?? 0) >= 1,
+      { args: [shotPlayer], timeout: 15_000, message: '镜头 1 成片读到元数据' }
+    );
+    // 静音播放（不打扰测试机），Chromium 照样解码音轨
+    await page.evaluate((selector: string) => {
+      const video = document.querySelector<HTMLVideoElement>(`${selector} video`);
+      if (!video) return;
+      video.muted = true;
+      void video.play();
+    }, shotPlayer);
+    await page.waitFor(
+      (selector: string) =>
+        document.querySelector<HTMLElement>(selector)?.dataset.audio === 'present',
+      { args: [shotPlayer], timeout: 15_000, message: '镜头 1 成片判定为有音轨' }
+    );
+    const shotMedia = await page.evaluate<{ width: number; audio: string; absent: boolean }>(
+      (selector: string) => {
+        const group = document.querySelector<HTMLElement>(selector);
+        const video = group?.querySelector('video');
+        video?.pause();
+        return {
+          width: video?.videoWidth ?? 0,
+          audio: group?.dataset.audio ?? '',
+          absent: !!group?.querySelector('[data-audio="absent"]'),
+        };
+      },
+      shotPlayer
+    );
+    expect(shotMedia.width).toBeGreaterThanOrEqual(1280);
+    expect(shotMedia.audio).not.toBe('absent');
+    expect(shotMedia.absent).toBe(false);
 
     // 场景：配音语言普通话、背景音乐「青石镇的清晨」
     await page.click(`${CANVAS} [role="group"][aria-label="场景"] p`);

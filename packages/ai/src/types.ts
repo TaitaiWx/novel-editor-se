@@ -220,6 +220,8 @@ export interface ProviderConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** 配音服务：未指定声音的台词使用的默认声音（厂商的 voice id） */
+  voice?: string;
   timeoutMs?: number;
   retry?: RetryPolicy;
   fetch?: FetchLike;

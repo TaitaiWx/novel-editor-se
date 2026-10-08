@@ -12,6 +12,7 @@ import {
   normalizeShortcutInput,
 } from '../../utils/appSettings';
 import { isImeComposing } from '../../utils/ime';
+import type { AIIpcResult, AIProviderInfo } from '../../types/ai-api';
 import {
   AI_PRESET_OPTIONS,
   VALID_TABS,
@@ -54,6 +55,20 @@ interface UseSettingsFormOptions {
   onClose: () => void;
   initialTab: SettingsTab;
   onSettingsChange?: (settings: SettingsDraft) => void;
+}
+
+/** 删除全部自定义文本 AI（Key 一并删除）并恢复默认写作 AI；主进程不可用时忽略 */
+async function clearCustomTextProviders(): Promise<void> {
+  const ipc = window.electron?.ipcRenderer;
+  if (!ipc) return;
+  const listed = (await ipc.invoke('ai-providers-list').catch(() => undefined)) as
+    | AIIpcResult<AIProviderInfo[]>
+    | undefined;
+  const custom = listed?.ok ? listed.data.filter((item) => item.custom) : [];
+  for (const item of custom) {
+    await ipc.invoke('ai-providers-remove-custom', item.id);
+  }
+  await ipc.invoke('ai-providers-set-default', null);
 }
 
 /**
@@ -206,8 +221,10 @@ export function useSettingsForm({
       }
 
       if (scope === 'ai' || scope === 'all') {
-        // 默认 AI 的 Key 保存在主进程安全存储中，恢复默认时一并清除
+        // 默认 AI 的 Key 保存在主进程安全存储中，恢复默认时一并清除；
+        // 自己添加的文本 AI 连同 Key 一起删除，默认写作 AI 恢复为内置服务
         await ipc?.invoke('ai-providers-set', 'openai-compatible', { clearKey: true });
+        await clearCustomTextProviders();
       }
 
       if (scope === 'ai') {

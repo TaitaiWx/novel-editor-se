@@ -57,7 +57,7 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     kind: 'text',
     label: 'OpenAI 兼容',
     description:
-      'OpenAI、DeepSeek、OpenRouter 等兼容 /chat/completions 的服务（设置中心的默认 AI）',
+      'OpenAI、DeepSeek、OpenRouter 等兼容 /chat/completions 的服务（内置，地址与模型在设置中心填写）',
     defaultBaseUrl: OPENAI_COMPATIBLE_DEFAULTS.baseUrl,
     defaultModel: OPENAI_COMPATIBLE_DEFAULTS.model,
     models: [OPENAI_COMPATIBLE_DEFAULTS.model],
@@ -191,6 +191,11 @@ export class ProviderRegistry {
       factory,
     });
     return this;
+  }
+
+  /** 移除一个 Provider（主进程的自定义文本 AI 被删除时使用）；返回是否存在 */
+  unregister(id: string): boolean {
+    return this.entries.delete(id);
   }
 
   has(id: string): boolean {
