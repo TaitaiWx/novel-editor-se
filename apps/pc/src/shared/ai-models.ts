@@ -49,6 +49,8 @@ export interface AIModelPreset {
   keyHint?: string;
   /** 语音：声音候选 */
   voices?: readonly string[];
+  /** 境外服务（国内通常直连不了）：「添加模型」默认勾选「通过代理访问」 */
+  suggestProxy?: boolean;
 }
 
 // OpenAI 内置音色（2026-10-08 核对 https://developers.openai.com/api/docs/guides/text-to-speech；
@@ -75,6 +77,7 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
   // gpt-5.4-nano 已标记弃用，不再推荐）
   {
     key: 'openai',
+    suggestProxy: true,
     capability: 'text',
     vendor: 'openai-compatible',
     label: 'OpenAI',
@@ -98,6 +101,7 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
   // （base https://api.x.ai/v1；xAI 推荐 Responses API，/chat/completions 标为 deprecated 但未给下线日期）
   {
     key: 'grok',
+    suggestProxy: true,
     capability: 'text',
     vendor: 'grok',
     label: 'xAI Grok',
@@ -187,6 +191,7 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
   // 2026-10-08 核对 https://docs.x.ai/docs/guides/image-generations（grok-2-image 已不在模型列表）
   {
     key: 'grok-image',
+    suggestProxy: true,
     capability: 'image',
     vendor: 'grok-image',
     label: 'xAI Grok',
@@ -198,6 +203,7 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
   // （gpt-image-1 已标记弃用，dall-e-3 不在模型列表）
   {
     key: 'openai-image',
+    suggestProxy: true,
     capability: 'image',
     vendor: 'grok-image',
     label: 'OpenAI 兼容图片',
@@ -237,6 +243,7 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
   // （tts-1 / tts-1-hd 已标记弃用，不再推荐）
   {
     key: 'openai-speech',
+    suggestProxy: true,
     capability: 'speech',
     vendor: 'openai-speech',
     label: 'OpenAI 兼容',

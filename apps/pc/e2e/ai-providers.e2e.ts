@@ -9,15 +9,23 @@
  * 3. 「语音」分区的配音默认语言：下拉选项浮在设置弹窗之上，点选后 video-settings-get 返回新语言。
  * 4. 文本模型的「生成参数」温度：失焦保存到 ai-providers.json，重新打开仍在，请求体里带这个温度。
  * 5. 视频（Seedance 预设）与语音模型：测试连接走自己的地址与 Key；场景视频的「视频模型」下拉里能选到它。
+ * 6. 网络代理：手动填写本地 HTTP 代理 → 给 Grok 模型勾选「通过代理访问」→ 测试连接与流式请求经过代理，
+ *    没勾选的模型仍然直连。
  */
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { chooseSelectOption, comboboxSelector, selectedOptionText } from './support/select';
-import { openChapter, setupAppSuite } from './support/suite';
+import { captureForReview, openChapter, setupAppSuite } from './support/suite';
 
 const suite = setupAppSuite({ fixture: { prefix: 'novel-editor-e2e-ai-' } });
 
@@ -40,6 +48,40 @@ const requests: Array<{
 }> = [];
 let server: Server;
 let baseUrl = '';
+/** 本地 HTTP 正向代理：记录经过的请求（绝对地址形式）后转发 */
+let proxyServer: Server;
+let proxyUrl = '';
+const proxied: string[] = [];
+
+function forward(req: IncomingMessage, res: ServerResponse) {
+  proxied.push(`${req.method} ${req.url}`);
+  let target: URL;
+  try {
+    target = new URL(req.url ?? '');
+  } catch {
+    res.writeHead(400);
+    res.end();
+    return;
+  }
+  const upstream = httpRequest(
+    {
+      hostname: target.hostname,
+      port: target.port,
+      path: `${target.pathname}${target.search}`,
+      method: req.method,
+      headers: req.headers,
+    },
+    (response) => {
+      res.writeHead(response.statusCode ?? 502, response.headers);
+      response.pipe(res);
+    }
+  );
+  upstream.on('error', () => {
+    res.writeHead(502);
+    res.end();
+  });
+  req.pipe(upstream);
+}
 
 function handle(req: IncomingMessage, res: ServerResponse) {
   let raw = '';
@@ -69,10 +111,14 @@ beforeAll(async () => {
   server = createServer(handle);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
+  proxyServer = createServer(forward);
+  await new Promise<void>((resolve) => proxyServer.listen(0, '127.0.0.1', resolve));
+  proxyUrl = `http://127.0.0.1:${(proxyServer.address() as AddressInfo).port}`;
 });
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
 });
 
 describe('AI 模型配置', () => {
@@ -376,6 +422,82 @@ describe('AI 模型配置', () => {
       )
     ).toBe(true);
   });
+
+  it('6. 网络代理：手动填写代理地址 → Grok 模型勾选「通过代理访问」→ 测试连接与流式经过代理，其余直连', async () => {
+    const { page, app } = suite;
+    const PROXY_GROUP = '[data-testid="ai-section-proxy"]';
+    await openAiSettings();
+    await page.waitForTarget({ text: '网络代理', within: PROXY_GROUP, exact: true });
+    expect(await selectedOptionText(page, '代理方式')).toBe('跟随系统代理');
+    await chooseSelectOption(page, '代理方式', '手动填写代理地址');
+    await page.waitForTarget(`${PROXY_GROUP} input[aria-label="代理地址"]`);
+    await fill(`${PROXY_GROUP} input[aria-label="代理地址"]`, `${proxyUrl}/`);
+    await page.press('Enter');
+    await page.waitForTarget({ text: '已保存', within: PROXY_GROUP, exact: true });
+    expect(
+      await page.evaluate<unknown>(() => window.electron.ipcRenderer.invoke('ai-proxy-get'))
+    ).toEqual({ ok: true, data: { mode: 'manual', url: proxyUrl } });
+
+    // Grok 模型：编辑 → 勾选「通过代理访问」，行内出现「通过代理」
+    await page.click(`${GROK_ROW} [aria-label^="编辑"]`);
+    await page.click({ text: '通过代理访问', within: GROK_ROW, exact: true });
+    await page.waitForTarget(`${GROK_ROW} [data-testid="ai-model-proxy-tag"]`);
+    // 第 5 步用「OpenAI 兼容」预设加的语音模型默认勾选了代理，加上 Grok 共 2 个
+    await page.waitForTarget({ text: '2 个模型通过代理访问', within: PROXY_GROUP });
+
+    const before = proxied.length;
+    await page.click({ text: '测试连接', within: GROK_ROW, exact: true });
+    await waitForConnected(GROK_ROW);
+    expect(proxied.slice(before)).toEqual([`POST ${baseUrl}/chat/completions`]);
+    expect(requests.at(-1)).toMatchObject({
+      auth: `Bearer ${API_KEY}`,
+      body: { model: GROK_MODEL },
+    });
+
+    // 流式请求同样经过代理，片段照常推送
+    const streamed = await page.evaluate<string>(
+      () =>
+        new Promise((resolve, reject) => {
+          let text = '';
+          const dispose = window.electron.ipcRenderer.on(
+            'ai-stream-event',
+            (_event: unknown, payload: { type: string; text?: string; error?: unknown }) => {
+              if (payload.type === 'delta') text += payload.text ?? '';
+              if (payload.type === 'error') reject(new Error(JSON.stringify(payload.error)));
+              if (payload.type === 'done') {
+                if (typeof dispose === 'function') dispose();
+                resolve(text);
+              }
+            }
+          );
+          void window.electron.ipcRenderer.invoke('ai-stream-start', {
+            providerId: 'text-1',
+            prompt: '续写',
+          });
+        })
+    );
+    expect(streamed).toBe('雾气翻涌，林舟拔剑。');
+    expect(proxied.length).toBe(before + 2);
+
+    // 没勾选的模型（DeepSeek）直连：代理没有新请求
+    await page.click({ text: '测试连接', within: DEEPSEEK_ROW, exact: true });
+    await waitForConnected(DEEPSEEK_ROW);
+    expect(requests.at(-1)).toMatchObject({ auth: `Bearer ${CUSTOM_KEY}` });
+    expect(proxied.length).toBe(before + 2);
+
+    const providersFile = JSON.parse(
+      await readFile(path.join(app.userDataDir, 'ai-providers.json'), 'utf-8')
+    ) as { proxy?: unknown; models: Array<{ id: string; useProxy?: boolean }> };
+    expect(providersFile.proxy).toEqual({ mode: 'manual', url: proxyUrl });
+    expect(providersFile.models.find((item) => item.id === 'text-1')?.useProxy).toBe(true);
+    expect(providersFile.models.find((item) => item.id === 'text-2')?.useProxy).toBeUndefined();
+    await page.evaluate((selector: string) => {
+      document.querySelector(selector)?.scrollIntoView({ block: 'start' });
+      return true;
+    }, PROXY_GROUP);
+    await captureForReview(page, 'ai-proxy-settings');
+    await closeSettings();
+  });
 });
 
 /** 打开设置中心的 AI 分区 */
@@ -385,6 +507,11 @@ async function openAiSettings(): Promise<void> {
   await page.waitForTarget({ text: '设置中心', exact: true });
   await page.click({ text: 'AI', within: '[class*="sidebar"]', exact: true });
   await page.waitForTarget(TEXT_SECTION);
+  // 模型列表与代理设置都读完后再操作（异步加载会改变布局，点击坐标可能落空）
+  await page.waitForTarget({ text: '添加模型', within: TEXT_SECTION, exact: true });
+  await page.waitForTarget(
+    '[data-testid="ai-section-proxy"] [role="combobox"][aria-label="代理方式"]'
+  );
 }
 
 async function closeSettings(): Promise<void> {
@@ -428,6 +555,8 @@ async function addTextModel(options: {
   model: string;
   apiKey?: string;
   reuseKey?: boolean;
+  /** 「通过代理访问」（境外预设默认勾选；省略时取消勾选，保持直连） */
+  useProxy?: boolean;
 }): Promise<void> {
   const { page } = suite;
   const form = `${TEXT_SECTION} ${ADD_FORM}`;
@@ -459,6 +588,21 @@ async function addTextModel(options: {
     expect(await page.exists(`${form} input[aria-label="API Key"]`)).toBe(false);
   } else if (options.apiKey) {
     await fill(`${form} input[aria-label="API Key"]`, options.apiKey);
+  }
+  const proxyChecked = () =>
+    page.evaluate<boolean>(
+      (selector: string) =>
+        Array.from(
+          document.querySelectorAll<HTMLInputElement>(`${selector} input[type="checkbox"]`)
+        ).find((input) => input.closest('label')?.textContent?.includes('通过代理访问'))?.checked ??
+        false,
+      form
+    );
+  if ((await proxyChecked()) !== Boolean(options.useProxy)) {
+    await page.click({ text: '通过代理访问', within: form, exact: true });
+    await page.waitUntil(async () => (await proxyChecked()) === Boolean(options.useProxy), {
+      message: '「通过代理访问」已切换',
+    });
   }
   await page.click({ text: '添加', within: form, exact: true });
   await page.waitForGone(form);

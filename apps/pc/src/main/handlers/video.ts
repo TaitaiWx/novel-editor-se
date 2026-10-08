@@ -152,7 +152,10 @@ export function createDefaultVideoRunner(): VideoTaskRunner {
     repo: storeRepo,
     getProvider: (providerId) => getAIService().getVideoProvider(providerId),
     resolveOutput: resolveInsideWork,
-    downloadFile: (url, destination, signal) => downloadToFile(url, destination, { signal }),
+    downloadFile: (url, destination, signal, providerId) => {
+      const fetch = providerId ? getAIService().fetchFor(providerId) : undefined;
+      return downloadToFile(url, destination, { signal, ...(fetch ? { fetch } : {}) });
+    },
     writeJson: writeJsonFile,
     listFiles: (dir) => readdir(dir),
     limits: () => ({ maxConcurrent: getProviderConfigStore().getVideoSettings().maxConcurrent }),

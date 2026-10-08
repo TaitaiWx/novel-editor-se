@@ -12,6 +12,7 @@
  * - 视频队列设置原样保留
  */
 import { BUILTIN_PROVIDERS } from '@novel-editor/ai';
+import type { AIProxySettings } from '../../shared/ai-proxy';
 import {
   AI_CAPABILITIES,
   defaultModelLabel,
@@ -42,6 +43,8 @@ export interface ModelEntry {
   pricePerSecond?: number;
   currency?: 'CNY' | 'USD';
   voice?: string;
+  /** 通过代理访问（全局代理设置见 ModelConfigFile.proxy） */
+  useProxy?: boolean;
   createdAt: string;
   /** 旧版内置 openai-compatible：参数是否已从设置中心 JSON 导入 */
   settingsImported?: boolean;
@@ -54,6 +57,8 @@ export interface ModelConfigFile {
   /** 新模型 id 的编号（按能力只增不减，删除后不复用，避免旧 Key 串号） */
   nextNumber: Record<AICapability, number>;
   video: VideoSettingsInfo;
+  /** AI 网络代理（只对 useProxy 的模型生效；缺省为跟随系统代理） */
+  proxy?: AIProxySettings;
 }
 
 export const DEFAULT_VIDEO_SETTINGS: VideoSettingsInfo = { maxConcurrent: 2 };

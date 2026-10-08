@@ -16,6 +16,7 @@ import Switch from '../../Switch';
 import { SettingsGroup, SettingsRow, SettingsSection } from '../layout';
 import AddModelForm from './AddModelForm';
 import ModelRow from './ModelRow';
+import ProxySetting from './ProxySetting';
 import { useAiModels } from './useAiModels';
 import VoiceLanguageSetting from './VoiceLanguageSetting';
 import styles from './styles.module.scss';
@@ -104,6 +105,14 @@ const AiSection: React.FC<AiSectionProps> = ({ aiSettings, setSettings }) => {
           />
         </SettingsRow>
         {api.error && <div className={styles.statusError}>加载 AI 模型失败：{api.error}</div>}
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="网络代理"
+        description="有些服务（如 OpenAI、Grok）在国内需要通过代理访问：在这里设置代理，再在模型里勾选「通过代理访问」。"
+        data-testid="ai-section-proxy"
+      >
+        <ProxySetting proxiedCount={(api.models ?? []).filter((item) => item.useProxy).length} />
       </SettingsGroup>
 
       {SECTIONS.map((section) => {

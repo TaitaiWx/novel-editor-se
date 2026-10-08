@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import type { AIIpcResult, AIProviderInfo, AIProviderUpdate } from '../../../types/ai-api';
 import { defaultModelLabel, findPreset } from '@/shared/ai-models';
+import Checkbox from '../../Checkbox';
 import NumberInput from '../../NumberInput';
 import Select from '../../Select';
 import sharedStyles from '../styles.module.scss';
@@ -14,6 +15,10 @@ import ApiKeyField from './ApiKeyField';
 import FieldRow from './FieldRow';
 import GenerationParams from './GenerationParams';
 import styles from './styles.module.scss';
+
+/** 「通过代理访问」的说明（添加 / 编辑表单共用） */
+export const PROXY_FIELD_DESCRIPTION =
+  '国内直连不了的服务（如 OpenAI、Grok）勾选；代理地址在本页顶部「网络代理」里设置。';
 
 interface ModelEditFormProps {
   info: AIProviderInfo;
@@ -132,6 +137,13 @@ const ModelEditForm: React.FC<ModelEditFormProps> = ({ info, onUpdate, onKeyChan
           secureStorage={info.secureStorage}
           placeholder="粘贴 API Key"
           onConfiguredChange={onKeyChanged}
+        />
+      </FieldRow>
+      <FieldRow label="网络" description={PROXY_FIELD_DESCRIPTION}>
+        <Checkbox
+          checked={info.useProxy}
+          onChange={(next) => void save({ useProxy: next })}
+          label="通过代理访问"
         />
       </FieldRow>
       {info.kind === 'text' && (

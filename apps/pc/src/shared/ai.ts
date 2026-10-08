@@ -46,6 +46,8 @@ export interface AIProviderInfo {
   baseUrl: string;
   /** 实际使用的模型（没有填写时为协议默认） */
   model: string;
+  /** 通过代理访问（设置中心「AI → 网络代理」） */
+  useProxy: boolean;
   /** 这个能力的默认模型（每个能力一个；功能里省略模型时使用） */
   isDefault: boolean;
   /** 同 isDefault（只在文本模型上；旧字段名） */
@@ -79,6 +81,8 @@ export interface AIModelInput {
   contextTokens?: number;
   pricePerSecond?: number;
   voice?: string;
+  /** 通过代理访问 */
+  useProxy?: boolean;
 }
 
 /** 旧版内置文本 AI 的 id（迁移后仍是一条模型的 id） */
@@ -103,6 +107,8 @@ export interface AIProviderUpdate {
   contextTokens?: number | null;
   /** 语音的默认声音（空字符串恢复默认） */
   voice?: string;
+  /** 通过代理访问 */
+  useProxy?: boolean;
 }
 
 export type AIIpcResult<T> = { ok: true; data: T } | { ok: false; error: SerializedAIError };

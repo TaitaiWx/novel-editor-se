@@ -80,6 +80,7 @@ export function effectiveBaseUrl(
 function initialUpdate(input: AIModelInput, baseUrl: string, model: string): AIProviderUpdate {
   const update: AIProviderUpdate = { baseUrl, model };
   if (typeof input.enabled === 'boolean') update.enabled = input.enabled;
+  if (typeof input.useProxy === 'boolean') update.useProxy = input.useProxy;
   if (input.capability === 'text') {
     if (typeof input.temperature === 'number') update.temperature = input.temperature;
     if (typeof input.maxTokens === 'number') update.maxTokens = input.maxTokens;

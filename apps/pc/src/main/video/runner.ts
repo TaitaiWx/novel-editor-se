@@ -45,7 +45,13 @@ export interface VideoRunnerDeps {
   getProvider(providerId: string): VideoProvider;
   /** 把作品内相对路径解析为安全的绝对路径（校验不逃出作品目录） */
   resolveOutput(workPath: string, relativeFile: string): Promise<string>;
-  downloadFile(url: string, destination: string, signal: AbortSignal): Promise<unknown>;
+  /** providerId：下载成片也按该模型的网络设置（是否走代理） */
+  downloadFile(
+    url: string,
+    destination: string,
+    signal: AbortSignal,
+    providerId?: string
+  ): Promise<unknown>;
   writeJson(file: string, data: unknown): Promise<void>;
   listFiles(dir: string): Promise<string[]>;
   limits(): QueueLimits;
@@ -292,7 +298,7 @@ export class VideoTaskRunner {
         version: task.version,
       });
       const destination = await this.deps.resolveOutput(task.workPath, layout.file);
-      await this.deps.downloadFile(url, destination, signal);
+      await this.deps.downloadFile(url, destination, signal, task.providerId);
       const promptFile = await this.deps.resolveOutput(task.workPath, layout.promptFile);
       await this.deps.writeJson(
         promptFile,

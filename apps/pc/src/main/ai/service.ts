@@ -34,6 +34,7 @@ import {
   findPreset,
   type AICapability,
 } from '../../shared/ai-models';
+import type { AIProxySettings } from '../../shared/ai-proxy';
 import type { CredentialStore } from './credential-store';
 import { reconcileLegacySettings } from './legacy-settings';
 import {
@@ -80,6 +81,8 @@ export interface AIServiceDeps {
   /** 读取设置中心 JSON（数据库未初始化时返回 undefined） */
   readSettings: () => string | undefined;
   registry?: ProviderRegistry;
+  /** 走代理的 fetch（勾选了「通过代理访问」的模型使用；未提供时一律直连） */
+  proxyFetch?: NonNullable<ProviderConfig['fetch']>;
 }
 
 /** 默认文本模型的摘要（注入设置中心 JSON，供渲染进程判断「AI 是否可用」） */
@@ -210,6 +213,7 @@ export class AIService {
       enabled: entry.enabled,
       baseUrl,
       model,
+      useProxy: entry.useProxy === true,
       isDefault,
       ...(capability === 'text'
         ? {
@@ -342,7 +346,31 @@ export class AIService {
       });
     }
     const { baseUrl, model } = this.effective(entry);
-    return { entry, config: { apiKey, baseUrl, model } };
+    return { entry, config: { apiKey, baseUrl, model, ...this.transport(entry) } };
+  }
+
+  /** 网络通道：勾选了「通过代理访问」的模型注入代理 fetch，其余直连 */
+  private transport(entry: ModelEntry): Pick<ProviderConfig, 'fetch'> {
+    return entry.useProxy && this.deps.proxyFetch ? { fetch: this.deps.proxyFetch } : {};
+  }
+
+  /** 「AI → 网络代理」设置 */
+  getProxySettings(): AIProxySettings {
+    return this.deps.configs.getProxy();
+  }
+
+  setProxySettings(value: unknown): AIProxySettings {
+    try {
+      return this.deps.configs.setProxy(value);
+    } catch (error) {
+      throw badRequest(error);
+    }
+  }
+
+  /** 某个模型的下载等附带请求应使用的 fetch（undefined = 直连） */
+  fetchFor(providerId: string): ProviderConfig['fetch'] {
+    const entry = isModelId(providerId) ? this.deps.configs.getEntry(providerId) : undefined;
+    return entry ? this.transport(entry).fetch : undefined;
   }
 
   /**
@@ -422,7 +450,7 @@ export class AIService {
         providerId: entry.id,
       });
     }
-    const config = { apiKey, ...this.effective(entry) };
+    const config = { apiKey, ...this.effective(entry), ...this.transport(entry) };
     const call = { signal };
     switch (entry.capability) {
       case 'text':

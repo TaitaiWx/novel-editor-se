@@ -26,6 +26,7 @@ import {
 import { getAIService } from '../ai/runtime';
 import { SETTINGS_CENTER_KEY } from '../ai/settings-secrets';
 import type { AIService } from '../ai/service';
+import type { AIProxySettings } from '../../shared/ai-proxy';
 
 const MAX_STREAMS_PER_SENDER = 4;
 
@@ -205,6 +206,15 @@ export function registerAIProviderHandlers(
       return { latencyMs: Date.now() - started };
     });
   ipcMain.handle('ai-models-test', (_event, id: unknown) => test(id));
+  ipcMain.handle(
+    'ai-proxy-get',
+    (): Promise<AIIpcResult<AIProxySettings>> => guard(() => getService().getProxySettings())
+  );
+  ipcMain.handle(
+    'ai-proxy-set',
+    (_event, value: unknown): Promise<AIIpcResult<AIProxySettings>> =>
+      guardAndNotify(() => getService().setProxySettings(value))
+  );
   ipcMain.handle('ai-providers-test', (_event, id: unknown) => test(id));
   ipcMain.handle(
     'ai-complete',

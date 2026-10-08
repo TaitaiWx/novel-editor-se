@@ -25,7 +25,7 @@ import NumberInput from '../../NumberInput';
 import Select from '../../Select';
 import sharedStyles from '../styles.module.scss';
 import FieldRow from './FieldRow';
-import { SuggestSelect } from './ModelEditForm';
+import { PROXY_FIELD_DESCRIPTION, SuggestSelect } from './ModelEditForm';
 import styles from './styles.module.scss';
 
 interface AddModelFormProps {
@@ -46,6 +46,7 @@ interface Draft {
   reuseKey: boolean;
   pricePerSecond: number | null;
   voice: string;
+  useProxy: boolean;
 }
 
 function draftFor(preset: AIModelPreset): Draft {
@@ -58,6 +59,7 @@ function draftFor(preset: AIModelPreset): Draft {
     reuseKey: true,
     pricePerSecond: null,
     voice: '',
+    useProxy: preset.suggestProxy === true,
   };
 }
 
@@ -114,6 +116,7 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ capability, existing, onAdd
         label: draft.label.trim() || defaultLabel,
         baseUrl: draft.baseUrl,
         model: draft.model,
+        useProxy: draft.useProxy,
         ...(reusing && keySource ? { reuseKeyFrom: keySource.id } : {}),
         ...(!reusing && draft.apiKey.trim() ? { apiKey: draft.apiKey } : {}),
         ...(capability === 'video' && draft.pricePerSecond !== null
@@ -204,6 +207,13 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ capability, existing, onAdd
             />
           )}
         </div>
+      </FieldRow>
+      <FieldRow label="网络" description={PROXY_FIELD_DESCRIPTION}>
+        <Checkbox
+          checked={draft.useProxy}
+          onChange={(useProxy) => set({ useProxy })}
+          label="通过代理访问"
+        />
       </FieldRow>
       {capability === 'video' && (
         <FieldRow label="每秒单价" description="CNY，用于费用预估，可不填。">

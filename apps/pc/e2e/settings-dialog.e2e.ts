@@ -147,6 +147,13 @@ describe('设置中心弹窗', () => {
     await page.click({ text: 'AI', within: DIALOG, exact: true });
     const trigger = `${DIALOG} [role="combobox"][aria-label="配音默认语言"]`;
     await page.waitForTarget(trigger);
+    // 模型列表与代理设置异步读取完成后再定位（读完会改变布局，点击坐标可能落空）
+    await page.waitForTarget({
+      text: '添加模型',
+      within: '[data-testid="ai-section-speech"]',
+      exact: true,
+    });
+    await page.waitForTarget(`${DIALOG} [role="combobox"][aria-label="代理方式"]`);
     await page.evaluate((selector: string) => {
       document.querySelector(selector)?.scrollIntoView({ block: 'center' });
       return true;

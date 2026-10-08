@@ -11,6 +11,11 @@ import path from 'path';
 import { normalizeLanguage } from '@novel-editor/video';
 import type { AIProviderUpdate, VideoSettingsInfo } from '../../shared/ai';
 import {
+  DEFAULT_AI_PROXY,
+  normalizeProxySettings,
+  type AIProxySettings,
+} from '../../shared/ai-proxy';
+import {
   AI_CAPABILITIES,
   findPreset,
   isAICapability,
@@ -122,6 +127,10 @@ export function applyModelUpdate(entry: ModelEntry, update: AIProviderUpdate): M
   const next: ModelEntry = { ...entry };
   if (update.label !== undefined) next.label = normalizeModelLabel(update.label);
   if (typeof update.enabled === 'boolean') next.enabled = update.enabled;
+  if (typeof update.useProxy === 'boolean') {
+    if (update.useProxy) next.useProxy = true;
+    else delete next.useProxy;
+  }
   const baseUrl = normalizeBaseUrl(update.baseUrl);
   if (baseUrl !== undefined) {
     if (baseUrl) next.baseUrl = baseUrl;
@@ -178,6 +187,7 @@ function readEntry(value: unknown): ModelEntry | null {
     ...(typeof value.preset === 'string' && value.preset ? { preset: value.preset } : {}),
     ...params,
     enabled: params.enabled !== false,
+    ...(value.useProxy === true ? { useProxy: true } : {}),
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : '',
     ...(typeof value.settingsImported === 'boolean'
       ? { settingsImported: value.settingsImported }
@@ -205,6 +215,7 @@ function readFile(parsed: Record<string, unknown>): ModelConfigFile {
   if (isRecord(parsed.video)) {
     file.video = { ...DEFAULT_VIDEO_SETTINGS, ...(parsed.video as Partial<VideoSettingsInfo>) };
   }
+  if (parsed.proxy !== undefined) file.proxy = normalizeProxySettings(parsed.proxy, true);
   return file;
 }
 
@@ -390,6 +401,20 @@ export class ProviderConfigStore {
     if (id) file.defaults[capability] = id;
     else delete file.defaults[capability];
     this.write(file);
+  }
+
+  /** AI 网络代理设置（缺省为跟随系统代理） */
+  getProxy(): AIProxySettings {
+    return { ...(this.read().proxy ?? DEFAULT_AI_PROXY) };
+  }
+
+  /** 保存代理设置（严格校验：手动模式必须是有效的代理地址） */
+  setProxy(value: unknown): AIProxySettings {
+    const next = normalizeProxySettings(value);
+    const file = this.read();
+    file.proxy = next;
+    this.write(file);
+    return { ...next };
   }
 
   getVideoSettings(): VideoSettingsInfo {

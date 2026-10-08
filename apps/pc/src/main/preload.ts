@@ -218,6 +218,8 @@ contextBridge.exposeInMainWorld('electron', {
         'ai-models-remove',
         'ai-models-set-default',
         'ai-models-test',
+        'ai-proxy-get',
+        'ai-proxy-set',
         'ai-complete',
         'ai-stream-start',
         'ai-stream-cancel',

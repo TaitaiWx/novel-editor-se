@@ -66,6 +66,7 @@ function mockMain(initial: Array<Partial<AIProviderInfo> & { id: string }> = [])
       return { ...row, isDefault, ...(row.kind === 'text' ? { isDefaultText: isDefault } : {}) };
     });
   const find = (id: unknown) => rows.find((row) => row.id === id) as AIProviderInfo;
+  let proxy: { mode: string; url?: string } = { mode: 'system' };
   const mock: ElectronMock = installElectronMock((channel, ...args) => {
     switch (channel) {
       case 'ai-providers-list':
@@ -88,6 +89,7 @@ function mockMain(initial: Array<Partial<AIProviderInfo> & { id: string }> = [])
           baseUrl: input.baseUrl || VENDOR_DEFAULTS[input.vendor]?.baseUrl || '',
           model: input.model || VENDOR_DEFAULTS[input.vendor]?.model || '',
           configured: Boolean(input.apiKey || source?.configured),
+          useProxy: input.useProxy === true,
           ...(typeof input.pricePerSecond === 'number'
             ? { pricePerSecond: input.pricePerSecond }
             : {}),
@@ -101,6 +103,7 @@ function mockMain(initial: Array<Partial<AIProviderInfo> & { id: string }> = [])
         if (update.apiKey) row.configured = true;
         if (update.clearKey) row.configured = false;
         if (typeof update.enabled === 'boolean') row.enabled = update.enabled;
+        if (typeof update.useProxy === 'boolean') row.useProxy = update.useProxy;
         for (const key of ['label', 'baseUrl', 'model', 'voice'] as const) {
           const value = update[key];
           if (typeof value === 'string') row[key] = value;
@@ -127,6 +130,16 @@ function mockMain(initial: Array<Partial<AIProviderInfo> & { id: string }> = [])
         return { ok: true, data: view() };
       case 'ai-models-test':
         return { ok: true, data: { latencyMs: 42 } };
+      case 'ai-proxy-get':
+        return { ok: true, data: proxy };
+      case 'ai-proxy-set': {
+        const value = args[0] as { mode: string; url?: string };
+        if (value.mode === 'manual' && value.url?.startsWith('ftp')) {
+          return { ok: false, error: { kind: 'bad-request', message: '代理地址只支持 http' } };
+        }
+        proxy = value.mode === 'manual' ? { mode: 'manual', url: value.url } : { mode: 'system' };
+        return { ok: true, data: proxy };
+      }
       case 'video-settings-get':
         return { ok: true, data: { maxConcurrent: 2, voiceLanguage: 'zh-CN' } };
       default:
@@ -239,6 +252,8 @@ describe('设置中心 · AI 模型列表', () => {
       label: 'xAI Grok · grok-4.6',
       baseUrl: 'https://api.x.ai/v1',
       model: 'grok-4.6',
+      // 境外服务商默认勾选「通过代理访问」
+      useProxy: true,
       apiKey: 'xai-1',
     });
     expect(screen.queryByRole('group', { name: '添加模型' })).toBeNull();
@@ -412,6 +427,79 @@ describe('设置中心 · AI 模型列表', () => {
     await waitFor(() =>
       expect(calls(mock, 'ai-models-update')).toContainEqual(['speech-1', { voice: 'onyx' }])
     );
+  });
+
+  it('网络代理：默认跟随系统；手动填写地址失焦保存，无效地址就地提示；显示使用代理的模型数', async () => {
+    const { mock } = mockMain([{ ...GROK, useProxy: true }]);
+    renderSection();
+    const group = await screen.findByTestId('ai-section-proxy');
+    expect(within(group).getByRole('heading', { name: '网络代理' })).toBeTruthy();
+    await waitFor(() => expect(calls(mock, 'ai-proxy-get')).toHaveLength(1));
+    expect(getCombobox('代理方式', within(group)).textContent).toBe('跟随系统代理');
+    expect(group.textContent).toContain('1 个模型通过代理访问');
+    expect(within(group).queryByLabelText('代理地址')).toBeNull();
+
+    chooseOption(getCombobox('代理方式', within(group)), '手动填写代理地址');
+    const input = within(group).getByLabelText('代理地址') as HTMLInputElement;
+    expect(input.placeholder).toBe('http://127.0.0.1:7890');
+    // 渲染进程先做同一套校验，不合法时不发请求
+    fireEvent.change(input, { target: { value: 'http://u:p@127.0.0.1:7890' } });
+    fireEvent.blur(input);
+    expect(within(group).getByRole('status').textContent).toContain('账号密码');
+    expect(calls(mock, 'ai-proxy-set')).toHaveLength(0);
+
+    fireEvent.change(input, { target: { value: ' socks5://127.0.0.1:1080/ ' } });
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(calls(mock, 'ai-proxy-set').at(-1)?.[0]).toEqual({
+        mode: 'manual',
+        url: 'socks5://127.0.0.1:1080',
+      })
+    );
+    expect((await within(group).findByRole('status')).textContent).toBe('已保存');
+    expect(input.value).toBe('socks5://127.0.0.1:1080');
+
+    chooseOption(getCombobox('代理方式', within(group)), '跟随系统代理');
+    await waitFor(() =>
+      expect(calls(mock, 'ai-proxy-set').at(-1)?.[0]).toEqual({ mode: 'system' })
+    );
+  });
+
+  it('模型的「通过代理访问」：境外服务商添加时默认勾选、国内不勾；编辑里可开关，行内显示「通过代理」', async () => {
+    const { mock } = mockMain([GROK]);
+    renderSection();
+    const text = section('文本（写作 / 续写 / 分镜 / 预演）');
+    fireEvent.click(await within(text).findByRole('button', { name: '添加模型' }));
+    const form = screen.getByRole('group', { name: '添加模型' });
+    const proxyBox = () =>
+      within(form).getByRole('checkbox', { name: '通过代理访问' }) as HTMLInputElement;
+    // 第一个预设是 OpenAI：默认勾选
+    expect(proxyBox().checked).toBe(true);
+    chooseOption(getCombobox('服务商', within(form)), 'DeepSeek');
+    expect(proxyBox().checked).toBe(false);
+    fireEvent.click(proxyBox());
+    expect(proxyBox().checked).toBe(true);
+    fireEvent.change(within(form).getByLabelText('API Key'), { target: { value: 'sk-1' } });
+    fireEvent.click(within(form).getByRole('button', { name: '添加' }));
+    const added = await screen.findByTestId('ai-model-text-1');
+    expect(calls(mock, 'ai-models-add')[0][0]).toMatchObject({
+      preset: 'deepseek',
+      useProxy: true,
+    });
+    expect(within(added).getByTestId('ai-model-proxy-tag').textContent).toBe('通过代理');
+    expect(within(row('grok')).queryByTestId('ai-model-proxy-tag')).toBeNull();
+
+    // 编辑：勾选后立即保存
+    fireEvent.click(within(row('grok')).getByRole('button', { name: /编辑/ }));
+    const box = within(row('grok')).getByRole('checkbox', {
+      name: '通过代理访问',
+    }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    await waitFor(() =>
+      expect(calls(mock, 'ai-models-update').at(-1)).toEqual(['grok', { useProxy: true }])
+    );
+    expect(await within(row('grok')).findByTestId('ai-model-proxy-tag')).toBeTruthy();
   });
 
   it('视频 / 图片 / 语音的服务商预设', async () => {

@@ -4,17 +4,19 @@
  * 密钥与 Provider 配置是应用全局的（userData），设置中心 JSON 跟随当前打开的数据库。
  * 数据库打开后（db-init / db-init-default）调用 onDatabaseOpened：迁移明文 Key、恢复视频任务轮询。
  */
-import { app, safeStorage } from 'electron';
+import { app, safeStorage, session } from 'electron';
 import path from 'path';
 import { isDatabaseReady, settingsOps } from '@novel-editor/store';
 import { CREDENTIALS_FILE_NAME, CredentialStore } from './credential-store';
 import { PROVIDER_CONFIG_FILE_NAME, ProviderConfigStore } from './provider-config';
+import { AI_PROXY_PARTITION, ProxyFetcher } from './proxy-fetch';
 import { AIService } from './service';
 import { migratePlaintextApiKey, SETTINGS_CENTER_KEY } from './settings-secrets';
 
 let credentials: CredentialStore | null = null;
 let configs: ProviderConfigStore | null = null;
 let service: AIService | null = null;
+let proxyFetcher: ProxyFetcher | null = null;
 const databaseOpenedListeners = new Set<() => void>();
 
 function userDataPath(fileName: string): string {
@@ -34,11 +36,21 @@ export function getProviderConfigStore(): ProviderConfigStore {
   return configs;
 }
 
+/** 勾选了「通过代理访问」的模型使用的代理通道（独立内存会话，按「AI → 网络代理」设置） */
+export function getProxyFetcher(): ProxyFetcher {
+  proxyFetcher ??= new ProxyFetcher(
+    () => session.fromPartition(AI_PROXY_PARTITION, { cache: false }),
+    () => getProviderConfigStore().getProxy()
+  );
+  return proxyFetcher;
+}
+
 export function getAIService(): AIService {
   service ??= new AIService({
     credentials: getCredentialStore(),
     configs: getProviderConfigStore(),
     readSettings: () => (isDatabaseReady() ? settingsOps.get(SETTINGS_CENTER_KEY) : undefined),
+    proxyFetch: (input, init) => getProxyFetcher().fetch(input, init),
   });
   return service;
 }
@@ -73,5 +85,6 @@ export function resetAIRuntimeForTests(): void {
   credentials = null;
   configs = null;
   service = null;
+  proxyFetcher = null;
   databaseOpenedListeners.clear();
 }

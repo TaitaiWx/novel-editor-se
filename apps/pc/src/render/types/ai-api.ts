@@ -5,6 +5,7 @@
  * 流式片段通过 on('ai-stream-event', (event, payload: AIStreamEvent) => …) 接收，
  * 视频任务变化通过 on('video-task-updated', (event, task: VideoTask) => …) 接收。
  */
+import type { AIProxySettings } from '../../shared/ai-proxy';
 import type {
   AICompletePayload,
   AICompleteResult,
@@ -81,6 +82,8 @@ export interface AIInvokeOverloads {
     id: string | null
   ): Promise<AIIpcResult<AIProviderInfo[]>>;
   invoke(channel: 'ai-models-test', id: string): Promise<AIIpcResult<{ latencyMs: number }>>;
+  invoke(channel: 'ai-proxy-get'): Promise<AIIpcResult<AIProxySettings>>;
+  invoke(channel: 'ai-proxy-set', value: AIProxySettings): Promise<AIIpcResult<AIProxySettings>>;
   invoke(
     channel: 'ai-complete',
     payload: AICompletePayload

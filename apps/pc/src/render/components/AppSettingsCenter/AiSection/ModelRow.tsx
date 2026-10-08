@@ -101,6 +101,12 @@ const ModelRow: React.FC<ModelRowProps> = ({
                 <span className={styles.rowModel}>{info.model}</span>
               </>
             )}
+            {info.useProxy && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span data-testid="ai-model-proxy-tag">通过代理</span>
+              </>
+            )}
           </div>
         </div>
         <div className={styles.panelActions}>
