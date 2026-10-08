@@ -534,6 +534,20 @@ describe('设置中心 · AI 模型列表', () => {
         '服务商',
         within(within(section('语音（配音）')).getByRole('group', { name: '添加模型' }))
       )
-    ).toEqual(['OpenAI 兼容', 'MiniMax']);
+    ).toEqual(['OpenAI 兼容', 'MiniMax', '豆包语音（火山引擎）']);
+    // 豆包语音：预填接口地址与模型（= 资源 id），Key 说明指向豆包语音控制台；国内服务不默认走代理
+    const speechForm = within(section('语音（配音）')).getByRole('group', { name: '添加模型' });
+    chooseOption(getCombobox('服务商', within(speechForm)), '豆包语音（火山引擎）');
+    expect((within(speechForm).getByLabelText('接口地址') as HTMLInputElement).value).toBe(
+      'https://openspeech.bytedance.com'
+    );
+    expect(getCombobox('模型', within(speechForm)).textContent).toBe('seed-tts-2.0');
+    expect(speechForm.textContent).toContain('豆包语音');
+    expect(speechForm.textContent).toContain('API Key 管理');
+    expect(
+      (within(speechForm).getByRole('checkbox', { name: '通过代理访问' }) as HTMLInputElement)
+        .checked
+    ).toBe(false);
+    expect(getCombobox('默认声音', within(speechForm))).toBeTruthy();
   });
 });

@@ -9,6 +9,7 @@
  * 3. 「语音」分区的配音默认语言：下拉选项浮在设置弹窗之上，点选后 video-settings-get 返回新语言。
  * 4. 文本模型的「生成参数」温度：失焦保存到 ai-providers.json，重新打开仍在，请求体里带这个温度。
  * 5. 视频（Seedance 预设）与语音模型：测试连接走自己的地址与 Key；场景视频的「视频模型」下拉里能选到它。
+ * 7. 语音「豆包语音（火山引擎）」预设：X-Api-Key 鉴权、按音色带 X-Api-Resource-Id，Chunked 逐行 base64 音频 → 测试连接成功。
  * 6. 网络代理：手动填写本地 HTTP 代理 → 给 Grok 模型勾选「通过代理访问」→ 测试连接与流式请求经过代理，
  *    没勾选的模型仍然直连。
  */
@@ -33,6 +34,9 @@ const API_KEY = 'xai-e2e-secret-0001';
 const CUSTOM_KEY = 'custom-e2e-secret-0002';
 const VIDEO_KEY = 'ark-e2e-secret-0003';
 const SPEECH_KEY = 'tts-e2e-secret-0004';
+const VOLC_KEY = 'volc-e2e-secret-0005';
+/** 最小的 MP3（ID3 头 + 一帧帧头），配音结果按文件头识别格式 */
+const MP3_BYTES = Buffer.from([0x49, 0x44, 0x33, 0x03, 0, 0, 0, 0, 0, 0, 0xff, 0xfb, 0x90, 0x64]);
 const GROK_MODEL = 'grok-mock-a';
 const DEEPSEEK_MODEL = 'deepseek-mock-b';
 const GROK_ROW = '[data-testid="ai-model-text-1"]';
@@ -45,6 +49,7 @@ const requests: Array<{
   method?: string;
   url?: string;
   body: Record<string, unknown>;
+  volc?: { key?: string; resource?: string; requestId?: string };
 }> = [];
 let server: Server;
 let baseUrl = '';
@@ -83,12 +88,44 @@ function forward(req: IncomingMessage, res: ServerResponse) {
   req.pipe(upstream);
 }
 
+/** 豆包语音 V3 单向流式：X-Api-Key 鉴权，Chunked 每行一个 JSON（base64 音频），最后是结束码 */
+function handleVolcTts(req: IncomingMessage, res: ServerResponse, body: Record<string, unknown>) {
+  if (req.headers['x-api-key'] !== VOLC_KEY) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ code: 45000010, message: 'invalid api key' }));
+    return;
+  }
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  const half = Math.floor(MP3_BYTES.length / 2);
+  for (const part of [MP3_BYTES.subarray(0, half), MP3_BYTES.subarray(half)]) {
+    res.write(`${JSON.stringify({ code: 0, message: '', data: part.toString('base64') })}\n`);
+  }
+  res.write(
+    `${JSON.stringify({ code: 0, message: '', data: null, sentence: { text: '你好' } })}\n`
+  );
+  res.end(`${JSON.stringify({ code: 20000000, message: 'ok', data: null, body })}\n`);
+}
+
 function handle(req: IncomingMessage, res: ServerResponse) {
   let raw = '';
   req.on('data', (chunk: Buffer) => (raw += chunk.toString('utf-8')));
   req.on('end', () => {
     const body = JSON.parse(raw || '{}') as Record<string, unknown>;
-    requests.push({ auth: req.headers.authorization, method: req.method, url: req.url, body });
+    requests.push({
+      auth: req.headers.authorization,
+      method: req.method,
+      url: req.url,
+      body,
+      volc: {
+        key: req.headers['x-api-key'] as string | undefined,
+        resource: req.headers['x-api-resource-id'] as string | undefined,
+        requestId: req.headers['x-api-request-id'] as string | undefined,
+      },
+    });
+    if (req.url === '/api/v3/tts/unidirectional') {
+      handleVolcTts(req, res, body);
+      return;
+    }
     if (!ACCEPTED_KEYS.includes(req.headers.authorization ?? '')) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'Incorrect API key provided' } }));
@@ -496,6 +533,47 @@ describe('AI 模型配置', () => {
       return true;
     }, PROXY_GROUP);
     await captureForReview(page, 'ai-proxy-settings');
+    await closeSettings();
+  });
+});
+
+describe('语音：豆包语音（火山引擎）', () => {
+  it('7. 用「豆包语音（火山引擎）」预设添加配音模型 → 测试连接：X-Api-Key + 按音色的资源 id，逐行音频解析成功', async () => {
+    const { page } = suite;
+    const SPEECH_SECTION = '[data-testid="ai-section-speech"]';
+    const form = `${SPEECH_SECTION} ${ADD_FORM}`;
+    await openAiSettings();
+    await page.click({ text: '添加模型', within: SPEECH_SECTION, exact: true });
+    await page.waitForTarget(form);
+    await chooseSelectOption(page, '服务商', '豆包语音（火山引擎）');
+    expect(await selectedOptionText(page, '模型')).toBe('seed-tts-2.0');
+    await fill(`${form} input[aria-label="接口地址"]`, baseUrl.replace(/\/v1$/, ''));
+    await fill(`${form} input[aria-label="API Key"]`, VOLC_KEY);
+    await page.click({ text: '添加', within: form, exact: true });
+    await page.waitForGone(form);
+    const row = await page.waitFor<string>(
+      () => {
+        const rows = Array.from(document.querySelectorAll('[data-testid^="ai-model-speech-"]'));
+        const found = rows.find((item) => item.textContent?.includes('豆包语音'));
+        return found ? `[data-testid="${found.getAttribute('data-testid')}"]` : null;
+      },
+      { message: '豆包语音模型出现在列表里' }
+    );
+    expect(await textOf(row)).toContain('豆包语音 · seed-tts-2.0');
+    const before = requests.length;
+    await page.click({ text: '测试连接', within: row, exact: true });
+    await waitForConnected(row);
+    const sent = requests.slice(before).find((item) => item.url === '/api/v3/tts/unidirectional');
+    expect(sent?.volc).toMatchObject({ key: VOLC_KEY, resource: 'seed-tts-2.0' });
+    expect(sent?.volc?.requestId).toBeTruthy();
+    expect(sent?.auth).toBeUndefined();
+    expect(sent?.body).toMatchObject({
+      req_params: {
+        text: '你好',
+        speaker: 'zh_female_xiaohe_uranus_bigtts',
+        audio_params: { format: 'mp3', sample_rate: 24000 },
+      },
+    });
     await closeSettings();
   });
 });

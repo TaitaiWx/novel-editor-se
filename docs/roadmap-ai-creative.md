@@ -20,6 +20,7 @@
 - `vendor` 是协议实现（openai-compatible / grok / seedream-image / minimax-image / grok-image / minimax-video / seedance-video / openai-speech / minimax-speech）；OpenAI、DeepSeek、xAI Grok、通义、Kimi、智谱、Ollama 等只是**服务商预设**（`AI_MODEL_PRESETS`，预填协议、地址、推荐模型，每个预设上方注明核对的官方文档与日期）
 - 默认模型由主进程 `AIService.resolveDefaultId(capability)` 统一决定：作者选定的 > 第一个已保存 Key 且启用的 > 第一个；省略模型的请求（续写、成长推演、章纲、配音、出图等）都走它
 - 「沿用已保存的 Key」：同协议 + 同地址的模型可在主进程内复制 Key
+- 配音服务：OpenAI 兼容（`openai-speech`）、MiniMax（`minimax-speech`）、豆包语音 / 火山引擎（`volcengine-speech`，`providers/volcengine-speech.ts`：HTTP 单向流式 V3 `POST https://openspeech.bytedance.com/api/v3/tts/unidirectional`，新版控制台的 `X-Api-Key`，`X-Api-Resource-Id` = 模型（seed-tts-2.0 / seed-tts-1.0 / seed-icl-2.0），按音色版本自动纠正（`resourceIdFor`：`*_uranus_*` → 2.0、`*_mars_*` / `*_moon_*` → 1.0、`S_*` → 声音复刻 2.0）；响应逐行 JSON 拼接 base64 音频，结束码 20000000；只有 1.0 多情感音色（`_emo_`）发送情感；未用真实 Key 联调）
 - 网络代理：设置中心「AI → 网络代理」一份全局设置（跟随系统代理 / 手动填写 http、https、socks4、socks5 地址，不含账号密码；`shared/ai-proxy.ts` 校验，存 `ai-providers.json` 的 `proxy`）；只有勾选了「通过代理访问」（`useProxy`）的模型走代理，其余直连。境外服务商预设（OpenAI、xAI Grok 及其图片 / 配音）添加时默认勾选（`suggestProxy`）。实现：主进程 `ai/proxy-fetch.ts` 用独立内存会话（`session.fromPartition`）+ `setProxy` + `session.fetch`（Chromium 网络栈，支持系统代理 / PAC 与 SOCKS，流式与取消照常），注入 Provider 配置的 `fetch`；视频成片下载也按该模型的设置。IPC `ai-proxy-get / set`。CLI 不读这份设置（直连）
 - 旧版（schemaVersion 1 的内置服务 + 自定义服务）第一次读取时迁移，原文件备份为 `ai-providers.v1.json`，id / 名称 / 参数 / Key 不变
 

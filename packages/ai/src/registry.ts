@@ -26,6 +26,10 @@ import {
   MINIMAX_SPEECH_DEFAULTS,
   OPENAI_SPEECH_DEFAULTS,
 } from './providers/speech';
+import {
+  createVolcengineSpeechProvider,
+  VOLCENGINE_SPEECH_DEFAULTS,
+} from './providers/volcengine-speech';
 import type {
   ImageProvider,
   ProviderConfig,
@@ -151,6 +155,17 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     models: MINIMAX_SPEECH_DEFAULTS.models,
     envKey: providerEnvKey('minimax-speech'),
     docsUrl: 'https://platform.minimax.cn/docs/api-reference/speech-t2a-http',
+  },
+  {
+    id: 'volcengine-speech',
+    kind: 'speech',
+    label: '豆包语音（火山引擎）',
+    description: '场景视频的对白配音（豆包语音合成 2.0 / 1.0，HTTP 单向流式 V3）',
+    defaultBaseUrl: VOLCENGINE_SPEECH_DEFAULTS.baseUrl,
+    defaultModel: VOLCENGINE_SPEECH_DEFAULTS.model,
+    models: VOLCENGINE_SPEECH_DEFAULTS.models,
+    envKey: providerEnvKey('volcengine-speech'),
+    docsUrl: 'https://www.volcengine.com/docs/6561/1598757',
   },
 ];
 
@@ -299,5 +314,6 @@ export function createDefaultRegistry(): ProviderRegistry {
   registry.registerImage(byId('grok-image'), createGrokImageProvider);
   registry.registerSpeech(byId('openai-speech'), createOpenAISpeechProvider);
   registry.registerSpeech(byId('minimax-speech'), createMinimaxSpeechProvider);
+  registry.registerSpeech(byId('volcengine-speech'), createVolcengineSpeechProvider);
   return registry;
 }

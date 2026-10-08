@@ -144,6 +144,8 @@ export interface RequestOptions {
   /** 覆盖客户端的重试策略（例如提交视频任务不重试，避免重复扣费） */
   retry?: RetryPolicy;
   query?: Record<string, string | number | undefined>;
+  /** 本次请求额外的请求头（与客户端的鉴权头合并，同名时以这里为准） */
+  headers?: Record<string, string>;
 }
 
 /** 拼接 baseUrl 与路径：去掉多余斜杠；path 为完整 URL 时直接使用 */
@@ -205,6 +207,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
           ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
           Accept: 'application/json, text/event-stream',
           ...options.headers,
+          ...request.headers,
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: ctl.signal,

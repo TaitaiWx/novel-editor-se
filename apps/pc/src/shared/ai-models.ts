@@ -260,6 +260,33 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
     baseUrl: 'https://api.minimax.cn',
     models: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd', 'speech-02-hd'],
   },
+  // 2026-10-09 核对 https://www.volcengine.com/docs/6561/1598757（HTTP 单向流式 V3，新版控制台 X-Api-Key）
+  // 与音色列表 https://www.volcengine.com/docs/6561/1257544；模型 = X-Api-Resource-Id，按音色自动纠正
+  {
+    key: 'volcengine-speech',
+    capability: 'speech',
+    vendor: 'volcengine-speech',
+    label: '豆包语音（火山引擎）',
+    shortLabel: '豆包语音',
+    baseUrl: 'https://openspeech.bytedance.com',
+    models: ['seed-tts-2.0', 'seed-tts-1.0', 'seed-icl-2.0'],
+    voices: [
+      'zh_female_vv_uranus_bigtts',
+      'zh_female_xiaohe_uranus_bigtts',
+      'zh_male_m191_uranus_bigtts',
+      'zh_male_taocheng_uranus_bigtts',
+      'zh_male_liufei_uranus_bigtts',
+      'zh_female_sophie_uranus_bigtts',
+      'zh_female_qingxinnvsheng_uranus_bigtts',
+      'zh_female_cancan_uranus_bigtts',
+      'zh_female_shuangkuaisisi_uranus_bigtts',
+      'en_female_jenny_uranus_bigtts',
+      'en_male_david_uranus_bigtts',
+    ],
+    keyHint:
+      '在火山引擎「豆包语音」新版控制台的「API Key 管理」里创建（不是火山方舟的 Key），并开通「语音合成大模型」。',
+    note: '模型对应音色版本：seed-tts-2.0（2.0 音色，名字含 uranus）、seed-tts-1.0（1.0 音色）、seed-icl-2.0（声音复刻 S_ 开头）；填错时会按音色自动纠正。',
+  },
 ];
 
 /** 旧版内置服务（vendor id）→ 迁移后的预设 */

@@ -340,6 +340,7 @@ describe('注册表', () => {
       'grok-image',
       'openai-speech',
       'minimax-speech',
+      'volcengine-speech',
     ]);
     expect(registry.list('image').map((item) => item.id)).toEqual([
       'seedream-image',
@@ -353,6 +354,7 @@ describe('注册表', () => {
     expect(registry.list('speech').map((item) => item.id)).toEqual([
       'openai-speech',
       'minimax-speech',
+      'volcengine-speech',
     ]);
     expect(registry.get('grok')?.envKey).toBe('NOVEL_EDITOR_GROK_API_KEY');
     expect(providerEnvKey('minimax-video')).toBe('NOVEL_EDITOR_MINIMAX_VIDEO_API_KEY');

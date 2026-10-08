@@ -104,6 +104,7 @@ describe('配音 Provider：请求映射', () => {
     expect(registry.list('speech').map((item) => item.id)).toEqual([
       'openai-speech',
       'minimax-speech',
+      'volcengine-speech',
     ]);
     expect(registry.get('openai-speech')?.envKey).toBe('NOVEL_EDITOR_OPENAI_SPEECH_API_KEY');
     expect(registry.createSpeech('openai-speech', { apiKey: 'k' }).kind).toBe('speech');

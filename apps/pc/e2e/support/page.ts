@@ -125,8 +125,33 @@ const LOCATE_SOURCE = `(target) => {
   }
   if (!el) return null;
   el.scrollIntoView({ block: 'center', inline: 'center' });
+  // 记下定位到的元素，供点击前的遮挡检查使用
+  window.__e2eLocated = el;
   const rect = el.getBoundingClientRect();
   return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+}`;
+
+/**
+ * 点击前的定位：在 LOCATE_SOURCE 基础上等两帧确认位置稳定，并确认中心点落在元素自身上。
+ * 异步数据刚到、列表重排时坐标会变，被浮层盖住时点不到；返回 null 让调用方下一轮重试。
+ */
+/** 等待位置稳定的最长时间，超过后按普通定位点击 */
+const STABLE_LOCATE_MS = 1_500;
+
+const STABLE_LOCATE_SOURCE = `async (target) => {
+  const locate = ${LOCATE_SOURCE};
+  const first = locate(target);
+  if (!first) return null;
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const rect = locate(target);
+  if (!rect) return null;
+  const moved = ['x', 'y', 'width', 'height'].some((key) => Math.abs(rect[key] - first[key]) > 1);
+  if (moved) return null;
+  const el = window.__e2eLocated;
+  const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  // 中心点落在目标自身、它的子元素或承载它的容器上才算可点；被其他元素盖住时下一轮再试
+  if (el && hit && hit !== el && !el.contains(hit) && !hit.contains(el)) return null;
+  return rect;
 }`;
 
 function describeTarget(target: Target): string {
@@ -280,11 +305,22 @@ export class Page {
 
   /** 定位元素中心点（会先滚动到可见区域），找不到时在超时内重试 */
   async locate(target: Target, timeout = 10_000): Promise<{ x: number; y: number }> {
-    const rect = await this.waitFor<Rect>(`(target) => (${LOCATE_SOURCE})(target)`, {
-      timeout,
-      args: [target],
-      message: `定位元素: ${describeTarget(target)}`,
-    });
+    const message = `定位元素: ${describeTarget(target)}`;
+    let rect: Rect;
+    try {
+      // 先等位置稳定、没有被遮住（最多 STABLE_LOCATE_MS）；一直在动的元素（滚动容器、动画）退回普通定位
+      rect = await this.waitFor<Rect>(`(target) => (${STABLE_LOCATE_SOURCE})(target)`, {
+        timeout: Math.min(timeout, STABLE_LOCATE_MS),
+        args: [target],
+        message,
+      });
+    } catch {
+      rect = await this.waitFor<Rect>(`(target) => (${LOCATE_SOURCE})(target)`, {
+        timeout,
+        args: [target],
+        message,
+      });
+    }
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
   }
 
