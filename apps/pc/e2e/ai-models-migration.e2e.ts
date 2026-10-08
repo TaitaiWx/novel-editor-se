@@ -116,7 +116,7 @@ describe('旧版 AI 配置迁移', () => {
     expect(rows).toEqual({
       text: ['xAI Grok · grok-3', 'DeepSeek 工作'],
       image: [],
-      video: ['Seedance · doubao-seedance-1-0-pro-250528', '方舟 工作室'],
+      video: ['Seedance · doubao-seedance-2-0-260128', '方舟 工作室'],
       speech: [],
     });
     // 默认写作 AI 仍是作者原来选的；每条都是「已配置」

@@ -1,69 +1,18 @@
-// 设置中心「AI」：总开关 + 每个能力一张模型列表（每行一层边框，展开后是行式表单）
+// 设置中心「AI」：总开关 + 每个能力一组模型列表（分区 / 分组 / 行的版式来自 ../layout，这里只有 AI 特有的部分）
 
-.aiPanel {
-  max-width: 680px;
-}
-
-// ─── 总开关（独立一行，不包在卡片里） ────────────────────────────────
-
-.masterRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-top: 20px;
-  padding: 0 2px 18px;
-  border-bottom: 1px solid var(--ui-border-subtle);
-}
-
-.masterTitle {
-  color: var(--ui-fg-primary);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-// ─── 能力分区 ─────────────────────────────────────────────────────────
-
-.capability {
-  margin-top: 26px;
-}
-
-.capabilityHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.capabilityTitle {
-  margin: 0;
-  color: var(--ui-fg-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.capabilityMeta {
-  flex-shrink: 0;
-  color: var(--ui-fg-muted);
-  font-size: 12px;
-}
-
-.aiPanel .capabilityDesc {
-  margin: 4px 0 0;
-  color: var(--ui-fg-muted);
+// 总开关关闭时的提示
+.masterHint {
+  margin-top: 6px;
+  color: var(--ui-interaction-accent-fg);
   font-size: 12px;
   line-height: 1.6;
-}
-
-.sectionSetting {
-  margin-top: 8px;
 }
 
 .panelList {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 // ─── 模型行 ───────────────────────────────────────────────────────────
@@ -166,7 +115,7 @@
 }
 
 .aiPanel .emptyState {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   padding: 12px;
   border: 1px dashed var(--ui-border-subtle);
   border-radius: 8px;
@@ -250,10 +199,6 @@
   padding: 12px;
 }
 
-.fieldControl {
-  min-width: 0;
-}
-
 .aiPanel .formNote {
   margin: 4px 12px 0;
   color: var(--ui-fg-muted);
@@ -275,8 +220,8 @@
   gap: 8px;
 }
 
-// 表单底部按钮统一高度、去掉共享按钮的上外边距（primaryButton 自带 margin-top 与 32px 高度，
-// 与 30px 的 secondaryButton 并排时会错位）；加 .aiPanel 前缀保证优先级高于共享样式
+// 表单底部按钮统一高度（primaryButton 为 32px，与 30px 的 secondaryButton 并排时会错位）；
+// 加 .aiPanel 前缀保证优先级高于共享样式
 .aiPanel .footerButton {
   box-sizing: border-box;
   height: 30px;
@@ -333,7 +278,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 6px 10px;
   border: 1px dashed var(--ui-border-strong);
   border-radius: 6px;
@@ -349,7 +294,7 @@
 }
 
 .addForm {
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 0 4px 4px;
   border: 1px dashed var(--ui-border-strong);
   border-radius: 8px;

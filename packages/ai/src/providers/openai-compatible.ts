@@ -21,6 +21,10 @@ import type {
   TokenUsage,
 } from '../types';
 
+/**
+ * 协议默认值（只在旧数据没有地址 / 模型时兜底；新添加的模型用 shared/ai-models.ts 的预设）。
+ * 2026-10-08 核对 https://developers.openai.com/api/docs/models：gpt-5.4-mini 仍为可用（非弃用）模型，保持不变
+ */
 export const OPENAI_COMPATIBLE_DEFAULTS = {
   baseUrl: 'https://api.openai.com/v1',
   model: 'gpt-5.4-mini',

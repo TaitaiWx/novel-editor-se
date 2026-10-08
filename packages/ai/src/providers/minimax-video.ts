@@ -1,7 +1,9 @@
 /**
  * MiniMax（海螺）视频生成 Provider
  *
- * 接口（依据 platform.minimax.cn 公开文档，2026-10 核对）：
+ * 接口（依据 platform.minimax.cn 公开文档，2026-10 核对；2026-10-08 再次核对地址与模型名：
+ * https://platform.minimax.cn/docs/api-reference/video-generation-t2v 列出
+ * MiniMax-Hailuo-2.3 / MiniMax-Hailuo-02 / T2V-01-Director / T2V-01，国际站文档同样四个）：
  * - 提交：POST {base}/v1/video_generation
  *     { model, prompt, duration?, resolution?, first_frame_image?, prompt_optimizer? } → { task_id, base_resp }
  * - 查询：GET  {base}/v1/query/video_generation?task_id=

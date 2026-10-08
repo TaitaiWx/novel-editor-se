@@ -95,6 +95,26 @@ describe('openai-compatible：complete', () => {
     expect(requests[0].headers.Authorization).toBe('Bearer sk-1');
   });
 
+  it('地址不带 /v1（DeepSeek 官方 base_url）时同样拼成 {baseUrl}/chat/completions', async () => {
+    const { fetch, requests } = mockFetch(
+      jsonResponse({ choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] })
+    );
+    for (const baseUrl of ['https://api.deepseek.com', 'https://api.deepseek.com/']) {
+      const provider = createOpenAICompatibleProvider({
+        apiKey: 'sk',
+        baseUrl,
+        model: 'deepseek-flash',
+        fetch,
+      });
+      await provider.complete({ messages });
+    }
+    expect(requests.map((item) => item.url)).toEqual([
+      'https://api.deepseek.com/chat/completions',
+      'https://api.deepseek.com/chat/completions',
+    ]);
+    expect(requests[0].body).toMatchObject({ model: 'deepseek-flash' });
+  });
+
   it('content 为数组时拼接 text', async () => {
     const { fetch } = mockFetch(
       jsonResponse({ choices: [{ message: { content: [{ text: 'a' }, { text: 'b' }, {}] } }] })

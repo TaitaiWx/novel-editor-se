@@ -1,7 +1,4 @@
 // 设置中心「正文结构」
-.hint {
-  margin-top: 18px;
-}
 
 .muted {
   margin-top: 8px;
@@ -21,10 +18,6 @@
   font-size: 12px;
 }
 
-.switch {
-  justify-self: end;
-}
-
 .examples {
   display: flex;
   flex-wrap: wrap;
@@ -40,26 +33,8 @@
   }
 }
 
-.sectionTitle {
-  margin-top: 22px;
-  color: var(--ui-fg-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.ruleHelp {
-  margin-top: 4px;
-  color: #9ca3af;
-  font-size: 12px;
-  line-height: 1.6;
-
-  code {
-    color: #c8c8c8;
-  }
-}
-
 .rules {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -125,7 +100,7 @@
 }
 
 .testBox {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
@@ -153,9 +128,8 @@
   margin: 0;
   padding: 8px 10px;
   list-style: none;
-  border: 1px solid var(--ui-border-subtle);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
   overflow: auto;
   max-height: 220px;
 
@@ -200,22 +174,6 @@
 .scene {
   color: #c8b48a;
   background: rgba(215, 186, 125, 0.08);
-}
-
-.saveRow {
-  margin-top: 18px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-
-  button {
-    margin-top: 0;
-  }
-
-  button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
 }
 
 @media (max-width: 880px) {

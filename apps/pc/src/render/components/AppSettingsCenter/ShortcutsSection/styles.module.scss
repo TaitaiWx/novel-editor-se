@@ -1,3 +1,5 @@
+// 设置中心「快捷键」：可编辑的快捷键输入与只读按键标识
+
 .shortcutEditor {
   display: flex;
   flex-direction: column;
@@ -12,45 +14,24 @@
 }
 
 .shortcutHint {
-  color: #9ca3af;
+  color: var(--ui-fg-muted);
   font-size: 11px;
   line-height: 1.5;
 }
 
-.readonlyShortcutList {
-  margin-top: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.readonlyShortcutItem {
-  border: 1px solid var(--ui-border-subtle);
-  background: rgba(255, 255, 255, 0.02);
-  padding: 12px 14px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.readonlyShortcutMeta {
-  min-width: 0;
-}
-
-.readonlyShortcutValue {
-  flex-shrink: 0;
-  color: var(--ui-fg-primary);
-  font-size: 12px;
-  border: 1px solid var(--ui-border-strong);
-  background: #1f1f21;
-  padding: 6px 10px;
+.keyValue {
+  padding: 2px 8px;
   border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ui-fg-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
 }
 
 @media (max-width: 880px) {
-  .shortcutActions,
-  .readonlyShortcutItem {
+  .shortcutActions {
     flex-direction: column;
     align-items: stretch;
   }

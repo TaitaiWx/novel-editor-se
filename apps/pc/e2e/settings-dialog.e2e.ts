@@ -1,6 +1,7 @@
 /**
  * 设置中心弹窗：打开后稳定不消失；从弹窗里拖到遮罩上不会误关；弹窗里的下拉列表浮在弹窗之上、可以切换；
- * 不带 key 的 keydown（输入框自动填充等）不会让全局快捷键报错
+ * 不带 key 的 keydown（输入框自动填充等）不会让全局快捷键报错；
+ * 每个分区都是同一套无边框的行式版式（分组之间只有分隔线），AI 总开关醒目
  */
 import { describe, expect, it } from 'vitest';
 import { captureForReview, setupAppSuite } from './support/suite';
@@ -35,6 +36,65 @@ async function sampleDialog(): Promise<string[]> {
 async function closeDialog() {
   await suite.page.click('[aria-label="关闭设置"]');
   await suite.page.waitForGone(DIALOG);
+}
+
+/** 每个分区：侧栏标签 → 分区标题 */
+const SETTINGS_TABS: ReadonlyArray<readonly [string, string, string]> = [
+  ['通用', '通用设置', 'general'],
+  ['正文结构', '正文结构', 'structure'],
+  ['AI', 'AI 设置', 'ai'],
+  ['数据与缓存', '数据与缓存', 'data'],
+  ['快捷键', '快捷键', 'shortcuts'],
+  ['关于', '关于', 'about'],
+];
+
+interface LayoutReport {
+  groups: number;
+  rows: number;
+  /** 分区 / 分组 / 行容器自身左右下边框不为 0 的 */
+  boxedContainers: string[];
+  /** 包住设置行的、四边都有边框的祖先（卡片盒子） */
+  boxedAncestors: string[];
+  /** 第 2 个起的分组是否都有 1px 顶部分隔线 */
+  dividersOk: boolean;
+}
+
+/** 在页面里检查当前分区的版式（计算样式） */
+function inspectLayout(dialogSelector: string): LayoutReport {
+  const dialog = document.querySelector(dialogSelector) as HTMLElement;
+  const section = dialog.querySelector('[data-settings-section]') as HTMLElement;
+  const width = (el: Element, side: string) =>
+    parseFloat(getComputedStyle(el).getPropertyValue(`border-${side}-width`)) || 0;
+  const nameOf = (el: Element) =>
+    `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`;
+  const containers = [
+    section,
+    ...Array.from(section.querySelectorAll('[data-settings-group], [data-settings-row]')),
+  ];
+  const boxedContainers = containers
+    .filter((el) => ['left', 'right', 'bottom'].some((side) => width(el, side) > 0))
+    .map(nameOf);
+  const boxedAncestors = new Set<string>();
+  for (const row of Array.from(section.querySelectorAll('[data-settings-row]'))) {
+    for (let el = row.parentElement; el && el !== section; el = el.parentElement) {
+      if (['top', 'right', 'bottom', 'left'].every((side) => width(el as Element, side) > 0)) {
+        boxedAncestors.add(nameOf(el));
+      }
+    }
+  }
+  const groups = Array.from(section.querySelectorAll('[data-settings-group]'));
+  const dividersOk = groups.every((group) => {
+    const prev = group.previousElementSibling;
+    if (!prev || !prev.hasAttribute('data-settings-group')) return true;
+    return width(group, 'top') === 1 && getComputedStyle(group).borderTopStyle === 'solid';
+  });
+  return {
+    groups: groups.length,
+    rows: section.querySelectorAll('[data-settings-row]').length,
+    boxedContainers,
+    boxedAncestors: Array.from(boxedAncestors),
+    dividersOk,
+  };
 }
 
 describe('设置中心弹窗', () => {
@@ -124,6 +184,76 @@ describe('设置中心弹窗', () => {
       },
       { message: '配音默认语言已保存' }
     );
+    await closeDialog();
+  });
+
+  it('每个分区都是无边框的行式版式：分组之间只有分隔线；AI 总开关醒目、能力分组之间有分隔线', async () => {
+    const { page } = suite;
+    if (!(await page.exists(DIALOG))) {
+      await page.click('[aria-label="打开设置中心"]');
+      await page.waitForTarget(DIALOG);
+    }
+    for (const [tab, title, id] of SETTINGS_TABS) {
+      await page.click({ text: tab, within: `${DIALOG} [class*="sidebar"]`, exact: true });
+      await page.waitFor(
+        (selector: string, heading: string) => {
+          const h4 = document.querySelector(`${selector} [data-settings-section] h4`);
+          const rows = document.querySelectorAll(`${selector} [data-settings-row]`).length;
+          return h4?.textContent?.trim() === heading && rows > 0;
+        },
+        { args: [DIALOG, title], message: `「${tab}」分区已渲染` }
+      );
+      const report = await page.evaluate<LayoutReport>(inspectLayout, DIALOG);
+      expect(report.groups, tab).toBeGreaterThan(0);
+      expect(report.boxedContainers, tab).toEqual([]);
+      expect(report.boxedAncestors, tab).toEqual([]);
+      expect(report.dividersOk, tab).toBe(true);
+      await captureForReview(page, `settings-tab-${id}`);
+
+      if (id !== 'ai') continue;
+      const ai = await page.evaluate<{
+        tone: string | null;
+        checked: boolean;
+        labelColor: string;
+        background: string;
+        shadow: string;
+        hint: boolean;
+        dividers: string[];
+      }>(() => {
+        const row = document.querySelector('[data-testid="ai-master-row"]') as HTMLElement;
+        const input = row.querySelector('input[role="switch"]') as HTMLInputElement;
+        const label = row.querySelector('[class*="rowLabel"]') as HTMLElement;
+        const style = getComputedStyle(row);
+        return {
+          tone: row.getAttribute('data-tone'),
+          checked: input.checked,
+          labelColor: getComputedStyle(label).color,
+          background: style.backgroundImage,
+          shadow: style.boxShadow,
+          hint: (row.textContent ?? '').includes('已关闭：AI 功能不会发送请求'),
+          dividers: ['text', 'image', 'video', 'speech'].map((capability) => {
+            const group = document.querySelector(
+              `[data-testid="ai-section-${capability}"]`
+            ) as HTMLElement;
+            const groupStyle = getComputedStyle(group);
+            return `${groupStyle.borderTopWidth} ${groupStyle.borderTopStyle}`;
+          }),
+        };
+      });
+      // 标签为强调色文字（--ui-interaction-accent-fg）
+      expect(ai.labelColor).toBe('rgb(140, 196, 236)');
+      if (ai.checked) {
+        expect(ai.tone).toBe('emphasis');
+        expect(ai.background).not.toBe('none');
+        expect(ai.hint).toBe(false);
+      } else {
+        expect(ai.tone).toBe('attention');
+        expect(ai.shadow).not.toBe('none');
+        expect(ai.hint).toBe(true);
+      }
+      // 总开关之后的每个能力分组上方都有一条 1px 分隔线
+      expect(ai.dividers).toEqual(Array(4).fill('1px solid'));
+    }
     await closeDialog();
   });
 

@@ -1,0 +1,211 @@
+// 设置中心统一版式：分区头 / 分组 / 行。不画卡片边框，层次只靠留白与 1px 分隔线
+
+// 行与行之间比组与组之间更淡
+$row-divider: color-mix(in srgb, var(--ui-border-subtle) 55%, transparent);
+$danger-fg: #e5a29d;
+
+// ─── 分区 ────────────────────────────────────────────────────────────
+
+.section {
+  max-width: 640px;
+}
+
+.sectionWide {
+  max-width: 680px;
+}
+
+.sectionHeader {
+  padding-bottom: 6px;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--ui-fg-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sectionIcon {
+  display: inline-flex;
+  color: var(--ui-fg-muted);
+
+  svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+}
+
+.sectionDesc {
+  margin: 6px 0 0;
+  color: var(--ui-fg-muted);
+  font-size: 13px;
+  line-height: 1.7;
+
+  code {
+    color: var(--ui-fg-primary);
+    font-size: 12px;
+  }
+}
+
+// ─── 分组 ────────────────────────────────────────────────────────────
+
+.group {
+  padding: 18px 0;
+
+  // 组与组之间一条分隔线（唯一的边框）
+  & + & {
+    border-top: 1px solid var(--ui-border-subtle);
+  }
+
+  &:last-child {
+    padding-bottom: 4px;
+  }
+}
+
+.groupHeader {
+  margin-bottom: 4px;
+}
+
+.groupTitleLine {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.groupTitle {
+  margin: 0;
+  color: var(--ui-fg-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.groupMeta {
+  flex-shrink: 0;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+}
+
+.groupDesc {
+  margin: 4px 0 0;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+
+  code {
+    color: var(--ui-fg-primary);
+  }
+}
+
+// ─── 行 ──────────────────────────────────────────────────────────────
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 0;
+
+  & + & {
+    border-top: 1px solid $row-divider;
+  }
+}
+
+.rowField {
+  grid-template-columns: minmax(0, 1fr) 260px;
+}
+
+.rowStart {
+  align-items: start;
+}
+
+.rowMain {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rowLeading {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.rowMeta {
+  min-width: 0;
+}
+
+.rowLabel {
+  color: var(--ui-fg-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rowDesc {
+  margin-top: 3px;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.rowControl {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.rowField .rowControl {
+  display: block;
+}
+
+// 强调行（总开关打开）：强调色标签 + 柔和的强调色底纹，左右留内边距，不画边框
+.rowEmphasis,
+.rowAttention {
+  padding: 14px 16px;
+  border-radius: 8px;
+
+  // 底纹行与相邻行之间不再画分隔线，留白代替
+  & + .row,
+  .row + & {
+    border-top: none;
+  }
+
+  .rowLabel {
+    color: var(--ui-interaction-accent-fg);
+    font-size: 14px;
+  }
+}
+
+.rowEmphasis {
+  background: linear-gradient(
+    90deg,
+    var(--ui-interaction-accent-soft) 0%,
+    color-mix(in srgb, var(--ui-interaction-accent) 4%, transparent) 100%
+  );
+}
+
+// 提醒行（总开关关闭）：强调色内描边（box-shadow，不占布局），提示文字
+.rowAttention {
+  background: color-mix(in srgb, var(--ui-interaction-accent) 5%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-interaction-accent) 55%, transparent);
+}
+
+.rowDanger .rowLabel {
+  color: $danger-fg;
+}
+
+@media (max-width: 880px) {
+  .row,
+  .rowField {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .rowControl {
+    justify-content: flex-start;
+  }
+}

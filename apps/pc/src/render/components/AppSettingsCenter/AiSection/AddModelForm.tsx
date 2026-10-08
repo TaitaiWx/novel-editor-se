@@ -15,6 +15,7 @@ import type {
 } from '../../../types/ai-api';
 import {
   defaultModelLabel,
+  sameServiceBaseUrl,
   presetProviderName,
   presetsFor,
   type AIModelPreset,
@@ -60,17 +61,14 @@ function draftFor(preset: AIModelPreset): Draft {
   };
 }
 
-const trimUrl = (value: string) => value.trim().replace(/\/+$/, '');
-
-/** 同一协议 + 同一接口地址、已保存 Key 的模型（第一个） */
+/** 同一协议 + 同一接口地址（含预设的等价旧地址）、已保存 Key 的模型（第一个） */
 export function reusableKeySource(
   existing: readonly AIProviderInfo[],
   vendor: string,
   baseUrl: string
 ): AIProviderInfo | undefined {
-  const url = trimUrl(baseUrl);
   return existing.find(
-    (item) => item.vendor === vendor && item.configured && trimUrl(item.baseUrl) === url && url
+    (item) => item.vendor === vendor && item.configured && sameServiceBaseUrl(item.baseUrl, baseUrl)
   );
 }
 

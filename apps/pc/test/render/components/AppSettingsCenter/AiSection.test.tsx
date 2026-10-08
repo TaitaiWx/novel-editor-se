@@ -19,7 +19,7 @@ const VENDOR_DEFAULTS: Record<string, { baseUrl: string; model: string; audio?: 
   grok: { baseUrl: 'https://api.x.ai/v1', model: 'grok-4' },
   'seedance-video': {
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    model: 'doubao-seedance-1-0-pro-250528',
+    model: 'doubao-seedance-2-0-260128',
     audio: true,
   },
   'openai-speech': { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini-tts' },
@@ -224,10 +224,10 @@ describe('设置中心 · AI 模型列表', () => {
     expect((within(form).getByLabelText('接口地址') as HTMLInputElement).value).toBe(
       'https://api.x.ai/v1'
     );
-    expect(getCombobox('模型', within(form)).textContent).toBe('grok-4');
-    chooseOption(getCombobox('模型', within(form)), 'grok-4-fast');
+    expect(getCombobox('模型', within(form)).textContent).toBe('grok-4.7');
+    chooseOption(getCombobox('模型', within(form)), 'grok-4.6');
     expect((within(form).getByLabelText('显示名称') as HTMLInputElement).placeholder).toBe(
-      'xAI Grok · grok-4-fast'
+      'xAI Grok · grok-4.6'
     );
     fireEvent.change(within(form).getByLabelText('API Key'), { target: { value: 'xai-1' } });
     fireEvent.click(within(form).getByRole('button', { name: '添加' }));
@@ -236,9 +236,9 @@ describe('设置中心 · AI 模型列表', () => {
       capability: 'text',
       vendor: 'grok',
       preset: 'grok',
-      label: 'xAI Grok · grok-4-fast',
+      label: 'xAI Grok · grok-4.6',
       baseUrl: 'https://api.x.ai/v1',
-      model: 'grok-4-fast',
+      model: 'grok-4.6',
       apiKey: 'xai-1',
     });
     expect(screen.queryByRole('group', { name: '添加模型' })).toBeNull();
@@ -263,6 +263,7 @@ describe('设置中心 · AI 模型列表', () => {
   });
 
   it('同一服务商 + 地址已有 Key：默认沿用（主进程复制），也可以改填新 Key', async () => {
+    // 已保存的条目是旧预设地址（带 /v1），与新预设地址等价，仍可沿用
     const { mock } = mockMain([
       {
         id: 'text-1',
@@ -284,13 +285,14 @@ describe('设置中心 · AI 模型列表', () => {
     expect((reuse as HTMLInputElement).checked).toBe(true);
     expect(within(form).queryByLabelText('API Key')).toBeNull();
     expect(within(form).getByText('与「DeepSeek · deepseek-chat」使用同一个 Key')).toBeTruthy();
-    chooseOption(getCombobox('模型', within(form)), 'deepseek-reasoner');
+    chooseOption(getCombobox('模型', within(form)), 'deepseek-v4-pro');
     fireEvent.click(within(form).getByRole('button', { name: '添加' }));
     await screen.findByTestId('ai-model-text-2');
     expect(calls(mock, 'ai-models-add')[0][0]).toMatchObject({
       vendor: 'openai-compatible',
       preset: 'deepseek',
-      model: 'deepseek-reasoner',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-pro',
       reuseKeyFrom: 'text-1',
     });
     expect(calls(mock, 'ai-models-add')[0][0]).not.toHaveProperty('apiKey');
@@ -347,23 +349,23 @@ describe('设置中心 · AI 模型列表', () => {
       expect(calls(mock, 'ai-models-update')).toContainEqual(['grok', { temperature: null }])
     );
 
-    chooseOption(getCombobox('模型', within(row('grok'))), 'grok-3-mini');
+    chooseOption(getCombobox('模型', within(row('grok'))), 'grok-4.3');
     await waitFor(() =>
       expect(calls(mock, 'ai-models-update')).toContainEqual([
         'grok',
-        { model: 'grok-3-mini', label: defaultModelLabel('xAI Grok', 'grok-3-mini') },
+        { model: 'grok-4.3', label: defaultModelLabel('xAI Grok', 'grok-4.3') },
       ])
     );
-    await screen.findByRole('region', { name: 'xAI Grok · grok-3-mini' });
+    await screen.findByRole('region', { name: 'xAI Grok · grok-4.3' });
 
     // 改过名的不跟着变
     const label = within(row('grok')).getByLabelText('显示名称');
     fireEvent.change(label, { target: { value: '快写' } });
     fireEvent.blur(label);
     await screen.findByRole('region', { name: '快写' });
-    chooseOption(getCombobox('模型', within(row('grok'))), 'grok-4');
+    chooseOption(getCombobox('模型', within(row('grok'))), 'grok-4.6');
     await waitFor(() =>
-      expect(calls(mock, 'ai-models-update')).toContainEqual(['grok', { model: 'grok-4' }])
+      expect(calls(mock, 'ai-models-update')).toContainEqual(['grok', { model: 'grok-4.6' }])
     );
 
     const key = within(row('grok')).getByLabelText('API Key') as HTMLInputElement;
@@ -428,7 +430,7 @@ describe('设置中心 · AI 模型列表', () => {
       capability: 'video',
       vendor: 'seedance-video',
       preset: 'seedance',
-      label: 'Seedance · doubao-seedance-1-0-pro-250528',
+      label: 'Seedance · doubao-seedance-2-0-260128',
       pricePerSecond: 0.4,
     });
     fireEvent.click(within(section('图片')).getByRole('button', { name: '添加模型' }));

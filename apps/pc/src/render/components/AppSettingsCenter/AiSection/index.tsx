@@ -1,5 +1,6 @@
 /**
- * 设置中心「AI」：顶部独立的总开关，下面每个能力（文本 / 图片 / 视频 / 语音）一张模型列表。
+ * 设置中心「AI」：顶部独立的总开关（打开时强调底纹，关闭时强调描边 + 提示），
+ * 下面每个能力（文本 / 图片 / 视频 / 语音）一组模型列表，组与组之间一条分隔线。
  *
  * - 一行 = 一个可选用的模型（服务商预设 + 接口地址 + 模型 + Key），可以同时配置多个，各功能里按显示名称选择
  * - 每个能力一个默认模型（「设为默认」）；功能里没有特别选择时使用它
@@ -12,7 +13,7 @@ import type { SettingsDraft } from '../../../utils/appSettings';
 import type { AICapability, AIProviderInfo } from '../../../types/ai-api';
 import type { SettingsFormApi } from '../useSettingsForm';
 import Switch from '../../Switch';
-import sharedStyles from '../styles.module.scss';
+import { SettingsGroup, SettingsRow, SettingsSection } from '../layout';
 import AddModelForm from './AddModelForm';
 import ModelRow from './ModelRow';
 import { useAiModels } from './useAiModels';
@@ -66,79 +67,80 @@ const AiSection: React.FC<AiSectionProps> = ({ aiSettings, setSettings }) => {
   const byCapability = (capability: AICapability): AIProviderInfo[] =>
     (api.models ?? []).filter((item) => item.kind === capability);
 
+  const enabled = aiSettings.enabled;
+
   return (
-    <div className={`${sharedStyles.panel} ${styles.aiPanel}`}>
-      <h4>
-        <AiOutlineApi />
-        <span>AI 设置</span>
-      </h4>
-      <p>按能力配置模型。Key 只保存在本机的系统钥匙串中，界面上不会再显示明文。</p>
-
-      <div className={styles.masterRow}>
-        <div className={sharedStyles.formMeta}>
-          <div className={styles.masterTitle}>启用 AI 功能</div>
-          <div className={sharedStyles.formDesc}>
-            总开关。关闭后，写作功能的默认模型（续写、分镜、灵感、推演等）不再发送请求。
-          </div>
-        </div>
-        <Switch
-          aria-label="启用 AI 功能"
-          checked={aiSettings.enabled}
-          onChange={(next) =>
-            setSettings((prev) => ({
-              ...prev,
-              ai: { ...prev.ai, enabled: next, enabledExplicitlySet: true },
-            }))
+    <SettingsSection
+      icon={<AiOutlineApi />}
+      title="AI 设置"
+      description="按能力配置模型。Key 只保存在本机的系统钥匙串中，界面上不会再显示明文。"
+      wide
+      className={styles.aiPanel}
+    >
+      <SettingsGroup>
+        <SettingsRow
+          label="启用 AI 功能"
+          description="总开关。关闭后，写作功能的默认模型（续写、分镜、灵感、推演等）不再发送请求。"
+          tone={enabled ? 'emphasis' : 'attention'}
+          data-testid="ai-master-row"
+          extra={
+            !enabled && (
+              <div className={styles.masterHint} role="note">
+                已关闭：AI 功能不会发送请求
+              </div>
+            )
           }
-        />
-      </div>
-
-      {api.error && <div className={styles.statusError}>加载 AI 模型失败：{api.error}</div>}
+        >
+          <Switch
+            size="lg"
+            aria-label="启用 AI 功能"
+            checked={enabled}
+            onChange={(next) =>
+              setSettings((prev) => ({
+                ...prev,
+                ai: { ...prev.ai, enabled: next, enabledExplicitlySet: true },
+              }))
+            }
+          />
+        </SettingsRow>
+        {api.error && <div className={styles.statusError}>加载 AI 模型失败：{api.error}</div>}
+      </SettingsGroup>
 
       {SECTIONS.map((section) => {
         const items = byCapability(section.capability);
         const defaultItem = items.find((item) => item.isDefault);
         return (
-          <section
+          <SettingsGroup
             key={section.capability}
-            className={styles.capability}
-            aria-labelledby={`ai-section-${section.capability}`}
+            title={section.title}
+            titleId={`ai-section-${section.capability}`}
+            description={section.description}
+            meta={defaultItem ? `默认：${defaultItem.label}` : undefined}
             data-testid={`ai-section-${section.capability}`}
           >
-            <div className={styles.capabilityHeader}>
-              <h5 id={`ai-section-${section.capability}`} className={styles.capabilityTitle}>
-                {section.title}
-              </h5>
-              {defaultItem && (
-                <span className={styles.capabilityMeta}>默认：{defaultItem.label}</span>
-              )}
-            </div>
-            <p className={styles.capabilityDesc}>{section.description}</p>
-            {section.capability === 'speech' && (
-              <div className={styles.sectionSetting}>
-                <VoiceLanguageSetting />
-              </div>
-            )}
+            {section.capability === 'speech' && <VoiceLanguageSetting />}
             {api.models !== null && items.length === 0 && (
               <p className={styles.emptyState}>{section.empty}</p>
             )}
-            <div className={styles.panelList}>
-              {items.map((info) => (
-                <ModelRow
-                  key={info.id}
-                  info={info}
-                  expanded={expandedId === info.id}
-                  onToggleExpanded={() =>
-                    setExpandedId((prev) => (prev === info.id ? null : info.id))
-                  }
-                  onUpdate={(patch) => api.update(info.id, patch)}
-                  onSetDefault={() => void api.setDefault(section.capability, info.id)}
-                  onTest={() => api.test(info.id)}
-                  onRemove={() => void api.remove(info.id)}
-                  onKeyChanged={() => void api.reload()}
-                />
-              ))}
-            </div>
+            {items.length > 0 && (
+              <div className={styles.panelList}>
+                {items.map((info) => (
+                  <ModelRow
+                    key={info.id}
+                    info={info}
+                    expanded={expandedId === info.id}
+                    onToggleExpanded={() =>
+                      setExpandedId((prev) => (prev === info.id ? null : info.id))
+                    }
+                    onUpdate={(patch) => api.update(info.id, patch)}
+                    onSetDefault={() => void api.setDefault(section.capability, info.id)}
+                    onTest={() => api.test(info.id)}
+                    onRemove={() => void api.remove(info.id)}
+                    onKeyChanged={() => void api.reload()}
+                  />
+                ))}
+              </div>
+            )}
             {api.models !== null && (
               <AddModelForm
                 capability={section.capability}
@@ -147,10 +149,10 @@ const AiSection: React.FC<AiSectionProps> = ({ aiSettings, setSettings }) => {
                 onAdded={(info) => setExpandedId(info.configured ? null : info.id)}
               />
             )}
-          </section>
+          </SettingsGroup>
         );
       })}
-    </div>
+    </SettingsSection>
   );
 };
 

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "pid": 98994,
+  "appVersion": "1.1.0-beta.43",
+  "workspaceRoot": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc",
+  "state": "open",
+  "activeFile": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc/coverage/sorter.js",
+  "openFiles": [
+    {
+      "path": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc/coverage/base.css",
+      "relativePath": "coverage/base.css",
+      "dirty": false,
+      "untitled": false
+    },
+    {
+      "path": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc/coverage/block-navigation.js",
+      "relativePath": "coverage/block-navigation.js",
+      "dirty": false,
+      "untitled": false
+    },
+    {
+      "path": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc/coverage/favicon.png",
+      "relativePath": "coverage/favicon.png",
+      "dirty": false,
+      "untitled": false
+    },
+    {
+      "path": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc/coverage/index.html",
+      "relativePath": "coverage/index.html",
+      "dirty": false,
+      "untitled": false
+    },
+    {
+      "path": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc/coverage/prettify.css",
+      "relativePath": "coverage/prettify.css",
+      "dirty": false,
+      "untitled": false
+    },
+    {
+      "path": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc/coverage/sort-arrow-sprite.png",
+      "relativePath": "coverage/sort-arrow-sprite.png",
+      "dirty": false,
+      "untitled": false
+    },
+    {
+      "path": "/Users/fengwenxuan/Desktop/startup-project/business/novel-editor-se/apps/pc/coverage/sorter.js",
+      "relativePath": "coverage/sorter.js",
+      "dirty": false,
+      "untitled": false
+    }
+  ],
+  "dirtyFiles": [],
+  "startedAt": "2026-10-08T14:55:35.790Z",
+  "updatedAt": "2026-10-08T14:56:57.164Z"
+}

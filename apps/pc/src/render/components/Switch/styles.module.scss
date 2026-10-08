@@ -39,6 +39,12 @@
   font-size: 13px;
 }
 
+.lg {
+  --switch-width: 38px;
+  --switch-height: 20px;
+  font-size: 13px;
+}
+
 .control {
   position: relative;
   display: inline-flex;
@@ -96,6 +102,11 @@
     background: #fff;
     transform: translateX(calc(var(--switch-width) - var(--switch-height)));
   }
+}
+
+// 大号开关（总开关）打开时外加一圈柔和的强调色光晕，更醒目
+.lg .input:checked:not(:focus-visible) + .track {
+  box-shadow: 0 0 0 3px var(--ui-interaction-accent-soft);
 }
 
 .input:focus-visible + .track {

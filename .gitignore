@@ -53,3 +53,6 @@ coverage/
 # E2E 构建的临时目录（构建完成后整体替换 dist）
 apps/pc/.dist-staging-*/
 apps/pc/dist.retired-*/
+
+# pnpm dev / start 用的本地化 Electron 副本（macOS 菜单栏显示「小说编辑器」）
+apps/pc/.electron-dev/

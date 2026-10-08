@@ -1,39 +1,17 @@
-// 设置中心「关于」分区：沿用设置面板的分组卡片与行式布局
+// 设置中心「关于」分区：应用图标、版本徽标、设备 ID 与上传状态（行式布局来自 layout/）
 @use '../../../styles/about' as about;
 
-.row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.actionButton {
+  display: inline-flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
 
-  &:last-child {
-    border-bottom: none;
+  &:disabled {
+    cursor: default;
+    opacity: 0.7;
   }
-
-  // 右侧按钮与标题行对齐
-  > button {
-    align-self: start;
-    min-width: 96px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-
-    &:disabled {
-      cursor: default;
-      opacity: 0.7;
-    }
-  }
-}
-
-.app {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
 }
 
 .appIcon {
@@ -44,19 +22,15 @@
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
 }
 
-.appMeta {
-  min-width: 0;
-}
-
 .versionRow {
-  margin-top: 5px;
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: 2px;
 }
 
 .version {
-  color: #9ca3af;
+  color: var(--ui-fg-muted);
   font-family: about.$mono;
   font-size: 12px;
 }
@@ -70,10 +44,9 @@
   display: inline-block;
   max-width: 100%;
   margin-top: 8px;
-  padding: 5px 8px;
-  border: 1px solid var(--ui-border-subtle);
+  padding: 3px 8px;
   border-radius: 4px;
-  background: #1f1f21;
+  background: rgba(255, 255, 255, 0.05);
   color: var(--ui-fg-primary);
   font-family: about.$mono;
   font-size: 12px;
@@ -86,7 +59,7 @@
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  color: #8cc4ec;
+  color: var(--ui-interaction-accent-fg);
 }
 
 .spin {
@@ -111,15 +84,4 @@
 
 .uploadHint {
   color: var(--ui-fg-disabled);
-}
-
-.notice {
-  color: var(--ui-fg-muted);
-  font-size: 12px;
-}
-
-.noticeWarn {
-  color: #f1c27d;
-  border-color: rgba(241, 194, 125, 0.25);
-  background: rgba(241, 194, 125, 0.06);
 }

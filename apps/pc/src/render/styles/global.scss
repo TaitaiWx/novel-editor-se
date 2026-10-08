@@ -27,6 +27,8 @@
   --ui-interaction-focus-ring: rgba(0, 122, 204, 0.5);
   --ui-interaction-accent: #007acc;
   --ui-interaction-accent-soft: rgba(0, 122, 204, 0.14);
+  /* 深色背景上的强调色文字（#007acc 直接做文字对比度不够） */
+  --ui-interaction-accent-fg: #8cc4ec;
   --ui-interaction-danger-hover-bg: rgba(248, 81, 73, 0.12);
 
   /* 卡片式三栏布局：窗口背景比卡片更深，卡片之间留出统一间距 */

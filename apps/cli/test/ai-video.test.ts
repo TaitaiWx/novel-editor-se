@@ -147,7 +147,7 @@ describe('ne ai continue', () => {
     expect(out.stdout).toBe(`${state.reply}\n`);
     const request = state.requests[0];
     expect(request.auth).toBe('Bearer xai-test');
-    expect(request.body).toMatchObject({ model: 'grok-4', stream: true, max_tokens: 180 });
+    expect(request.body).toMatchObject({ model: 'grok-4.7', stream: true, max_tokens: 180 });
     const user = (request.body.messages as Array<{ role: string; content: string }>)[1].content;
     expect(user).toContain('【核心规则】');
     expect(user).toContain('林舟在第十章前不得超过 5 级');

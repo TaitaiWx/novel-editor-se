@@ -1,7 +1,10 @@
 /**
  * Seedance（字节跳动 · 火山引擎方舟 Ark）视频生成 Provider
  *
- * 接口（依据火山方舟「视频生成 API」公开文档，2026-10 核对）：
+ * 接口（依据火山方舟「视频生成 API」公开文档，2026-10 核对；2026-10-08 再次核对地址与模型名：
+ * https://www.volcengine.com/docs/82379/1520757 与模型列表 https://www.volcengine.com/docs/82379/1330310，
+ * 当前为 Seedance 2.x：doubao-seedance-2-5-260628 / 2-0-260128 / 2-0-fast-260128 / 2-0-mini-260615，
+ * 1.0 pro 系列标「即将下线」，1.0 lite 已不在列表）：
  * - 提交：POST {base}/contents/generations/tasks
  *     { model, content: [{ type: 'text', text }, { type: 'image_url', image_url: { url }, role: 'first_frame' }],
  *       ratio?, duration?, resolution?, watermark?, seed? } → { id }
@@ -21,7 +24,8 @@
  *
  * 声音（文档未写明的假设，未用真实 Key 联调）：
  * - 公开文档中 Seedance 1.5 pro 起支持顶层 `generate_audio: boolean`（生成与画面同步的
- *   对白 / 音效，有声成片为带 AAC 音轨的 MP4）；其他模型是否接受该字段文档未写明
+ *   对白 / 音效，有声成片为带 AAC 音轨的 MP4）；2026-10-08 的创建任务文档写明其默认值为 true
+ *   （不传即生成有声视频）；更早的模型是否接受该字段文档未写明
  * - 只有调用方显式传入 `withAudio` 时才发送 `generate_audio`（缺省不发，沿用厂商默认），
  *   且只在 paramStyle 为 'body' 时发送（文本命令格式没有对应写法）
  * - 成片按原始字节下载落盘，不转码，音轨原样保留
@@ -39,12 +43,12 @@ import type {
 
 export const SEEDANCE_VIDEO_DEFAULTS = {
   baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-  model: 'doubao-seedance-1-0-pro-250528',
+  model: 'doubao-seedance-2-0-260128',
   models: [
-    'doubao-seedance-1-0-pro-250528',
-    'doubao-seedance-1-0-lite-t2v-250428',
-    'doubao-seedance-1-0-lite-i2v-250428',
+    'doubao-seedance-2-0-260128',
     'doubao-seedance-2-0-fast-260128',
+    'doubao-seedance-2-5-260628',
+    'doubao-seedance-2-0-mini-260615',
   ],
   timeoutMs: 60_000,
 } as const;

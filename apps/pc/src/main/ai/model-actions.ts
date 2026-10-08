@@ -3,7 +3,7 @@
  *
  * - 添加：能力与协议实现必须一致（协议实现的 kind = 能力）；预设必须属于这个能力与协议；
  *   OpenAI 兼容协议必须填接口地址；显示名称省略时为「服务商 · 模型」
- * - 沿用 Key（reuseKeyFrom）：只允许同一协议 + 同一接口地址、已保存 Key 的模型；Key 在主进程内复制，渲染进程拿不到
+ * - 沿用 Key（reuseKeyFrom）：只允许同一协议 + 同一接口地址（含预设写明的等价旧地址）、已保存 Key 的模型；Key 在主进程内复制，渲染进程拿不到
  * - 任一字段校验失败都不留半成品（模型与 Key 一起撤销）
  */
 import {
@@ -16,6 +16,7 @@ import type { AIModelInput, AIProviderUpdate } from '../../shared/ai';
 import {
   defaultModelLabel,
   findPreset,
+  sameServiceBaseUrl,
   isAICapability,
   presetForVendor,
   presetProviderName,
@@ -101,7 +102,7 @@ function reusableKey(
   if (!isModelId(sourceId)) throw badRequest('要沿用 Key 的模型无效');
   const source = deps.configs.getEntry(sourceId);
   if (!source || source.vendor !== vendor.id) throw badRequest('只能沿用同一服务商的 Key');
-  if (effectiveBaseUrl(source, vendor) !== (baseUrl || vendor.defaultBaseUrl)) {
+  if (!sameServiceBaseUrl(effectiveBaseUrl(source, vendor), baseUrl || vendor.defaultBaseUrl)) {
     throw badRequest('只能沿用同一接口地址的 Key');
   }
   const key = deps.credentials.get(source.id);

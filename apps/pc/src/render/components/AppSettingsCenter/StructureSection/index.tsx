@@ -15,6 +15,8 @@ import {
 import Checkbox from '../../Checkbox';
 import Select from '../../Select';
 import Switch from '../../Switch';
+import Tooltip from '../../Tooltip';
+import { SettingsGroup, SettingsRow, SettingsSection } from '../layout';
 import sharedStyles from '../styles.module.scss';
 import styles from './styles.module.scss';
 import { useStructureSettings } from './useStructureSettings';
@@ -55,22 +57,21 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
   );
 
   return (
-    <div className={sharedStyles.panel}>
-      <h4>
-        <VscListTree />
-        <span>正文结构</span>
-      </h4>
-      <p>
-        不用 # 标题时，编辑器、目录、卷纲与场景视频按这些规则识别 章 / 幕 / 场。规则跟随项目自动保存
-        （软件内部数据，不需要手动处理），命令行 <code>ne structure</code> 读写同一份。
-      </p>
-
+    <SettingsSection
+      icon={<VscListTree />}
+      title="正文结构"
+      description={
+        <>
+          不用 # 标题时，编辑器、目录、卷纲与场景视频按这些规则识别 章 / 幕 /
+          场。规则跟随项目自动保存（软件内部数据，不需要手动处理），命令行 <code>ne structure</code>{' '}
+          读写同一份。
+        </>
+      }
+    >
       {!folderPath && (
-        <div className={`${sharedStyles.comingSoon} ${styles.hint}`}>
-          先打开一个项目文件夹，再设置它的正文结构规则。
-        </div>
+        <div className={sharedStyles.notice}>先打开一个项目文件夹，再设置它的正文结构规则。</div>
       )}
-      {folderPath && api.loading && <div className={styles.muted}>正在读取…</div>}
+      {folderPath && api.loading && <div className={sharedStyles.notice}>正在读取…</div>}
       {folderPath && api.loadError && (
         <div className={styles.error} role="alert">
           读取失败：{api.loadError}
@@ -79,111 +80,119 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
 
       {draft && (
         <>
-          <div className={sharedStyles.formSection} aria-label="预设">
+          <SettingsGroup title="预设" aria-label="预设">
             {STRUCTURE_PRESET_IDS.map((id) => {
               const preset = STRUCTURE_PRESET_INFO[id];
               return (
-                <div key={id} className={sharedStyles.formRow}>
-                  <div className={sharedStyles.formMeta}>
-                    <div className={sharedStyles.formLabel}>{preset.label}</div>
-                    <div className={sharedStyles.formDesc}>{preset.description}</div>
+                <SettingsRow
+                  key={id}
+                  label={preset.label}
+                  description={preset.description}
+                  extra={
                     <div className={styles.examples}>
                       {preset.examples.map((example) => (
                         <code key={example}>{example}</code>
                       ))}
                     </div>
-                  </div>
+                  }
+                >
                   <Switch
-                    className={styles.switch}
                     checked={draft.presets.includes(id)}
                     onChange={(checked) => api.togglePreset(id, checked)}
                     aria-label={`${preset.label} 规则`}
                   />
-                </div>
+                </SettingsRow>
               );
             })}
-          </div>
+          </SettingsGroup>
 
-          <div className={styles.sectionTitle}>自定义规则</div>
-          <div className={styles.ruleHelp}>
-            正则匹配去掉首尾空白后的整行，例如 <code>^=== (.+) ===$</code>{' '}
-            识别为场。自定义规则优先于预设。
-          </div>
-          <div className={styles.rules}>
-            {draft.custom.length === 0 && <div className={styles.muted}>还没有自定义规则</div>}
-            {draft.custom.map((rule, index) => (
-              <div key={`${rule.id}-${index}`} className={styles.ruleRow}>
-                <div className={styles.ruleFields}>
-                  <Select
-                    size="sm"
-                    value={rule.kind}
-                    options={KIND_OPTIONS}
-                    onChange={(kind) => api.updateRule(index, { kind })}
-                    aria-label={`规则 ${index + 1} 类型`}
-                  />
-                  <input
-                    className={`${sharedStyles.input} ${styles.patternInput}`}
-                    value={rule.pattern}
-                    spellCheck={false}
-                    placeholder="^=== (.+) ===$"
-                    aria-label={`规则 ${index + 1} 正则`}
-                    aria-invalid={Boolean(api.ruleErrors[index]) || undefined}
-                    onChange={(event) => api.updateRule(index, { pattern: event.target.value })}
-                  />
-                  <Checkbox
-                    size="sm"
-                    checked={rule.flags === 'i'}
-                    onChange={(checked) =>
-                      api.updateRule(index, { flags: checked ? 'i' : undefined })
-                    }
-                    label="忽略大小写"
-                  />
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    onClick={() => api.removeRule(index)}
-                    aria-label={`删除规则 ${index + 1}`}
-                    title="删除规则"
-                  >
-                    <VscTrash />
-                  </button>
+          <SettingsGroup
+            title="自定义规则"
+            description={
+              <>
+                正则匹配去掉首尾空白后的整行，例如 <code>^=== (.+) ===$</code>{' '}
+                识别为场。自定义规则优先于预设。
+              </>
+            }
+          >
+            <div className={styles.rules}>
+              {draft.custom.length === 0 && <div className={styles.muted}>还没有自定义规则</div>}
+              {draft.custom.map((rule, index) => (
+                <div key={`${rule.id}-${index}`} className={styles.ruleRow}>
+                  <div className={styles.ruleFields}>
+                    <Select
+                      size="sm"
+                      value={rule.kind}
+                      options={KIND_OPTIONS}
+                      onChange={(kind) => api.updateRule(index, { kind })}
+                      aria-label={`规则 ${index + 1} 类型`}
+                    />
+                    <input
+                      className={`${sharedStyles.input} ${styles.patternInput}`}
+                      value={rule.pattern}
+                      spellCheck={false}
+                      placeholder="^=== (.+) ===$"
+                      aria-label={`规则 ${index + 1} 正则`}
+                      aria-invalid={Boolean(api.ruleErrors[index]) || undefined}
+                      onChange={(event) => api.updateRule(index, { pattern: event.target.value })}
+                    />
+                    <Checkbox
+                      size="sm"
+                      checked={rule.flags === 'i'}
+                      onChange={(checked) =>
+                        api.updateRule(index, { flags: checked ? 'i' : undefined })
+                      }
+                      label="忽略大小写"
+                    />
+                    <Tooltip content="删除规则">
+                      <button
+                        type="button"
+                        className={styles.iconButton}
+                        onClick={() => api.removeRule(index)}
+                        aria-label={`删除规则 ${index + 1}`}
+                      >
+                        <VscTrash />
+                      </button>
+                    </Tooltip>
+                  </div>
+                  {api.ruleErrors[index] && rule.pattern && (
+                    <div className={styles.error}>{api.ruleErrors[index]}</div>
+                  )}
                 </div>
-                {api.ruleErrors[index] && rule.pattern && (
-                  <div className={styles.error}>{api.ruleErrors[index]}</div>
-                )}
-              </div>
-            ))}
-            <button type="button" className={styles.addButton} onClick={api.addRule}>
-              <VscAdd />
-              <span>添加规则</span>
-            </button>
-          </div>
-
-          <div className={styles.sectionTitle}>试一试</div>
-          <div className={styles.testBox}>
-            <textarea
-              className={styles.testInput}
-              value={testText}
-              onChange={(event) => setTestText(event.target.value)}
-              aria-label="测试文本"
-              spellCheck={false}
-              rows={5}
-            />
-            <ul className={styles.testResults} aria-label="识别结果">
-              {testResults.map((item, index) => (
-                <li key={`${index}-${item.line}`}>
-                  <span
-                    className={`${styles.kindBadge} ${item.match ? styles[item.match.kind] : ''}`}
-                  >
-                    {item.match ? KIND_LABELS[item.match.kind] : '正文'}
-                  </span>
-                  <span className={styles.testLine}>{item.line.trim()}</span>
-                </li>
               ))}
-            </ul>
-          </div>
+              <button type="button" className={styles.addButton} onClick={api.addRule}>
+                <VscAdd />
+                <span>添加规则</span>
+              </button>
+            </div>
+          </SettingsGroup>
 
-          <div className={styles.saveRow}>
+          <SettingsGroup title="试一试" description="输入几行正文，右侧即时显示识别结果。">
+            <div className={styles.testBox}>
+              <textarea
+                className={styles.testInput}
+                value={testText}
+                onChange={(event) => setTestText(event.target.value)}
+                aria-label="测试文本"
+                spellCheck={false}
+                rows={5}
+              />
+              <ul className={styles.testResults} aria-label="识别结果">
+                {testResults.map((item, index) => (
+                  <li key={`${index}-${item.line}`}>
+                    <span
+                      className={`${styles.kindBadge} ${item.match ? styles[item.match.kind] : ''}`}
+                    >
+                      {item.match ? KIND_LABELS[item.match.kind] : '正文'}
+                    </span>
+                    <span className={styles.testLine}>{item.line.trim()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </SettingsGroup>
+
+          <div className={sharedStyles.actions}>
             <button
               type="button"
               className={sharedStyles.primaryButton}
@@ -210,7 +219,7 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
           </div>
         </>
       )}
-    </div>
+    </SettingsSection>
   );
 };
 

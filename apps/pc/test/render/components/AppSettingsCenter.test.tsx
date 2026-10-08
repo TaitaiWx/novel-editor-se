@@ -74,14 +74,13 @@ function renderCenter(props: Partial<React.ComponentProps<typeof AppSettingsCent
   return { ...utils, onClose, onSettingsChange, onOpenShortcuts, rerenderWith };
 }
 
-/** 设置行中的开关按钮（无可访问名称，按行标签定位） */
-function switchFor(label: string): HTMLButtonElement {
-  const row = screen.getByText(label).closest('[class*="formRow"]') as HTMLElement;
-  return row.querySelector('button') as HTMLButtonElement;
+/** 设置行中的开关（可访问名称与行标签相同） */
+function switchFor(label: string): HTMLInputElement {
+  return screen.getByRole('switch', { name: label }) as HTMLInputElement;
 }
 
 function inputFor(label: string, selector = 'input'): HTMLInputElement {
-  const row = screen.getByText(label).closest('[class*="formRow"]') as HTMLElement;
+  const row = screen.getByText(label).closest('[data-settings-row]') as HTMLElement;
   return row.querySelector(selector) as HTMLInputElement;
 }
 
@@ -110,9 +109,9 @@ describe('AppSettingsCenter', () => {
     expect(mock.invoke).toHaveBeenCalledWith('db-settings-get', SETTINGS_STORAGE_KEY);
 
     const statusSwitch = switchFor('显示状态栏');
-    expect(statusSwitch.className).toContain('enabled');
+    expect(statusSwitch.checked).toBe(true);
     fireEvent.click(statusSwitch);
-    expect(switchFor('显示状态栏').className).not.toContain('enabled');
+    expect(switchFor('显示状态栏').checked).toBe(false);
     await waitFor(() => expect(lastSaved(mock).general.showStatusBar).toBe(false));
 
     for (const label of [
@@ -145,7 +144,7 @@ describe('AppSettingsCenter', () => {
       },
     });
     renderCenter();
-    await waitFor(() => expect(switchFor('显示状态栏').className).not.toContain('enabled'));
+    await waitFor(() => expect(switchFor('显示状态栏').checked).toBe(false));
   });
 
   it('读取失败回退默认设置', async () => {
@@ -154,13 +153,13 @@ describe('AppSettingsCenter', () => {
     await waitFor(() =>
       expect(mock.invoke.mock.calls.some((c) => c[0] === 'db-settings-set')).toBe(true)
     );
-    expect(switchFor('显示状态栏').className).toContain('enabled');
+    expect(switchFor('显示状态栏').checked).toBe(true);
   });
 
   it('无 electron 时使用默认设置', () => {
     uninstallElectronMock();
     renderCenter();
-    expect(switchFor('显示状态栏').className).toContain('enabled');
+    expect(switchFor('显示状态栏').checked).toBe(true);
   });
 
   it('显示系统性能信息（低配）', async () => {
@@ -243,7 +242,7 @@ describe('AppSettingsCenter', () => {
     expect(inputFor('搜索并打开文件').value).toBe(edited);
     fireEvent.blur(inputFor('搜索并打开文件'), { target: { value: edited } });
 
-    const row = screen.getByText('搜索并打开文件').closest('[class*="formRow"]') as HTMLElement;
+    const row = screen.getByText('搜索并打开文件').closest('[data-settings-row]') as HTMLElement;
     fireEvent.click(row.querySelector('button') as HTMLButtonElement);
     expect(inputFor('搜索并打开文件').value).toBe('Mod+P');
 
@@ -350,11 +349,11 @@ describe('AppSettingsCenter', () => {
     });
     renderCenter();
     fireEvent.click(switchFor('显示状态栏'));
-    expect(switchFor('显示状态栏').className).not.toContain('enabled');
+    expect(switchFor('显示状态栏').checked).toBe(false);
     await act(async () => {
       resolveGet(null);
     });
-    expect(switchFor('显示状态栏').className).not.toContain('enabled');
+    expect(switchFor('显示状态栏').checked).toBe(false);
   });
 });
 

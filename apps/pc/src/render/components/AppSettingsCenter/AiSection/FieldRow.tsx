@@ -1,5 +1,5 @@
 import React from 'react';
-import sharedStyles from '../styles.module.scss';
+import { SettingsRow } from '../layout';
 import styles from './styles.module.scss';
 
 interface FieldRowProps {
@@ -8,15 +8,11 @@ interface FieldRowProps {
   children: React.ReactNode;
 }
 
-/** 面板里的一行：左侧标签与说明，右侧控件（与设置中心其他分区同一行式布局） */
+/** 模型面板里的一行：与设置中心其他分区同一行式布局（layout/SettingsRow），左右加内边距 */
 const FieldRow: React.FC<FieldRowProps> = ({ label, description, children }) => (
-  <div className={`${sharedStyles.formRow} ${styles.fieldRow}`}>
-    <div className={sharedStyles.formMeta}>
-      <div className={sharedStyles.formLabel}>{label}</div>
-      {description && <div className={sharedStyles.formDesc}>{description}</div>}
-    </div>
-    <div className={styles.fieldControl}>{children}</div>
-  </div>
+  <SettingsRow label={label} description={description} control="field" className={styles.fieldRow}>
+    {children}
+  </SettingsRow>
 );
 
 export default FieldRow;

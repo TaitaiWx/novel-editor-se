@@ -3,6 +3,12 @@
  *
  * 接口依据公开文档整理（2026-10），**均未用真实 Key 联调**，地址与字段集中在常量 / build*Body 里便于修正：
  *
+ * 地址与模型名 2026-10-08 再次核对：
+ * - OpenAI：https://developers.openai.com/api/docs/guides/text-to-speech（推荐 gpt-4o-mini-tts，
+ *   tts-1 / tts-1-hd 在模型列表中标为弃用；推荐音色 marin / cedar）
+ * - MiniMax：https://platform.minimax.cn/docs/api-reference/speech-t2a-http（国内站 https://api.minimax.cn，
+ *   模型 speech-2.8-hd / speech-2.8-turbo / speech-2.6-* / speech-02-* / speech-01-*）
+ *
  * - OpenAI 兼容：POST {base}/audio/speech
  *     { model, voice, input, response_format: 'mp3' | 'wav', instructions? } → 音频字节（Content-Type: audio/*）
  *     错误体 { error: { message } }（与 /chat/completions 相同，由 errors.ts 规范化）
@@ -52,15 +58,15 @@ export const SPEECH_TEXT_MAX = 1000;
 export const OPENAI_SPEECH_DEFAULTS = {
   baseUrl: 'https://api.openai.com/v1',
   model: 'gpt-4o-mini-tts',
-  models: ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'],
+  models: ['gpt-4o-mini-tts'],
   timeoutMs: 120_000,
   voices: { female: 'nova', male: 'onyx', neutral: 'alloy' },
 } as const;
 
 export const MINIMAX_SPEECH_DEFAULTS = {
   baseUrl: 'https://api.minimax.cn',
-  model: 'speech-02-hd',
-  models: ['speech-02-hd', 'speech-02-turbo'],
+  model: 'speech-2.8-hd',
+  models: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd', 'speech-02-hd'],
   timeoutMs: 120_000,
   voices: { female: 'female-shaonv', male: 'male-qn-qingse', neutral: 'presenter_male' },
   sampleRate: 32000,

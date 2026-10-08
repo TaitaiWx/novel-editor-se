@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { DEFAULT_VOICE_LANGUAGE, VOICE_LANGUAGES } from '@novel-editor/video';
 import type { AIIpcResult, VideoSettingsInfo } from '../../../types/ai-api';
 import Select from '../../Select';
-import FieldRow from './FieldRow';
+import { SettingsRow } from '../layout';
 
 /** 配音默认语言（新的场景视频使用；保存在 ai-providers.json 的视频设置里） */
 const VoiceLanguageSetting: React.FC = () => {
@@ -16,7 +16,11 @@ const VoiceLanguageSetting: React.FC = () => {
       .catch(() => undefined);
   }, []);
   return (
-    <FieldRow label="配音默认语言" description="新的场景视频使用；每一场可在「场景 → 声音」里改。">
+    <SettingsRow
+      label="配音默认语言"
+      description="新的场景视频使用；每一场可在「场景 → 声音」里改。"
+      control="field"
+    >
       <Select
         block
         size="lg"
@@ -34,7 +38,7 @@ const VoiceLanguageSetting: React.FC = () => {
             .catch(() => undefined);
         }}
       />
-    </FieldRow>
+    </SettingsRow>
   );
 };
 

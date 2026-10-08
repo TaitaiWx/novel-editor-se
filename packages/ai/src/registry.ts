@@ -72,7 +72,7 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     defaultModel: GROK_DEFAULTS.model,
     models: GROK_DEFAULTS.models,
     envKey: providerEnvKey('grok'),
-    docsUrl: 'https://docs.x.ai/docs/api-reference',
+    docsUrl: 'https://docs.x.ai/docs/models',
   },
   {
     id: 'minimax-video',
@@ -112,12 +112,12 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     id: 'minimax-image',
     kind: 'image',
     label: 'MiniMax 图片',
-    description: 'image-01 文生图，可用一张人物图作参考',
+    description: 'image-01 / image-01-live 文生图，可用一张人物图作参考',
     defaultBaseUrl: MINIMAX_IMAGE_DEFAULTS.baseUrl,
     defaultModel: MINIMAX_IMAGE_DEFAULTS.model,
     models: MINIMAX_IMAGE_DEFAULTS.models,
     envKey: providerEnvKey('minimax-image'),
-    docsUrl: 'https://platform.minimax.io/docs/guides/image-generation',
+    docsUrl: 'https://platform.minimax.cn/docs/api-reference/image-generation-t2i',
   },
   {
     id: 'grok-image',
@@ -150,7 +150,7 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     defaultModel: MINIMAX_SPEECH_DEFAULTS.model,
     models: MINIMAX_SPEECH_DEFAULTS.models,
     envKey: providerEnvKey('minimax-speech'),
-    docsUrl: 'https://platform.minimaxi.com/document/T2A%20V2',
+    docsUrl: 'https://platform.minimax.cn/docs/api-reference/speech-t2a-http',
   },
 ];
 

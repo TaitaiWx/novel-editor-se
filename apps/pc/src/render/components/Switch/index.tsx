@@ -7,7 +7,7 @@
 import React, { useId, useState } from 'react';
 import styles from './styles.module.scss';
 
-export type SwitchSize = 'sm' | 'md';
+export type SwitchSize = 'sm' | 'md' | 'lg';
 
 export interface SwitchProps {
   /** 受控开关状态 */

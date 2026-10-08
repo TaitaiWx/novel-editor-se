@@ -308,7 +308,7 @@ describe('AI 模型配置', () => {
     const SPEECH_SECTION = '[data-testid="ai-section-speech"]';
     const VIDEO_ROW = '[data-testid="ai-model-video-1"]';
     const SPEECH_ROW = '[data-testid="ai-model-speech-1"]';
-    const VIDEO_LABEL = 'Seedance · doubao-seedance-1-0-pro-250528';
+    const VIDEO_LABEL = 'Seedance · doubao-seedance-2-0-260128';
     await openAiSettings();
 
     await page.click({ text: '添加模型', within: VIDEO_SECTION, exact: true });

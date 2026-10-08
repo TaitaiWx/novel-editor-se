@@ -160,7 +160,7 @@ describe('模型配置', () => {
       kind: 'text',
       capability: 'text',
       vendor: 'grok',
-      label: 'xAI Grok · grok-4',
+      label: 'xAI Grok · grok-4.7',
       providerLabel: 'xAI Grok',
       configured: true,
       enabled: true,

@@ -2,7 +2,22 @@
  * 图片生成 Provider：火山方舟 Seedream、MiniMax image-01、xAI Grok 图片
  *
  * 用途：人物形象 / 三视图 / 服装 / 背景图、设定图；参考图用于保持人物一致（场景视频的「不崩」基础）。
- * 接口依据公开文档整理（2026-10），**均未用真实 Key 联调**，地址与字段集中在 *_IMAGE_ENDPOINTS / 构造函数里便于修正：
+ * 接口依据公开文档整理（2026-10-08 再次核对地址与模型名），**均未用真实 Key 联调**，
+ * 地址与字段集中在 *_IMAGE_ENDPOINTS / 构造函数里便于修正：
+ *
+ * 文档来源（2026-10-08）：
+ * - Seedream：https://www.volcengine.com/docs/82379/1330310（模型列表：5.0 系列为推荐，4.0 / 4.5 即将下线；
+ *   5.0 中只有 doubao-seedream-5-0-260128 支持组图）、https://www.volcengine.com/docs/82379/1541523
+ * - MiniMax：https://platform.minimax.cn/docs/api-reference/image-generation-t2i（模型 image-01 / image-01-live；
+ *   国内站 https://api.minimax.cn，国际站 https://api.minimax.io）
+ * - xAI：https://docs.x.ai/docs/guides/image-generations（grok-imagine-image 系列；grok-2-image 已不在列表）
+ * - OpenAI（同一实现，预设 openai-image）：https://developers.openai.com/api/docs/guides/image-generation
+ *
+ * 文档未写明的假设：
+ * - Seedream 5.0 沿用 4.x 的请求字段（image 数组参考图、sequential_image_generation）
+ * - xAI 已支持 /images/edits 参考图（≤5 张），这里仍只用 /images/generations 文生图（supportsReferences = false）
+ * - OpenAI GPT 图片模型默认就返回 base64；请求里仍带 response_format: 'b64_json'，假设被接受
+ *
  *
  * - Seedream（火山方舟）：POST {base}/images/generations
  *     { model, prompt, size, response_format: 'b64_json', watermark: false,
@@ -33,8 +48,12 @@ const PROMPT_MAX = 1500;
 
 export const SEEDREAM_IMAGE_DEFAULTS = {
   baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-  model: 'doubao-seedream-4-0-250828',
-  models: ['doubao-seedream-4-0-250828', 'doubao-seedream-4-5-251128'],
+  model: 'doubao-seedream-5-0-260128',
+  models: [
+    'doubao-seedream-5-0-260128',
+    'doubao-seedream-5-0-pro-260628',
+    'doubao-seedream-5-0-flash-260915',
+  ],
   timeoutMs: 120_000,
   maxReferences: 10,
 } as const;
@@ -42,14 +61,14 @@ export const SEEDREAM_IMAGE_DEFAULTS = {
 export const MINIMAX_IMAGE_DEFAULTS = {
   baseUrl: 'https://api.minimax.cn',
   model: 'image-01',
-  models: ['image-01'],
+  models: ['image-01', 'image-01-live'],
   timeoutMs: 120_000,
 } as const;
 
 export const GROK_IMAGE_DEFAULTS = {
   baseUrl: 'https://api.x.ai/v1',
-  model: 'grok-2-image',
-  models: ['grok-2-image'],
+  model: 'grok-imagine-image',
+  models: ['grok-imagine-image', 'grok-imagine-image-2.0', 'grok-imagine-image-quality'],
   timeoutMs: 120_000,
 } as const;
 

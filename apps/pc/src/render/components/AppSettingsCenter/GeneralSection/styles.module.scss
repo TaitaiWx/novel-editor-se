@@ -1,36 +1,24 @@
-.statusTitle {
-  color: var(--ui-fg-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.statusSubtext {
-  margin-top: 4px;
-  color: #9ca3af;
-  font-size: 12px;
-}
+// 设置中心「通用」：运行性能的徽标与规格值
 
 .statusBadge {
-  flex-shrink: 0;
-  min-width: 72px;
-  padding: 4px 8px;
-  text-align: center;
+  padding: 1px 8px;
+  border-radius: 999px;
   font-size: 11px;
-  font-weight: 700;
-  border: 1px solid var(--ui-border-strong);
+  line-height: 18px;
 }
 
-.signed-in {
-  color: #8ce0b9;
-  background: rgba(78, 201, 176, 0.1);
+.standard {
+  color: #9fd8ba;
+  background: rgba(159, 216, 186, 0.12);
 }
 
-.signed-out {
-  color: #d4d4d4;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.expired {
+.lowSpec {
   color: #f1c27d;
-  background: rgba(241, 194, 125, 0.1);
+  background: rgba(241, 194, 125, 0.12);
+}
+
+.specValue {
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  text-align: right;
 }
