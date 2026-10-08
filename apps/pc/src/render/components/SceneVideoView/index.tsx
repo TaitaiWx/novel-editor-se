@@ -223,7 +223,8 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
           state,
           shots,
           providerId: provider.id,
-          model: state.model ?? provider.model,
+          // 模型跟随所选的视频模型条目（旧版分镜里单独保存的 model 不再使用）
+          model: provider.model,
           ...(provider.supportsAudio ? { withAudio: state.withAudio } : {}),
           references,
         });

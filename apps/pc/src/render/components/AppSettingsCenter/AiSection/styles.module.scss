@@ -1,4 +1,4 @@
-// 设置中心「AI」：总开关 + 能力分区 + 可折叠的服务面板（只有面板一层边框，面板内是行式表单）
+// 设置中心「AI」：总开关 + 每个能力一张模型列表（每行一层边框，展开后是行式表单）
 
 .aiPanel {
   max-width: 680px;
@@ -66,7 +66,7 @@
   margin-top: 10px;
 }
 
-// ─── 服务面板 ─────────────────────────────────────────────────────────
+// ─── 模型行 ───────────────────────────────────────────────────────────
 
 .panel {
   border: 1px solid var(--ui-border-subtle);
@@ -78,55 +78,103 @@
   border-color: var(--ui-border-strong);
 }
 
-.panelHeader {
+.rowHeader {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 12px 0 0;
+  padding: 10px 12px;
 }
 
-.panelToggle {
+.rowMain {
   display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rowTitleLine {
+  display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 11px 0 11px 12px;
-  border: none;
-  background: none;
-  color: var(--ui-fg-primary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-
-  &:focus-visible {
-    outline: 2px solid var(--ui-interaction-focus-ring);
-    outline-offset: -2px;
-    border-radius: 8px;
-  }
 }
 
-.chevron {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   color: var(--ui-fg-muted);
-  transition: transform 0.15s ease;
+  font-size: 12px;
 }
 
-.chevronOpen {
-  transform: rotate(90deg);
+.rowModel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panelName {
   overflow: hidden;
+  color: var(--ui-fg-primary);
   font-size: 13px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.kindTag,
+.rowNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px 10px;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--ui-fg-muted);
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    color: var(--ui-fg-primary);
+    background: var(--ui-interaction-hover-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ui-interaction-focus-ring);
+    outline-offset: -2px;
+  }
+}
+
+.iconButtonActive {
+  color: var(--ui-interaction-accent);
+}
+
+.aiPanel .emptyState {
+  margin: 10px 0 0;
+  padding: 12px;
+  border: 1px dashed var(--ui-border-subtle);
+  border-radius: 8px;
+  color: var(--ui-fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .statusTag,
 .defaultTag {
   flex-shrink: 0;
@@ -136,11 +184,6 @@
   font-weight: 400;
   line-height: 18px;
   white-space: nowrap;
-}
-
-.kindTag {
-  color: var(--ui-fg-muted);
-  background: var(--ui-interaction-hover-bg);
 }
 
 .status-enabled {
@@ -181,21 +224,19 @@
   font-size: 12px;
   cursor: pointer;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--ui-interaction-hover-bg);
+  }
+
+  &:disabled {
+    color: var(--ui-fg-disabled);
+    cursor: default;
   }
 }
 
 .panelBody {
   padding: 0 4px 6px;
   border-top: 1px solid var(--ui-border-subtle);
-}
-
-.aiPanel .panelDesc {
-  margin: 10px 12px 2px;
-  color: var(--ui-fg-muted);
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 // ─── 面板内的行式表单 ─────────────────────────────────────────────────
@@ -211,12 +252,6 @@
 
 .fieldControl {
   min-width: 0;
-}
-
-.dualInputGroup {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
 }
 
 .aiPanel .formNote {
@@ -253,7 +288,7 @@
   vertical-align: middle;
 }
 
-// ─── 生成参数（每个文本服务同一组） ──────────────────────────────────
+// ─── 生成参数（每个文本模型同一组） ──────────────────────────────────
 
 .paramGroup {
   display: flex;
@@ -292,7 +327,7 @@
   }
 }
 
-// ─── 添加服务（文本 / 图片 / 视频 / 语音） ──────────────────────────────────────────────────────
+// ─── 添加模型 ─────────────────────────────────────────────────────────
 
 .addButton {
   display: inline-flex;

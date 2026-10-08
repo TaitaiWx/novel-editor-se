@@ -130,22 +130,22 @@ const Toolbar: React.FC<ToolbarProps> = ({
           />
         </Tooltip>
         {!servicesLoaded ? null : videoProviders.length === 0 ? (
-          <Tooltip content="支持 MiniMax（海螺）与 Seedance；没有配置也可以先拆分镜">
+          <Tooltip content="在设置中心添加视频模型（MiniMax 海螺 / Seedance）；没有配置也可以先拆分镜">
             <button
               type="button"
               className={styles.button}
               data-testid="scene-video-no-provider"
               onClick={onOpenSettings}
             >
-              配置视频服务
+              添加视频模型
             </button>
           </Tooltip>
         ) : (
           <>
-            <Tooltip content="视频服务">
+            <Tooltip content="视频模型（在设置中心「AI → 视频」里添加与设置默认）">
               <Select
                 className={styles.select}
-                aria-label="视频服务"
+                aria-label="视频模型"
                 value={provider?.id ?? ''}
                 options={videoProviders.map((item) => ({ value: item.id, label: item.label }))}
                 onChange={(providerId) => {
@@ -153,21 +153,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 }}
               />
             </Tooltip>
-            {provider && (
-              <Tooltip content="视频模型">
-                <Select
-                  className={styles.select}
-                  aria-label="视频模型"
-                  value={state.model ?? provider.model}
-                  options={Array.from(new Set([provider.model, ...provider.models])).map(
-                    (model) => ({ value: model, label: model })
-                  )}
-                  onChange={(model) => {
-                    onChange((prev) => ({ ...prev, providerId: provider.id, model }));
-                  }}
-                />
-              </Tooltip>
-            )}
             {provider && (
               <Tooltip
                 content={

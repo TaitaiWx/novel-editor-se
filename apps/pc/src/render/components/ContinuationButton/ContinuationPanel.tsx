@@ -5,6 +5,7 @@ import type { ContinuationState } from '../TextEditor/assist';
 import { describeAIError } from '../TextEditor/assist/ai-error';
 import { currentContinuationText } from '../TextEditor/assist/continuation-state';
 import type { ResolvedProvider } from '../../utils/continuationService';
+import { usableModels } from '../../utils/textProviders';
 import Checkbox from '../Checkbox';
 import Select from '../Select';
 import { ContextDetails } from './ContextDetails';
@@ -58,7 +59,7 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
   const [form, setForm] = useState<ContinuationPanelForm>(DEFAULT_PANEL_FORM);
   const update = (patch: Partial<ContinuationPanelForm>) =>
     setForm((prev) => ({ ...prev, ...patch }));
-  const usable = (providers ?? []).filter((item) => item.configured && item.enabled);
+  const usable = usableModels(providers ?? [], 'text');
   const suggestion = state.mode === 'suggestion' ? state : null;
   const busy = suggestion?.phase === 'loading' || suggestion?.phase === 'streaming';
   const text = suggestion ? currentContinuationText(suggestion) : '';
@@ -137,10 +138,10 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
         <Select
           className={styles.select}
           size="sm"
-          aria-label="AI 服务"
+          aria-label="AI 模型"
           value={form.providerId}
           options={[
-            { value: '', label: `自动（${resolvedProvider?.label ?? '读取中…'}）` },
+            { value: '', label: `默认（${resolvedProvider?.label ?? '读取中…'}）` },
             ...usable.map((item) => ({ value: item.id, label: item.label })),
           ]}
           onChange={(providerId) => update({ providerId })}

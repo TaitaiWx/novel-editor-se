@@ -75,14 +75,6 @@ describe('invokeConfiguredAI（与旧版行为一致）', () => {
       ok: false,
       error: '未配置 AI Key，请先在设置中心填写 API Key',
     });
-    credentials.set('openai-compatible', 'sk-1');
-    settingsJson = JSON.stringify({
-      ai: { enabled: true, enabledExplicitlySet: true, baseUrl: '', model: 'm' },
-    });
-    expect(await service.invokeConfiguredAI({ prompt: 'x' })).toEqual({
-      ok: false,
-      error: 'AI Base URL 或模型未配置完整',
-    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -110,14 +102,8 @@ describe('invokeConfiguredAI（与旧版行为一致）', () => {
       max_tokens: 7,
       messages: [{ role: 'user', content: 'p' }],
     });
-    settingsJson = JSON.stringify({
-      ai: {
-        enabled: true,
-        enabledExplicitlySet: true,
-        baseUrl: 'https://llm.test/v1',
-        model: 'm1',
-      },
-    });
+    // 设置 JSON 只导入一次；之后参数在模型条目里，清空即恢复协议默认
+    service.updateModel('openai-compatible', { temperature: null, maxTokens: null });
     await service.invokeConfiguredAI({ prompt: 'p' });
     expect(lastBody()).toMatchObject({ temperature: 1.3, max_tokens: 8192 });
   });
@@ -161,41 +147,44 @@ describe('invokeConfiguredAI（与旧版行为一致）', () => {
   });
 });
 
-describe('Provider 配置', () => {
-  it('列表不含密钥，只有 configured', () => {
-    credentials.set('grok', 'xai-secret');
+describe('模型配置', () => {
+  it('列表只有配置过的模型，不含密钥，只有 configured', () => {
+    expect(service.listProviders()).toEqual([]);
+    credentials.set('openai-compatible', 'sk-default');
+    service.updateProvider('grok', { apiKey: 'xai-secret' });
     const list = service.listProviders();
-    expect(list.map((item) => item.id)).toEqual([
-      'openai-compatible',
-      'grok',
-      'minimax-video',
-      'seedance-video',
-      'seedream-image',
-      'minimax-image',
-      'grok-image',
-      'openai-speech',
-      'minimax-speech',
-    ]);
+    expect(list.map((item) => item.id)).toEqual(['openai-compatible', 'grok']);
     expect(JSON.stringify(list)).not.toContain('xai-secret');
-    // 只有公开文档支持生成声音的视频服务带 supportsAudio
-    expect(list.find((item) => item.id === 'seedance-video')?.supportsAudio).toBe(true);
-    expect(list.find((item) => item.id === 'minimax-video')?.supportsAudio).toBeUndefined();
+    expect(JSON.stringify(list)).not.toContain('sk-default');
     expect(list.find((item) => item.id === 'grok')).toMatchObject({
+      kind: 'text',
+      capability: 'text',
+      vendor: 'grok',
+      label: 'xAI Grok · grok-4',
+      providerLabel: 'xAI Grok',
       configured: true,
       enabled: true,
       baseUrl: 'https://api.x.ai/v1',
       secureStorage: true,
+      isDefault: false,
     });
+    // 旧版内置 AI 的地址 / 模型从设置 JSON 导入，仍是默认文本模型
     expect(list.find((item) => item.id === 'openai-compatible')).toMatchObject({
-      configured: false,
+      configured: true,
       enabled: true,
       baseUrl: 'https://llm.test/v1',
       model: 'm1',
+      isDefault: true,
+      isDefaultText: true,
+      temperature: 0.4,
     });
-    expect(list.find((item) => item.id === 'minimax-video')).toMatchObject({
-      configured: false,
-      currency: 'CNY',
-    });
+    service.updateProvider('seedance-video', { apiKey: 'ark' });
+    service.updateProvider('minimax-video', { apiKey: 'mm' });
+    const video = service.listProviders().filter((item) => item.kind === 'video');
+    // 只有公开文档支持生成声音的视频协议带 supportsAudio
+    expect(video.find((item) => item.id === 'seedance-video')?.supportsAudio).toBe(true);
+    expect(video.find((item) => item.id === 'minimax-video')?.supportsAudio).toBeUndefined();
+    expect(video.find((item) => item.id === 'minimax-video')?.currency).toBe('CNY');
   });
 
   it('写入 Key / 地址 / 模型 / 单价；清除 Key；校验输入', () => {
@@ -220,18 +209,15 @@ describe('Provider 配置', () => {
         baseUrl: '',
       })
     ).toMatchObject({ configured: false, baseUrl: 'https://ark.cn-beijing.volces.com/api/v3' });
+    service.updateProvider('grok', { apiKey: 'k' });
     expect(() => service.updateProvider('grok', { baseUrl: 'file:///etc/passwd' })).toThrow(
       '只支持 http'
     );
     expect(() => service.updateProvider('grok', { baseUrl: 'https://u:p@x' })).toThrow('账号密码');
     expect(() => service.updateProvider('grok', { model: 'a\nb' })).toThrow('模型名称无效');
     expect(() => service.updateProvider('grok', { pricePerSecond: -1 })).toThrow('非负数');
-    expect(() => service.updateProvider('nope', {})).toThrow('未知的 AI 服务');
+    expect(() => service.updateProvider('nope', {})).toThrow('找不到这个模型');
     expect(() => service.updateProvider('grok', null as never)).toThrow('无效的配置');
-    // 默认服务的地址模型由设置中心保存，这里只写 Key
-    service.updateProvider('openai-compatible', { apiKey: 'sk-9', baseUrl: 'https://ignored' });
-    expect(credentials.get('openai-compatible')).toBe('sk-9');
-    expect(configs.get('openai-compatible')).toEqual({});
     expect(() => normalizeBaseUrl('not a url')).toThrow('格式不正确');
     expect(normalizeBaseUrl(42)).toBeUndefined();
   });
@@ -239,19 +225,22 @@ describe('Provider 配置', () => {
   it('getTextProvider / getVideoProvider 的配置检查', () => {
     expect(() => service.getTextProvider('grok')).toThrow('未配置 xAI Grok 的 API Key');
     credentials.set('grok', 'k');
+    // 只有 Key 没有条目（兜底）：以旧 id 补建
     expect(service.getTextProvider('grok').id).toBe('grok');
     configs.update('grok', { enabled: false });
     expect(() => service.getTextProvider('grok')).toThrow('未启用');
+    service.updateProvider('minimax-video', { apiKey: 'k' });
     expect(() => service.getTextProvider('minimax-video')).toThrow('不是文本服务');
     expect(() => service.getVideoProvider('grok')).toThrow('不是视频服务');
-    expect(() => service.getVideoProvider('minimax-video')).toThrow('未配置');
-    credentials.set('minimax-video', 'k');
     expect(service.getVideoProvider('minimax-video').kind).toBe('video');
     configs.update('minimax-video', { enabled: false });
     expect(() => service.getVideoProvider('minimax-video')).toThrow('未启用');
+    expect(() => service.getVideoProvider('seedance-video')).toThrow('未配置');
   });
 
   it('测试连接使用已保存的 Key', async () => {
+    await expect(service.testProvider('grok')).rejects.toThrow('未配置');
+    service.updateProvider('grok', { baseUrl: 'https://api.x.ai/v1' });
     await expect(service.testProvider('grok')).rejects.toThrow('请先填写并保存 API Key');
     credentials.set('grok', 'xai');
     fetchMock.mockImplementation(async () => json({ choices: [] }));
@@ -267,7 +256,7 @@ describe('Provider 配置', () => {
     await expect(service.testProvider('minimax-video')).rejects.toMatchObject({ kind: 'auth' });
   });
 
-  it('complete / stream 指定 Provider', async () => {
+  it('complete / stream 指定模型', async () => {
     credentials.set('grok', 'xai');
     fetchMock.mockImplementation(async () =>
       json({ choices: [{ message: { content: 'grok 回答' } }] })

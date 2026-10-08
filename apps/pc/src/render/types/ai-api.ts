@@ -1,15 +1,16 @@
 /**
  * AI 服务 / 流式补全 / 场景视频 IPC 类型（与 main/handlers/ai-providers.ts、video.ts 保持一致）
  *
- * Key 只写不读：ai-providers-* 只返回 configured，绝不返回密钥。
+ * Key 只写不读：ai-providers-* / ai-models-* 只返回 configured，绝不返回密钥。
  * 流式片段通过 on('ai-stream-event', (event, payload: AIStreamEvent) => …) 接收，
  * 视频任务变化通过 on('video-task-updated', (event, task: VideoTask) => …) 接收。
  */
 import type {
   AICompletePayload,
   AICompleteResult,
-  AICustomProviderInput,
+  AICapability,
   AIIpcResult,
+  AIModelInput,
   AIProviderInfo,
   AIProviderUpdate,
   SceneAudioImportPayload,
@@ -34,9 +35,9 @@ export type {
   SpeechSynthesizeResult,
   AICompletePayload,
   AICompleteResult,
-  AICustomProviderInput,
-  AICustomTextInput,
+  AICapability,
   AIIpcResult,
+  AIModelInput,
   AIProviderInfo,
   AIProviderUpdate,
   AIStreamEvent,
@@ -65,20 +66,21 @@ export interface AIInvokeOverloads {
     channel: 'ai-providers-test',
     providerId: string
   ): Promise<AIIpcResult<{ latencyMs: number }>>;
-  /** 添加自己的服务（文本 custom-text-<n>；视频 / 图片 / 语音 custom-<kind>-<n>） */
+  /** 添加模型（Key 只写；reuseKeyFrom 沿用同一服务商 + 地址的已保存 Key） */
+  invoke(channel: 'ai-models-add', input: AIModelInput): Promise<AIIpcResult<AIProviderInfo>>;
   invoke(
-    channel: 'ai-providers-add-custom',
-    input: AICustomProviderInput
+    channel: 'ai-models-update',
+    id: string,
+    update: AIProviderUpdate
   ): Promise<AIIpcResult<AIProviderInfo>>;
+  invoke(channel: 'ai-models-remove', id: string): Promise<AIIpcResult<{ removed: boolean }>>;
+  /** 设置某个能力的默认模型（null 清除），返回新的模型列表 */
   invoke(
-    channel: 'ai-providers-remove-custom',
-    providerId: string
-  ): Promise<AIIpcResult<{ removed: boolean }>>;
-  /** 选定默认写作 AI（null 恢复内置默认），返回新的服务列表 */
-  invoke(
-    channel: 'ai-providers-set-default',
-    providerId: string | null
+    channel: 'ai-models-set-default',
+    capability: AICapability,
+    id: string | null
   ): Promise<AIIpcResult<AIProviderInfo[]>>;
+  invoke(channel: 'ai-models-test', id: string): Promise<AIIpcResult<{ latencyMs: number }>>;
   invoke(
     channel: 'ai-complete',
     payload: AICompletePayload

@@ -3,13 +3,12 @@ import { isDatabaseReady, statsOps, settingsOps, aiCacheOps } from '@novel-edito
 import { getAIService, getCredentialStore } from '../../ai/runtime';
 import type { DefaultTextSummary } from '../../ai/service';
 import {
-  DEFAULT_TEXT_PROVIDER_ID,
   interceptSettingsWrite,
   sanitizeSettingsForRenderer,
   SETTINGS_CENTER_KEY,
 } from '../../ai/settings-secrets';
 
-/** 默认写作 AI 摘要（不是内置默认时注入设置）；配置文件异常时按内置默认处理，不影响读取设置 */
+/** 默认文本模型摘要（注入设置）；配置文件异常时视为没有，不影响读取设置 */
 function readDefaultTextSummary(): DefaultTextSummary | null {
   try {
     return getAIService().describeDefaultText();
@@ -39,11 +38,8 @@ export function registerSettingsAndCacheHandlers(): void {
     const value = settingsOps.get(key);
     // AI Key 只写不读：去掉明文，只告诉渲染进程是否已配置
     if (key === SETTINGS_CENTER_KEY) {
-      return sanitizeSettingsForRenderer(
-        value,
-        getCredentialStore().has(DEFAULT_TEXT_PROVIDER_ID),
-        readDefaultTextSummary()
-      );
+      const summary = readDefaultTextSummary();
+      return sanitizeSettingsForRenderer(value, summary?.hasKey ?? false, summary);
     }
     return value;
   });

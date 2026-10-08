@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import React, { useState } from 'react';
+import { modelInfo } from '../../helpers/aiModel';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createSceneAudio, type SceneAudio, type Shot } from '@novel-editor/video';
@@ -144,7 +145,7 @@ describe('镜头检查器 · 对白', () => {
 });
 
 function speechProvider(id: string, label: string): AIProviderInfo {
-  return {
+  return modelInfo({
     id,
     kind: 'speech',
     label,
@@ -157,7 +158,7 @@ function speechProvider(id: string, label: string): AIProviderInfo {
     enabled: true,
     baseUrl: '',
     model: 'm',
-  };
+  });
 }
 
 function SceneHarness(props: {
@@ -189,7 +190,7 @@ describe('场景检查器 · 声音', () => {
     const onAudio = vi.fn<(audio: SceneAudio) => void>();
     const onImport = vi.fn(async () => '资料/音乐/雨夜.wav');
     render(<SceneHarness onAudio={onAudio} onImport={onImport} />);
-    expect(screen.getByText(/还没有配置配音服务/)).toBeTruthy();
+    expect(screen.getByText(/还没有配音模型/)).toBeTruthy();
     pick('配音语言', /英语（美国）/);
     expect(onAudio.mock.calls.at(-1)?.[0].language).toBe('en-US');
 
@@ -219,7 +220,7 @@ describe('场景检查器 · 声音', () => {
     expect(onAudio.mock.calls.at(-1)?.[0].bgm?.source).toBe('none');
   });
 
-  it('取消选择文件时不改配乐；多个配音服务时可以选择', async () => {
+  it('取消选择文件时不改配乐；多个配音模型时可以选择', async () => {
     const onAudio = vi.fn<(audio: SceneAudio) => void>();
     render(
       <SceneHarness
@@ -233,7 +234,7 @@ describe('场景检查器 · 声音', () => {
     );
     pick('背景音乐', '本地音乐文件');
     await waitFor(() => expect(onAudio).not.toHaveBeenCalled());
-    pick('配音服务', 'MiniMax 语音合成');
+    pick('配音模型', 'MiniMax 语音合成');
     expect(onAudio.mock.calls.at(-1)?.[0].speechProviderId).toBe('minimax-speech');
   });
 });

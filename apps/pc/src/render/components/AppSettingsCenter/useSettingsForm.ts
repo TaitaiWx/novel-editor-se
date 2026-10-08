@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../Toast';
 import {
-  type AIPresetKey,
   type SettingsDraft,
   type ShortcutSettings,
   DEFAULT_AI_SETTINGS,
@@ -14,7 +13,6 @@ import {
 import { isImeComposing } from '../../utils/ime';
 import type { AIIpcResult, AIProviderInfo } from '../../types/ai-api';
 import {
-  AI_PRESET_OPTIONS,
   VALID_TABS,
   type ClearDataScope,
   type SettingsTab,
@@ -57,22 +55,20 @@ interface UseSettingsFormOptions {
   onSettingsChange?: (settings: SettingsDraft) => void;
 }
 
-/** 删除全部自定义文本 AI（Key 一并删除）并恢复默认写作 AI；主进程不可用时忽略 */
-async function clearCustomTextProviders(): Promise<void> {
+/** 删除全部 AI 模型（Key 一并删除）；主进程不可用时忽略 */
+async function clearAllModels(): Promise<void> {
   const ipc = window.electron?.ipcRenderer;
   if (!ipc) return;
   const listed = (await ipc.invoke('ai-providers-list').catch(() => undefined)) as
     | AIIpcResult<AIProviderInfo[]>
     | undefined;
-  const custom = listed?.ok ? listed.data.filter((item) => item.custom) : [];
-  for (const item of custom) {
-    await ipc.invoke('ai-providers-remove-custom', item.id);
+  for (const item of listed?.ok ? listed.data : []) {
+    await ipc.invoke('ai-models-remove', item.id);
   }
-  await ipc.invoke('ai-providers-set-default', null);
 }
 
 /**
- * 设置中心的表单状态：加载 / 自动保存设置草稿、系统性能信息、清理数据与 AI 预设
+ * 设置中心的表单状态：加载 / 自动保存设置草稿、系统性能信息、清理数据
  */
 export function useSettingsForm({
   visible,
@@ -87,12 +83,9 @@ export function useSettingsForm({
   // 始终指向最新的设置草稿，供异步加载完成时判断用户是否已做修改
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-  const [aiSaveStatus, setAiSaveStatus] = useState('');
   const [clearConfirmScope, setClearConfirmScope] = useState<ClearDataScope | null>(null);
   const [systemProfile, setSystemProfile] = useState<SystemProfileInfo | null>(null);
   const aiSettings = settings.ai ?? DEFAULT_AI_SETTINGS;
-  const activeAIPreset =
-    AI_PRESET_OPTIONS.find((item) => item.key === aiSettings.preset) || AI_PRESET_OPTIONS[0];
 
   useEffect(() => {
     setActiveTab(normalizeTab(initialTab));
@@ -181,31 +174,6 @@ export function useSettingsForm({
     }));
   };
 
-  const setAI = <K extends keyof SettingsDraft['ai']>(key: K, value: SettingsDraft['ai'][K]) => {
-    setSettings((prev) => ({
-      ...prev,
-      ai: { ...prev.ai, [key]: value },
-    }));
-  };
-
-  const applyAIPreset = (presetKey: AIPresetKey) => {
-    const preset = AI_PRESET_OPTIONS.find((item) => item.key === presetKey);
-    if (!preset) return;
-    setSettings((prev) => ({
-      ...prev,
-      ai: {
-        ...prev.ai,
-        preset: preset.key,
-        provider: preset.provider,
-        baseUrl: preset.baseUrl || prev.ai.baseUrl,
-        model: preset.models[0] || prev.ai.model,
-        temperature: preset.defaultTemperature,
-        contextTokens: preset.defaultContextTokens,
-        maxTokens: 8192,
-      },
-    }));
-  };
-
   const handleClearData = async (scope: ClearDataScope) => {
     const ipc = window.electron?.ipcRenderer;
     try {
@@ -221,10 +189,8 @@ export function useSettingsForm({
       }
 
       if (scope === 'ai' || scope === 'all') {
-        // 默认 AI 的 Key 保存在主进程安全存储中，恢复默认时一并清除；
-        // 自己添加的文本 AI 连同 Key 一起删除，默认写作 AI 恢复为内置服务
-        await ipc?.invoke('ai-providers-set', 'openai-compatible', { clearKey: true });
-        await clearCustomTextProviders();
+        // 全部模型连同 Key（主进程安全存储）一起删除
+        await clearAllModels();
       }
 
       if (scope === 'ai') {
@@ -252,36 +218,19 @@ export function useSettingsForm({
     }
   };
 
-  const handleSaveAISettings = async () => {
-    const ipc = window.electron?.ipcRenderer;
-    if (!ipc) return;
-    try {
-      await ipc.invoke('db-settings-set', SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-      setAiSaveStatus('AI 配置已保存');
-      setTimeout(() => setAiSaveStatus(''), 1800);
-    } catch {
-      setAiSaveStatus('保存失败，请重试');
-    }
-  };
-
   return {
     activeTab,
     setActiveTab,
     settings,
     setSettings,
     aiSettings,
-    activeAIPreset,
-    aiSaveStatus,
     clearConfirmScope,
     setClearConfirmScope,
     systemProfile,
     setGeneral,
     setShortcuts,
     resetShortcut,
-    setAI,
-    applyAIPreset,
     handleClearData,
-    handleSaveAISettings,
   };
 }
 

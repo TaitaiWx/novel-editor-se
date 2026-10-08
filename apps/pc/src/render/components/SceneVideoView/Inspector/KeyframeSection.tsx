@@ -129,7 +129,7 @@ const KeyframeSection: React.FC<KeyframeSectionProps> = ({
           content={
             imageReady
               ? '按画面描述 + 人物三视图 + 预演第一帧生成 4 张首帧，挑一张采用'
-              : '先在设置中心配置图片服务（Seedream / MiniMax / Grok 图片）'
+              : '先在设置中心「AI → 图片」里添加图片模型'
           }
         >
           <button

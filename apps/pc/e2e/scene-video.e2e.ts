@@ -259,9 +259,9 @@ describe('场景视频', () => {
       text: `001-启程 · ${SCENE}`,
       within: '[data-testid="scene-video-view"]',
     });
-    // 视频服务已配置（工具栏出现下拉框）
-    await page.waitForTarget(comboboxSelector('视频服务'));
-    expect(await selectedOptionText(page, '视频服务')).toBe('MiniMax 海螺视频');
+    // 视频模型已配置（工具栏出现下拉框，选项是模型的显示名称）
+    await page.waitForTarget(comboboxSelector('视频模型'));
+    expect(await selectedOptionText(page, '视频模型')).toBe('MiniMax 海螺 · MiniMax-Hailuo-02');
     // 画布：自动用 AI（Grok mock）拆分镜，不需要点任何按钮
     const SHOT_NODES = '[data-testid="scene-canvas"] [role="group"][aria-label^="镜头 "]';
     await page.waitFor((selector: string) => document.querySelectorAll(selector).length >= 3, {

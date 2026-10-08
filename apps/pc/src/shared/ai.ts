@@ -1,83 +1,90 @@
 /**
  * AI / 视频 IPC 协议（主进程与渲染进程共用的类型与通道名）
  *
- * 安全约定：渲染进程永远拿不到 API Key 明文——只能写入（ai-providers-set），
+ * 安全约定：渲染进程永远拿不到 API Key 明文——只能写入（ai-models-add / ai-models-update），
  * 读取时只返回 configured: true / false。
  */
 import type { AIErrorKind, ChatMessage, ProviderKind, SerializedAIError } from '@novel-editor/ai';
 import type { VideoTask } from '@novel-editor/video';
+import type { AICapability } from './ai-models';
 
 export const AI_STREAM_EVENT = 'ai-stream-event';
 export const VIDEO_TASK_EVENT = 'video-task-updated';
 
-/** 设置中心「AI 服务」列表的一行（不含任何密钥） */
+/**
+ * 设置中心「AI」模型列表的一行，也是各功能模型选择器的选项（不含任何密钥）。
+ * 一行 = 一个模型配置：能力（kind / capability）+ 协议实现（vendor）+ 接口地址 + 模型 + 显示名称（label）
+ */
 export interface AIProviderInfo {
+  /** 模型 id（旧版内置服务保持旧 id，例如 grok、seedance-video；新添加的为 text-<n> 等） */
   id: string;
   kind: ProviderKind;
+  /** 同 kind（文本 / 图片 / 视频 / 语音） */
+  capability: AICapability;
+  /** 协议实现（注册表里的 Provider id，例如 openai-compatible、grok、seedance-video） */
+  vendor: string;
+  /** 显示名称（默认「服务商 · 模型」） */
   label: string;
+  /** 服务商预设 key（ai-models.ts AI_MODEL_PRESETS） */
+  preset?: string;
+  /** 服务商名称（预设名称；没有预设时为协议实现的名称） */
+  providerLabel: string;
   description: string;
   defaultBaseUrl: string;
   defaultModel: string;
+  /** 推荐模型 */
   models: readonly string[];
   docsUrl?: string;
-  /** 视频服务支持「生成声音」 */
+  /** 视频：支持「生成声音」 */
   supportsAudio?: boolean;
   /** 已保存 API Key */
   configured: boolean;
   /** 密钥是否由系统钥匙串加密保存（false = 系统不支持加密，以受限权限文件保存） */
   secureStorage: boolean;
   enabled: boolean;
+  /** 实际使用的接口地址（没有填写时为协议默认） */
   baseUrl: string;
+  /** 实际使用的模型（没有填写时为协议默认） */
   model: string;
-  /** 视频服务：每秒单价（作者自行填写，用于费用预估） */
+  /** 这个能力的默认模型（每个能力一个；功能里省略模型时使用） */
+  isDefault: boolean;
+  /** 同 isDefault（只在文本模型上；旧字段名） */
+  isDefaultText?: boolean;
+  /** 视频：每秒单价（作者自行填写，用于费用预估） */
   pricePerSecond?: number;
   currency?: 'CNY' | 'USD';
-  /**
-   * 作者自己添加的服务（可改名 / 删除）：文本为 OpenAI 兼容（custom-text-<n>），
-   * 视频 / 图片 / 语音沿用某个内置厂商实现（custom-video-<n> / custom-image-<n> / custom-speech-<n>）
-   */
-  custom?: boolean;
-  /** 自定义视频 / 图片 / 语音服务沿用的厂商实现（内置服务 id，例如 seedance-video） */
-  vendor?: string;
-  /** 文本服务：是默认写作 AI（续写、分镜、预演、灵感、推演、ai-request 省略 providerId 时使用） */
-  isDefaultText?: boolean;
-  /** 默认写作 AI 是作者在设置中心选定的（false / 缺省 = 未选择，沿用内置默认） */
-  defaultTextChosen?: boolean;
-  /**
-   * 文本服务的生成参数（每个文本服务都有；内置默认的值来自设置中心 JSON，其余在 ai-providers.json）：
-   * 温度 / 单次回复长度（同时是请求 max_tokens 的上限）/ 上下文长度（续写等按它决定上下文预算）
-   */
+  /** 文本：温度 / 单次回复长度（同时是请求 max_tokens 的上限）/ 上下文长度 */
   temperature?: number;
   maxTokens?: number;
   contextTokens?: number;
-  /** 配音服务：未指定声音的台词使用的默认声音 */
+  /** 语音：未指定声音的台词使用的默认声音 */
   voice?: string;
 }
 
-/**
- * ai-providers-add-custom：添加一个自己的服务（Key 可同时写入，只写不读）
- * - kind 省略或为 text：OpenAI 兼容文本 AI，baseUrl 必填
- * - kind 为 video / image / speech：vendor 必填（同类内置服务的 id），baseUrl 省略时用该厂商的默认地址
- */
-export interface AICustomProviderInput {
-  kind?: ProviderKind;
-  vendor?: string;
-  label: string;
+/** ai-models-add：添加一个模型（Key 只写不读；reuseKeyFrom 沿用另一个模型已保存的 Key，由主进程复制） */
+export interface AIModelInput {
+  capability: AICapability;
+  vendor: string;
+  preset?: string;
+  /** 显示名称；省略时为「服务商 · 模型」 */
+  label?: string;
   baseUrl?: string;
   model?: string;
   apiKey?: string;
-  /** 视频服务：每秒单价 */
+  /** 同一服务商 + 同一接口地址、已保存 Key 的模型 id */
+  reuseKeyFrom?: string;
+  enabled?: boolean;
+  temperature?: number;
+  maxTokens?: number;
+  contextTokens?: number;
   pricePerSecond?: number;
-  /** 语音服务：默认声音 */
   voice?: string;
 }
 
-/** 旧名称（只添加文本 AI 时的写法） */
-export type AICustomTextInput = AICustomProviderInput;
-
+/** 旧版内置文本 AI 的 id（迁移后仍是一条模型的 id） */
 export const BUILTIN_TEXT_PROVIDER_ID = 'openai-compatible';
 
-/** 写入 Provider 配置；apiKey 只写不读，clearKey 删除已保存的 Key */
+/** 写入模型配置；apiKey 只写不读，clearKey 删除已保存的 Key */
 export interface AIProviderUpdate {
   apiKey?: string;
   clearKey?: boolean;
@@ -86,20 +93,22 @@ export interface AIProviderUpdate {
   model?: string;
   pricePerSecond?: number | null;
   currency?: 'CNY' | 'USD';
-  /** 只对自己添加的服务有效：改名 */
+  /** 显示名称 */
   label?: string;
-  /** 文本服务参数（null 恢复默认） */
+  /** 服务商预设（必须与模型的能力、协议一致） */
+  preset?: string;
+  /** 文本参数（null 恢复默认） */
   temperature?: number | null;
   maxTokens?: number | null;
   contextTokens?: number | null;
-  /** 配音服务的默认声音（空字符串恢复默认） */
+  /** 语音的默认声音（空字符串恢复默认） */
   voice?: string;
 }
 
 export type AIIpcResult<T> = { ok: true; data: T } | { ok: false; error: SerializedAIError };
 
 export interface AICompletePayload {
-  /** 省略时使用默认写作 AI（设置中心选定的文本 AI；未选择时为内置 openai-compatible） */
+  /** 文本模型 id；省略时使用默认文本模型 */
   providerId?: string;
   messages?: ChatMessage[];
   /** 兼容旧版 ai-request 的写法：prompt + systemPrompt + context */
@@ -164,7 +173,7 @@ export interface SpeechSynthesizePayload {
   text: string;
   /** BCP-47 */
   language: string;
-  /** 配音服务；省略时用第一个已配置的配音服务 */
+  /** 语音模型 id；省略时用默认语音模型 */
   providerId?: string;
   model?: string;
   emotion?: string;
@@ -245,4 +254,4 @@ export interface VideoSceneAnimaticPayload extends VideoSceneRef {
   data: Uint8Array;
 }
 
-export type { AIErrorKind, SerializedAIError, VideoTask };
+export type { AIErrorKind, SerializedAIError, VideoTask, AICapability };

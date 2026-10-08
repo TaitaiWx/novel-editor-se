@@ -36,18 +36,13 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
     settings,
     setSettings,
     aiSettings,
-    activeAIPreset,
-    aiSaveStatus,
     clearConfirmScope,
     setClearConfirmScope,
     systemProfile,
     setGeneral,
     setShortcuts,
     resetShortcut,
-    setAI,
-    applyAIPreset,
     handleClearData,
-    handleSaveAISettings,
   } = useSettingsForm({ visible, onClose, initialTab, onSettingsChange });
   const overlayPressRef = useRef(false);
 
@@ -123,17 +118,7 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
               />
             )}
 
-            {activeTab === 'ai' && (
-              <AiSection
-                aiSettings={aiSettings}
-                activeAIPreset={activeAIPreset}
-                setSettings={setSettings}
-                setAI={setAI}
-                applyAIPreset={applyAIPreset}
-                aiSaveStatus={aiSaveStatus}
-                handleSaveAISettings={handleSaveAISettings}
-              />
-            )}
+            {activeTab === 'ai' && <AiSection aiSettings={aiSettings} setSettings={setSettings} />}
 
             {activeTab === 'about' && <AboutSection active={visible} />}
           </section>

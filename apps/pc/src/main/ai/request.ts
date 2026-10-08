@@ -11,6 +11,8 @@ export interface DefaultTextSettings {
   temperature?: number;
   maxTokens?: number;
   contextTokens?: number;
+  /** 旧版设置中心的服务预设（openai-official、deepseek-official…） */
+  preset?: string;
 }
 
 const MAX_MESSAGES = 64;
@@ -52,6 +54,7 @@ export function parseDefaultTextSettings(
     temperature: num(pick('temperature')),
     maxTokens: num(pick('maxTokens')),
     contextTokens: num(pick('contextTokens')),
+    ...(str(pick('preset')) ? { preset: str(pick('preset')) } : {}),
   };
 }
 

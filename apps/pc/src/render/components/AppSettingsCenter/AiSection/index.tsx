@@ -1,153 +1,70 @@
 /**
- * 设置中心「AI」：顶部独立的总开关，下面按能力分区（文本 / 图片 / 视频 / 语音），
- * 每个服务一个可折叠面板，只显示这家需要的字段。
+ * 设置中心「AI」：顶部独立的总开关，下面每个能力（文本 / 图片 / 视频 / 语音）一张模型列表。
  *
- * - 文本：内置 OpenAI 兼容（参数在设置中心 JSON）+ Grok + 自己添加的 OpenAI 兼容服务（可多个），
- *   其中一个是默认写作 AI（「设为默认」）；每个文本服务都有同一组「生成参数」（GenerationParams）
- * - 图片 / 视频 / 语音：内置厂商 + 自己添加的（沿用某个内置厂商实现，例如第二个 Seedance 账号），每个分区底部「添加…」
- * - 展开状态记在 localStorage；没点过的：已配置或默认写作 AI 展开，其余收起
+ * - 一行 = 一个可选用的模型（服务商预设 + 接口地址 + 模型 + Key），可以同时配置多个，各功能里按显示名称选择
+ * - 每个能力一个默认模型（「设为默认」）；功能里没有特别选择时使用它
+ * - 「添加模型」：选服务商预填地址与推荐模型；同一服务商 + 地址已有 Key 时可沿用
+ * - Grok、DeepSeek、通义等只是 OpenAI 兼容协议的预设，不再有单独的服务面板
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { AiOutlineApi } from 'react-icons/ai';
-import type { AIPresetKey, SettingsDraft } from '../../../utils/appSettings';
-import type { AIProviderInfo } from '../../../types/ai-api';
-import { BUILTIN_TEXT_PROVIDER_ID } from '../../../types/ai-api';
-import type { AIPresetOption } from '../constants';
+import type { SettingsDraft } from '../../../utils/appSettings';
+import type { AICapability, AIProviderInfo } from '../../../types/ai-api';
 import type { SettingsFormApi } from '../useSettingsForm';
 import Switch from '../../Switch';
 import sharedStyles from '../styles.module.scss';
-import AddProvider from './AddProvider';
-import BuiltinTextForm from './BuiltinTextForm';
-import ProviderPanel from './ProviderPanel';
-import { useAiProviders } from './useAiProviders';
-import { useExpandedPanels } from './useExpandedPanels';
-import VendorForm from './VendorForm';
+import AddModelForm from './AddModelForm';
+import ModelRow from './ModelRow';
+import { useAiModels } from './useAiModels';
 import VoiceLanguageSetting from './VoiceLanguageSetting';
 import styles from './styles.module.scss';
 
-type ProviderKind = AIProviderInfo['kind'];
-
 interface AiSectionProps {
   aiSettings: SettingsDraft['ai'];
-  activeAIPreset: AIPresetOption;
   setSettings: SettingsFormApi['setSettings'];
-  setAI: SettingsFormApi['setAI'];
-  applyAIPreset: (presetKey: AIPresetKey) => void;
-  aiSaveStatus: string;
-  handleSaveAISettings: () => Promise<void>;
 }
 
 interface SectionDef {
-  kind: ProviderKind;
+  capability: AICapability;
   title: string;
   description: string;
+  empty: string;
 }
 
 const SECTIONS: readonly SectionDef[] = [
   {
-    kind: 'text',
+    capability: 'text',
     title: '文本（写作 / 续写 / 分镜 / 预演）',
-    description: '写作功能的主力 AI。可以添加多家，选一个作为默认。',
+    description: '可以同时配置多个模型（例如 Grok 写续写、DeepSeek 做整理），选一个作为默认。',
+    empty:
+      '还没有文本模型。点「添加模型」，选服务商（OpenAI、DeepSeek、Grok、通义…）并填写 Key 即可使用。',
   },
   {
-    kind: 'image',
+    capability: 'image',
     title: '图片',
-    description: '人物形象、三视图、设定图与场景视频的首帧。可以添加同一家的多个账号或兼容接口。',
+    description: '人物形象、三视图、设定图与场景视频的首帧。',
+    empty: '还没有图片模型。点「添加模型」选择 Seedream、MiniMax 或 Grok。',
   },
   {
-    kind: 'video',
+    capability: 'video',
     title: '视频',
-    description: '场景视频的镜头生成（异步任务，按厂商计费）。可以添加多个账号 / 接口。',
+    description: '场景视频的镜头生成（异步任务，按厂商计费）。',
+    empty: '还没有视频模型。点「添加模型」选择 MiniMax 海螺或 Seedance。',
   },
   {
-    kind: 'speech',
+    capability: 'speech',
     title: '语音（配音）',
-    description: '场景视频的对白配音。可以添加自建的 OpenAI 兼容配音等多个服务。',
+    description: '场景视频的对白配音。',
+    empty: '还没有配音模型。点「添加模型」选择 OpenAI 兼容或 MiniMax。',
   },
 ];
 
-/** 主进程列表还没读到时，内置文本 AI 用设置草稿兜底显示 */
-function builtinFallback(ai: SettingsDraft['ai']): AIProviderInfo {
-  return {
-    id: BUILTIN_TEXT_PROVIDER_ID,
-    kind: 'text',
-    label: 'OpenAI 兼容',
-    description: '',
-    defaultBaseUrl: '',
-    defaultModel: '',
-    models: [],
-    configured: Boolean(ai.hasApiKey),
-    secureStorage: true,
-    enabled: ai.enabled,
-    baseUrl: ai.baseUrl,
-    model: ai.model,
-    isDefaultText: !ai.defaultTextProviderId,
-  };
-}
+const AiSection: React.FC<AiSectionProps> = ({ aiSettings, setSettings }) => {
+  const api = useAiModels();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-const AiSection: React.FC<AiSectionProps> = (props) => {
-  const { aiSettings, setSettings } = props;
-  const api = useAiProviders();
-  const panels = useExpandedPanels();
-
-  const list = api.providers ?? [];
-  const builtin = list.find((item) => item.id === BUILTIN_TEXT_PROVIDER_ID);
-  const byKind = (kind: ProviderKind) =>
-    kind === 'text'
-      ? [
-          builtin ?? builtinFallback(aiSettings),
-          ...list.filter((item) => item.kind === 'text' && item.id !== BUILTIN_TEXT_PROVIDER_ID),
-        ]
-      : list.filter((item) => item.kind === kind);
-  const defaultText = byKind('text').find((item) => item.isDefaultText);
-
-  const refreshOne = async (id: string) => {
-    const result = await window.electron?.ipcRenderer.invoke('ai-providers-get', id);
-    if (result?.ok) api.replace(result.data);
-  };
-
-  const renderPanel = (info: AIProviderInfo) => {
-    const isBuiltin = info.id === BUILTIN_TEXT_PROVIDER_ID;
-    const configured = isBuiltin
-      ? Boolean(aiSettings.hasApiKey || aiSettings.apiKey?.trim())
-      : info.configured;
-    const enabled = isBuiltin ? aiSettings.enabled && info.enabled : info.enabled;
-    return (
-      <ProviderPanel
-        key={info.id}
-        info={info}
-        configured={configured}
-        enabled={enabled}
-        expanded={panels.isExpanded(info.id, configured || Boolean(info.isDefaultText))}
-        onToggleExpanded={(next) => panels.setExpanded(info.id, next)}
-        onToggleEnabled={(next) => void api.update(info.id, { enabled: next })}
-        enableDisabledReason={
-          isBuiltin && !aiSettings.enabled ? '先打开上方的「启用 AI 功能」' : undefined
-        }
-        onSetDefault={
-          info.kind === 'text' ? () => void api.setDefault(isBuiltin ? null : info.id) : undefined
-        }
-      >
-        {isBuiltin ? (
-          <BuiltinTextForm {...props} onKeyChanged={() => void refreshOne(info.id)} />
-        ) : (
-          <VendorForm
-            info={info}
-            onUpdate={(patch) => api.update(info.id, patch)}
-            onKeyChanged={() => void refreshOne(info.id)}
-            onRemove={
-              info.custom
-                ? () => {
-                    panels.forget(info.id);
-                    void api.removeCustom(info.id);
-                  }
-                : undefined
-            }
-          />
-        )}
-      </ProviderPanel>
-    );
-  };
+  const byCapability = (capability: AICapability): AIProviderInfo[] =>
+    (api.models ?? []).filter((item) => item.kind === capability);
 
   return (
     <div className={`${sharedStyles.panel} ${styles.aiPanel}`}>
@@ -155,13 +72,13 @@ const AiSection: React.FC<AiSectionProps> = (props) => {
         <AiOutlineApi />
         <span>AI 设置</span>
       </h4>
-      <p>按能力配置 AI 服务。Key 只保存在本机的系统钥匙串中，界面上不会再显示明文。</p>
+      <p>按能力配置模型。Key 只保存在本机的系统钥匙串中，界面上不会再显示明文。</p>
 
       <div className={styles.masterRow}>
         <div className={sharedStyles.formMeta}>
           <div className={styles.masterTitle}>启用 AI 功能</div>
           <div className={sharedStyles.formDesc}>
-            总开关。关闭后，写作功能的默认 AI（续写、分镜、灵感、推演等）不再发送请求。
+            总开关。关闭后，写作功能的默认模型（续写、分镜、灵感、推演等）不再发送请求。
           </div>
         </div>
         <Switch
@@ -176,39 +93,58 @@ const AiSection: React.FC<AiSectionProps> = (props) => {
         />
       </div>
 
-      {api.error && <div className={styles.statusError}>加载 AI 服务失败：{api.error}</div>}
+      {api.error && <div className={styles.statusError}>加载 AI 模型失败：{api.error}</div>}
 
       {SECTIONS.map((section) => {
-        const items = byKind(section.kind);
-        if (section.kind !== 'text' && items.length === 0 && api.providers === null) return null;
+        const items = byCapability(section.capability);
+        const defaultItem = items.find((item) => item.isDefault);
         return (
           <section
-            key={section.kind}
+            key={section.capability}
             className={styles.capability}
-            aria-labelledby={`ai-section-${section.kind}`}
+            aria-labelledby={`ai-section-${section.capability}`}
+            data-testid={`ai-section-${section.capability}`}
           >
             <div className={styles.capabilityHeader}>
-              <h5 id={`ai-section-${section.kind}`} className={styles.capabilityTitle}>
+              <h5 id={`ai-section-${section.capability}`} className={styles.capabilityTitle}>
                 {section.title}
               </h5>
-              {section.kind === 'text' && defaultText && (
-                <span className={styles.capabilityMeta}>默认写作 AI：{defaultText.label}</span>
+              {defaultItem && (
+                <span className={styles.capabilityMeta}>默认：{defaultItem.label}</span>
               )}
             </div>
             <p className={styles.capabilityDesc}>{section.description}</p>
-            {section.kind === 'speech' && (
+            {section.capability === 'speech' && (
               <div className={styles.sectionSetting}>
                 <VoiceLanguageSetting />
               </div>
             )}
-            <div className={styles.panelList}>{items.map(renderPanel)}</div>
-            {api.providers !== null && (
-              <AddProvider
-                kind={section.kind}
-                vendors={items.filter((item) => !item.custom)}
+            {api.models !== null && items.length === 0 && (
+              <p className={styles.emptyState}>{section.empty}</p>
+            )}
+            <div className={styles.panelList}>
+              {items.map((info) => (
+                <ModelRow
+                  key={info.id}
+                  info={info}
+                  expanded={expandedId === info.id}
+                  onToggleExpanded={() =>
+                    setExpandedId((prev) => (prev === info.id ? null : info.id))
+                  }
+                  onUpdate={(patch) => api.update(info.id, patch)}
+                  onSetDefault={() => void api.setDefault(section.capability, info.id)}
+                  onTest={() => api.test(info.id)}
+                  onRemove={() => void api.remove(info.id)}
+                  onKeyChanged={() => void api.reload()}
+                />
+              ))}
+            </div>
+            {api.models !== null && (
+              <AddModelForm
+                capability={section.capability}
                 existing={items}
-                onAdd={api.addCustom}
-                onAdded={(info) => panels.setExpanded(info.id, true)}
+                onAdd={api.add}
+                onAdded={(info) => setExpandedId(info.configured ? null : info.id)}
               />
             )}
           </section>

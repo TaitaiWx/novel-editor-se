@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AIProviderInfo } from '@/render/types/ai-api';
+import { usableModels } from '@/render/utils/textProviders';
 
-/** 已配置并启用的图片服务（Seedream / MiniMax / Grok 图片）；窗口重新获得焦点时刷新 */
+/** 已配置并启用的图片模型（默认模型在前）；窗口重新获得焦点时刷新 */
 export function useImageServices(): { loaded: boolean; providers: AIProviderInfo[] } {
   const [state, setState] = useState<{ loaded: boolean; providers: AIProviderInfo[] }>({
     loaded: false,
@@ -18,12 +19,7 @@ export function useImageServices(): { loaded: boolean; providers: AIProviderInfo
       .catch(() => null)
       .then((result) => {
         const list = result?.ok ? result.data : [];
-        setState({
-          loaded: true,
-          providers: list.filter(
-            (item) => item.kind === 'image' && item.configured && item.enabled
-          ),
-        });
+        setState({ loaded: true, providers: usableModels(list, 'image') });
       });
   }, []);
   useEffect(() => {

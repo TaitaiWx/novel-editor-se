@@ -17,18 +17,12 @@ import type {
   AIStreamEvent,
   SerializedAIError,
 } from '@/shared/ai';
-import {
-  BUILTIN_TEXT_PROVIDER_ID,
-  chosenDefaultTextProvider,
-  isUsableTextProvider,
-  providerIdForRequest,
-} from './textProviders';
+import { providerIdForRequest, resolveModelChoice } from './textProviders';
 import type {
   ContinuationContextSummary,
   ContinuationService,
 } from '../components/TextEditor/assist/types';
 
-export const DEFAULT_TEXT_PROVIDER_ID = BUILTIN_TEXT_PROVIDER_ID;
 /** 服务没有填写上下文长度时的续写上下文预算（tokens） */
 export const CONTINUATION_BUDGET = 6000;
 const MIN_CONTINUATION_BUDGET = 1000;
@@ -81,22 +75,12 @@ export interface ResolvedProvider {
   contextTokens?: number;
 }
 
-/**
- * 选择续写服务：指定的服务 > 作者选定的默认写作 AI > Grok > 内置默认 AI > 其他已配置的文本服务；
- * 都没有时返回 null（未选定默认写作 AI 时与旧版顺序一致）
- */
+/** 选择续写模型：指定的模型（可用时）> 默认文本模型 > 第一个可用的文本模型；都没有时返回 null */
 export function resolveContinuationProvider(
   providers: readonly AIProviderInfo[],
   preferred?: string
 ): ResolvedProvider | null {
-  const pick = (id: string) =>
-    providers.find((item) => item.id === id && isUsableTextProvider(item));
-  const chosen =
-    (preferred ? pick(preferred) : undefined) ??
-    chosenDefaultTextProvider(providers) ??
-    pick('grok') ??
-    pick(DEFAULT_TEXT_PROVIDER_ID) ??
-    providers.find(isUsableTextProvider);
+  const chosen = resolveModelChoice(providers, 'text', preferred);
   return chosen
     ? {
         providerId: providerIdForRequest(providers, chosen),

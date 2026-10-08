@@ -27,7 +27,10 @@ export function getCredentialStore(): CredentialStore {
 }
 
 export function getProviderConfigStore(): ProviderConfigStore {
-  configs ??= new ProviderConfigStore(userDataPath(PROVIDER_CONFIG_FILE_NAME));
+  // 旧版 ai-providers.json 迁移时按 Key 判断哪些内置服务配置过
+  configs ??= new ProviderConfigStore(userDataPath(PROVIDER_CONFIG_FILE_NAME), {
+    hasCredential: (id) => getCredentialStore().has(id),
+  });
   return configs;
 }
 

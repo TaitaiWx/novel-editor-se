@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { NARRATOR, type CharacterVoice, type DialogueLine, type Shot } from '@novel-editor/video';
+import { usableModels } from '@/render/utils/textProviders';
 import type { AIProviderInfo } from '@/render/types/ai-api';
 import { notifyWorkspaceFilesChanged } from '@/render/utils/workspaceFiles';
 import { shotNumber, type SceneVideoState } from './sceneVideoState';
@@ -30,7 +31,8 @@ export type AudioImportKind = 'bgm' | 'ambience' | 'sfx';
 
 /** 已配置 Key 且已启用的配音服务 */
 export function pickSpeechProviders(list: readonly AIProviderInfo[]): AIProviderInfo[] {
-  return list.filter((item) => item.kind === 'speech' && item.configured && item.enabled);
+  // 已配置且启用的语音模型，默认模型在前
+  return usableModels(list, 'speech');
 }
 
 /** 给对白写入配音结果（只改这一句） */

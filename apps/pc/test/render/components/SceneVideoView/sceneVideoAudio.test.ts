@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { modelInfo } from '../../helpers/aiModel';
 import {
   animaticSignatureFor,
   audioSignatureFor,
@@ -161,24 +162,21 @@ describe('样片签名与节点标记', () => {
   });
 
   it('只列出已配置且启用的配音服务', () => {
-    const info = (
-      id: string,
-      kind: AIProviderInfo['kind'],
-      configured: boolean
-    ): AIProviderInfo => ({
-      id,
-      kind,
-      label: id,
-      description: '',
-      defaultBaseUrl: '',
-      defaultModel: '',
-      models: [],
-      configured,
-      secureStorage: true,
-      enabled: true,
-      baseUrl: '',
-      model: '',
-    });
+    const info = (id: string, kind: AIProviderInfo['kind'], configured: boolean): AIProviderInfo =>
+      modelInfo({
+        id,
+        kind,
+        label: id,
+        description: '',
+        defaultBaseUrl: '',
+        defaultModel: '',
+        models: [],
+        configured,
+        secureStorage: true,
+        enabled: true,
+        baseUrl: '',
+        model: '',
+      });
     expect(
       pickSpeechProviders([
         info('openai-speech', 'speech', true),

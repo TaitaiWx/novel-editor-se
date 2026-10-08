@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AIProviderInfo, VideoSettingsInfo } from '@/render/types/ai-api';
-import { BUILTIN_TEXT_PROVIDER_ID, pickDefaultTextProvider } from '@/render/utils/textProviders';
-
-/** 内置默认文本服务；分镜优先用默认写作 AI（utils/textProviders），其次用其他已配置的文本服务 */
-export const DEFAULT_TEXT_PROVIDER_ID = BUILTIN_TEXT_PROVIDER_ID;
+import { pickDefaultTextProvider, usableModels } from '@/render/utils/textProviders';
 
 export interface VideoServicesState {
   loaded: boolean;
-  /** 已配置 Key 且已启用的视频服务（MiniMax / Seedance） */
+  /** 已配置 Key 且已启用的视频模型（默认模型在前） */
   videoProviders: AIProviderInfo[];
-  /** 分镜用的文本服务；没有可用的文本服务时为 null（使用按段落拆分） */
+  /** 分镜用的文本模型；没有可用的文本模型时为 null（使用按段落拆分） */
   textProviderId: string | null;
   settings: VideoSettingsInfo | null;
 }
@@ -21,7 +18,7 @@ const EMPTY: VideoServicesState = {
   settings: null,
 };
 
-/** 分镜 / 预演用的文本服务：默认写作 AI（选定的 > 内置默认 > 第一个可用的） */
+/** 分镜 / 预演用的文本模型：默认文本模型（可用时）> 第一个可用的 */
 export function pickTextProvider(providers: readonly AIProviderInfo[]): string | null {
   return pickDefaultTextProvider(providers)?.id ?? null;
 }
@@ -43,9 +40,7 @@ export function useVideoServices(): VideoServicesState & { reload: () => void } 
       const list = providers?.ok ? providers.data : [];
       setState({
         loaded: true,
-        videoProviders: list.filter(
-          (item) => item.kind === 'video' && item.configured && item.enabled
-        ),
+        videoProviders: usableModels(list, 'video'),
         textProviderId: pickTextProvider(list),
         settings: settings?.ok ? settings.data : null,
       });

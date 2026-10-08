@@ -1,49 +1,66 @@
 /**
- * 渲染进程选择「默认写作 AI」的唯一口径（续写、分镜、预演共用；只读 configured / enabled 标记，不涉及密钥）
+ * 渲染进程选择模型的唯一口径（续写、分镜、预演、场景视频、配音、图片共用；只读 configured / enabled / isDefault 标记，不涉及密钥）
  *
- * 主进程在 ai-providers-list 里给默认写作 AI 标上 isDefaultText（作者选定的，或未选择时的内置 openai-compatible），
- * defaultTextChosen 表示是作者在设置中心选定的。省略 providerId 的请求由主进程按同一规则解析。
+ * 主进程在 ai-providers-list 里给每个能力的默认模型标上 isDefault（作者选定的 > 第一个可用的 > 第一个），
+ * 省略模型 id 的请求由主进程按同一规则解析。
  */
-import { BUILTIN_TEXT_PROVIDER_ID, type AIProviderInfo } from '@/shared/ai';
+import { BUILTIN_TEXT_PROVIDER_ID, type AICapability, type AIProviderInfo } from '@/shared/ai';
 
 export { BUILTIN_TEXT_PROVIDER_ID };
 
-/** 已保存 Key 且已启用的文本服务 */
+/** 已保存 Key 且已启用的某类模型 */
+export function isUsableModel(item: AIProviderInfo, capability: AICapability): boolean {
+  return item.kind === capability && item.configured && item.enabled;
+}
+
+/** 已保存 Key 且已启用的文本模型 */
 export function isUsableTextProvider(item: AIProviderInfo): boolean {
-  return item.kind === 'text' && item.configured && item.enabled;
+  return isUsableModel(item, 'text');
 }
 
-/** 作者选定的默认写作 AI（可用时）；未选择或不可用时返回 null */
-export function chosenDefaultTextProvider(
-  providers: readonly AIProviderInfo[]
+/** 某类可用的模型，默认模型在前（选择器的选项顺序） */
+export function usableModels(
+  providers: readonly AIProviderInfo[],
+  capability: AICapability
+): AIProviderInfo[] {
+  const usable = providers.filter((item) => isUsableModel(item, capability));
+  return [...usable.filter((item) => item.isDefault), ...usable.filter((item) => !item.isDefault)];
+}
+
+/** 某类的默认模型（可用时）> 第一个可用的；都没有时返回 null */
+export function pickDefaultModel(
+  providers: readonly AIProviderInfo[],
+  capability: AICapability
 ): AIProviderInfo | null {
-  return providers.find((item) => item.defaultTextChosen && isUsableTextProvider(item)) ?? null;
+  return usableModels(providers, capability)[0] ?? null;
 }
 
-/** 默认写作 AI：选定的 > 内置默认 > 第一个可用的文本服务；都没有时返回 null */
+/** 默认文本模型（可用时）> 第一个可用的文本模型 */
 export function pickDefaultTextProvider(
   providers: readonly AIProviderInfo[]
 ): AIProviderInfo | null {
-  const usable = providers.filter(isUsableTextProvider);
-  return (
-    usable.find((item) => item.isDefaultText) ??
-    usable.find((item) => item.id === BUILTIN_TEXT_PROVIDER_ID) ??
-    usable[0] ??
-    null
-  );
+  return pickDefaultModel(providers, 'text');
+}
+
+/** 选中的模型 id 存在且可用时用它，否则用默认模型 */
+export function resolveModelChoice(
+  providers: readonly AIProviderInfo[],
+  capability: AICapability,
+  chosenId: string | null | undefined
+): AIProviderInfo | null {
+  const chosen = chosenId
+    ? providers.find((item) => item.id === chosenId && isUsableModel(item, capability))
+    : undefined;
+  return chosen ?? pickDefaultModel(providers, capability);
 }
 
 /**
- * 请求里要传的 providerId：选中的就是主进程会解析到的默认写作 AI 时省略（undefined），
- * 让主进程沿用默认 AI 的设置（总开关、内置服务的温度等）；否则显式传 id
+ * 请求里要传的模型 id：选中的就是默认文本模型时省略（undefined），
+ * 让主进程按默认模型处理（受「启用 AI 功能」总开关约束）；否则显式传 id
  */
 export function providerIdForRequest(
-  providers: readonly AIProviderInfo[],
+  _providers: readonly AIProviderInfo[],
   item: AIProviderInfo
 ): string | undefined {
-  const defaultId =
-    providers.find((entry) => entry.isDefaultText)?.id ??
-    // 旧数据 / 测试替身没有 isDefaultText 标记：内置服务就是默认
-    (providers.some((entry) => entry.defaultTextChosen) ? undefined : BUILTIN_TEXT_PROVIDER_ID);
-  return item.id === defaultId ? undefined : item.id;
+  return item.isDefault ? undefined : item.id;
 }

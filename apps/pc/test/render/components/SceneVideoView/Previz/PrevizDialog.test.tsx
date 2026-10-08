@@ -87,7 +87,7 @@ function mockIpc(options: { providers?: boolean; reply?: string } = {}) {
                 {
                   id: 'grok',
                   kind: 'text',
-                  label: 'Grok',
+                  label: 'xAI Grok · grok-4',
                   configured: true,
                   enabled: true,
                   model: 'grok-4',
@@ -180,10 +180,10 @@ describe('PrevizDialog', () => {
     // 不再有姿势 / 景别 / 滑块等手动面板
     expect(screen.queryByRole('radiogroup', { name: '姿势' })).toBeNull();
     expect(screen.queryByRole('slider', { name: '机位方向' })).toBeNull();
-    // 模型下拉只列出已配置的文本服务
+    // 模型下拉只列出已配置的文本模型（显示名称）
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: '预演模型' }).textContent).toContain(
-        'Grok · grok-4'
+        'xAI Grok · grok-4'
       )
     );
   });

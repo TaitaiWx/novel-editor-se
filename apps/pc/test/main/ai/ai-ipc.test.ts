@@ -203,7 +203,7 @@ describe('ai-providers-*', () => {
     });
     expect(await call('ai-providers-get', null, '../x')).toMatchObject({
       ok: false,
-      error: { message: '无效的 AI 服务 id' },
+      error: { message: '未知的 AI 模型: ../x' },
     });
   });
 
@@ -251,83 +251,138 @@ describe('ai-providers-*', () => {
   });
 });
 
-describe('自定义文本 AI 与默认写作 AI（IPC）', () => {
-  it('add / list / set-default / remove；校验输入；Key 不出现在返回值里', async () => {
+describe('ai-models-*（IPC）', () => {
+  it('add / list / set-default / remove / test；校验输入；Key 不出现在返回值里', async () => {
     const added = await call<{ ok: boolean; data: Record<string, unknown> }>(
-      'ai-providers-add-custom',
+      'ai-models-add',
       null,
-      { label: '通义', baseUrl: 'https://qwen.test/v1', model: 'qwen-plus', apiKey: 'sk-qwen' }
+      {
+        capability: 'text',
+        vendor: 'openai-compatible',
+        preset: 'qwen',
+        baseUrl: 'https://qwen.test/v1',
+        model: 'qwen-plus',
+        apiKey: 'sk-qwen',
+      }
     );
     expect(added).toMatchObject({
       ok: true,
-      data: { id: 'custom-text-1', custom: true, configured: true },
+      data: {
+        id: 'text-1',
+        capability: 'text',
+        vendor: 'openai-compatible',
+        label: '通义千问 · qwen-plus',
+        providerLabel: '通义千问',
+        configured: true,
+      },
     });
     expect(JSON.stringify(added)).not.toContain('sk-qwen');
     for (const bad of [
       null,
-      { label: '', baseUrl: 'https://a.test' },
-      { label: 'x', baseUrl: 'javascript:alert(1)' },
-      { label: 'x', baseUrl: 'https://user:pw@a.test' },
-      { label: 'x'.repeat(50), baseUrl: 'https://a.test' },
+      { capability: 'text', vendor: 'seedance-video', baseUrl: 'https://a.test' },
+      { capability: 'music', vendor: 'grok' },
+      { capability: 'text', vendor: 'openai-compatible' },
+      { capability: 'text', vendor: 'openai-compatible', baseUrl: 'javascript:alert(1)' },
+      { capability: 'text', vendor: 'openai-compatible', baseUrl: 'https://user:pw@a.test' },
+      { capability: 'text', vendor: 'grok', label: 'x'.repeat(90) },
+      { capability: 'text', vendor: 'grok', model: 'm'.repeat(201) },
+      { capability: 'text', vendor: 'grok', preset: 'seedance' },
+      { capability: 'video', vendor: 'seedance-video', reuseKeyFrom: 'text-1' },
     ]) {
-      expect(await call('ai-providers-add-custom', null, bad)).toMatchObject({
+      expect(await call('ai-models-add', null, bad)).toMatchObject({
         ok: false,
         error: { kind: 'bad-request' },
       });
     }
+    // 沿用 Key：同一服务商 + 地址，主进程复制，返回值里没有 Key
+    const second = await call<{ ok: boolean; data: Record<string, unknown> }>(
+      'ai-models-add',
+      null,
+      {
+        capability: 'text',
+        vendor: 'openai-compatible',
+        preset: 'qwen',
+        baseUrl: 'https://qwen.test/v1/',
+        model: 'qwen-max',
+        reuseKeyFrom: 'text-1',
+      }
+    );
+    expect(second).toMatchObject({ ok: true, data: { id: 'text-2', configured: true } });
+    expect(JSON.stringify(second)).not.toContain('sk-qwen');
+    expect(runtime.getCredentialStore().get('text-2')).toBe('sk-qwen');
+    // 不同地址不能沿用
+    expect(
+      await call('ai-models-add', null, {
+        capability: 'text',
+        vendor: 'openai-compatible',
+        baseUrl: 'https://evil.test/v1',
+        reuseKeyFrom: 'text-1',
+      })
+    ).toMatchObject({ ok: false, error: { message: '只能沿用同一接口地址的 Key' } });
+
     const list = await call<{ ok: boolean; data: Array<Record<string, unknown>> }>(
       'ai-providers-list',
       null
     );
-    expect(list.data.map((item) => item.id)).toContain('custom-text-1');
+    expect(list.data.map((item) => item.id)).toEqual(['text-1', 'text-2']);
+    expect(list.data.find((item) => item.isDefault)?.id).toBe('text-1');
     expect(JSON.stringify(list)).not.toContain('sk-qwen');
 
-    // 设为默认：返回新列表；设置 JSON 注入默认写作 AI 摘要
+    // 设为默认：返回新列表；设置 JSON 注入默认文本模型摘要（含上下文长度）
+    await call('ai-models-update', null, 'text-2', { contextTokens: 64_000, label: '通义 Max' });
     const setDefault = await call<{ ok: boolean; data: Array<Record<string, unknown>> }>(
-      'ai-providers-set-default',
+      'ai-models-set-default',
       null,
-      'custom-text-1'
+      'text',
+      'text-2'
     );
     expect(setDefault.ok).toBe(true);
-    expect(setDefault.data.find((item) => item.isDefaultText)?.id).toBe('custom-text-1');
+    expect(setDefault.data.find((item) => item.isDefault)?.id).toBe('text-2');
     settingsRows.set(
       SETTINGS_KEY,
       JSON.stringify({ ai: { enabled: true, enabledExplicitlySet: true } })
     );
     const read = JSON.parse(await call<string>('db-settings-get', null, SETTINGS_KEY));
     expect(read.ai).toMatchObject({
-      defaultTextProviderId: 'custom-text-1',
-      defaultTextLabel: '通义',
+      hasApiKey: true,
+      defaultTextProviderId: 'text-2',
+      defaultTextLabel: '通义 Max',
       defaultTextReady: true,
+      contextTokens: 64_000,
     });
 
-    // ai-request（成长推演、灵感等）走默认写作 AI
+    // ai-request（成长推演、灵感等）走默认文本模型
     fetchMock.mockImplementation(
       async () => new Response(JSON.stringify({ choices: [{ message: { content: '通义回答' } }] }))
     );
     expect(await call('ai-request', null, { prompt: 'p' })).toEqual({ ok: true, text: '通义回答' });
     expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('https://qwen.test/v1/chat/completions');
+    expect(JSON.parse(String((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body)).model).toBe(
+      'qwen-max'
+    );
+    expect(await call('ai-models-test', null, 'text-2')).toMatchObject({ ok: true });
 
-    expect(await call('ai-providers-set-default', null, 'seedance-video')).toMatchObject({
+    expect(await call('ai-models-set-default', null, 'video', 'text-1')).toMatchObject({
       ok: false,
-      error: { message: expect.stringContaining('不是文本服务') },
+      error: { message: expect.stringContaining('不是视频模型') },
     });
-    expect(await call('ai-providers-set-default', null, '../x')).toMatchObject({ ok: false });
+    expect(await call('ai-models-set-default', null, 'text', '../x')).toMatchObject({ ok: false });
+    expect(await call('ai-models-update', null, '../x', {})).toMatchObject({ ok: false });
 
-    // 删除：只接受 custom-text-<n>；删除后默认恢复内置，Key 一并删除
-    expect(await call('ai-providers-remove-custom', null, 'grok')).toMatchObject({ ok: false });
-    expect(await call('ai-providers-remove-custom', null, 'custom-text-1')).toEqual({
+    // 删除：Key 一并删除；默认被删后回到第一个可用的
+    expect(await call('ai-models-remove', null, '../x')).toMatchObject({ ok: false });
+    expect(await call('ai-models-remove', null, 'text-2')).toEqual({
       ok: true,
       data: { removed: true },
     });
-    expect(runtime.getCredentialStore().get('custom-text-1')).toBeNull();
+    expect(runtime.getCredentialStore().get('text-2')).toBeNull();
     const after = await call<{ ok: boolean; data: Array<Record<string, unknown>> }>(
       'ai-providers-list',
       null
     );
-    expect(after.data.find((item) => item.isDefaultText)?.id).toBe('openai-compatible');
+    expect(after.data.find((item) => item.isDefault)?.id).toBe('text-1');
     const reread = JSON.parse(await call<string>('db-settings-get', null, SETTINGS_KEY));
-    expect(reread.ai.defaultTextProviderId).toBeUndefined();
+    expect(reread.ai.defaultTextProviderId).toBe('text-1');
   });
 });
 

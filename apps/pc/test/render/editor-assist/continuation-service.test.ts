@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { modelInfo } from '../helpers/aiModel';
 import type { AIProviderInfo, AIStreamEvent } from '@/shared/ai';
 import {
   CONTINUATION_BUDGET,
@@ -15,7 +16,7 @@ import type {
 } from '@/render/components/TextEditor/assist/types';
 
 function provider(id: string, patch: Partial<AIProviderInfo> = {}): AIProviderInfo {
-  return {
+  return modelInfo({
     id,
     kind: 'text',
     label: id === 'grok' ? 'xAI Grok' : id === 'openai-compatible' ? '默认 AI' : id,
@@ -29,7 +30,7 @@ function provider(id: string, patch: Partial<AIProviderInfo> = {}): AIProviderIn
     baseUrl: '',
     model: '',
     ...patch,
-  };
+  });
 }
 
 describe('continuationBudget：按所选服务的上下文长度决定续写的上下文预算', () => {
@@ -60,40 +61,30 @@ describe('continuationBudget：按所选服务的上下文长度决定续写的�
 });
 
 describe('resolveContinuationProvider', () => {
-  it('Grok 已配置时优先 Grok，否则默认 AI；指定的服务可用时用指定的', () => {
-    const all = [provider('openai-compatible'), provider('grok')];
-    expect(resolveContinuationProvider(all)).toEqual({ providerId: 'grok', label: 'xAI Grok' });
-    expect(resolveContinuationProvider(all, 'openai-compatible')).toEqual({
-      providerId: undefined,
-      label: '默认 AI',
+  it('默认文本模型优先；指定的模型可用时用指定的；选中的就是默认时省略 providerId', () => {
+    const all = [provider('openai-compatible', { isDefault: true }), provider('grok')];
+    expect(resolveContinuationProvider(all)).toEqual({ providerId: undefined, label: '默认 AI' });
+    expect(resolveContinuationProvider(all, 'grok')).toEqual({
+      providerId: 'grok',
+      label: 'xAI Grok',
     });
+    // 指定的不可用：回到默认
     expect(
-      resolveContinuationProvider([
-        provider('openai-compatible'),
-        provider('grok', { configured: false }),
-      ])
+      resolveContinuationProvider(
+        [
+          provider('openai-compatible', { isDefault: true }),
+          provider('grok', { configured: false }),
+        ],
+        'grok'
+      )
     ).toEqual({ providerId: undefined, label: '默认 AI' });
   });
 
-  it('作者选定的默认写作 AI 优先于 Grok；选定的就是默认时省略 providerId', () => {
+  it('默认模型不可用时用第一个可用的，并显式带 id', () => {
     const all = [
-      provider('openai-compatible'),
+      provider('text-1', { label: 'Kimi', isDefault: true, configured: false }),
       provider('grok'),
-      provider('custom-text-1', {
-        label: 'Kimi',
-        custom: true,
-        isDefaultText: true,
-        defaultTextChosen: true,
-      }),
     ];
-    expect(resolveContinuationProvider(all)).toEqual({ providerId: undefined, label: 'Kimi' });
-    // 显式选内置服务：默认已经不是它，必须带 id
-    expect(resolveContinuationProvider(all, 'openai-compatible')).toEqual({
-      providerId: 'openai-compatible',
-      label: '默认 AI',
-    });
-    // 选定的默认不可用：回到旧顺序
-    all[2] = { ...all[2], configured: false };
     expect(resolveContinuationProvider(all)).toEqual({ providerId: 'grok', label: 'xAI Grok' });
   });
 
@@ -132,7 +123,10 @@ function setup(overrides: Partial<ContinuationDeps> = {}) {
   const cancelStream = vi.fn();
   const deps: ContinuationDeps = {
     loadSources: vi.fn(async () => SOURCES),
-    listProviders: vi.fn(async () => [provider('openai-compatible'), provider('grok')]),
+    listProviders: vi.fn(async () => [
+      provider('openai-compatible', { configured: false }),
+      provider('grok'),
+    ]),
     prepareStream: () => router.prepare(),
     startStream,
     cancelStream,

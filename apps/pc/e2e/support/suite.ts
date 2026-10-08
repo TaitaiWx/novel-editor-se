@@ -5,7 +5,8 @@
  * 每个用例结束时检查非预期的控制台错误。返回的对象在 beforeAll 之后可用。
  */
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from 'vitest';
 import { launchApp, writeLogs, type ElectronApp } from './app';
@@ -30,6 +31,8 @@ export interface SuiteOptions {
   fixture?: FixtureOptions;
   /** 已知且可接受的控制台错误（新增条目时写明原因） */
   allowedIssues?: RegExp[];
+  /** 启动前写入 userData（例如旧版配置文件，验证迁移）；目录在关闭后删除 */
+  prepareUserData?: (userDataDir: string) => Promise<void>;
 }
 
 export function setupAppSuite(options: SuiteOptions = {}): AppSuite {
@@ -50,14 +53,22 @@ export function setupAppSuite(options: SuiteOptions = {}): AppSuite {
     },
   };
 
+  let preparedUserData: string | undefined;
   beforeAll(async () => {
     fixture = await createFixtureProject(options.fixture);
-    app = await launchApp({ projectDir: fixture.root });
+    if (options.prepareUserData) {
+      preparedUserData = await mkdtemp(path.join(tmpdir(), 'novel-editor-e2e-userdata-'));
+      await options.prepareUserData(preparedUserData);
+    }
+    app = await launchApp({ projectDir: fixture.root, userDataDir: preparedUserData });
   });
 
   afterAll(async () => {
     await app?.close();
     await fixture?.dispose();
+    if (preparedUserData) {
+      await rm(preparedUserData, { recursive: true, force: true, maxRetries: 3 }).catch(() => {});
+    }
   });
 
   beforeEach(({ task, onTestFailed }) => {

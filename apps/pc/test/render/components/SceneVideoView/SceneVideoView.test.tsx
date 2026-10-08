@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import React from 'react';
+import { modelInfo } from '../../helpers/aiModel';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { WORKSPACE_FILES_CHANGED_EVENT } from '@/render/utils/workspaceFiles';
@@ -42,7 +43,7 @@ interface MockOptions {
 }
 
 function provider(id: string, kind: 'text' | 'video', ready: boolean) {
-  return {
+  return modelInfo({
     id,
     kind,
     label: id === 'minimax-video' ? 'MiniMax 视频' : id,
@@ -56,7 +57,7 @@ function provider(id: string, kind: 'text' | 'video', ready: boolean) {
     baseUrl: '',
     model: 'm1',
     ...(kind === 'video' ? { pricePerSecond: 0.5, currency: 'CNY' } : {}),
-  };
+  });
 }
 
 let taskSeq = 0;
@@ -244,7 +245,7 @@ describe('场景视频画布', () => {
     expect(screen.getByText(/AI 拆出 4 个镜头/)).toBeTruthy();
     expect(node('镜头 2').textContent).toContain('中景 · 4s');
     expect(node('镜头 2').textContent).toContain('林舟回头');
-    await screen.findByLabelText('视频服务');
+    await screen.findByLabelText('视频模型');
     expect(screen.getByTestId('scene-video-estimate').textContent).toBe(
       '预计 ¥9.00 · 4 个镜头 · 共 18 秒'
     );
@@ -316,7 +317,7 @@ describe('场景视频画布', () => {
     const { electron } = setup({ textReady: true, videoReady: true });
     await screen.findByTestId('scene-video-view');
     await waitFor(() => expect(shotNodes()).toHaveLength(4));
-    await screen.findByLabelText('视频服务');
+    await screen.findByLabelText('视频模型');
     fireEvent.click(screen.getByRole('button', { name: '生成 4 个镜头' }));
     await waitFor(() => expect(calls(electron, 'video-task-submit')).toHaveLength(4));
     const submitted = calls(electron, 'video-task-submit').map(

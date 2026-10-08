@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import React from 'react';
+import { modelInfo } from '../../helpers/aiModel';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CHARACTER_MEDIA_KINDS, type MediaItem } from '@novel-editor/core/entity-media';
@@ -12,7 +13,7 @@ import { chooseOption } from '../../helpers/select';
 const PNG_URL = 'data:image/png;base64,iVBORw0KGgo=';
 
 function provider(id: string, kind: 'image' | 'text', ready: boolean) {
-  return {
+  return modelInfo({
     id,
     kind,
     label: id,
@@ -25,7 +26,7 @@ function provider(id: string, kind: 'image' | 'text', ready: boolean) {
     enabled: ready,
     baseUrl: '',
     model: 'm',
-  };
+  });
 }
 
 let saveSeq = 0;

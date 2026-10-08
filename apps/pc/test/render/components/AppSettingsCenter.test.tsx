@@ -22,6 +22,7 @@ interface Options {
   setError?: boolean;
   clearError?: boolean;
   profile?: unknown;
+  models?: Array<{ id: string; kind: string }>;
 }
 
 function mockIpc(opts: Options = {}): ElectronMock {
@@ -38,8 +39,10 @@ function mockIpc(opts: Options = {}): ElectronMock {
       case 'app-cache-clear':
         if (opts.clearError) throw new Error('磁盘被锁定');
         return { removedSettingRows: 1 };
-      case 'ai-providers-set':
-        return { ok: true, data: {} };
+      case 'ai-providers-list':
+        return { ok: true, data: opts.models ?? [] };
+      case 'ai-models-remove':
+        return { ok: true, data: { removed: true } };
       default:
         return undefined;
     }
@@ -272,7 +275,13 @@ describe('AppSettingsCenter', () => {
       ...DEFAULT_SETTINGS_DRAFT,
       ai: { ...DEFAULT_SETTINGS_DRAFT.ai, apiKey: 'sk-secret' },
     };
-    const mock = mockIpc({ stored });
+    const mock = mockIpc({
+      stored,
+      models: [
+        { id: 'openai-compatible', kind: 'text' },
+        { id: 'video-1', kind: 'video' },
+      ],
+    });
     const { onSettingsChange } = renderCenter({ initialTab: 'data' });
     await waitFor(() => expect(onSettingsChange).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: '清除 AI 设置' }));
@@ -284,10 +293,9 @@ describe('AppSettingsCenter', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认清除' }));
     expect(await screen.findByText('AI 设置已恢复默认')).toBeTruthy();
     await waitFor(() => expect(lastSaved(mock).ai.apiKey).toBe(''));
-    // 安全存储中的 Key 一并清除
-    expect(mock.invoke).toHaveBeenCalledWith('ai-providers-set', 'openai-compatible', {
-      clearKey: true,
-    });
+    // 全部模型连同安全存储中的 Key 一并删除
+    expect(mock.invoke).toHaveBeenCalledWith('ai-models-remove', 'openai-compatible');
+    expect(mock.invoke).toHaveBeenCalledWith('ai-models-remove', 'video-1');
   });
 
   it('数据：全部清空', async () => {
@@ -312,104 +320,22 @@ describe('AppSettingsCenter', () => {
     expect(await screen.findByText('清除失败: 磁盘被锁定')).toBeTruthy();
   });
 
-  it('AI：总开关、预设、地址、模型、密钥、数值', async () => {
+  it('AI：总开关独立在最上方；每个能力一张模型列表（空状态 + 添加模型）', async () => {
     const mock = mockIpc();
     renderCenter({ initialTab: 'ai' });
     await waitFor(() =>
       expect(mock.invoke.mock.calls.some((c) => c[0] === 'db-settings-set')).toBe(true)
     );
-
-    // 总开关独立在最上方（不在服务面板里）
     fireEvent.click(screen.getByRole('switch', { name: '启用 AI 功能' }));
     await waitFor(() => expect(lastSaved(mock).ai.enabled).toBe(true));
     expect(lastSaved(mock).ai.enabledExplicitlySet).toBe(true);
-
-    chooseOption('服务预设', 'DeepSeek 官方');
-    await waitFor(() => expect(lastSaved(mock).ai.baseUrl).toBe('https://api.deepseek.com/v1'));
-    expect(lastSaved(mock).ai.model).toBe('deepseek-chat');
-    expect(inputFor('模型名称').disabled).toBe(true);
-    expect(selectOptionTexts('模型名称')).not.toContain('手动输入');
-
-    chooseOption('模型名称', 'deepseek-reasoner');
-    await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(65536));
-    chooseOption('模型名称', 'deepseek-chat / DeepSeek-V3.2');
-    await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(8192));
-
-    // 自定义预设：保留原 baseUrl/model
-    chooseOption('服务预设', '自定义兼容接口');
-    await waitFor(() => expect(lastSaved(mock).ai.preset).toBe('custom'));
-    expect(lastSaved(mock).ai.baseUrl).toBe('https://api.deepseek.com/v1');
-    expect(getCombobox('模型名称').textContent).toBe('手动输入');
-    chooseOption('模型名称', '手动输入');
-
-    fireEvent.change(inputFor('接口地址'), { target: { value: 'https://x.test/v1' } });
-    fireEvent.change(inputFor('模型名称'), { target: { value: 'my-model' } });
-    // Key 只写不读：输入后点「保存 Key」交给主进程加密保存，草稿里只记录 hasApiKey
-    fireEvent.change(inputFor('API Key'), { target: { value: 'sk-1' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存 Key' }));
-    expect(await screen.findByText('Key 已安全保存')).toBeTruthy();
-    expect(mock.invoke).toHaveBeenCalledWith('ai-providers-set', 'openai-compatible', {
-      apiKey: 'sk-1',
-    });
-    expect(inputFor('API Key').value).toBe('');
-    fireEvent.change(inputFor('温度'), { target: { value: '0.7' } });
-    // 超出范围的值在失焦时夹取到最小值（与其他文本服务同一组范围：上下文长度 ≥ 1000）
-    fireEvent.change(inputFor('上下文长度'), { target: { value: '10' } });
-    fireEvent.blur(inputFor('上下文长度'));
-    fireEvent.change(inputFor('单次回复长度'), { target: { value: '100' } });
-    fireEvent.blur(inputFor('单次回复长度'));
-    await waitFor(() => {
-      const ai = lastSaved(mock).ai;
-      expect(ai.baseUrl).toBe('https://x.test/v1');
-      expect(ai.model).toBe('my-model');
-      expect(ai.apiKey).toBe('');
-      expect(ai.hasApiKey).toBe(true);
-      expect(ai.temperature).toBe(0.7);
-      expect(ai.contextTokens).toBe(1000);
-      expect(ai.maxTokens).toBe(100);
-    });
-    // 清空后失焦恢复为当前值，非数字输入直接被拒绝
-    for (const label of ['温度', '上下文长度', '单次回复长度']) {
-      fireEvent.change(inputFor(label), { target: { value: '' } });
-      fireEvent.blur(inputFor(label));
-    }
-    fireEvent.change(inputFor('温度'), { target: { value: 'abc' } });
-    expect(inputFor('温度').value).toBe('0.7');
-    fireEvent.click(screen.getByRole('button', { name: '增加单次回复长度' }));
-    await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(228));
-    expect(lastSaved(mock).ai.temperature).toBe(0.7);
-    expect(lastSaved(mock).ai.contextTokens).toBe(1000);
+    expect(await screen.findByText(/还没有文本模型/)).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: '添加模型' })).toHaveLength(4);
+    // 不再有内置服务面板与「保存 AI 配置」
+    expect(screen.queryByRole('button', { name: '保存 AI 配置' })).toBeNull();
+    expect(screen.queryByText('服务预设')).toBeNull();
   });
 
-  it('AI：保存成功提示后自动消失；保存失败提示', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    let fail = false;
-    installElectronMock((channel) => {
-      if (channel === 'db-settings-set' && fail) throw new Error('x');
-      return null;
-    });
-    renderCenter({ initialTab: 'ai' });
-    fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
-    expect(await screen.findByText('AI 配置已保存')).toBeTruthy();
-    await act(async () => {
-      vi.advanceTimersByTime(2000);
-    });
-    expect(screen.queryByText('AI 配置已保存')).toBeNull();
-
-    fail = true;
-    fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
-    expect(await screen.findByText('保存失败，请重试')).toBeTruthy();
-  });
-
-  // BUG: AppSettingsCenter/index.tsx 温度输入 `Number(e.target.value) || 1.3`，
-  // 输入框允许 min="0"，但 0 是 falsy，会被强制改回 1.3，用户无法把温度设为 0。
-  it('AI：温度允许设置为 0', async () => {
-    const mock = mockIpc();
-    const { onSettingsChange } = renderCenter({ initialTab: 'ai' });
-    await waitFor(() => expect(onSettingsChange).toHaveBeenCalled());
-    fireEvent.change(inputFor('温度'), { target: { value: '0' } });
-    await waitFor(() => expect(lastSaved(mock).ai.temperature).toBe(0));
-  });
   // BUG: AppSettingsCenter/index.tsx 的加载 effect 在 db-settings-get 返回后无条件 setSettings(next)，
   // 若用户在加载完成前已修改设置，修改会被存储中的旧值覆盖（静默丢失）。
   it('加载完成前的修改不应被覆盖', async () => {

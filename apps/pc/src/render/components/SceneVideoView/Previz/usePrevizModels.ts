@@ -1,11 +1,10 @@
 /**
- * 预演可用的 AI 模型：已配置 Key 且已启用的文本服务（与「AI 生成分镜」同一判断，useVideoServices.pickTextProvider），
- * 每个服务列出当前模型与可选模型；默认选默认写作 AI（utils/textProviders：选定的 > 内置 openai-compatible），其次第一个可用服务。
- * 只读 configured 标记，不涉及任何密钥。
+ * 预演可用的 AI 模型：设置中心「AI → 文本」里已配置 Key 且已启用的模型（每条一个选项，显示名称即选项文字），
+ * 默认文本模型在前并默认选中（utils/textProviders）。只读 configured 标记，不涉及任何密钥。
  */
 import { useEffect, useMemo, useState } from 'react';
 import type { AIProviderInfo } from '@/render/types/ai-api';
-import { pickTextProvider } from '../useVideoServices';
+import { usableModels } from '@/render/utils/textProviders';
 import type { PrevizModelChoice } from './previzGeneration';
 
 export interface PrevizModelOption {
@@ -14,23 +13,12 @@ export interface PrevizModelOption {
   choice: PrevizModelChoice;
 }
 
-const SEPARATOR = '::';
-
 export function modelOptionsFrom(providers: readonly AIProviderInfo[]): PrevizModelOption[] {
-  const ready = providers.filter((item) => item.kind === 'text' && item.configured && item.enabled);
-  const preferred = pickTextProvider(providers);
-  const ordered = [...ready].sort(
-    (a, b) => Number(b.id === preferred) - Number(a.id === preferred)
-  );
-  return ordered.flatMap((provider) => {
-    const models = Array.from(new Set([provider.model, ...provider.models].filter(Boolean)));
-    const list = models.length ? models : [''];
-    return list.map((model) => ({
-      value: `${provider.id}${SEPARATOR}${model}`,
-      label: model ? `${provider.label} · ${model}` : provider.label,
-      choice: { providerId: provider.id, model },
-    }));
-  });
+  return usableModels(providers, 'text').map((provider) => ({
+    value: provider.id,
+    label: provider.label,
+    choice: { providerId: provider.id, model: provider.model },
+  }));
 }
 
 export function usePrevizModels(): {

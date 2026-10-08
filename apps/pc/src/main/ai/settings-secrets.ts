@@ -113,13 +113,14 @@ const DERIVED_AI_FIELDS = [
 ] as const;
 
 /**
- * db-settings-get：去掉 Key，注入 ai.hasApiKey；默认写作 AI 不是内置 openai-compatible 时
- * 再注入 defaultTextProviderId / defaultTextLabel / defaultTextReady（渲染进程据此判断 AI 是否可用）
+ * db-settings-get：去掉 Key，注入 ai.hasApiKey；有默认文本模型时再注入
+ * defaultTextProviderId / defaultTextLabel / defaultTextReady（渲染进程据此判断 AI 是否可用），
+ * 以及它的上下文长度 contextTokens（各功能按它决定上下文预算）
  */
 export function sanitizeSettingsForRenderer(
   raw: string | undefined,
   hasApiKey: boolean,
-  defaultText?: { id: string; label: string; ready: boolean } | null
+  defaultText?: { id: string; label: string; ready: boolean; contextTokens?: number } | null
 ): string | undefined {
   const settings = parse(raw);
   if (!settings) return raw;
@@ -134,6 +135,9 @@ export function sanitizeSettingsForRenderer(
           defaultTextProviderId: defaultText.id,
           defaultTextLabel: defaultText.label,
           defaultTextReady: defaultText.ready,
+          ...(typeof defaultText.contextTokens === 'number'
+            ? { contextTokens: defaultText.contextTokens }
+            : {}),
         }
       : {}),
   };

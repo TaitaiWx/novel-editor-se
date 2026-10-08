@@ -96,11 +96,11 @@ const SceneAudioSection: React.FC<SceneAudioSectionProps> = ({
         </label>
         {speechProviders.length > 1 && (
           <label className={styles.field}>
-            <span className={styles.label}>配音服务</span>
+            <span className={styles.label}>配音模型</span>
             <Select
               block
               size="lg"
-              aria-label="配音服务"
+              aria-label="配音模型"
               value={audio.speechProviderId ?? speechProviders[0]?.id ?? ''}
               options={speechProviders.map((item) => ({ value: item.id, label: item.label }))}
               onChange={(speechProviderId) => onChange((prev) => ({ ...prev, speechProviderId }))}
@@ -110,8 +110,8 @@ const SceneAudioSection: React.FC<SceneAudioSectionProps> = ({
       </div>
       {speechProviders.length === 0 && (
         <p className={styles.muted}>
-          还没有配置配音服务：在设置中心「AI → 语音」里填写 OpenAI 兼容配音或 MiniMax 语音合成的 Key
-          后，镜头里的对白可以一键生成配音。
+          还没有配音模型：在设置中心「AI → 语音」里添加模型（OpenAI 兼容或 MiniMax）后，
+          镜头里的对白可以一键生成配音。
         </p>
       )}
 

@@ -1418,7 +1418,8 @@ describe('小说编辑器 GUI', () => {
       () =>
         (document.querySelector('.cm-content video.cm-lp-video-player') as HTMLVideoElement | null)
           ?.paused === false,
-      { message: '点击播放按钮后开始播放' }
+      // 全量 E2E 负载下视频解码启动偏慢，放宽等待
+      { timeout: 20_000, message: '点击播放按钮后开始播放' }
     );
     // 暂停后控制条与「在旁边看」常显
     await page.evaluate(() => {

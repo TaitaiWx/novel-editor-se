@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import React from 'react';
+import { modelInfo } from '../../helpers/aiModel';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { chooseOption, getCombobox, selectOptionTexts } from '../../helpers/select';
 import Toolbar, {
   normalizeCustomDuration,
   normalizeCustomStyle,
@@ -25,7 +27,7 @@ const state = createSceneVideoState(
 );
 
 function videoProvider(id: string, supportsAudio: boolean): AIProviderInfo {
-  return {
+  return modelInfo({
     id,
     kind: 'video',
     label: id,
@@ -39,7 +41,7 @@ function videoProvider(id: string, supportsAudio: boolean): AIProviderInfo {
     baseUrl: '',
     model: 'm',
     ...(supportsAudio ? { supportsAudio: true } : {}),
-  };
+  });
 }
 
 function renderToolbar(providers: AIProviderInfo[], current: SceneVideoState = state) {
@@ -90,6 +92,34 @@ describe('场景视频工具栏 · 生成声音', () => {
     expect(screen.getByRole('switch', { name: '生成声音' }).getAttribute('aria-checked')).toBe(
       'false'
     );
+  });
+});
+
+describe('场景视频工具栏 · 视频模型', () => {
+  it('一个下拉列出视频模型（显示名称）；没有单独的「视频服务」+「模型」两级选择；选择后记录模型 id', () => {
+    const fast = {
+      ...videoProvider('video-2', true),
+      label: 'Seedance · 2.0 fast',
+      vendor: 'seedance-video',
+    };
+    const { onChange } = renderToolbar([
+      { ...videoProvider('video-1', false), label: 'MiniMax 海螺 · Hailuo-02' },
+      fast,
+    ]);
+    expect(screen.queryByRole('combobox', { name: '视频服务' })).toBeNull();
+    expect(selectOptionTexts('视频模型')).toEqual([
+      'MiniMax 海螺 · Hailuo-02',
+      'Seedance · 2.0 fast',
+    ]);
+    expect(getCombobox('视频模型').textContent).toBe('MiniMax 海螺 · Hailuo-02');
+    // MiniMax 不支持生成声音
+    expect((screen.getByRole('switch', { name: '生成声音' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    chooseOption('视频模型', 'Seedance · 2.0 fast');
+    const next = onChange.mock.calls[0][0]({ ...state, model: 'old-model' });
+    expect(next.providerId).toBe('video-2');
+    expect(next.model).toBeUndefined();
   });
 });
 

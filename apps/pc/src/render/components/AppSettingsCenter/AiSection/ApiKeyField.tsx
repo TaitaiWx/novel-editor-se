@@ -20,8 +20,8 @@ function errorText(result: AIIpcResult<unknown>): string {
 }
 
 /**
- * 只写的 API Key 输入：保存后清空输入框，只显示「已安全保存」；支持清除与测试连接。
- * Key 通过 ai-providers-set 交给主进程用 safeStorage 加密保存。
+ * 只写的 API Key 输入：保存后清空输入框，只显示「已安全保存」；支持清除（测试连接在模型行的标题栏）。
+ * Key 通过 ai-models-update 交给主进程用 safeStorage 加密保存。
  */
 const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
   providerId,
@@ -39,7 +39,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
     if (!ipc || !draft.trim()) return;
     setBusy(true);
     try {
-      const result = (await ipc.invoke('ai-providers-set', providerId, {
+      const result = (await ipc.invoke('ai-models-update', providerId, {
         apiKey: draft,
       })) as AIIpcResult<AIProviderInfo>;
       if (result.ok) {
@@ -58,7 +58,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
     if (!ipc) return;
     setBusy(true);
     try {
-      const result = (await ipc.invoke('ai-providers-set', providerId, {
+      const result = (await ipc.invoke('ai-models-update', providerId, {
         clearKey: true,
       })) as AIIpcResult<AIProviderInfo>;
       if (result.ok) {
@@ -67,24 +67,6 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
       } else {
         setStatus({ tone: 'error', text: errorText(result) });
       }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const test = async () => {
-    if (!ipc) return;
-    setBusy(true);
-    setStatus({ tone: 'muted', text: '正在测试连接…' });
-    try {
-      const result = (await ipc.invoke('ai-providers-test', providerId)) as AIIpcResult<{
-        latencyMs: number;
-      }>;
-      setStatus(
-        result.ok
-          ? { tone: 'ok', text: `连接成功（${result.data.latencyMs} ms）` }
-          : { tone: 'error', text: `连接失败：${errorText(result)}` }
-      );
     } finally {
       setBusy(false);
     }
@@ -120,14 +102,6 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
         </span>
         {configured && (
           <>
-            <button
-              type="button"
-              className={styles.linkButton}
-              disabled={busy}
-              onClick={() => void test()}
-            >
-              测试连接
-            </button>
             <button
               type="button"
               className={styles.linkButton}

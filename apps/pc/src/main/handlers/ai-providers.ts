@@ -1,12 +1,11 @@
 /**
  * AI Provider 配置 / 一次性补全 / 流式输出 IPC
  *
- * - ai-providers-list / get / set / test：设置中心「AI 服务」；Key 只写不读，返回值只有 configured
- * - ai-providers-add-custom / remove-custom：自己添加的服务——OpenAI 兼容文本 AI（custom-text-<n>），
- *   或沿用内置厂商实现的视频 / 图片 / 语音服务（custom-video-<n> / custom-image-<n> / custom-speech-<n>）；
- *   全部字段由主进程校验，改名走 set { label }
- * - ai-providers-set-default：选定默认写作 AI（null 恢复内置默认）；变化后广播 settings-updated，
- *   让各窗口的 AI 可用状态（useAiConfig）重新读取
+ * - ai-providers-list / get：模型列表（每个能力一张，不含密钥，只有 configured）
+ * - ai-models-add / update / remove / set-default / test：模型的增删改、每个能力的默认模型、测试连接；
+ *   全部字段由主进程校验，Key 只写不读（add 可用 reuseKeyFrom 沿用同一服务商 + 地址的 Key，在主进程内复制）
+ * - ai-providers-set / test：旧通道（= ai-models-update / test；内置服务 id 还没有模型时以这个 id 新建）
+ * - 配置变化后广播 settings-updated，让各窗口的 AI 可用状态（useAiConfig）与模型列表重新读取
  * - ai-complete：一次性补全（可指定 providerId，例如 grok）
  * - ai-stream-start / ai-stream-cancel：流式补全，片段通过 webContents.send('ai-stream-event') 推送，
  *   只推给发起请求的窗口；窗口关闭时自动取消该窗口的所有流
@@ -18,8 +17,8 @@ import {
   AI_STREAM_EVENT,
   type AICompletePayload,
   type AICompleteResult,
-  type AICustomProviderInput,
   type AIIpcResult,
+  type AIModelInput,
   type AIProviderInfo,
   type AIProviderUpdate,
   type AIStreamEvent,
@@ -178,35 +177,35 @@ export function registerAIProviderHandlers(
     (): Promise<AIIpcResult<AIProviderInfo[]>> => guard(() => getService().listProviders())
   );
   ipcMain.handle('ai-providers-get', (_event, providerId: unknown) =>
-    guard(() => getService().getProviderInfo(String(providerId)))
+    guard(() => getService().getProviderInfo(providerId))
   );
   ipcMain.handle('ai-providers-set', (_event, providerId: unknown, update: AIProviderUpdate) =>
-    guardAndNotify(() => getService().updateProvider(String(providerId), update))
+    guardAndNotify(() => getService().updateProvider(providerId, update))
   );
   ipcMain.handle(
-    'ai-providers-add-custom',
-    (_event, input: AICustomProviderInput): Promise<AIIpcResult<AIProviderInfo>> =>
-      guardAndNotify(() => getService().addCustomProvider(input))
+    'ai-models-add',
+    (_event, input: AIModelInput): Promise<AIIpcResult<AIProviderInfo>> =>
+      guardAndNotify(() => getService().addModel(input))
   );
-  ipcMain.handle('ai-providers-remove-custom', (_event, providerId: unknown) =>
-    guardAndNotify(() => ({ removed: getService().removeCustomProvider(providerId) }))
+  ipcMain.handle('ai-models-update', (_event, id: unknown, update: AIProviderUpdate) =>
+    guardAndNotify(() => getService().updateModel(id, update))
+  );
+  ipcMain.handle('ai-models-remove', (_event, id: unknown) =>
+    guardAndNotify(() => ({ removed: getService().removeModel(id) }))
   );
   ipcMain.handle(
-    'ai-providers-set-default',
-    (_event, providerId: unknown): Promise<AIIpcResult<AIProviderInfo[]>> =>
-      guardAndNotify(() => {
-        const service = getService();
-        service.setDefaultTextProvider(providerId);
-        return service.listProviders();
-      })
+    'ai-models-set-default',
+    (_event, capability: unknown, id: unknown): Promise<AIIpcResult<AIProviderInfo[]>> =>
+      guardAndNotify(() => getService().setDefaultModel(capability, id))
   );
-  ipcMain.handle('ai-providers-test', (_event, providerId: unknown) =>
+  const test = (id: unknown) =>
     guard(async () => {
       const started = Date.now();
-      await getService().testProvider(String(providerId), AbortSignal.timeout(30_000));
+      await getService().testProvider(id, AbortSignal.timeout(30_000));
       return { latencyMs: Date.now() - started };
-    })
-  );
+    });
+  ipcMain.handle('ai-models-test', (_event, id: unknown) => test(id));
+  ipcMain.handle('ai-providers-test', (_event, id: unknown) => test(id));
   ipcMain.handle(
     'ai-complete',
     (_event, payload: AICompletePayload): Promise<AIIpcResult<AICompleteResult>> =>

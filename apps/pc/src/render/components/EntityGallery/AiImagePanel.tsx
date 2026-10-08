@@ -122,7 +122,7 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
         {providers.length > 1 && (
           <Select
             className={styles.select}
-            aria-label="图片服务"
+            aria-label="图片模型"
             value={providerId}
             options={providers.map((item) => ({ value: item.id, label: item.label }))}
             onChange={setProviderId}

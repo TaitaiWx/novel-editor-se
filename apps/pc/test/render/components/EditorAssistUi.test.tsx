@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import React from 'react';
+import { modelInfo } from '../helpers/aiModel';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CharacterHoverCard from '@/render/components/CharacterHoverCard';
@@ -118,7 +119,7 @@ describe('CharacterHoverCard', () => {
 });
 
 function provider(id: string, patch: Partial<AIProviderInfo> = {}): AIProviderInfo {
-  return {
+  return modelInfo({
     id,
     kind: 'text',
     label: id === 'grok' ? 'xAI Grok' : '默认 AI',
@@ -132,7 +133,7 @@ function provider(id: string, patch: Partial<AIProviderInfo> = {}): AIProviderIn
     baseUrl: '',
     model: '',
     ...patch,
-  };
+  });
 }
 
 function renderPanel(
@@ -157,15 +158,15 @@ function renderPanel(
 }
 
 describe('ContinuationPanel', () => {
-  it('选择长度 / 方向 / 章纲 / 服务后生成', () => {
+  it('选择长度 / 方向 / 章纲 / 模型后生成', () => {
     const props = renderPanel();
-    expect(screen.getByRole('combobox', { name: 'AI 服务' }).textContent).toContain(
-      '自动（xAI Grok）'
+    expect(screen.getByRole('combobox', { name: 'AI 模型' }).textContent).toContain(
+      '默认（xAI Grok）'
     );
     fireEvent.click(screen.getByRole('radio', { name: '约 500 字' }));
     fireEvent.click(screen.getByRole('radio', { name: '收束本章' }));
     fireEvent.click(screen.getByRole('checkbox', { name: '遵循章纲' }));
-    chooseOption('AI 服务', '默认 AI');
+    chooseOption('AI 模型', '默认 AI');
     fireEvent.click(screen.getByRole('button', { name: '生成建议' }));
     const form = props.onGenerate.mock.calls[0][0];
     expect(toContinuationOptions(form)).toEqual({
