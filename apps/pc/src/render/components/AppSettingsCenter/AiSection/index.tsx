@@ -3,7 +3,8 @@
  * 每个服务一个可折叠面板，只显示这家需要的字段。
  *
  * - 文本：内置 OpenAI 兼容（参数在设置中心 JSON）+ Grok + 自己添加的 OpenAI 兼容服务（可多个），
- *   其中一个是默认写作 AI（「设为默认」）
+ *   其中一个是默认写作 AI（「设为默认」）；每个文本服务都有同一组「生成参数」（GenerationParams）
+ * - 图片 / 视频 / 语音：内置厂商 + 自己添加的（沿用某个内置厂商实现，例如第二个 Seedance 账号），每个分区底部「添加…」
  * - 展开状态记在 localStorage；没点过的：已配置或默认写作 AI 展开，其余收起
  */
 import React from 'react';
@@ -15,7 +16,7 @@ import type { AIPresetOption } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
 import Switch from '../../Switch';
 import sharedStyles from '../styles.module.scss';
-import AddTextProvider from './AddTextProvider';
+import AddProvider from './AddProvider';
 import BuiltinTextForm from './BuiltinTextForm';
 import ProviderPanel from './ProviderPanel';
 import { useAiProviders } from './useAiProviders';
@@ -48,9 +49,21 @@ const SECTIONS: readonly SectionDef[] = [
     title: '文本（写作 / 续写 / 分镜 / 预演）',
     description: '写作功能的主力 AI。可以添加多家，选一个作为默认。',
   },
-  { kind: 'image', title: '图片', description: '人物形象、三视图、设定图与场景视频的首帧。' },
-  { kind: 'video', title: '视频', description: '场景视频的镜头生成（异步任务，按厂商计费）。' },
-  { kind: 'speech', title: '语音（配音）', description: '场景视频的对白配音。' },
+  {
+    kind: 'image',
+    title: '图片',
+    description: '人物形象、三视图、设定图与场景视频的首帧。可以添加同一家的多个账号或兼容接口。',
+  },
+  {
+    kind: 'video',
+    title: '视频',
+    description: '场景视频的镜头生成（异步任务，按厂商计费）。可以添加多个账号 / 接口。',
+  },
+  {
+    kind: 'speech',
+    title: '语音（配音）',
+    description: '场景视频的对白配音。可以添加自建的 OpenAI 兼容配音等多个服务。',
+  },
 ];
 
 /** 主进程列表还没读到时，内置文本 AI 用设置草稿兜底显示 */
@@ -189,8 +202,11 @@ const AiSection: React.FC<AiSectionProps> = (props) => {
               </div>
             )}
             <div className={styles.panelList}>{items.map(renderPanel)}</div>
-            {section.kind === 'text' && api.providers !== null && (
-              <AddTextProvider
+            {api.providers !== null && (
+              <AddProvider
+                kind={section.kind}
+                vendors={items.filter((item) => !item.custom)}
+                existing={items}
                 onAdd={api.addCustom}
                 onAdded={(info) => panels.setExpanded(info.id, true)}
               />

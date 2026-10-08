@@ -6,6 +6,7 @@
  */
 import { initialQualityId, normalizeSource, resolvePlayback } from './detect';
 import {
+  extensionOfUrl,
   isAudioSource,
   probeMimeFor,
   protocolHint,
@@ -13,6 +14,12 @@ import {
   type ResolvedSourceType,
 } from './formats';
 import type { MediaEngineFactory, PlayerSource } from './types';
+import {
+  audioCodecName,
+  audioCodecSupport,
+  audioUnsupportedHint,
+  type AudioCodecSupport,
+} from './audioCodecs';
 
 /** 能力探测：原生播放（canPlayType）与 MSE（MediaSource / ManagedMediaSource 的 isTypeSupported） */
 export interface CapabilityProbe {
@@ -342,6 +349,11 @@ export interface CanPlayResult {
   requires?: string;
   /** 说明（给人看） */
   reason: string;
+  /**
+   * 纯音频源：当前环境各音频编码（MP3 / AAC / Opus / Vorbis / FLAC / WAV / ALAC / AC-3 / AMR）能不能解码；
+   * 渐进式文件按 canPlayType，HLS / DASH 等流媒体按 MSE
+   */
+  codecs?: AudioCodecSupport[];
 }
 
 export interface CanPlayOptions {
@@ -408,6 +420,10 @@ export function canPlay(src: string | PlayerSource, options: CanPlayOptions = {}
   }
   const mime = probeMimeFor(url, type, source.mimeType) ?? spec.mime;
   const verdict = evaluateFormat(spec, probe, mime);
+  const audioReason =
+    type === 'audio' && !verdict.playable
+      ? audioUnsupportedHint(audioCodecName(mime, extensionOfUrl(url)))
+      : null;
   return {
     playable: verdict.playable,
     engine: verdict.engine,
@@ -415,6 +431,14 @@ export function canPlay(src: string | PlayerSource, options: CanPlayOptions = {}
     confidence: verdict.confidence,
     audioOnly,
     requires: verdict.engine === spec.engine ? spec.requires : undefined,
-    reason: verdict.note,
+    reason: audioReason ?? verdict.note,
+    ...(audioOnly
+      ? {
+          codecs: audioCodecSupport(
+            probe,
+            verdict.engine === 'native' || !verdict.engine ? 'native' : 'mse'
+          ),
+        }
+      : {}),
   };
 }

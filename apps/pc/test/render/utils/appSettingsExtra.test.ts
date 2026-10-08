@@ -132,6 +132,14 @@ describe('normalizeShortcutInput', () => {
 });
 
 describe('matchShortcutEvent', () => {
+  it('不带 key 的 keydown（输入框自动填充等派发）直接忽略，不抛错', () => {
+    const noKey = new Event('keydown') as KeyboardEvent;
+    expect(() => matchShortcutEvent(noKey, 'Mod+P')).not.toThrow();
+    expect(matchShortcutEvent(noKey, 'Mod+P')).toBe(false);
+    const emptyKey = { key: '', metaKey: true } as unknown as KeyboardEvent;
+    expect(matchShortcutEvent(emptyKey, 'Mod+P')).toBe(false);
+  });
+
   it('匹配 Mod 组合键（meta 或 ctrl）', () => {
     expect(matchShortcutEvent(keyEvent({ key: 'p', metaKey: true }), 'Mod+P')).toBe(true);
     expect(matchShortcutEvent(keyEvent({ key: 'p', ctrlKey: true }), 'Mod+P')).toBe(true);

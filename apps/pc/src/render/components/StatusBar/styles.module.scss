@@ -416,7 +416,7 @@
 .restartOverlay {
   position: fixed;
   inset: 0;
-  z-index: 99999;
+  z-index: var(--z-blocking);
   background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;

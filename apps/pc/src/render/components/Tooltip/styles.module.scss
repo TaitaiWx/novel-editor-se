@@ -15,8 +15,8 @@
   max-width: 320px;
   word-break: normal;
   pointer-events: none;
-  // 悬停提示始终位于弹窗（10000~10050）与 toast（10060）之上
-  z-index: 10070;
+  // 悬停提示在弹窗、浮层与 toast 之上
+  z-index: var(--z-tooltip);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   animation: tooltipFadeIn 0.12s ease-out;
 }

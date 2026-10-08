@@ -2,7 +2,9 @@
  * AI Provider 配置 / 一次性补全 / 流式输出 IPC
  *
  * - ai-providers-list / get / set / test：设置中心「AI 服务」；Key 只写不读，返回值只有 configured
- * - ai-providers-add-custom / remove-custom：自己添加的 OpenAI 兼容文本 AI（custom-text-<n>）；改名走 set { label }
+ * - ai-providers-add-custom / remove-custom：自己添加的服务——OpenAI 兼容文本 AI（custom-text-<n>），
+ *   或沿用内置厂商实现的视频 / 图片 / 语音服务（custom-video-<n> / custom-image-<n> / custom-speech-<n>）；
+ *   全部字段由主进程校验，改名走 set { label }
  * - ai-providers-set-default：选定默认写作 AI（null 恢复内置默认）；变化后广播 settings-updated，
  *   让各窗口的 AI 可用状态（useAiConfig）重新读取
  * - ai-complete：一次性补全（可指定 providerId，例如 grok）
@@ -16,7 +18,7 @@ import {
   AI_STREAM_EVENT,
   type AICompletePayload,
   type AICompleteResult,
-  type AICustomTextInput,
+  type AICustomProviderInput,
   type AIIpcResult,
   type AIProviderInfo,
   type AIProviderUpdate,
@@ -183,11 +185,11 @@ export function registerAIProviderHandlers(
   );
   ipcMain.handle(
     'ai-providers-add-custom',
-    (_event, input: AICustomTextInput): Promise<AIIpcResult<AIProviderInfo>> =>
-      guardAndNotify(() => getService().addCustomTextProvider(input))
+    (_event, input: AICustomProviderInput): Promise<AIIpcResult<AIProviderInfo>> =>
+      guardAndNotify(() => getService().addCustomProvider(input))
   );
   ipcMain.handle('ai-providers-remove-custom', (_event, providerId: unknown) =>
-    guardAndNotify(() => ({ removed: getService().removeCustomTextProvider(providerId) }))
+    guardAndNotify(() => ({ removed: getService().removeCustomProvider(providerId) }))
   );
   ipcMain.handle(
     'ai-providers-set-default',

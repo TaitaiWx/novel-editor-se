@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
-  AICustomTextInput,
+  AICustomProviderInput,
   AIIpcResult,
   AIProviderInfo,
   AIProviderUpdate,
@@ -22,7 +22,7 @@ export interface AiProvidersApi {
   /** 用主进程返回的最新信息替换一行 */
   replace: (info: AIProviderInfo) => void;
   update: (id: string, update: AIProviderUpdate) => Promise<AIIpcResult<AIProviderInfo> | null>;
-  addCustom: (input: AICustomTextInput) => Promise<AIIpcResult<AIProviderInfo> | null>;
+  addCustom: (input: AICustomProviderInput) => Promise<AIIpcResult<AIProviderInfo> | null>;
   removeCustom: (id: string) => Promise<AIIpcResult<{ removed: boolean }> | null>;
   setDefault: (id: string | null) => Promise<AIIpcResult<AIProviderInfo[]> | null>;
 }
@@ -83,7 +83,7 @@ export function useAiProviders(): AiProvidersApi {
     [replace]
   );
 
-  const addCustom = useCallback(async (input: AICustomTextInput) => {
+  const addCustom = useCallback(async (input: AICustomProviderInput) => {
     const ipc = window.electron?.ipcRenderer;
     if (!ipc) return null;
     const result = (await ipc.invoke('ai-providers-add-custom', input)) as

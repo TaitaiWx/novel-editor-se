@@ -1,6 +1,6 @@
 .contextMenu {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--z-floating);
   background-color: #2d2d2d;
   border: 1px solid var(--ui-border-strong);
   border-radius: 6px;

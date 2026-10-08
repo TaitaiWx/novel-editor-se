@@ -240,6 +240,44 @@
   gap: 8px;
 }
 
+// 表单底部按钮统一高度、去掉共享按钮的上外边距（primaryButton 自带 margin-top 与 32px 高度，
+// 与 30px 的 secondaryButton 并排时会错位）；加 .aiPanel 前缀保证优先级高于共享样式
+.aiPanel .footerButton {
+  box-sizing: border-box;
+  height: 30px;
+  margin: 0;
+  padding: 0 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 28px;
+  vertical-align: middle;
+}
+
+// ─── 生成参数（每个文本服务同一组） ──────────────────────────────────
+
+.paramGroup {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 0;
+  border-top: 1px dashed var(--ui-border-subtle);
+}
+
+.paramGroupTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 12px 12px 0;
+  color: var(--ui-fg-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.paramGroupHint {
+  color: var(--ui-fg-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
 .dangerButton {
   padding: 5px 10px;
   border: 1px solid transparent;
@@ -254,7 +292,7 @@
   }
 }
 
-// ─── 添加文本 AI ──────────────────────────────────────────────────────
+// ─── 添加服务（文本 / 图片 / 视频 / 语音） ──────────────────────────────────────────────────────
 
 .addButton {
   display: inline-flex;

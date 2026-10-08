@@ -10,7 +10,7 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { VscOpenPreview } from 'react-icons/vsc';
 import Tooltip from '../../Tooltip';
-import VideoPlayer from '../../VideoPlayer';
+import VideoPlayer, { AudioPlayer } from '../../VideoPlayer';
 import { referenceItemFor, requestOpenReference } from '../../../utils/referencePane';
 
 export const MEDIA_MAX_WIDTH = 640;
@@ -76,7 +76,7 @@ export const MediaFigure: React.FC<MediaFigureProps> = ({
 }) => {
   if (kind === 'audio') {
     return (
-      <VideoPlayer
+      <AudioPlayer
         src={{ src: url, audioOnly: true }}
         title={label}
         maxWidth={AUDIO_MAX_WIDTH}

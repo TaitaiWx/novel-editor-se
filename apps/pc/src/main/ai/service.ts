@@ -2,7 +2,10 @@
  * 主进程 AI 服务：Provider 注册表 + 安全密钥 + 非密钥配置的组合
  *
  * - 内置默认文本服务（openai-compatible）的地址 / 模型 / 温度 / 启用状态来自设置中心 JSON，Key 来自 CredentialStore
- * - 其他 Provider（grok、minimax-video、seedance-video…）与自定义文本 AI（custom-text-<n>）的配置来自 ProviderConfigStore
+ * - 其他 Provider（grok、minimax-video、seedance-video…）与自己添加的服务（custom-text-<n>、custom-video-<n>、
+ *   custom-image-<n>、custom-speech-<n>）的配置来自 ProviderConfigStore
+ * - 每个文本服务都有同一组生成参数（温度 / 上下文长度 / 单次回复长度）：请求没有指定温度时用服务的温度，
+ *   单次回复长度同时是请求 max_tokens 的上限
  * - 默认写作 AI：作者在设置中心选定的文本服务（resolveDefaultTextProviderId，省略 providerId 的请求都走它）；
  *   未选择时为内置 openai-compatible，与旧版完全一致
  * - invokeConfiguredAI 保持旧版签名、默认值与错误文案（成长推演、大纲导入等调用方无需改动）
@@ -20,13 +23,20 @@ import {
 } from '@novel-editor/ai';
 import type {
   AICompletePayload,
-  AICustomTextInput,
+  AICustomProviderInput,
   AIProviderInfo,
   AIProviderUpdate,
 } from '../../shared/ai';
 import { assertProviderId, type CredentialStore } from './credential-store';
+import { addCustomProvider, removeCustomProvider } from './custom-actions';
+import { customMediaVendorOf, syncCustomMediaProviders } from './custom-media';
 import { isCustomTextId, syncCustomTextProviders } from './custom-text';
-import { normalizeBaseUrl, type ProviderConfigStore } from './provider-config';
+import {
+  isCustomMediaId,
+  isCustomProviderId,
+  type ProviderConfigStore,
+  type StoredProviderConfig,
+} from './provider-config';
 import {
   isRecord,
   parseDefaultTextSettings,
@@ -42,6 +52,8 @@ export {
   sanitizeMessages,
   toCompletionRequest,
 } from './request';
+
+const MEDIA_KIND_LABELS = { video: '视频', image: '图片', speech: '配音' } as const;
 
 export interface AIRequestPayload {
   prompt: string;
@@ -84,9 +96,10 @@ export class AIService {
     );
   }
 
-  /** 同步自定义文本 AI 到注册表 */
+  /** 同步自己添加的服务到注册表 */
   private sync(): void {
     syncCustomTextProviders(this.registry, this.deps.configs);
+    syncCustomMediaProviders(this.registry, this.deps.configs);
   }
 
   private descriptor(providerId: string) {
@@ -146,48 +159,43 @@ export class AIService {
     };
   }
 
-  /** 添加自定义文本 AI（OpenAI 兼容）：名称 + 接口地址必填，模型 / Key 可选 */
-  addCustomTextProvider(input: AICustomTextInput): AIProviderInfo {
-    if (!isRecord(input)) throw new AIError({ kind: 'bad-request', message: '无效的配置' });
-    let baseUrl: string | undefined;
-    try {
-      baseUrl = normalizeBaseUrl(input.baseUrl);
-    } catch (error) {
-      throw new AIError({ kind: 'bad-request', message: toAIError(error).message });
-    }
-    if (!baseUrl) throw new AIError({ kind: 'bad-request', message: '请填写接口地址' });
-    const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
-    if (apiKey.length > 4096) throw new AIError({ kind: 'bad-request', message: 'API Key 过长' });
-    const clock = this.deps.clock ?? (() => new Date());
-    let profile;
-    try {
-      profile = this.deps.configs.addCustomText(input.label, clock().toISOString());
-    } catch (error) {
-      throw new AIError({ kind: 'bad-request', message: toAIError(error).message });
-    }
-    try {
-      this.deps.configs.update(profile.id, {
-        baseUrl,
-        model: typeof input.model === 'string' ? input.model : undefined,
-      });
-      if (apiKey) this.deps.credentials.set(profile.id, apiKey);
-    } catch (error) {
-      // 地址 / 模型校验失败：撤销登记，不留半成品
-      this.deps.configs.removeCustomText(profile.id);
-      throw new AIError({ kind: 'bad-request', message: toAIError(error).message });
-    }
-    return this.getProviderInfo(profile.id);
+  /** 添加自己的服务：文本为 OpenAI 兼容，视频 / 图片 / 语音沿用某个内置厂商实现 */
+  addCustomProvider(input: AICustomProviderInput): AIProviderInfo {
+    const id = addCustomProvider(this.deps, input);
+    this.sync();
+    return this.getProviderInfo(id);
   }
 
-  /** 删除自定义文本 AI：同时删除它的 Key 与配置；它是默认写作 AI 时恢复内置默认 */
-  removeCustomTextProvider(providerId: unknown): boolean {
-    if (!isCustomTextId(providerId)) {
-      throw new AIError({ kind: 'bad-request', message: '只能删除自己添加的文本 AI' });
-    }
-    this.deps.credentials.delete(providerId);
-    const removed = this.deps.configs.removeCustomText(providerId);
+  /** 旧名称：添加 OpenAI 兼容文本 AI */
+  addCustomTextProvider(input: AICustomProviderInput): AIProviderInfo {
+    return this.addCustomProvider(isRecord(input) ? { ...input, kind: 'text' } : input);
+  }
+
+  /** 删除自己添加的服务：同时删除它的 Key 与配置；它是默认写作 AI 时恢复内置默认 */
+  removeCustomProvider(providerId: unknown): boolean {
+    const removed = removeCustomProvider(this.deps, providerId);
     this.sync();
     return removed;
+  }
+
+  /** 旧名称 */
+  removeCustomTextProvider(providerId: unknown): boolean {
+    return this.removeCustomProvider(providerId);
+  }
+
+  /** 文本服务的生成参数（内置默认来自设置中心 JSON） */
+  private textParams(
+    providerId: string
+  ): Pick<StoredProviderConfig, 'temperature' | 'maxTokens' | 'contextTokens'> {
+    const source =
+      providerId === DEFAULT_TEXT_PROVIDER_ID
+        ? this.defaultSettings()
+        : this.deps.configs.get(providerId);
+    return {
+      temperature: source.temperature,
+      maxTokens: source.maxTokens,
+      contextTokens: source.contextTokens,
+    };
   }
 
   getProviderInfo(providerId: string): AIProviderInfo {
@@ -218,37 +226,38 @@ export class AIService {
       ...(descriptor.kind === 'video'
         ? { pricePerSecond: stored.pricePerSecond, currency: stored.currency ?? 'CNY' }
         : {}),
-      ...(isCustomTextId(descriptor.id) ? { custom: true } : {}),
+      ...(isCustomProviderId(descriptor.id) ? { custom: true } : {}),
+      ...(isCustomMediaId(descriptor.id)
+        ? { vendor: customMediaVendorOf(this.deps.configs, descriptor.id) }
+        : {}),
       ...(isText && defaultTextId === descriptor.id
         ? {
             isDefaultText: true,
             defaultTextChosen: Boolean(this.deps.configs.getDefaultTextProviderId()),
           }
         : {}),
-      ...(isText && !isDefault
-        ? {
-            temperature: stored.temperature,
-            maxTokens: stored.maxTokens,
-            contextTokens: stored.contextTokens,
-          }
-        : {}),
+      ...(isText ? this.textParams(descriptor.id) : {}),
       ...(descriptor.kind === 'speech' && stored.voice ? { voice: stored.voice } : {}),
     };
   }
 
   /**
    * 写入配置；apiKey 只写不读。内置 openai-compatible 的地址 / 模型仍由设置中心 AI 分区保存，
-   * 这里只记它自己的启用开关；label（改名）只对自定义文本 AI 有效
+   * 这里只记它自己的启用开关；label（改名）只对自己添加的服务有效
    */
   updateProvider(providerId: string, update: AIProviderUpdate): AIProviderInfo {
     const descriptor = this.descriptor(providerId);
     if (!isRecord(update)) throw new AIError({ kind: 'bad-request', message: '无效的配置' });
     if (update.label !== undefined) {
-      if (!isCustomTextId(descriptor.id)) {
-        throw new AIError({ kind: 'bad-request', message: '只能给自己添加的文本 AI 改名' });
+      if (!isCustomProviderId(descriptor.id)) {
+        throw new AIError({ kind: 'bad-request', message: '只能给自己添加的服务改名' });
       }
       try {
-        this.deps.configs.renameCustomText(descriptor.id, update.label);
+        if (isCustomTextId(descriptor.id)) {
+          this.deps.configs.renameCustomText(descriptor.id, update.label);
+        } else {
+          this.deps.configs.renameCustomMedia(descriptor.id, update.label);
+        }
       } catch (error) {
         throw new AIError({ kind: 'bad-request', message: toAIError(error).message });
       }
@@ -360,12 +369,16 @@ export class AIService {
     });
   }
 
-  getVideoProvider(providerId: string): VideoProvider {
+  /**
+   * 媒体服务的可用配置：类型不符报 bad-request，未启用 / 没有 Key 报 not-configured。
+   * 没有指定 providerId 时由调用方传入「第一个已配置的」
+   */
+  private mediaConfig(kind: 'video' | 'image' | 'speech', providerId: string) {
     const descriptor = this.descriptor(providerId);
-    if (descriptor.kind !== 'video') {
+    if (descriptor.kind !== kind) {
       throw new AIError({
         kind: 'bad-request',
-        message: `${descriptor.label} 不是视频服务`,
+        message: `${descriptor.label} 不是${MEDIA_KIND_LABELS[kind]}服务`,
         providerId,
       });
     }
@@ -385,19 +398,26 @@ export class AIService {
         providerId,
       });
     }
-    return this.registry.createVideo(descriptor.id, {
-      apiKey,
-      baseUrl: stored.baseUrl,
-      model: stored.model,
-    });
+    return { id: descriptor.id, stored, apiKey };
   }
 
-  /** 已配置且启用的图片服务（设置中心「更多 AI 服务」里的 Seedream / MiniMax / Grok 图片） */
-  listReadyImageProviders(): AIProviderInfo[] {
+  getVideoProvider(providerId: string): VideoProvider {
+    const { id, stored, apiKey } = this.mediaConfig('video', providerId);
+    return this.registry.createVideo(id, { apiKey, baseUrl: stored.baseUrl, model: stored.model });
+  }
+
+  /** 已配置且启用的某类服务（包括自己添加的） */
+  private listReady(kind: 'image' | 'speech'): AIProviderInfo[] {
+    this.sync();
     return this.registry
-      .list('image')
+      .list(kind)
       .map((descriptor) => this.getProviderInfo(descriptor.id))
       .filter((info) => info.configured && info.enabled);
+  }
+
+  /** 已配置且启用的图片服务（Seedream / MiniMax / Grok 图片，以及自己添加的） */
+  listReadyImageProviders(): AIProviderInfo[] {
+    return this.listReady('image');
   }
 
   getImageProvider(providerId?: string): ImageProvider {
@@ -406,46 +426,20 @@ export class AIService {
       throw new AIError({
         kind: 'not-configured',
         message:
-          '还没有配置图片服务，请先在设置中心「AI → 更多 AI 服务」里填写 Seedream / MiniMax / Grok 图片的 Key',
+          '还没有配置图片服务，请先在设置中心「AI → 图片」里填写 Seedream / MiniMax / Grok 图片的 Key',
       });
     }
-    const descriptor = this.descriptor(id);
-    if (descriptor.kind !== 'image') {
-      throw new AIError({
-        kind: 'bad-request',
-        message: `${descriptor.label} 不是图片服务`,
-        providerId: id,
-      });
-    }
-    const stored = this.deps.configs.get(descriptor.id);
-    const apiKey = this.deps.credentials.get(descriptor.id);
-    if (stored.enabled === false) {
-      throw new AIError({
-        kind: 'not-configured',
-        message: `${descriptor.label} 未启用`,
-        providerId: id,
-      });
-    }
-    if (!apiKey) {
-      throw new AIError({
-        kind: 'not-configured',
-        message: `未配置 ${descriptor.label} 的 API Key，请先在设置中心填写`,
-        providerId: id,
-      });
-    }
-    return this.registry.createImage(descriptor.id, {
-      apiKey,
-      baseUrl: stored.baseUrl,
-      model: stored.model,
+    const config = this.mediaConfig('image', id);
+    return this.registry.createImage(config.id, {
+      apiKey: config.apiKey,
+      baseUrl: config.stored.baseUrl,
+      model: config.stored.model,
     });
   }
 
-  /** 已配置且启用的配音服务（设置中心「更多 AI 服务」里的 OpenAI 兼容配音 / MiniMax 语音合成） */
+  /** 已配置且启用的配音服务（OpenAI 兼容配音 / MiniMax 语音合成，以及自己添加的） */
   listReadySpeechProviders(): AIProviderInfo[] {
-    return this.registry
-      .list('speech')
-      .map((descriptor) => this.getProviderInfo(descriptor.id))
-      .filter((info) => info.configured && info.enabled);
+    return this.listReady('speech');
   }
 
   getSpeechProvider(providerId?: string): SpeechProvider {
@@ -454,38 +448,15 @@ export class AIService {
       throw new AIError({
         kind: 'not-configured',
         message:
-          '还没有配置配音服务，请先在设置中心「AI → 更多 AI 服务」里填写 OpenAI 兼容配音 / MiniMax 语音合成的 Key',
+          '还没有配置配音服务，请先在设置中心「AI → 语音」里填写 OpenAI 兼容配音 / MiniMax 语音合成的 Key',
       });
     }
-    const descriptor = this.descriptor(id);
-    if (descriptor.kind !== 'speech') {
-      throw new AIError({
-        kind: 'bad-request',
-        message: `${descriptor.label} 不是配音服务`,
-        providerId: id,
-      });
-    }
-    const stored = this.deps.configs.get(descriptor.id);
-    const apiKey = this.deps.credentials.get(descriptor.id);
-    if (stored.enabled === false) {
-      throw new AIError({
-        kind: 'not-configured',
-        message: `${descriptor.label} 未启用`,
-        providerId: id,
-      });
-    }
-    if (!apiKey) {
-      throw new AIError({
-        kind: 'not-configured',
-        message: `未配置 ${descriptor.label} 的 API Key，请先在设置中心填写`,
-        providerId: id,
-      });
-    }
-    return this.registry.createSpeech(descriptor.id, {
-      apiKey,
-      baseUrl: stored.baseUrl,
-      model: stored.model,
-      voice: stored.voice,
+    const config = this.mediaConfig('speech', id);
+    return this.registry.createSpeech(config.id, {
+      apiKey: config.apiKey,
+      baseUrl: config.stored.baseUrl,
+      model: config.stored.model,
+      voice: config.stored.voice,
     });
   }
 
@@ -520,14 +491,29 @@ export class AIService {
     await this.registry.createVideo(descriptor.id, config).testConnection({ signal });
   }
 
+  /**
+   * 请求参数 + 服务的生成参数：请求没有指定温度 / 回复长度时由 Provider 用服务的值；
+   * 指定了回复长度时不超过服务的「单次回复长度」
+   */
+  private textRequest(payload: AICompletePayload) {
+    const request = toCompletionRequest(payload);
+    const id = requestedProviderId(payload) ?? this.resolveDefaultTextProviderId();
+    const limit =
+      this.registry.get(id)?.kind === 'text' ? this.textParams(id).maxTokens : undefined;
+    if (typeof limit === 'number' && typeof request.maxTokens === 'number') {
+      request.maxTokens = Math.min(request.maxTokens, limit);
+    }
+    return request;
+  }
+
   async complete(payload: AICompletePayload, signal?: AbortSignal) {
     const provider = this.getTextProvider(requestedProviderId(payload));
-    return provider.complete(toCompletionRequest(payload), { signal });
+    return provider.complete(this.textRequest(payload), { signal });
   }
 
   stream(payload: AICompletePayload, signal?: AbortSignal): AsyncIterable<StreamChunk> {
     const provider = this.getTextProvider(requestedProviderId(payload));
-    return provider.stream(toCompletionRequest(payload), { signal });
+    return provider.stream(this.textRequest(payload), { signal });
   }
 
   /** 旧版 ai-request 语义：不抛异常，返回 { ok, text | error } */

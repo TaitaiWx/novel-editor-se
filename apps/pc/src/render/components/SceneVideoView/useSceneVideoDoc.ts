@@ -76,7 +76,7 @@ export function useSceneVideoDoc(options: UseSceneVideoDocOptions) {
     setPendingSeed(null);
     const load = async () => {
       const seed = getSceneVideoSeed(tabPath);
-      // 配音语言默认值来自设置中心（AI → 更多 AI 服务 → 配音默认语言）
+      // 配音语言默认值来自设置中心（AI → 语音 → 配音默认语言）
       const settings = ipc ? await ipc.invoke('video-settings-get').catch(() => null) : null;
       const language = (settings?.ok && settings.data.voiceLanguage) || undefined;
       let loaded: SceneVideoState | null = null;

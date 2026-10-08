@@ -94,6 +94,12 @@ export function mediaErrorMessage(code: number, type?: string): PlayerError {
           `浏览器无法解码这个 ${type.toUpperCase()} 文件（编码不受支持，例如 HEVC / AC-3 / DTS），建议转封装为 MP4（H.264 + AAC）或 WebM`
         );
       }
+      if (type === 'audio') {
+        return new PlayerError(
+          'unsupported',
+          '不支持这个音频格式或地址无法访问（ALAC / AMR / WMA / AIFF / AC-3 等编码浏览器无法解码，建议转码为 AAC（.m4a）、MP3 或 Opus）'
+        );
+      }
       return new PlayerError('unsupported', `不支持这个${noun}格式或地址无法访问`);
     default:
       return new PlayerError('unknown', `${noun}播放出错`);

@@ -8,6 +8,7 @@ import NumberInput from '../../NumberInput';
 import sharedStyles from '../styles.module.scss';
 import ApiKeyField from './ApiKeyField';
 import FieldRow from './FieldRow';
+import GenerationParams from './GenerationParams';
 import { vendorSpec, type VendorField } from './vendorSpecs';
 import styles from './styles.module.scss';
 
@@ -16,7 +17,7 @@ interface VendorFormProps {
   onUpdate: (patch: AIProviderUpdate) => Promise<AIIpcResult<AIProviderInfo> | null>;
   /** Key 保存 / 清除后重新读取（启用状态可能随之变化） */
   onKeyChanged: () => void;
-  /** 自定义文本 AI：删除 */
+  /** 自己添加的服务：删除 */
   onRemove?: () => void;
 }
 
@@ -37,34 +38,6 @@ function toDraft(info: AIProviderInfo): TextDraft {
 }
 
 type TextKey = keyof TextDraft;
-type NumberKey = 'temperature' | 'contextTokens' | 'maxTokens';
-
-const NUMBER_FIELDS: Record<
-  NumberKey,
-  { label: string; desc: string; min: number; max: number; step: number }
-> = {
-  temperature: {
-    label: '温度',
-    desc: '数值越高越发散，越低越稳定；留空用服务默认值。',
-    min: 0,
-    max: 2,
-    step: 0.1,
-  },
-  contextTokens: {
-    label: '上下文长度',
-    desc: '单次请求可携带的上下文上限（参考值）。',
-    min: 1000,
-    max: 10_000_000,
-    step: 1000,
-  },
-  maxTokens: {
-    label: '单次回复长度',
-    desc: '限制单次回复的最大长度；留空用默认值。',
-    min: 1,
-    max: 1_000_000,
-    step: 128,
-  },
-};
 
 const VendorForm: React.FC<VendorFormProps> = ({ info, onUpdate, onKeyChanged, onRemove }) => {
   const spec = vendorSpec(info);
@@ -186,36 +159,25 @@ const VendorForm: React.FC<VendorFormProps> = ({ info, onUpdate, onKeyChanged, o
             />
           </FieldRow>
         );
-      default: {
-        const config = NUMBER_FIELDS[field];
-        const current = info[field];
-        return (
-          <FieldRow key={field} label={config.label} description={config.desc}>
-            <NumberInput
-              block
-              size="lg"
-              allowEmpty
-              min={config.min}
-              max={config.max}
-              step={config.step}
-              aria-label={config.label}
-              value={typeof current === 'number' ? current : null}
-              onChange={() => undefined}
-              onCommit={(value) => {
-                if (value !== (typeof current === 'number' ? current : null)) {
-                  void save({ [field]: value });
-                }
-              }}
-            />
-          </FieldRow>
-        );
-      }
+      default:
+        return null;
     }
   };
 
   return (
     <div className={styles.form}>
       {spec.fields.map(renderField)}
+      {info.kind === 'text' && (
+        <GenerationParams
+          providerLabel={info.label}
+          values={{
+            temperature: info.temperature,
+            contextTokens: info.contextTokens,
+            maxTokens: info.maxTokens,
+          }}
+          onCommit={(key, value) => void save({ [key]: value })}
+        />
+      )}
       {spec.note && <p className={styles.formNote}>{spec.note}</p>}
       {(message || onRemove) && (
         <div className={styles.formFooter}>
@@ -232,22 +194,26 @@ const VendorForm: React.FC<VendorFormProps> = ({ info, onUpdate, onKeyChanged, o
                 <span className={styles.statusMuted}>Key 与配置会一起删除</span>
                 <button
                   type="button"
-                  className={sharedStyles.secondaryButton}
+                  className={`${sharedStyles.secondaryButton} ${styles.footerButton}`}
                   onClick={() => setConfirmingRemove(false)}
                 >
                   取消
                 </button>
-                <button type="button" className={styles.dangerButton} onClick={onRemove}>
+                <button
+                  type="button"
+                  className={`${styles.dangerButton} ${styles.footerButton}`}
+                  onClick={onRemove}
+                >
                   确认删除
                 </button>
               </div>
             ) : (
               <button
                 type="button"
-                className={styles.dangerButton}
+                className={`${styles.dangerButton} ${styles.footerButton}`}
                 onClick={() => setConfirmingRemove(true)}
               >
-                删除这个 AI
+                {info.kind === 'text' ? '删除这个 AI' : '删除这个服务'}
               </button>
             ))}
         </div>

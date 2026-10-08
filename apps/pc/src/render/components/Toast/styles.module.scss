@@ -3,8 +3,8 @@
   position: fixed;
   bottom: 36px; // above StatusBar
   right: 16px;
-  // 高于设置中心 / 关于等模态弹窗（10000~10050），弹窗内操作的提示（如「设备 ID 已复制」）不会被遮罩挡住
-  z-index: 10060;
+  // 高于模态弹窗与浮层，弹窗内操作的提示（如「设备 ID 已复制」）不会被遮罩挡住
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column-reverse;
   gap: 8px;

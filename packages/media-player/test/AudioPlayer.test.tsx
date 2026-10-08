@@ -81,9 +81,7 @@ describe('纯音频界面', () => {
     const group = screen.getByRole('group', { name: '音频 心跳' });
     const video = group.querySelector('video')!;
     loadMetadata(video, 0, 0, 100);
-    const wave = group.querySelector(
-      '[data-testid="audio-visual"] [aria-hidden="true"]:last-child'
-    );
+    const wave = group.querySelector('[data-testid="audio-waveform"]');
     expect(wave).toBeTruthy();
     vi.spyOn(wave as HTMLElement, 'getBoundingClientRect').mockReturnValue({
       left: 0,

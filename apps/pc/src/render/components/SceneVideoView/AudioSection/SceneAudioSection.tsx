@@ -110,8 +110,8 @@ const SceneAudioSection: React.FC<SceneAudioSectionProps> = ({
       </div>
       {speechProviders.length === 0 && (
         <p className={styles.muted}>
-          还没有配置配音服务：在设置中心「AI → 更多 AI 服务」里填写 OpenAI 兼容配音或 MiniMax
-          语音合成的 Key 后，镜头里的对白可以一键生成配音。
+          还没有配置配音服务：在设置中心「AI → 语音」里填写 OpenAI 兼容配音或 MiniMax 语音合成的 Key
+          后，镜头里的对白可以一键生成配音。
         </p>
       )}
 

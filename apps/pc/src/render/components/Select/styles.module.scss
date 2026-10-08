@@ -85,7 +85,8 @@
 
 .popup {
   position: fixed;
-  z-index: 2000;
+  // 下拉列表在任何弹窗之上（例如设置中心里的「配音默认语言」）
+  z-index: var(--z-floating);
   box-sizing: border-box;
   max-width: min(420px, calc(100vw - 16px));
   padding: 4px;

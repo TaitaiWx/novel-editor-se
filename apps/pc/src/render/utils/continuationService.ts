@@ -29,7 +29,23 @@ import type {
 } from '../components/TextEditor/assist/types';
 
 export const DEFAULT_TEXT_PROVIDER_ID = BUILTIN_TEXT_PROVIDER_ID;
+/** 服务没有填写上下文长度时的续写上下文预算（tokens） */
 export const CONTINUATION_BUDGET = 6000;
+const MIN_CONTINUATION_BUDGET = 1000;
+const MAX_CONTINUATION_BUDGET = 32000;
+
+/**
+ * 续写的上下文预算：按所选服务的「上下文长度」决定——取 5%（128K 模型约 6400，与旧版 6000 接近），
+ * 夹在 1000–32000 之间，且不超过上下文长度的一半（给系统提示与回复留空间）；没填时为 CONTINUATION_BUDGET
+ */
+export function continuationBudget(contextTokens: number | undefined): number {
+  if (typeof contextTokens !== 'number' || !Number.isFinite(contextTokens) || contextTokens <= 0) {
+    return CONTINUATION_BUDGET;
+  }
+  const scaled = Math.round(contextTokens * 0.05);
+  const clamped = Math.min(MAX_CONTINUATION_BUDGET, Math.max(MIN_CONTINUATION_BUDGET, scaled));
+  return Math.max(1, Math.min(clamped, Math.floor(contextTokens / 2)));
+}
 
 /** 续写需要的作品资料（当前章章纲、人物、成长档案、核心规则） */
 export interface WritingSources {
@@ -61,6 +77,8 @@ export interface ResolvedProvider {
   /** undefined 表示默认写作 AI（由主进程解析） */
   providerId: string | undefined;
   label: string;
+  /** 服务的上下文长度（决定续写的上下文预算） */
+  contextTokens?: number;
 }
 
 /**
@@ -80,7 +98,13 @@ export function resolveContinuationProvider(
     pick(DEFAULT_TEXT_PROVIDER_ID) ??
     providers.find(isUsableTextProvider);
   return chosen
-    ? { providerId: providerIdForRequest(providers, chosen), label: chosen.label }
+    ? {
+        providerId: providerIdForRequest(providers, chosen),
+        label: chosen.label,
+        ...(typeof chosen.contextTokens === 'number'
+          ? { contextTokens: chosen.contextTokens }
+          : {}),
+      }
     : null;
 }
 
@@ -143,7 +167,7 @@ export function createContinuationService(deps: ContinuationDeps): ContinuationS
           characters: sources.characters,
           growth: sources.growth,
           rules: sources.rules,
-          budget: CONTINUATION_BUDGET,
+          budget: continuationBudget(provider.contextTokens),
         });
         const prompt = buildContinuationPrompt({
           context,

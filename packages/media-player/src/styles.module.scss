@@ -239,6 +239,16 @@ $focus-ring: var(
   }
 }
 
+.control:disabled {
+  opacity: 0.38;
+  cursor: default;
+
+  &:hover {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.86);
+  }
+}
+
 .controlOn {
   color: $accent;
   background: rgba(156, 196, 232, 0.16);
@@ -361,10 +371,52 @@ $focus-ring: var(
 
 .time {
   margin-left: 4px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
   font-size: 11.5px;
   color: rgba(255, 255, 255, 0.82);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px $focus-ring;
+  }
+}
+
+// 快退 / 快进图标（圆弧箭头 + 秒数）
+.skipIcon {
+  font-size: 17px;
+  overflow: visible;
+}
+
+// A-B 循环按钮：文字图标
+.abButton {
+  width: auto;
+  min-width: 28px;
+  padding: 0 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+// 进度条上的 A-B 区间
+.progressAb {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  border-radius: 2px;
+  background: rgba(156, 196, 232, 0.28);
+  pointer-events: none;
 }
 
 .spacer {
@@ -382,7 +434,10 @@ $focus-ring: var(
 }
 
 // 纯音频：没有画面，紧凑卡片（封面 + 波形在上，控制条常显在下）；<video> 只负责发声
+// 没有需要裁切的画面：不裁切溢出，设置菜单、悬停时间可以伸出卡片
 .audioMode {
+  overflow: visible;
+
   .video {
     display: none;
   }
@@ -458,6 +513,11 @@ $focus-ring: var(
   background: rgba(24, 24, 27, 0.92);
   backdrop-filter: blur(8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.menuDown {
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 
 .menuItem {

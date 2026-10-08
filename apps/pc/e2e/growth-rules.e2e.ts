@@ -11,6 +11,7 @@ import {
   GROWTH_WORKSPACE,
   captureForReview,
   ensureSidebarOpen,
+  GROWTH_SECTION,
   openCharacterGrowth,
   setupAppSuite,
 } from './support/suite';
@@ -32,6 +33,8 @@ describe('规则之书：可视化编辑', () => {
     const rulesFile = path.join(fixture.resolve(FIXTURE_MEMORY_DIR), '规则.json');
     await ensureSidebarOpen(page);
     await selectWork(page, FIXTURE_WORK);
+    // 全量 E2E 并发负载下冷启动加载人物较慢：先等人物列表出现（放宽到 20 秒）
+    await page.waitForTarget({ text: '林舟', within: GROWTH_SECTION, exact: true }, 20_000);
     await openCharacterGrowth(page, '林舟');
     // 第一次打开成长卡会弹出引导，跳过以免遮挡后续操作
     const tour = '[role="dialog"][aria-label^="引导"]';

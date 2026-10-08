@@ -1,11 +1,27 @@
 /**
  * @novel-editor/media-player
  *
- * 自绘的 React 视频 / 音频播放器与配套纯函数：可插拔播放引擎（原生 / hls.js / dash.js / mpegts.js）、
- * 兼容矩阵与 canPlay、清晰度、播放速度、字幕、画中画、截图、录制、纯音频界面。样式为 SCSS Module，由使用方的构建工具（Vite 等）处理；详见 README。
+ * 自绘的 React 媒体播放器与配套纯函数。音频、视频是同一个组件（MediaPlayer；VideoPlayer 是它的别名，
+ * AudioPlayer = kind="audio"）：可插拔播放引擎（原生 / hls.js / dash.js / mpegts.js）、兼容矩阵与 canPlay、
+ * 清晰度、播放速度、循环、A-B 循环、播放列表、媒体会话、字幕、画中画、截图、录制、音频界面（真实波形）。
+ * 样式为 SCSS Module，由使用方的构建工具（Vite 等）处理；详见 README。
  */
-export { default as VideoPlayer, default } from './VideoPlayer';
-export type { VideoMetadata, VideoPlayerHandle, VideoPlayerProps } from './playerTypes';
+export {
+  MediaPlayer,
+  VideoPlayer,
+  AudioPlayer,
+  default,
+  type AudioPlayerProps,
+} from './VideoPlayer';
+export type {
+  MediaDownloadInfo,
+  MediaKind,
+  MediaPlayerHandle,
+  MediaPlayerProps,
+  VideoMetadata,
+  VideoPlayerHandle,
+  VideoPlayerProps,
+} from './playerTypes';
 export type { PlayerControls } from './ControlBar';
 export type { RenderTooltip, TooltipContext } from './ControlButton';
 export { SEEK_STEP_SECONDS, timeRangesToArray } from './ProgressBar';
@@ -63,6 +79,15 @@ export {
   type FormatCapability,
   type PlayConfidence,
 } from './engines/capabilities';
+export {
+  AUDIO_CODECS,
+  audioCodecName,
+  audioCodecSupport,
+  audioUnsupportedHint,
+  codecsOfMime,
+  type AudioCodecSpec,
+  type AudioCodecSupport,
+} from './engines/audioCodecs';
 export { defaultEngines, selectEngine } from './engines';
 export { PROGRESSIVE_TYPES, attachNative, canPlayNatively, nativeEngine } from './engines/native';
 export { createHlsEngine, hlsLevels, type HlsEngineOptions } from './engines/hls';
@@ -75,7 +100,50 @@ export {
   type DashModuleLike,
   type DashPlayerLike,
 } from './engines/dash';
-export { waveformBars } from './AudioVisual';
+// 音频：波形、A-B 循环、播放列表、媒体会话
+export {
+  MAX_WAVEFORM_BYTES,
+  PEAK_RESOLUTION,
+  browserAudioDecoder,
+  canDecodeWaveform,
+  clearWaveformCache,
+  computePeaks,
+  computePeaksChunked,
+  loadWaveform,
+  resamplePeaks,
+  waveformBars,
+  type AudioDecoder,
+  type DecodedAudio,
+  type WaveformData,
+} from './peaks';
+export type { WaveformOption, WaveformState } from './useWaveform';
+export {
+  EMPTY_AB,
+  MIN_AB_SPAN,
+  abActive,
+  abLoopTarget,
+  applyAbCommand,
+  cycleAb,
+  setAbPoint,
+  type AbCommand,
+  type AbRange,
+} from './abRepeat';
+export {
+  RESTART_THRESHOLD_SECONDS,
+  clampPlaylistIndex,
+  nextTrackIndex,
+  previousTrackAction,
+  type PlaylistItem,
+  type PreviousAction,
+} from './playlist';
+export {
+  SESSION_ACTIONS,
+  createSessionMetadata,
+  getMediaSession,
+  sessionHandlerFor,
+  type MediaSessionLike,
+  type SessionHandlers,
+} from './mediaSession';
 export { qualityOptionsFor, type QualityOption } from './useMediaEngine';
 // 截图 / 录制 / 字幕 / 快捷键 / 能力检测
 export { captureFrame, downloadBlob, mediaFileName, type ScreenshotMeta } from './screenshot';
@@ -96,7 +164,14 @@ export {
   mediaErrorMessage,
   type PlayerTrack,
 } from './captions';
-export { PLAYBACK_RATES, keyAction, stepPlaybackRate, type PlayerKeyAction } from './keyboard';
+export {
+  KEY_SEEK_SECONDS,
+  LONG_SEEK_SECONDS,
+  PLAYBACK_RATES,
+  keyAction,
+  stepPlaybackRate,
+  type PlayerKeyAction,
+} from './keyboard';
 export {
   getFullscreenElement,
   supportsElementFullscreen,

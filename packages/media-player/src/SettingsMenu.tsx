@@ -1,6 +1,7 @@
 /**
  * 设置菜单（齿轮）：清晰度 / 播放速度 / 字幕。菜单渲染在播放器内部，全屏时同样可见。
  * 一级列表显示各项当前值，点进去是单选列表；选中后关闭。Esc 关闭并把焦点还给齿轮，↑ / ↓ 移动。
+ * 默认向上弹出；上方空间不够（例如音频播放条在可视区顶部）而下方更宽裕时向下弹出。
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { VscCheck, VscChevronLeft, VscChevronRight, VscSettingsGear } from 'react-icons/vsc';
@@ -31,6 +32,16 @@ export interface SettingsMenuProps {
 
 type View = 'root' | 'quality' | 'speed' | 'captions';
 
+/** 菜单的最大高度（与样式一致）+ 间距 */
+const MENU_SPACE = 256;
+
+/** 触发按钮上下的可用空间 → 弹出方向（纯函数） */
+export function menuPlacement(top: number, bottom: number, viewportHeight: number): 'up' | 'down' {
+  const above = top;
+  const below = viewportHeight - bottom;
+  return above < MENU_SPACE && below > above ? 'down' : 'up';
+}
+
 interface Choice {
   key: string;
   label: string;
@@ -53,6 +64,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>('root');
+  const [placement, setPlacement] = useState<'up' | 'down'>('up');
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -158,6 +170,9 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
         onClick={() => {
           if (open) close(false);
           else {
+            const rect = triggerRef.current?.getBoundingClientRect();
+            const height = typeof window !== 'undefined' ? window.innerHeight : 0;
+            setPlacement(rect && height > 0 ? menuPlacement(rect.top, rect.bottom, height) : 'up');
             setView('root');
             setOpen(true);
           }
@@ -168,7 +183,8 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
       {open && (
         <div
           ref={menuRef}
-          className={styles.menu}
+          className={placement === 'down' ? `${styles.menu} ${styles.menuDown}` : styles.menu}
+          data-placement={placement}
           role="menu"
           aria-label="播放设置"
           onKeyDown={onMenuKeyDown}

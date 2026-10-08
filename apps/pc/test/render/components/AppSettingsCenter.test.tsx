@@ -199,7 +199,15 @@ describe('AppSettingsCenter', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: '关闭设置' }));
     expect(onClose).toHaveBeenCalledTimes(2);
-    fireEvent.click(container.querySelector('[class*="overlay"]') as HTMLElement);
+    const overlay = container.querySelector('[class*="overlay"]') as HTMLElement;
+    // 从弹窗里按下、在遮罩上松开（拖选文字拖出去）：不关闭
+    const before = onClose.mock.calls.length;
+    fireEvent.pointerDown(screen.getByText('设置中心'));
+    fireEvent.click(overlay);
+    expect(onClose.mock.calls.length).toBe(before);
+    // 在遮罩上按下并松开：关闭
+    fireEvent.pointerDown(overlay);
+    fireEvent.click(overlay);
     expect(onClose).toHaveBeenCalledTimes(3);
   });
 
@@ -345,7 +353,7 @@ describe('AppSettingsCenter', () => {
     });
     expect(inputFor('API Key').value).toBe('');
     fireEvent.change(inputFor('温度'), { target: { value: '0.7' } });
-    // 超出范围的值在失焦时夹取到最小值
+    // 超出范围的值在失焦时夹取到最小值（与其他文本服务同一组范围：上下文长度 ≥ 1000）
     fireEvent.change(inputFor('上下文长度'), { target: { value: '10' } });
     fireEvent.blur(inputFor('上下文长度'));
     fireEvent.change(inputFor('单次回复长度'), { target: { value: '100' } });
@@ -357,8 +365,8 @@ describe('AppSettingsCenter', () => {
       expect(ai.apiKey).toBe('');
       expect(ai.hasApiKey).toBe(true);
       expect(ai.temperature).toBe(0.7);
-      expect(ai.contextTokens).toBe(128000);
-      expect(ai.maxTokens).toBe(512);
+      expect(ai.contextTokens).toBe(1000);
+      expect(ai.maxTokens).toBe(100);
     });
     // 清空后失焦恢复为当前值，非数字输入直接被拒绝
     for (const label of ['温度', '上下文长度', '单次回复长度']) {
@@ -368,9 +376,9 @@ describe('AppSettingsCenter', () => {
     fireEvent.change(inputFor('温度'), { target: { value: 'abc' } });
     expect(inputFor('温度').value).toBe('0.7');
     fireEvent.click(screen.getByRole('button', { name: '增加单次回复长度' }));
-    await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(640));
+    await waitFor(() => expect(lastSaved(mock).ai.maxTokens).toBe(228));
     expect(lastSaved(mock).ai.temperature).toBe(0.7);
-    expect(lastSaved(mock).ai.contextTokens).toBe(128000);
+    expect(lastSaved(mock).ai.contextTokens).toBe(1000);
   });
 
   it('AI：保存成功提示后自动消失；保存失败提示', async () => {

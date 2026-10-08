@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import type { SettingsDraft } from '../../utils/appSettings';
 import styles from './styles.module.scss';
 import { TAB_LABELS, VALID_TABS, type SettingsTab } from './constants';
@@ -49,11 +49,24 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
     handleClearData,
     handleSaveAISettings,
   } = useSettingsForm({ visible, onClose, initialTab, onSettingsChange });
+  const overlayPressRef = useRef(false);
 
   if (!visible) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div
+      className={styles.overlay}
+      // 只有在遮罩本身上按下并松开才关闭：从弹窗里拖选文字拖到外面、
+      // 或点在弹窗里的浮层（下拉列表等）上，都不会误关
+      onPointerDown={(event) => {
+        overlayPressRef.current = event.target === event.currentTarget;
+      }}
+      onClick={(event) => {
+        const pressedOnOverlay = overlayPressRef.current;
+        overlayPressRef.current = false;
+        if (pressedOnOverlay && event.target === event.currentTarget) onClose();
+      }}
+    >
       <div
         className={styles.modal}
         role="dialog"

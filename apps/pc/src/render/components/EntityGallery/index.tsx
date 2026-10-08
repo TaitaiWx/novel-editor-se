@@ -185,7 +185,7 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
     ? '正在读取图片服务…'
     : aiReady
       ? `AI 生成：按${entity === 'character' ? '人物设计' : '设定内容'}自动出 ${CANDIDATE_COUNT} 张，挑喜欢的保存`
-      : '还没有配置图片服务：在设置中心「AI → 更多 AI 服务」填写 Seedream / MiniMax / Grok 图片的 Key';
+      : '还没有配置图片服务：在设置中心「AI → 图片」填写 Seedream / MiniMax / Grok 图片的 Key';
 
   return (
     <section

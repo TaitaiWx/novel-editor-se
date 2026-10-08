@@ -42,6 +42,16 @@ export const EXTENSION_FORMATS: Readonly<Record<string, FormatEntry>> = {
   weba: { type: 'audio', mime: 'audio/webm', audio: true },
   wav: { type: 'audio', mime: 'audio/wav', audio: true },
   flac: { type: 'audio', mime: 'audio/flac', audio: true },
+  // 浏览器普遍解不了的音频：仍按音频识别，canPlay / 错误提示给出转码建议
+  amr: { type: 'audio', mime: 'audio/amr', audio: true },
+  awb: { type: 'audio', mime: 'audio/amr-wb', audio: true },
+  wma: { type: 'audio', mime: 'audio/x-ms-wma', audio: true },
+  aif: { type: 'audio', mime: 'audio/aiff', audio: true },
+  aiff: { type: 'audio', mime: 'audio/aiff', audio: true },
+  caf: { type: 'audio', mime: 'audio/x-caf', audio: true },
+  ape: { type: 'audio', mime: 'audio/ape', audio: true },
+  ac3: { type: 'audio', mime: 'audio/ac3', audio: true },
+  mka: { type: 'audio', mime: 'audio/x-matroska', audio: true },
 };
 
 /** MIME（不含参数，小写比较）→ 格式；顺序有意义：HLS 的 audio/mpegurl 要先于 audio/* */

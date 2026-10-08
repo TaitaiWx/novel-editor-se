@@ -1,5 +1,6 @@
 /**
  * 播放器的公开类型：属性、通过 ref 控制的接口、元数据。
+ * 音频与视频是同一个组件（MediaPlayer），所以只有一套类型；VideoPlayer* 是历史名称，与 MediaPlayer* 完全相同。
  */
 import type React from 'react';
 import type { AudioTrackState } from './audio';
@@ -9,6 +10,23 @@ import type { PlayerTrack } from './captions';
 import type { RecordingMeta } from './recorder';
 import type { ScreenshotMeta } from './screenshot';
 import type { MediaEngineFactory, PlayerError, PlayerSource } from './engines/types';
+import type { PlaylistItem } from './playlist';
+import type { WaveformOption } from './useWaveform';
+
+/**
+ * 显示哪种界面：auto（默认）先按地址 / MIME 判断，读到元数据后以有没有画面为准；
+ * audio / video 强制使用音频 / 视频界面（引擎、控制、快捷键都一样，只是画面区域不同）
+ */
+export type MediaKind = 'auto' | 'video' | 'audio';
+
+/** onDownload 回调的参数 */
+export interface MediaDownloadInfo {
+  /** 当前播放源（播放列表时为当前曲目） */
+  src: string | PlayerSource;
+  /** 实际播放的地址（多清晰度时为当前清晰度） */
+  url: string;
+  title: string;
+}
 
 export interface VideoMetadata {
   width: number;
@@ -17,10 +35,26 @@ export interface VideoMetadata {
 }
 
 export interface VideoPlayerProps {
-  /** 视频地址，或带格式 / 多清晰度的播放源描述 */
-  src: string | PlayerSource;
-  /** 视频名称：用于 aria-label「视频 X」、悬停时左上角的标题与截图 / 录制的文件名 */
+  /** 媒体地址，或带格式 / 多清晰度的播放源描述（有 playlist 时可省略） */
+  src?: string | PlayerSource;
+  /** 名称：用于 aria-label「视频 X」/「音频 X」、标题与截图 / 录制的文件名 */
   title: string;
+  /** 界面：auto（默认）/ video / audio，见 MediaKind */
+  kind?: MediaKind;
+  /** 播放列表（音频、视频都可用）：上一首 / 下一首，播完自动下一首；有它时 src 被忽略 */
+  playlist?: readonly PlaylistItem[];
+  /** 初始曲目下标，默认 0 */
+  defaultPlaylistIndex?: number;
+  onPlaylistIndexChange?: (index: number) => void;
+  /** 媒体会话（系统媒体键 / 锁屏控件）里的艺术家、专辑 */
+  artist?: string;
+  album?: string;
+  /** 开始播放时接管系统媒体会话（Media Session API），默认 true；compact 不接管 */
+  mediaSession?: boolean;
+  /** 音频界面的波形：auto（能读到字节就解码真实波形，否则装饰波形）/ decorative / 峰值数组（0–1） */
+  waveform?: WaveformOption;
+  /** 传入时控制条显示「下载」按钮，点击时回调（由使用方决定下载 / 另存为 / 导出） */
+  onDownload?: (info: MediaDownloadInfo) => void;
   variant?: 'full' | 'compact';
   /** 自动播放（静音起播，并显示「开启声音」按钮） */
   autoPlay?: boolean;
@@ -91,4 +125,13 @@ export interface VideoPlayerHandle {
   startRecording(): Promise<boolean>;
   stopRecording(): Promise<Blob | null>;
   toggleFullscreen(): void;
+  /** 播放列表：下一首 / 上一首（超过 3 秒时先回到开头） */
+  next(): void;
+  previous(): void;
+  /** A-B 循环：设置区间（秒）/ 清除 */
+  setAbRepeat(a: number, b: number): void;
+  clearAbRepeat(): void;
 }
+
+export type MediaPlayerProps = VideoPlayerProps;
+export type MediaPlayerHandle = VideoPlayerHandle;

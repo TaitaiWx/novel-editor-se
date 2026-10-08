@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIProviderInfo, AIStreamEvent } from '@/shared/ai';
 import {
+  CONTINUATION_BUDGET,
+  continuationBudget,
   createContinuationService,
   resolveContinuationProvider,
   type ContinuationDeps,
@@ -29,6 +31,33 @@ function provider(id: string, patch: Partial<AIProviderInfo> = {}): AIProviderIn
     ...patch,
   };
 }
+
+describe('continuationBudget：按所选服务的上下文长度决定续写的上下文预算', () => {
+  it('没填时为默认值；按 5% 缩放并夹在范围内，且不超过上下文长度的一半', () => {
+    expect(continuationBudget(undefined)).toBe(CONTINUATION_BUDGET);
+    expect(continuationBudget(0)).toBe(CONTINUATION_BUDGET);
+    expect(continuationBudget(128000)).toBe(6400);
+    expect(continuationBudget(8000)).toBe(1000);
+    expect(continuationBudget(1500)).toBe(750);
+    expect(continuationBudget(2_000_000)).toBe(32000);
+  });
+
+  it('选中的服务带上下文长度时随结果返回', () => {
+    const grok = {
+      id: 'grok',
+      kind: 'text',
+      label: 'xAI Grok',
+      configured: true,
+      enabled: true,
+      contextTokens: 32000,
+    } as AIProviderInfo;
+    expect(resolveContinuationProvider([grok])).toEqual({
+      providerId: 'grok',
+      label: 'xAI Grok',
+      contextTokens: 32000,
+    });
+  });
+});
 
 describe('resolveContinuationProvider', () => {
   it('Grok 已配置时优先 Grok，否则默认 AI；指定的服务可用时用指定的', () => {

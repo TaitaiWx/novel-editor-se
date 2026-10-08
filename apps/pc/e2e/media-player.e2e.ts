@@ -6,6 +6,8 @@
  * - 设置菜单：播放速度 1.5x 生效
  * - 全屏：控制按钮的悬停提示挂在全屏元素里（挂到 body 的提示在全屏时看不见）
  * - 纯音频：测试内生成的 WAV 经参考窗格打开，显示音频界面（波形 + 常显控制条）并真正播放
+ * - 声音示例.md 的 ::audio（与视频同一个播放器）：解码出真实波形、点击波形中点跳到一半、音频界面里 1.5x、
+ *   A-B 循环（[ / ] 设点后播放只在区间内反复）
  * 另存为对话框由 NOVEL_EDITOR_E2E_SAVE_PATH 替代（不带扩展名，主进程按格式补上）。
  */
 import { existsSync } from 'node:fs';
@@ -142,7 +144,8 @@ describe('视频播放器', () => {
         }
         return null;
       },
-      { timeout: 15_000, message: '录制已保存' }
+      // 录制是实时的（MediaRecorder），全量 E2E 负载下保存可能偏慢
+      { timeout: 30_000, message: '录制已保存' }
     );
     if (saved.ext === '.webm') expect(hasPrefix(saved.bytes, [0x1a, 0x45, 0xdf, 0xa3])).toBe(true);
     else expect(hasPrefix(saved.bytes, [0x66, 0x74, 0x79, 0x70], 4)).toBe(true);
@@ -229,5 +232,140 @@ describe('视频播放器', () => {
     } finally {
       await rm(wavPath, { force: true });
     }
+  });
+
+  it('声音示例：真实波形、点击波形跳转、1.5x、A-B 循环', async () => {
+    const { page } = suite;
+    const AUDIO = '.cm-content [role="group"][data-media="audio"][aria-label^="音频 配乐"]';
+    const WAVE = `${AUDIO} [data-testid="audio-waveform"]`;
+    await ensureSidebarOpen(page);
+    await selectWork(page, FIXTURE_WORK);
+    await openProjectDocs(page);
+    await page.click({ text: '声音示例', within: SEL.projectNotes, exact: true });
+    await waitForEditorText(page, '五声音阶的轻柔旋律');
+    await page.waitForTarget(AUDIO, 15_000);
+    // 本地 blob 地址：解码出真实波形（不是装饰图案）
+    await page.waitFor(
+      (selector: string) =>
+        document.querySelector(selector)?.getAttribute('data-waveform') === 'decoded',
+      { args: [WAVE], timeout: 20_000, message: '真实波形已解码' }
+    );
+    const duration = await page.waitFor<number>(
+      (selector: string) => {
+        const media = document.querySelector(`${selector} video`) as HTMLVideoElement | null;
+        const value = media?.duration ?? Number.NaN;
+        return Number.isFinite(value) && value > 0 ? value : null;
+      },
+      { args: [AUDIO], timeout: 15_000, message: '读到音频时长' }
+    );
+    const bars = await page.evaluate<number[]>(
+      (selector: string) =>
+        Array.from(document.querySelectorAll(`${selector} span[style]`)).map((bar) =>
+          parseFloat((bar as HTMLElement).style.height)
+        ),
+      WAVE
+    );
+    // 真实波形：首尾淡入淡出，高度不全相同
+    expect(new Set(bars).size).toBeGreaterThan(3);
+
+    // 控制条的「播放」：真正出声、时间前进
+    await page.hover(AUDIO);
+    await page.click(`${AUDIO} button[aria-label="播放"]`);
+    await page.waitFor(
+      (selector: string) =>
+        ((document.querySelector(`${selector} video`) as HTMLVideoElement | null)?.currentTime ??
+          0) > 0.3,
+      { args: [AUDIO], timeout: 10_000, message: '音频在播放' }
+    );
+    // 点击波形中点 → 跳到一半
+    await page.evaluate((selector: string) => {
+      (document.querySelector(`${selector} video`) as HTMLVideoElement).pause();
+    }, AUDIO);
+    await page.click(WAVE);
+    const afterClick = await page.evaluate<number>(
+      (selector: string) =>
+        (document.querySelector(`${selector} video`) as HTMLVideoElement).currentTime,
+      AUDIO
+    );
+    expect(Math.abs(afterClick - duration / 2)).toBeLessThan(duration * 0.06);
+
+    // 音频界面的设置菜单：播放速度 1.5x
+    await page.hover(AUDIO);
+    await page.click(`${AUDIO} button[aria-label="设置"]`);
+    await page.waitForTarget(`${AUDIO} [role="menu"][aria-label="播放设置"]`);
+    await page.click({ text: '播放速度', within: `${AUDIO} [role="menu"]` });
+    await page.click({ text: '1.5x', within: `${AUDIO} [role="menu"]`, exact: true });
+    await page.waitForGone(`${AUDIO} [role="menu"]`);
+    expect(
+      await page.evaluate<number>(
+        (selector: string) =>
+          (document.querySelector(`${selector} video`) as HTMLVideoElement).playbackRate,
+        AUDIO
+      )
+    ).toBe(1.5);
+
+    // A-B 循环：在 1 秒按 [、2.5 秒按 ]，播放后只在 [1, 2.5] 内反复
+    const A = 1;
+    const B = 2.5;
+    // 跳到指定时间并等跳转完成（连续几次跳转 + 立即播放会让 Chromium 的解码管线卡住，真实操作不会这么快）
+    const setTime = (time: number) =>
+      page.evaluate(
+        (selector: string, value: number) =>
+          new Promise<void>((resolve) => {
+            const group = document.querySelector(selector) as HTMLElement;
+            const media = group.querySelector('video') as HTMLVideoElement;
+            group.focus();
+            const done = () => setTimeout(resolve, 50);
+            if (Math.abs(media.currentTime - value) < 0.001) return done();
+            media.addEventListener('seeked', done, { once: true });
+            media.currentTime = value;
+          }),
+        AUDIO,
+        time
+      );
+    await setTime(A);
+    await page.press('[');
+    await setTime(B);
+    await page.press(']');
+    await page.waitFor(
+      (selector: string) => document.querySelector(selector)?.getAttribute('data-ab') === 'ab',
+      { args: [AUDIO], message: 'A-B 循环已设置' }
+    );
+    expect(await page.exists(`${WAVE} [data-testid="audio-ab-range"]`)).toBe(true);
+    await setTime(A);
+    await page.evaluate((selector: string) => {
+      void (document.querySelector(`${selector} video`) as HTMLVideoElement).play();
+    }, AUDIO);
+    const samples: number[] = [];
+    for (let index = 0; index < 30; index += 1) {
+      samples.push(
+        await page.evaluate<number>(
+          (selector: string) =>
+            (document.querySelector(`${selector} video`) as HTMLVideoElement).currentTime,
+          AUDIO
+        )
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    await captureForReview(page, 'media-player-audio-ab');
+    // 区间 1.5 秒、1.5x 播放约 1 秒一圈：3 秒内至少回到 A 点一次，且从不越过 B 点太多
+    const trace = samples.map((time) => time.toFixed(2)).join(' ');
+    expect(
+      samples.every((time) => time >= A - 0.05 && time <= B + 0.3),
+      trace
+    ).toBe(true);
+    expect(
+      samples.some((time, index) => index > 0 && time < samples[index - 1] - 0.5),
+      trace
+    ).toBe(true);
+    // 清除 A-B 并停下，不影响后续用例
+    await page.press('\\');
+    await page.evaluate((selector: string) => {
+      (document.querySelector(`${selector} video`) as HTMLVideoElement).pause();
+    }, AUDIO);
+    await page.waitFor(
+      (selector: string) => document.querySelector(selector)?.getAttribute('data-ab') === 'none',
+      { args: [AUDIO], message: 'A-B 循环已清除' }
+    );
   });
 });

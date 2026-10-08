@@ -8,7 +8,7 @@
 import type {
   AICompletePayload,
   AICompleteResult,
-  AICustomTextInput,
+  AICustomProviderInput,
   AIIpcResult,
   AIProviderInfo,
   AIProviderUpdate,
@@ -34,6 +34,7 @@ export type {
   SpeechSynthesizeResult,
   AICompletePayload,
   AICompleteResult,
+  AICustomProviderInput,
   AICustomTextInput,
   AIIpcResult,
   AIProviderInfo,
@@ -64,10 +65,10 @@ export interface AIInvokeOverloads {
     channel: 'ai-providers-test',
     providerId: string
   ): Promise<AIIpcResult<{ latencyMs: number }>>;
-  /** 添加自己的 OpenAI 兼容文本 AI（返回分配的 custom-text-<n>） */
+  /** 添加自己的服务（文本 custom-text-<n>；视频 / 图片 / 语音 custom-<kind>-<n>） */
   invoke(
     channel: 'ai-providers-add-custom',
-    input: AICustomTextInput
+    input: AICustomProviderInput
   ): Promise<AIIpcResult<AIProviderInfo>>;
   invoke(
     channel: 'ai-providers-remove-custom',

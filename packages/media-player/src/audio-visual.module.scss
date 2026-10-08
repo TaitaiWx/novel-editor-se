@@ -65,11 +65,29 @@ $accent: var(--media-player-accent, rgba(156, 196, 232, 0.95));
 }
 
 .wave {
+  position: relative;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+  touch-action: none;
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px
+      var(--media-player-focus-ring, var(--ui-interaction-focus-ring, rgba(156, 196, 232, 0.6)));
+  }
+}
+
+.waveStatic {
+  cursor: default;
+}
+
+.bars {
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 28px;
-  cursor: pointer;
+  height: 100%;
+  pointer-events: none;
 }
 
 .bar {
@@ -82,6 +100,63 @@ $accent: var(--media-player-accent, rgba(156, 196, 232, 0.95));
 
 .played {
   background: $accent;
+}
+
+// 已缓冲：底部细线
+.buffered {
+  position: absolute;
+  bottom: -3px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  pointer-events: none;
+}
+
+// A-B 循环区间与标记
+.abRange {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  border-radius: 3px;
+  background: rgba(156, 196, 232, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(156, 196, 232, 0.35);
+  pointer-events: none;
+}
+
+.abMarker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 0;
+  border-left: 1px solid $accent;
+  pointer-events: none;
+
+  b {
+    position: absolute;
+    top: -12px;
+    left: 0;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+    color: $accent;
+    transform: translateX(-50%);
+  }
+}
+
+.hoverTime {
+  position: absolute;
+  bottom: 100%;
+  z-index: 1;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(20, 20, 22, 0.82);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
 }
 
 // 播放中：已播放部分轻微呼吸

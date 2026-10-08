@@ -390,6 +390,8 @@ export function normalizeShortcutInput(input: string): string {
 }
 
 export function matchShortcutEvent(event: KeyboardEvent, shortcut: string): boolean {
+  // Chromium 的输入框自动填充等会派发不带 key 的 keydown（event.key 为 undefined）：不是按键，直接忽略
+  if (typeof event.key !== 'string' || !event.key) return false;
   if (isImeComposing(event)) return false;
   const normalized = normalizeShortcutInput(shortcut);
   if (!normalized) return false;

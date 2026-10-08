@@ -1,16 +1,16 @@
 /**
- * 内置 OpenAI 兼容文本 AI 的表单：服务预设、接口地址、模型（推荐 + 手填）、Key、温度 / 上下文 / 回复长度。
+ * 内置 OpenAI 兼容文本 AI 的表单：服务预设、接口地址、模型（推荐 + 手填）、Key + 与其他文本服务相同的「生成参数」。
  * 地址 / 模型 / 温度等保存在设置中心 JSON（与旧版一致），Key 只写不读（ApiKeyField）。
  */
 import React from 'react';
 import type { AIPresetKey, SettingsDraft } from '../../../utils/appSettings';
 import { AI_PRESET_OPTIONS, type AIPresetOption } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
-import NumberInput from '../../NumberInput';
 import Select from '../../Select';
 import sharedStyles from '../styles.module.scss';
 import ApiKeyField from './ApiKeyField';
 import FieldRow from './FieldRow';
+import GenerationParams from './GenerationParams';
 import styles from './styles.module.scss';
 
 interface BuiltinTextFormProps {
@@ -107,48 +107,23 @@ const BuiltinTextForm: React.FC<BuiltinTextFormProps> = ({
       />
     </FieldRow>
 
-    <FieldRow label="温度" description="数值越高，回复越发散；数值越低，回复越稳定。">
-      <NumberInput
-        block
-        size="lg"
-        aria-label="温度"
-        min={0}
-        max={2}
-        step={0.1}
-        value={aiSettings.temperature}
-        onChange={(value) => setAI('temperature', value)}
-      />
-    </FieldRow>
-
-    <FieldRow label="上下文长度" description="单次请求可携带的上下文上限。">
-      <NumberInput
-        block
-        size="lg"
-        aria-label="上下文长度"
-        min={128000}
-        max={1000000}
-        step={10000}
-        value={aiSettings.contextTokens}
-        onChange={(value) => setAI('contextTokens', value)}
-      />
-    </FieldRow>
-
-    <FieldRow label="单次回复长度" description="限制单次回复的最大长度，较长回复会消耗更多额度。">
-      <NumberInput
-        block
-        size="lg"
-        aria-label="单次回复长度"
-        min={512}
-        max={65536}
-        step={128}
-        value={aiSettings.maxTokens}
-        onChange={(value) => setAI('maxTokens', value)}
-      />
-    </FieldRow>
+    <GenerationParams
+      providerLabel="OpenAI 兼容"
+      values={{
+        temperature: aiSettings.temperature,
+        contextTokens: aiSettings.contextTokens,
+        maxTokens: aiSettings.maxTokens,
+      }}
+      onChange={(key, value) => setAI(key, value)}
+    />
 
     <div className={styles.formFooter}>
       {aiSaveStatus ? <span className={styles.statusOk}>{aiSaveStatus}</span> : <span />}
-      <button type="button" className={sharedStyles.primaryButton} onClick={handleSaveAISettings}>
+      <button
+        type="button"
+        className={`${sharedStyles.primaryButton} ${styles.footerButton}`}
+        onClick={handleSaveAISettings}
+      >
         保存 AI 配置
       </button>
     </div>

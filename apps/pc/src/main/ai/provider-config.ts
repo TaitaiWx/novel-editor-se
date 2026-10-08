@@ -3,7 +3,8 @@
  *
  * 保存在 userData/ai-providers.json（应用全局）。内置 openai-compatible 的地址 / 模型 / 温度仍沿用
  * 设置中心「AI 设置」（novel-editor:settings-center），这里只保存它的启用开关与其他 Provider。
- * 自定义文本 AI（custom-text-<n>）只在这里登记名称；它们的 Key 与其他服务一样在 CredentialStore。
+ * 自定义文本 AI（custom-text-<n>）与自定义视频 / 图片 / 语音服务（custom-<kind>-<n>，记录沿用的厂商实现）
+ * 只在这里登记名称；它们的 Key 与其他服务一样在 CredentialStore。
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import path from 'path';
@@ -31,6 +32,22 @@ export interface CustomTextProfile {
   createdAt: string;
 }
 
+/** 可以自己添加的媒体服务类型 */
+export type CustomMediaKind = 'video' | 'image' | 'speech';
+export const CUSTOM_MEDIA_KINDS: readonly CustomMediaKind[] = ['video', 'image', 'speech'];
+
+/**
+ * 作者添加的视频 / 图片 / 语音服务（例如第二个 Seedance 账号、自建的 OpenAI 兼容配音）：
+ * vendor 是沿用的内置厂商实现（seedance-video、openai-speech…），创建后不可改
+ */
+export interface CustomMediaProfile {
+  id: string;
+  kind: CustomMediaKind;
+  vendor: string;
+  label: string;
+  createdAt: string;
+}
+
 interface ProviderConfigFile {
   schemaVersion: 1;
   providers: Record<string, StoredProviderConfig>;
@@ -40,11 +57,16 @@ interface ProviderConfigFile {
   nextCustomTextNumber: number;
   /** 作者选定的默认写作 AI；未选择时为内置 openai-compatible */
   defaultTextProviderId?: string;
+  customMedia: CustomMediaProfile[];
+  /** 各类自定义媒体服务的下一个编号（同样只增不减） */
+  nextCustomMediaNumber: Record<CustomMediaKind, number>;
 }
 
 export const CUSTOM_TEXT_ID_PREFIX = 'custom-text-';
 export const CUSTOM_TEXT_ID_PATTERN = /^custom-text-[0-9]{1,6}$/;
 export const MAX_CUSTOM_TEXT_PROVIDERS = 20;
+export const CUSTOM_MEDIA_ID_PATTERN = /^custom-(video|image|speech)-[0-9]{1,6}$/;
+export const MAX_CUSTOM_MEDIA_PROVIDERS = 20;
 const LABEL_MAX = 40;
 
 export const PROVIDER_CONFIG_FILE_NAME = 'ai-providers.json';
@@ -98,6 +120,19 @@ export function isCustomTextId(value: unknown): value is string {
   return typeof value === 'string' && CUSTOM_TEXT_ID_PATTERN.test(value);
 }
 
+export function isCustomMediaId(value: unknown): value is string {
+  return typeof value === 'string' && CUSTOM_MEDIA_ID_PATTERN.test(value);
+}
+
+/** 自己添加的服务（文本或媒体） */
+export function isCustomProviderId(value: unknown): value is string {
+  return isCustomTextId(value) || isCustomMediaId(value);
+}
+
+function isCustomMediaKind(value: unknown): value is CustomMediaKind {
+  return typeof value === 'string' && (CUSTOM_MEDIA_KINDS as readonly string[]).includes(value);
+}
+
 /** 可选数值：null 删除，范围外报错，其他类型忽略 */
 function applyNumber(
   target: StoredProviderConfig,
@@ -135,9 +170,35 @@ function readCustomText(value: unknown): CustomTextProfile[] {
   return list;
 }
 
+function readCustomMedia(value: unknown): CustomMediaProfile[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const list: CustomMediaProfile[] = [];
+  for (const item of value) {
+    if (!isRecord(item) || !isCustomMediaId(item.id) || seen.has(item.id)) continue;
+    if (!isCustomMediaKind(item.kind) || !item.id.startsWith(`custom-${item.kind}-`)) continue;
+    if (typeof item.vendor !== 'string' || !item.vendor) continue;
+    if (typeof item.label !== 'string' || !item.label.trim()) continue;
+    seen.add(item.id);
+    list.push({
+      id: item.id,
+      kind: item.kind,
+      vendor: item.vendor,
+      label: item.label.trim().slice(0, 200),
+      createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
+    });
+  }
+  return list;
+}
+
+/** 编号：id 末尾的数字 */
+function idNumber(id: string): number {
+  return Number(id.slice(id.lastIndexOf('-') + 1));
+}
+
 /** 已用编号的下一个（文件里记录的计数器与现有 id 取较大值） */
-function nextNumber(stored: unknown, list: CustomTextProfile[]): number {
-  const used = list.map((item) => Number(item.id.slice(CUSTOM_TEXT_ID_PREFIX.length)));
+function nextNumber(stored: unknown, list: ReadonlyArray<{ id: string }>): number {
+  const used = list.map((item) => idNumber(item.id));
   const fromFile =
     typeof stored === 'number' && Number.isInteger(stored) && stored > 0 ? stored : 1;
   return Math.max(fromFile, ...used.map((n) => n + 1), 1);
@@ -153,6 +214,8 @@ export class ProviderConfigStore {
       video: { ...DEFAULT_VIDEO_SETTINGS },
       customText: [],
       nextCustomTextNumber: 1,
+      customMedia: [],
+      nextCustomMediaNumber: { video: 1, image: 1, speech: 1 },
     };
     if (!existsSync(this.filePath)) return empty;
     try {
@@ -163,6 +226,13 @@ export class ProviderConfigStore {
         : {};
       const video = isRecord(parsed.video) ? (parsed.video as Partial<VideoSettingsInfo>) : {};
       const customText = readCustomText(parsed.customText);
+      const customMedia = readCustomMedia(parsed.customMedia);
+      const storedNext = isRecord(parsed.nextCustomMediaNumber) ? parsed.nextCustomMediaNumber : {};
+      const mediaNext = (kind: CustomMediaKind) =>
+        nextNumber(
+          storedNext[kind],
+          customMedia.filter((item) => item.kind === kind)
+        );
       const defaultId =
         typeof parsed.defaultTextProviderId === 'string' && parsed.defaultTextProviderId
           ? parsed.defaultTextProviderId
@@ -174,6 +244,12 @@ export class ProviderConfigStore {
         customText,
         nextCustomTextNumber: nextNumber(parsed.nextCustomTextNumber, customText),
         ...(defaultId ? { defaultTextProviderId: defaultId } : {}),
+        customMedia,
+        nextCustomMediaNumber: {
+          video: mediaNext('video'),
+          image: mediaNext('image'),
+          speech: mediaNext('speech'),
+        },
       };
     } catch {
       return empty;
@@ -262,6 +338,64 @@ export class ProviderConfigStore {
     profile.label = name;
     this.write(file);
     return { ...profile };
+  }
+
+  // ─── 自定义视频 / 图片 / 语音服务 ──────────────────────────────────
+
+  listCustomMedia(kind?: CustomMediaKind): CustomMediaProfile[] {
+    return this.read()
+      .customMedia.filter((item) => !kind || item.kind === kind)
+      .map((item) => ({ ...item }));
+  }
+
+  /** 登记一个自定义媒体服务，返回分配的 id（custom-<kind>-<n>）；vendor 由调用方校验 */
+  addCustomMedia(
+    kind: CustomMediaKind,
+    vendor: string,
+    label: unknown,
+    createdAt: string
+  ): CustomMediaProfile {
+    if (!isCustomMediaKind(kind)) throw new Error('无效的服务类型');
+    const name = normalizeProfileLabel(label);
+    const file = this.read();
+    if (
+      file.customMedia.filter((item) => item.kind === kind).length >= MAX_CUSTOM_MEDIA_PROVIDERS
+    ) {
+      throw new Error(`同一类最多添加 ${MAX_CUSTOM_MEDIA_PROVIDERS} 个服务`);
+    }
+    const profile: CustomMediaProfile = {
+      id: `custom-${kind}-${file.nextCustomMediaNumber[kind]}`,
+      kind,
+      vendor,
+      label: name,
+      createdAt,
+    };
+    file.customMedia.push(profile);
+    file.nextCustomMediaNumber[kind] += 1;
+    delete file.providers[profile.id];
+    this.write(file);
+    return { ...profile };
+  }
+
+  renameCustomMedia(id: string, label: unknown): CustomMediaProfile {
+    const name = normalizeProfileLabel(label);
+    const file = this.read();
+    const profile = file.customMedia.find((item) => item.id === id);
+    if (!profile) throw new Error('找不到这个服务');
+    profile.label = name;
+    this.write(file);
+    return { ...profile };
+  }
+
+  /** 删除自定义媒体服务的登记与配置 */
+  removeCustomMedia(id: string): boolean {
+    const file = this.read();
+    const before = file.customMedia.length;
+    file.customMedia = file.customMedia.filter((item) => item.id !== id);
+    const existed = file.customMedia.length !== before || id in file.providers;
+    delete file.providers[id];
+    if (existed) this.write(file);
+    return existed;
   }
 
   /** 删除自定义文本 AI 的登记与配置；它是默认写作 AI 时恢复为内置默认 */

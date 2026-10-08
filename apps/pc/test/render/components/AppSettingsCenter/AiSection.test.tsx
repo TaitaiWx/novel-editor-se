@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import AiSection from '@/render/components/AppSettingsCenter/AiSection';
 import { AI_PANELS_STORAGE_KEY } from '@/render/components/AppSettingsCenter/AiSection/useExpandedPanels';
 import { AI_PRESET_OPTIONS } from '@/render/components/AppSettingsCenter/constants';
-import type { AICustomTextInput, AIProviderInfo, AIProviderUpdate } from '@/shared/ai';
+import type { AICustomProviderInput, AIProviderInfo, AIProviderUpdate } from '@/shared/ai';
 import { DEFAULT_AI_SETTINGS } from '@/render/utils/appSettings';
 import {
   installElectronMock,
@@ -44,7 +44,7 @@ function mockMain() {
     base('openai-speech', 'speech', 'OpenAI 兼容配音'),
   ];
   let defaultId: string | null = null;
-  let next = 1;
+  const next: Record<string, number> = { text: 1, video: 1, image: 1, speech: 1 };
   const info = (row: Row): AIProviderInfo => {
     const { stored, ...rest } = row;
     const resolved = defaultId ?? 'openai-compatible';
@@ -71,15 +71,29 @@ function mockMain() {
         if (typeof update.enabled === 'boolean') row.stored.enabled = update.enabled;
         if (typeof update.baseUrl === 'string') row.baseUrl = update.baseUrl;
         if (typeof update.label === 'string') row.label = update.label;
+        for (const key of ['temperature', 'maxTokens', 'contextTokens'] as const) {
+          const value = update[key];
+          if (value === null) delete row[key];
+          else if (typeof value === 'number') row[key] = value;
+        }
         return { ok: true, data: info(row) };
       }
       case 'ai-providers-add-custom': {
-        const input = args[0] as AICustomTextInput;
+        const input = args[0] as AICustomProviderInput;
+        const kind = input.kind ?? 'text';
+        const vendor = rows.find((row) => row.id === input.vendor);
         const row: Row = {
-          ...base(`custom-text-${next++}`, 'text', input.label),
-          baseUrl: input.baseUrl,
-          model: input.model ?? '',
+          ...base(`custom-${kind}-${next[kind]++}`, kind, input.label),
+          baseUrl: input.baseUrl || vendor?.defaultBaseUrl || '',
+          model: input.model || vendor?.defaultModel || '',
           custom: true,
+          ...(input.vendor ? { vendor: input.vendor } : {}),
+          ...(vendor?.supportsAudio ? { supportsAudio: true } : {}),
+          ...(typeof input.pricePerSecond === 'number'
+            ? { pricePerSecond: input.pricePerSecond }
+            : {}),
+          ...(input.voice ? { voice: input.voice } : {}),
+          ...(input.apiKey ? { configured: true } : {}),
         };
         rows.push(row);
         return { ok: true, data: info(row) };
@@ -198,7 +212,8 @@ describe('设置中心 AI 分区', () => {
     const grok = panel('grok');
     expect(within(grok).getByLabelText('接口地址')).toBeTruthy();
     expect(within(grok).queryByLabelText(/每秒单价/)).toBeNull();
-    expect(within(grok).queryByLabelText('温度')).toBeNull();
+    // 每个文本服务都有同一组生成参数；媒体服务没有
+    expect(within(seedance).queryByLabelText('温度')).toBeNull();
     expect(within(panel('seedream-image')).getByText(/参考图/)).toBeTruthy();
     // 内置服务：预设 + 地址 + 模型 + Key + 温度 / 上下文 / 回复长度
     const builtin = panel('openai-compatible');
@@ -259,6 +274,7 @@ describe('设置中心 AI 分区', () => {
 
     const custom = await screen.findByTestId('ai-provider-custom-text-1');
     expect(mock.invoke).toHaveBeenCalledWith('ai-providers-add-custom', {
+      kind: 'text',
       label: '我的 Kimi',
       baseUrl: 'https://api.moonshot.cn/v1',
       model: 'kimi-k2-turbo-preview',
@@ -309,5 +325,137 @@ describe('设置中心 AI 分区', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '添加' }));
     expect((await screen.findByRole('alert')).textContent).toBe('接口地址只支持 http / https');
+  });
+
+  it('每个文本服务都有同一组「生成参数」；非内置服务失焦即保存、清空恢复默认', async () => {
+    const { mock } = mockMain();
+    renderSection();
+    await screen.findByTestId('ai-provider-grok');
+    fireEvent.click(headerToggle('grok'));
+    fireEvent.click(
+      within(screen.getByRole('region', { name: /文本/ })).getByRole('button', {
+        name: '添加文本 AI',
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: '添加' }));
+    await screen.findByTestId('ai-provider-custom-text-1');
+    for (const id of ['openai-compatible', 'grok', 'custom-text-1']) {
+      if (headerToggle(id).getAttribute('aria-expanded') !== 'true')
+        fireEvent.click(headerToggle(id));
+    }
+
+    const groups = screen.getAllByTestId('ai-generation-params');
+    // 内置 OpenAI 兼容（默认展开）、Grok、新添加的 DeepSeek
+    expect(groups).toHaveLength(3);
+    const labels = (group: HTMLElement) =>
+      within(group)
+        .getAllByRole('spinbutton')
+        .map((input) => input.getAttribute('aria-label'));
+    for (const group of groups) {
+      expect(within(group).getByText('生成参数')).toBeTruthy();
+      expect(labels(group)).toEqual(['温度', '上下文长度', '单次回复长度']);
+    }
+    const ranges = groups.map((group) =>
+      within(group)
+        .getAllByRole('spinbutton')
+        .map(
+          (input) => `${input.getAttribute('aria-valuemin')}-${input.getAttribute('aria-valuemax')}`
+        )
+        .join(',')
+    );
+    expect(new Set(ranges).size).toBe(1);
+
+    const grokParams = within(panel('grok')).getByTestId('ai-generation-params');
+    const temperature = within(grokParams).getByLabelText('温度');
+    fireEvent.change(temperature, { target: { value: '0.4' } });
+    fireEvent.blur(temperature);
+    await waitFor(() => expect(setCalls(mock, 'grok').at(-1)).toEqual({ temperature: 0.4 }));
+    const context = within(grokParams).getByLabelText('上下文长度');
+    fireEvent.change(context, { target: { value: '32000' } });
+    fireEvent.blur(context);
+    await waitFor(() => expect(setCalls(mock, 'grok').at(-1)).toEqual({ contextTokens: 32000 }));
+    fireEvent.change(temperature, { target: { value: '' } });
+    fireEvent.blur(temperature);
+    await waitFor(() => expect(setCalls(mock, 'grok').at(-1)).toEqual({ temperature: null }));
+  });
+
+  it('添加表单的「取消」「添加」在同一行、同一按钮样式', async () => {
+    mockMain();
+    renderSection();
+    await screen.findByTestId('ai-provider-grok');
+    fireEvent.click(screen.getByRole('button', { name: '添加文本 AI' }));
+    const form = screen.getByRole('group', { name: '添加文本 AI' });
+    const cancel = within(form).getByRole('button', { name: '取消' });
+    const add = within(form).getByRole('button', { name: '添加' });
+    expect(cancel.parentElement).toBe(add.parentElement);
+    expect(cancel.parentElement?.classList.contains('footerButtons')).toBe(true);
+    expect(cancel.classList.contains('footerButton')).toBe(true);
+    expect(add.classList.contains('footerButton')).toBe(true);
+  });
+
+  it('添加自定义视频服务（沿用 Seedance）与语音服务', async () => {
+    const { mock } = mockMain();
+    renderSection();
+    await screen.findByTestId('ai-provider-grok');
+
+    const video = screen.getByRole('region', { name: /^视频/ });
+    fireEvent.click(within(video).getByRole('button', { name: '添加视频服务' }));
+    const videoForm = screen.getByRole('group', { name: '添加视频服务' });
+    // 服务类型候选只有同类的内置服务；名称默认带序号
+    expect(within(videoForm).getByRole('combobox', { name: '服务类型' }).textContent).toBe(
+      'Seedance'
+    );
+    expect((within(videoForm).getByLabelText('新视频服务 名称') as HTMLInputElement).value).toBe(
+      'Seedance 2'
+    );
+    fireEvent.change(within(videoForm).getByLabelText('新视频服务 接口地址'), {
+      target: { value: 'http://127.0.0.1:9/api/v3' },
+    });
+    fireEvent.change(within(videoForm).getByLabelText('新视频服务 API Key'), {
+      target: { value: 'ark-2' },
+    });
+    fireEvent.click(within(videoForm).getByRole('button', { name: '添加' }));
+    const customVideo = await screen.findByTestId('ai-provider-custom-video-1');
+    expect(mock.invoke).toHaveBeenCalledWith('ai-providers-add-custom', {
+      kind: 'video',
+      vendor: 'seedance-video',
+      label: 'Seedance 2',
+      baseUrl: 'http://127.0.0.1:9/api/v3',
+      model: '',
+      apiKey: 'ark-2',
+    });
+    // 新面板：名称 + 厂商自己的字段（单价、生成声音说明），没有生成参数
+    expect(within(customVideo).getByLabelText('名称')).toBeTruthy();
+    expect(within(customVideo).getByLabelText('Seedance 2 每秒单价')).toBeTruthy();
+    expect(within(customVideo).getByText(/生成声音/)).toBeTruthy();
+    expect(within(customVideo).queryByTestId('ai-generation-params')).toBeNull();
+    expect(within(customVideo).getByRole('button', { name: '删除这个服务' })).toBeTruthy();
+
+    const speech = screen.getByRole('region', { name: /^语音/ });
+    fireEvent.click(within(speech).getByRole('button', { name: '添加语音服务' }));
+    const speechForm = screen.getByRole('group', { name: '添加语音服务' });
+    fireEvent.change(within(speechForm).getByLabelText('新语音服务 名称'), {
+      target: { value: '自建 TTS' },
+    });
+    fireEvent.change(within(speechForm).getByLabelText('新语音服务 默认声音'), {
+      target: { value: 'nova' },
+    });
+    fireEvent.click(within(speechForm).getByRole('button', { name: '添加' }));
+    const customSpeech = await screen.findByTestId('ai-provider-custom-speech-1');
+    expect(mock.invoke).toHaveBeenCalledWith(
+      'ai-providers-add-custom',
+      expect.objectContaining({
+        kind: 'speech',
+        vendor: 'openai-speech',
+        label: '自建 TTS',
+        voice: 'nova',
+      })
+    );
+    expect(within(customSpeech).getByLabelText('声音')).toBeTruthy();
+
+    fireEvent.click(within(customSpeech).getByRole('button', { name: '删除这个服务' }));
+    fireEvent.click(within(customSpeech).getByRole('button', { name: '确认删除' }));
+    await waitFor(() => expect(screen.queryByTestId('ai-provider-custom-speech-1')).toBeNull());
+    expect(mock.invoke).toHaveBeenCalledWith('ai-providers-remove-custom', 'custom-speech-1');
   });
 });

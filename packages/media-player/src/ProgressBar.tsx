@@ -3,6 +3,7 @@
  * 显示已缓冲的区间；悬停时在指针上方显示该位置的时间。
  */
 import React, { useRef, useState } from 'react';
+import { abActive, type AbRange } from './abRepeat';
 import { formatTime, ratioFromPointer } from './format';
 import styles from './styles.module.scss';
 
@@ -16,6 +17,8 @@ interface ProgressBarProps {
   onDragChange?: (dragging: boolean) => void;
   /** 已缓冲的区间（秒） */
   buffered?: ReadonlyArray<readonly [number, number]>;
+  /** A-B 循环区间（高亮显示） */
+  ab?: AbRange;
 }
 
 /** TimeRanges → [start, end] 数组 */
@@ -38,6 +41,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
   onSeek,
   onDragChange,
   buffered = [],
+  ab,
 }) => {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
@@ -121,6 +125,16 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
               }}
             />
           ))}
+        {known && ab && abActive(ab) && (
+          <div
+            className={styles.progressAb}
+            data-testid="video-ab-range"
+            style={{
+              left: `${toPercent(ab.a)}%`,
+              width: `${toPercent(ab.b) - toPercent(ab.a)}%`,
+            }}
+          />
+        )}
         <div className={styles.progressFill} style={{ width: `${percent}%` }} />
         <div className={styles.progressThumb} style={{ left: `${percent}%` }} />
       </div>

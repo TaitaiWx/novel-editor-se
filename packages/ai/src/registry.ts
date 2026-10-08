@@ -193,7 +193,21 @@ export class ProviderRegistry {
     return this;
   }
 
-  /** 移除一个 Provider（主进程的自定义文本 AI 被删除时使用）；返回是否存在 */
+  /**
+   * 以已注册的厂商实现（baseId）登记一个新的 Provider：沿用它的工厂，只换描述（id / 名称等）。
+   * 主进程的自定义视频 / 图片 / 语音服务（例如第二个 Seedance 账号）使用；kind 必须与厂商一致
+   */
+  registerVariant(baseId: string, descriptor: ProviderDescriptor): this {
+    const base = this.entries.get(baseId);
+    if (!base) throw unknownProvider(baseId);
+    if (base.descriptor.kind !== descriptor.kind) {
+      throw new Error(`${descriptor.id} 与 ${baseId} 的类型不一致`);
+    }
+    this.entries.set(descriptor.id, { ...base, descriptor } as Entry);
+    return this;
+  }
+
+  /** 移除一个 Provider（主进程的自定义服务被删除时使用）；返回是否存在 */
   unregister(id: string): boolean {
     return this.entries.delete(id);
   }

@@ -221,6 +221,7 @@ export function useMediaEngine({
     takeResume,
     engineKind,
     playbackType: playback.type,
+    playbackUrl: playback.url,
     audioHint,
   };
 }

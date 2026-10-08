@@ -1,7 +1,9 @@
 /**
- * 底部控制条：进度条 + 按钮行
- * 播放 / 暂停、音量、时间 ｜ 循环、截图、录制（录制中显示已录时长）、画中画、设置（清晰度 / 速度 / 字幕）、全屏。
- * 不支持的能力（画中画、录制、全屏）不显示按钮；使用方也可用 controls 属性隐藏任意按钮。
+ * 底部控制条（音频、视频共用）：进度条 + 按钮行
+ * [上一首] 播放 / 暂停 [下一首]、[快退 / 快进]、音量、时间（点击切换剩余时间）｜ [A-B]、循环、截图、录制、画中画、
+ * [下载]、设置（清晰度 / 速度 / 字幕）、全屏。
+ * 音频界面：进度由波形承担（这里不再画进度条），显示快退快进与 A-B；截图 / 录制 / 画中画 / 全屏不显示。
+ * 不支持的能力不显示按钮；使用方也可用 controls 属性隐藏任意按钮。
  */
 import React from 'react';
 import {
@@ -16,6 +18,9 @@ import {
   VscSync,
 } from 'react-icons/vsc';
 import type { AudioTrackState } from './audio';
+import type { AbRange } from './abRepeat';
+import { LONG_SEEK_SECONDS, KEY_SEEK_SECONDS } from './keyboard';
+import { AbButton, DownloadButton, SkipButton, TrackButton } from './TransportButtons';
 import ControlButton, { type RenderTooltip } from './ControlButton';
 import ProgressBar from './ProgressBar';
 import SettingsMenu, { type CaptionOption } from './SettingsMenu';
@@ -40,13 +45,22 @@ export interface PlayerControls {
   speed?: boolean;
   captions?: boolean;
   fullscreen?: boolean;
+  /** 快退 / 快进按钮（默认只在音频界面显示） */
+  skip?: boolean;
+  /** A-B 循环按钮（默认只在音频界面显示；快捷键 [ / ] 始终可用） */
+  abRepeat?: boolean;
+  /** 上一首 / 下一首（有播放列表时） */
+  playlist?: boolean;
+  /** 下载按钮（传了 onDownload 时） */
+  download?: boolean;
 }
 
 /** 合并使用方的开关与浏览器能力：不支持的能力一律隐藏 */
 export function resolveControls(
   controls: PlayerControls | undefined,
   showLoopToggle: boolean,
-  supported: { screenshot: boolean; record: boolean; pip: boolean; fullscreen: boolean }
+  supported: { screenshot: boolean; record: boolean; pip: boolean; fullscreen: boolean },
+  context: { audio?: boolean; playlist?: boolean; download?: boolean } = {}
 ): Required<PlayerControls> {
   const on = (key: keyof PlayerControls, fallback = true) => controls?.[key] ?? fallback;
   return {
@@ -54,7 +68,7 @@ export function resolveControls(
     progress: on('progress'),
     volume: on('volume'),
     time: on('time'),
-    loop: on('loop', showLoopToggle),
+    loop: on('loop', showLoopToggle || context.audio === true),
     screenshot: on('screenshot') && supported.screenshot,
     record: on('record') && supported.record,
     pip: on('pip') && supported.pip,
@@ -63,6 +77,10 @@ export function resolveControls(
     speed: on('speed'),
     captions: on('captions'),
     fullscreen: on('fullscreen') && supported.fullscreen,
+    skip: on('skip', context.audio === true),
+    abRepeat: on('abRepeat', context.audio === true),
+    playlist: on('playlist') && context.playlist === true,
+    download: on('download') && context.download === true,
   };
 }
 
@@ -100,6 +118,28 @@ export interface ControlBarProps {
   captionIndex: number;
   onCaption: (index: number) => void;
   onMenuOpenChange: (open: boolean) => void;
+  /** 音频界面：进度由波形承担 */
+  audioMode?: boolean;
+  onSkip?: (delta: number) => void;
+  ab?: AbRange;
+  onAbCycle?: () => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  onDownload?: () => void;
+  /** 时间显示为剩余时间 */
+  remaining?: boolean;
+  onToggleRemaining?: () => void;
+}
+
+/** 时间文字：已播放 / 总时长，或 -剩余 / 总时长 */
+function timeText(props: Pick<ControlBarProps, 'current' | 'duration' | 'remaining'>): string {
+  const { current, duration, remaining } = props;
+  if (remaining && Number.isFinite(duration) && duration > 0) {
+    return `-${formatTime(Math.max(0, duration - current))} / ${formatTime(duration)}`;
+  }
+  return `${formatTime(current)} / ${formatTime(duration)}`;
 }
 
 const ControlBar: React.FC<ControlBarProps> = (props) => {
@@ -107,16 +147,25 @@ const ControlBar: React.FC<ControlBarProps> = (props) => {
   const recording = recordStatus === 'recording' || recordStatus === 'stopping';
   return (
     <div className={styles.controls}>
-      {show.progress && (
+      {show.progress && !props.audioMode && (
         <ProgressBar
           current={props.current}
           duration={props.duration}
           buffered={props.buffered}
+          ab={props.ab}
           onSeek={props.onSeek}
           onDragChange={props.onDragChange}
         />
       )}
       <div className={styles.bar}>
+        {show.playlist && (
+          <TrackButton
+            next={false}
+            disabled={!props.hasPrevious && props.current <= 0}
+            renderTooltip={renderTooltip}
+            onClick={() => props.onPrevious?.()}
+          />
+        )}
         {show.play && (
           <ControlButton
             tooltip={paused ? '播放（空格）' : '暂停（空格）'}
@@ -126,6 +175,48 @@ const ControlBar: React.FC<ControlBarProps> = (props) => {
           >
             {paused ? <VscPlay /> : <VscDebugPause />}
           </ControlButton>
+        )}
+        {show.playlist && (
+          <TrackButton
+            next
+            disabled={!props.hasNext}
+            renderTooltip={renderTooltip}
+            onClick={() => props.onNext?.()}
+          />
+        )}
+        {show.skip && props.onSkip && (
+          <>
+            <SkipButton
+              seconds={LONG_SEEK_SECONDS}
+              forward={false}
+              shortcut="Shift+←"
+              optional
+              renderTooltip={renderTooltip}
+              onSkip={props.onSkip}
+            />
+            <SkipButton
+              seconds={KEY_SEEK_SECONDS}
+              forward={false}
+              shortcut="←"
+              renderTooltip={renderTooltip}
+              onSkip={props.onSkip}
+            />
+            <SkipButton
+              seconds={KEY_SEEK_SECONDS}
+              forward
+              shortcut="→"
+              renderTooltip={renderTooltip}
+              onSkip={props.onSkip}
+            />
+            <SkipButton
+              seconds={LONG_SEEK_SECONDS}
+              forward
+              shortcut="Shift+→"
+              optional
+              renderTooltip={renderTooltip}
+              onSkip={props.onSkip}
+            />
+          </>
         )}
         {show.volume && (
           <VolumeControl
@@ -138,11 +229,25 @@ const ControlBar: React.FC<ControlBarProps> = (props) => {
           />
         )}
         {show.time && (
-          <span className={styles.time} data-testid="video-time">
-            {formatTime(props.current)} / {formatTime(props.duration)}
-          </span>
+          <button
+            type="button"
+            className={styles.time}
+            data-testid="video-time"
+            data-remaining={props.remaining ? 'true' : undefined}
+            title={props.remaining ? '显示已播放时间' : '显示剩余时间'}
+            aria-label={`${props.remaining ? '剩余' : '已播放'} ${timeText(props)}，点击切换`}
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onToggleRemaining?.();
+            }}
+          >
+            {timeText(props)}
+          </button>
         )}
         <span className={styles.spacer} />
+        {show.abRepeat && props.onAbCycle && props.ab && (
+          <AbButton range={props.ab} renderTooltip={renderTooltip} onClick={props.onAbCycle} />
+        )}
         {show.loop && (
           <ControlButton
             tooltip={props.loop ? '关闭循环' : '循环播放'}
@@ -198,6 +303,9 @@ const ControlBar: React.FC<ControlBarProps> = (props) => {
           >
             <VscMultipleWindows />
           </ControlButton>
+        )}
+        {show.download && props.onDownload && (
+          <DownloadButton renderTooltip={renderTooltip} onClick={props.onDownload} />
         )}
         {show.settings && (
           <SettingsMenu

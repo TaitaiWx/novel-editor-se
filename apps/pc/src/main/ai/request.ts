@@ -10,6 +10,7 @@ export interface DefaultTextSettings {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  contextTokens?: number;
 }
 
 const MAX_MESSAGES = 64;
@@ -50,6 +51,7 @@ export function parseDefaultTextSettings(
     model: str(pick('model')),
     temperature: num(pick('temperature')),
     maxTokens: num(pick('maxTokens')),
+    contextTokens: num(pick('contextTokens')),
   };
 }
 

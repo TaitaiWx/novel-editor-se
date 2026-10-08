@@ -1,11 +1,12 @@
 # @novel-editor/media-player
 
-自绘的 React 视频 / 音频播放器（不使用原生 `controls`）。小说编辑器的正文 `::video`、参考窗格、场景视频检查器都用它；也可以直接拿到别的项目（例如视频站点）里使用。
+自绘的 React 媒体播放器（不使用原生 `controls`）。**音频和视频是同一个组件**（`MediaPlayer`；`VideoPlayer` 是它的别名，`AudioPlayer` = `<MediaPlayer kind="audio" />`），见「为什么音频、视频是同一个播放器」。小说编辑器的正文 `::video`、参考窗格、场景视频检查器都用它；也可以直接拿到别的项目（例如视频站点）里使用。
 
 > 暂不发布：还在开发中，目前只在 monorepo 内以源码形式使用（`"private": true`）。
 
 - **可插拔播放引擎**：MP4 / M4V / MOV / WebM / Ogg / MKV / 纯音频原生播放；HLS（`.m3u8`）用 [hls.js](https://github.com/video-dev/hls.js)；DASH（`.mpd`）用 [dash.js](https://github.com/Dash-Industry-Forum/dash.js)；FLV / MPEG-TS 用 [mpegts.js](https://github.com/xqq/mpegts.js)（bilibili flv.js 的维护版）。三者都是**可选依赖**，只有真正播放对应格式时才动态 `import()`；没装时给出「需要安装 xxx」的错误（Safari / iOS 上 HLS 会退回原生播放）。完整列表见「格式兼容矩阵」
-- **纯音频**：mp3 / aac / m4a / ogg / opus / wav / flac（或读到元数据后没有画面的任何源，例如纯音频 HLS / DASH）显示紧凑的音频界面：封面 + 波形样式进度 + 常显控制条
+- **音频界面**：mp3 / aac / m4a / ogg / oga / opus / weba / wav / flac（或读到元数据后没有画面的任何源，例如纯音频 HLS / DASH）显示紧凑的音频界面：封面 + **真实波形**（能读到字节时用 WebAudio 解码）+ 常显控制条；快退快进（±5 / ±15 秒）、A-B 循环、循环、播放速度、剩余时间
+- **播放列表**（音频、视频通用）：上一首 / 下一首，播完自动下一首；**媒体会话**：系统媒体键 / 锁屏控件显示标题与封面并能控制播放
 - **清晰度切换**：多地址清晰度（`qualities`），或 HLS / DASH 档位 +「自动」（自适应码率）；切换后保持播放位置与播放状态
 - **播放速度**（0.5–2x）、**字幕**（WebVTT）、**画中画**、**循环**、**全屏**
 - **截图**：当前画面 → PNG（或 JPEG / WebP）Blob
@@ -91,6 +92,35 @@ import { nativeEngine } from '@novel-editor/media-player';
 
 用 webpack / Next.js 等时需要配置 TS / TSX 转译与 `*.module.scss`（Next.js 需把本包加入 `transpilePackages`，并在客户端组件中使用）。
 
+## 为什么音频、视频是同一个播放器
+
+浏览器里 `<audio>` 与 `<video>` 都是 `HTMLMediaElement`，能力完全一样（`<video>` 播纯音频没有任何损失）。所以本包只有**一个**播放器，音频不是另一套实现：
+
+| 共用（一份代码）                                                                                      | 只属于音频界面                                                                         |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 同一个 `<video>` 元素与播放引擎（原生 / hls.js / dash.js / mpegts.js），格式推断、`canPlay`、错误提示 | 画面区域换成 封面 + 标题 + 波形（`AudioVisual` / `Waveform`）                          |
+| 控制条：播放、音量 / 静音、时间（可切换剩余时间）、循环、设置菜单（速度 / 清晰度）、下载              | 波形同时是进度条（`role="slider"`），所以不再画细进度条                                |
+| 快捷键（Space / K、← / →、↑ / ↓、M、L、< / >、[ / ]、Shift+N / P …）                                  | 默认显示快退快进（±5 / ±15 秒）与 A-B 按钮（视频的浮层控制条保持精简，快捷键照常可用） |
+| 声音策略（自动播放静音起播 +「开启声音」、无音轨判断）、播放列表、媒体会话、A-B 循环、ref 接口        | 控制条常显、不裁切溢出（菜单可以伸出卡片）                                             |
+| 录制 / 截图 / 画中画 / 全屏 / 字幕的逻辑                                                              | 这些需要画面的功能在音频界面里隐藏，对应快捷键不拦截                                   |
+
+界面怎么选：`kind="auto"`（默认）先按 `audioOnly` / MIME / 扩展名判断，读到元数据后以实际有没有画面为准（`.ogg` 里有视频、`.mp4` 里只有声音都能显示正确的界面）；`kind="audio"` / `"video"` 强制。
+
+```tsx
+import { AudioPlayer, MediaPlayer } from '@novel-editor/media-player';
+
+<MediaPlayer src={url} title="自动判断" />;
+<AudioPlayer
+  title="第三章 · 对白"
+  artist="示例作品集"
+  playlist={[
+    { src: '/audio/01.m4a', title: '开场' },
+    { src: '/audio/02.mp3', title: '对白', poster: '/cover.jpg' },
+  ]}
+  onDownload={({ url, title }) => saveAs(url, title)}
+/>;
+```
+
 ## 播放源
 
 `src` 可以是地址字符串，也可以是描述：
@@ -154,11 +184,32 @@ const caps = getCapabilities();
 - 探测函数可注入，便于测试与 SSR：`canPlay(src, { probe: { canPlayType, isTypeSupported } })`、`getCapabilities(probe)`；`canPlay(src, { engines })` 时处理该格式的自定义引擎优先
 - `requires` 只说明需要哪个可选依赖，是否已安装要到真正加载时才知道（没装时报 `engine-missing`）
 
-## 纯音频
+## 音频界面
 
 - 判断：`audioOnly` → MIME 为 `audio/*`（HLS 的 `audio/mpegurl` 除外）→ 纯音频扩展名；读到元数据后以实际有没有画面（`videoWidth` / `videoHeight`）为准，所以 `.ogg` 里有视频、或 `.mp4` 里只有声音都能显示正确的界面
 - 界面：根元素 `aria-label="音频 <title>"`、`data-media="audio"`；封面（`poster`，没有时为播放 / 暂停圆标，点击切换播放）、标题、额外操作（`actions`）、波形样式的进度（按标题生成的固定图案，不解码音频；点击跳转）、「开启声音」在波形右侧；控制条常显：播放、进度、音量、时间、循环、设置（速度 / 清晰度）。截图、录制、画中画、全屏、字幕不显示（对应快捷键也不响应）
 - 宽度占满父容器（不超过 `maxWidth`），高度由内容决定
+- **真实波形**（`waveform="auto"`，默认）：地址能读到字节（`blob:` / `data:` / 相对地址 / 同源，跨域时需设置 `crossOrigin` 且服务器返回 CORS）且是渐进式文件时，`fetch` → `OfflineAudioContext.decodeAudioData`（浏览器在后台线程解码）→ 分块计算峰值（块之间让出主线程）；按地址缓存（最多 24 个），超过 48MB 不解码。流媒体、跨域、解码失败时退回按标题生成的装饰波形。波形元素 `data-waveform` 为 `decoded` / `loading` / `decorative` / `provided`。也可以直接给峰值：`waveform={[0.1, 0.8, …]}`（例如服务端用 audiowaveform 预先算好），或 `waveform="decorative"`。CSP 需要 `connect-src` 允许 `blob:`（否则退回装饰波形）
+- 波形是进度滑块：点击 / 拖动跳转，已播放部分高亮，底部细线为已缓冲区间，悬停显示时间；聚焦时 ← / → 5 秒、PageUp / PageDown 15 秒、Home / End
+- **A-B 循环**（反复听一句对白）：按钮依次 设 A → 设 B → 清除，或 `[` / `]` 设点、`\` 清除；B 早于 A 自动交换，两点间隔至少 0.2 秒；播放中逐帧检查，越过 B 点立刻回到 A 点（B 在结尾时播完回到 A，不触发 `onEnded`）。根元素 `data-ab` 为 `none` / `a` / `ab`；ref：`setAbRepeat(a, b)` / `clearAbRepeat()`
+- 播放速度 0.5–2x 与循环在音频界面同样可用（设置菜单在上方空间不够时向下弹出）
+- 纯函数：`computePeaks` / `computePeaksChunked` / `resamplePeaks` / `canDecodeWaveform` / `loadWaveform`、`setAbPoint` / `cycleAb` / `abLoopTarget`
+
+### 音频格式
+
+| 格式                                                                                                    | 支持                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MP3、AAC / HE-AAC（.m4a / .aac）、Opus（.opus / .ogg / .weba）、Vorbis（.ogg / .oga）、FLAC、WAV（PCM） | 主流浏览器原生播放                                                                                                                                                                |
+| 纯音频 HLS（只有音频的 `.m3u8`，或带音频轨的清单）、纯音频 DASH                                         | hls.js / dash.js；读到元数据后没有画面即显示音频界面，也可传 `audioOnly: true` 一开始就用音频界面；档位按码率显示（例如「128 kbps」）                                             |
+| ALAC（Apple Lossless .m4a）、AMR / AMR-WB、WMA、AIFF、CAF、APE、AC-3                                    | 浏览器普遍解不了：`canPlay` 返回 `playable: false` 与转码建议（`ffmpeg -i 输入 -c:a aac -b:a 192k 输出.m4a`）；播放时报「不支持这个音频格式…建议转码为 AAC（.m4a）、MP3 或 Opus」 |
+
+`canPlay` 对音频源额外返回 `codecs`：当前环境各音频编码（MP3 / AAC / HE-AAC / Opus / Vorbis / FLAC / WAV / ALAC / AC-3 / AMR）能不能解码——渐进式文件按 `canPlayType`，HLS / DASH 按 MSE `isTypeSupported`。声明了 `codecs` 的 MIME 会被精确探测，例如 `{ src, mimeType: 'audio/mp4; codecs="alac"' }`。
+
+## 播放列表与媒体会话
+
+- `playlist`（音频、视频都可用）：`[{ src, title?, artist?, album?, poster? }]`，当前曲目的名称 / 封面覆盖 `title` / `poster`；`defaultPlaylistIndex`、`onPlaylistIndexChange`。控制条显示上一首 / 下一首（Shift+P / Shift+N）；上一首在播放超过 3 秒时先回到开头；播完自动下一首并接着播放（单曲循环时不会触发）。根元素 `data-track` 为当前下标；ref：`next()` / `previous()`
+- 媒体会话（`mediaSession`，默认开启，`compact` 与静音自动播放的预览不接管）：开始播放时设置 `navigator.mediaSession` 的标题 / 艺术家 / 专辑 / 封面与 play / pause / stop / seekto / seekbackward / seekforward（默认 10 秒）/ previoustrack / nexttrack（有播放列表时），并同步进度；页面上谁开始播放谁接管，卸载时只清理自己接管的会话；不支持的浏览器或动作静默跳过
+- `onDownload({ src, url, title })`：传入时控制条显示「下载」按钮，由使用方决定下载 / 另存为 / 导出
 
 ## 引擎
 
@@ -208,36 +259,41 @@ DASH 引擎同时兼容 dash.js v5（`getRepresentationsByType` / `setRepresenta
 
 ## 属性
 
-| 属性                                           | 类型                                          | 默认     | 说明                                                                                                                                  |
-| ---------------------------------------------- | --------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `src`                                          | `string \| PlayerSource`                      | —        | 视频地址或播放源描述（对象每次渲染重新创建也不会重新加载）                                                                            |
-| `title`                                        | `string`                                      | —        | 名称：`aria-label`「视频 X」、悬停标题、截图 / 录制文件名                                                                             |
-| `variant`                                      | `'full' \| 'compact'`                         | `'full'` | `compact`：静音自动循环播放、没有控制条（纯音频只显示封面与波形）                                                                     |
-| `autoPlay`                                     | `boolean`                                     | `false`  | 自动播放（静音起播，显示「开启声音」）                                                                                                |
-| `defaultMuted` / `defaultLoop`                 | `boolean`                                     | `false`  | 默认静音 / 循环                                                                                                                       |
-| `defaultVolume`                                | `number`                                      | `1`      | 初始音量 0–1                                                                                                                          |
-| `defaultPlaybackRate`                          | `number`                                      | `1`      | 初始播放速度                                                                                                                          |
-| `poster`                                       | `string`                                      | —        | 封面图（不传时停在第一帧附近当封面）                                                                                                  |
-| `startTime`                                    | `number`                                      | —        | 从第几秒开始                                                                                                                          |
-| `crossOrigin`                                  | `'' \| 'anonymous' \| 'use-credentials'`      | —        | 跨域视频要截图 / 录制时设置（服务器需返回 CORS 头）                                                                                   |
-| `tracks`                                       | `PlayerTrack[]`                               | —        | 字幕：`{ src, label, srclang?, kind?, default? }`（WebVTT）                                                                           |
-| `engines`                                      | `MediaEngineFactory[]`                        | 默认引擎 | 替换 / 追加播放引擎                                                                                                                   |
-| `controls`                                     | `PlayerControls`                              | 全部显示 | 隐藏控制项：`play` `progress` `volume` `time` `loop` `screenshot` `record` `pip` `settings` `quality` `speed` `captions` `fullscreen` |
-| `showLoopToggle`                               | `boolean`                                     | `false`  | 显示「循环播放」开关（等同 `controls.loop`）                                                                                          |
-| `showTitle`                                    | `boolean`                                     | `true`   | 悬停时左上角显示标题                                                                                                                  |
-| `maxRecordingSeconds`                          | `number`                                      | `600`    | 最长录制时长，到时自动停止                                                                                                            |
-| `screenshotType`                               | `'image/png' \| 'image/jpeg' \| 'image/webp'` | PNG      | 截图格式                                                                                                                              |
-| `actions`                                      | `ReactNode`                                   | —        | 右上角额外操作，与控制条一起浮现                                                                                                      |
-| `maxWidth` / `maxHeight`                       | `number` / `number \| string`                 | —        | 最大宽 / 高，宽度按比例收窄                                                                                                           |
-| `className` / `videoClassName` / `videoTestId` | `string`                                      | —        | 根元素类名 / 内部 `<video>` 的类名与 `data-testid`                                                                                    |
-| `renderTooltip`                                | `(content, control, context) => ReactNode`    | —        | 自定义提示；`context.container` 在全屏时是播放器根元素，浮层应挂到这里                                                                |
-| `onScreenshot`                                 | `(blob, meta) => void \| boolean \| Promise`  | 下载     | 截图结果；返回 `false` 表示没保存（不提示「已截图」）                                                                                 |
-| `onRecording`                                  | `(blob, meta) => void \| boolean \| Promise`  | 下载     | 录制结果；`meta`：`duration` `mimeType` `extension` `fileName` `hasAudio` `startTime`                                                 |
-| `onError`                                      | `(error: PlayerError) => void`                | —        | `error.code`：`engine-missing` `unsupported` `network` `decode` `media` `tainted` `not-ready` `unknown`                               |
-| `onMetadata`                                   | `({ width, height, duration }) => void`       | —        | 读到元数据                                                                                                                            |
-| `onAudioTrack`                                 | `('present' \| 'absent') => void`             | —        | 判断出有没有音轨时回调一次                                                                                                            |
-| `onTimeUpdate` / `onEnded` / `onQualityChange` | —                                             | —        | 播放进度 / 结束 / 清晰度变化                                                                                                          |
-| `onLayoutChange`                               | `() => void`                                  | —        | 尺寸可能变化（读到元数据、进出全屏）                                                                                                  |
+| 属性                                           | 类型                                          | 默认     | 说明                                                                                                                                                                                                                                                 |
+| ---------------------------------------------- | --------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src`                                          | `string \| PlayerSource`                      | —        | 媒体地址或播放源描述（对象每次渲染重新创建也不会重新加载）；有 `playlist` 时可省略                                                                                                                                                                   |
+| `kind`                                         | `'auto' \| 'video' \| 'audio'`                | `'auto'` | 界面：自动 / 强制视频 / 强制音频（`AudioPlayer` 固定为 audio）                                                                                                                                                                                       |
+| `playlist` / `defaultPlaylistIndex`            | `PlaylistItem[]` / `number`                   | —        | 播放列表（见「播放列表与媒体会话」）；`onPlaylistIndexChange(index)`                                                                                                                                                                                 |
+| `artist` / `album` / `mediaSession`            | `string` / `string` / `boolean`               | `true`   | 媒体会话的元数据；`mediaSession={false}` 不接管系统媒体控件                                                                                                                                                                                          |
+| `waveform`                                     | `'auto' \| 'decorative' \| number[]`          | `'auto'` | 音频界面的波形                                                                                                                                                                                                                                       |
+| `onDownload`                                   | `({ src, url, title }) => void`               | —        | 显示「下载」按钮                                                                                                                                                                                                                                     |
+| `title`                                        | `string`                                      | —        | 名称：`aria-label`「视频 X」、悬停标题、截图 / 录制文件名                                                                                                                                                                                            |
+| `variant`                                      | `'full' \| 'compact'`                         | `'full'` | `compact`：静音自动循环播放、没有控制条（纯音频只显示封面与波形）                                                                                                                                                                                    |
+| `autoPlay`                                     | `boolean`                                     | `false`  | 自动播放（静音起播，显示「开启声音」）                                                                                                                                                                                                               |
+| `defaultMuted` / `defaultLoop`                 | `boolean`                                     | `false`  | 默认静音 / 循环                                                                                                                                                                                                                                      |
+| `defaultVolume`                                | `number`                                      | `1`      | 初始音量 0–1                                                                                                                                                                                                                                         |
+| `defaultPlaybackRate`                          | `number`                                      | `1`      | 初始播放速度                                                                                                                                                                                                                                         |
+| `poster`                                       | `string`                                      | —        | 封面图（不传时停在第一帧附近当封面）                                                                                                                                                                                                                 |
+| `startTime`                                    | `number`                                      | —        | 从第几秒开始                                                                                                                                                                                                                                         |
+| `crossOrigin`                                  | `'' \| 'anonymous' \| 'use-credentials'`      | —        | 跨域视频要截图 / 录制时设置（服务器需返回 CORS 头）                                                                                                                                                                                                  |
+| `tracks`                                       | `PlayerTrack[]`                               | —        | 字幕：`{ src, label, srclang?, kind?, default? }`（WebVTT）                                                                                                                                                                                          |
+| `engines`                                      | `MediaEngineFactory[]`                        | 默认引擎 | 替换 / 追加播放引擎                                                                                                                                                                                                                                  |
+| `controls`                                     | `PlayerControls`                              | 全部显示 | 隐藏控制项：`play` `progress` `volume` `time` `loop` `screenshot` `record` `pip` `settings` `quality` `speed` `captions` `fullscreen` `skip` `abRepeat` `playlist` `download`（`skip` / `abRepeat` 默认只在音频界面显示，`loop` 在音频界面默认显示） |
+| `showLoopToggle`                               | `boolean`                                     | `false`  | 显示「循环播放」开关（等同 `controls.loop`）                                                                                                                                                                                                         |
+| `showTitle`                                    | `boolean`                                     | `true`   | 悬停时左上角显示标题                                                                                                                                                                                                                                 |
+| `maxRecordingSeconds`                          | `number`                                      | `600`    | 最长录制时长，到时自动停止                                                                                                                                                                                                                           |
+| `screenshotType`                               | `'image/png' \| 'image/jpeg' \| 'image/webp'` | PNG      | 截图格式                                                                                                                                                                                                                                             |
+| `actions`                                      | `ReactNode`                                   | —        | 右上角额外操作，与控制条一起浮现                                                                                                                                                                                                                     |
+| `maxWidth` / `maxHeight`                       | `number` / `number \| string`                 | —        | 最大宽 / 高，宽度按比例收窄                                                                                                                                                                                                                          |
+| `className` / `videoClassName` / `videoTestId` | `string`                                      | —        | 根元素类名 / 内部 `<video>` 的类名与 `data-testid`                                                                                                                                                                                                   |
+| `renderTooltip`                                | `(content, control, context) => ReactNode`    | —        | 自定义提示；`context.container` 在全屏时是播放器根元素，浮层应挂到这里                                                                                                                                                                               |
+| `onScreenshot`                                 | `(blob, meta) => void \| boolean \| Promise`  | 下载     | 截图结果；返回 `false` 表示没保存（不提示「已截图」）                                                                                                                                                                                                |
+| `onRecording`                                  | `(blob, meta) => void \| boolean \| Promise`  | 下载     | 录制结果；`meta`：`duration` `mimeType` `extension` `fileName` `hasAudio` `startTime`                                                                                                                                                                |
+| `onError`                                      | `(error: PlayerError) => void`                | —        | `error.code`：`engine-missing` `unsupported` `network` `decode` `media` `tainted` `not-ready` `unknown`                                                                                                                                              |
+| `onMetadata`                                   | `({ width, height, duration }) => void`       | —        | 读到元数据                                                                                                                                                                                                                                           |
+| `onAudioTrack`                                 | `('present' \| 'absent') => void`             | —        | 判断出有没有音轨时回调一次                                                                                                                                                                                                                           |
+| `onTimeUpdate` / `onEnded` / `onQualityChange` | —                                             | —        | 播放进度 / 结束 / 清晰度变化                                                                                                                                                                                                                         |
+| `onLayoutChange`                               | `() => void`                                  | —        | 尺寸可能变化（读到元数据、进出全屏）                                                                                                                                                                                                                 |
 
 ### ref
 
@@ -253,7 +309,12 @@ interface VideoPlayerHandle {
   startRecording(): Promise<boolean>;
   stopRecording(): Promise<Blob | null>;
   toggleFullscreen(): void;
+  next(): void; // 播放列表
+  previous(): void;
+  setAbRepeat(a: number, b: number): void;
+  clearAbRepeat(): void;
 }
+// MediaPlayerHandle / MediaPlayerProps 与 VideoPlayerHandle / VideoPlayerProps 相同
 ```
 
 ### 截图与录制
@@ -264,30 +325,35 @@ interface VideoPlayerHandle {
 
 ## 键盘
 
-播放器获得焦点时（`compact` 不响应键盘；带 ⌘ / Ctrl / Alt 的按键交给宿主）：
+播放器获得焦点时（音频与视频完全一致；`compact` 不响应键盘；带 ⌘ / Ctrl / Alt 的按键交给宿主）：
 
-| 按键          | 作用                            |
-| ------------- | ------------------------------- |
-| `Space` / `K` | 播放 / 暂停                     |
-| `←` / `→`     | 后退 / 前进 5 秒                |
-| `↑` / `↓`     | 音量 ±10%                       |
-| `M`           | 静音 / 取消静音                 |
-| `F`           | 全屏 / 退出全屏（双击画面同样） |
-| `S`           | 截图                            |
-| `R`           | 开始 / 停止录制                 |
-| `<` / `>`     | 减速 / 加速                     |
-| `C`           | 字幕开 / 关                     |
-| `P`           | 画中画                          |
+| 按键                | 作用                               |
+| ------------------- | ---------------------------------- |
+| `Space` / `K`       | 播放 / 暂停                        |
+| `←` / `→`           | 后退 / 前进 5 秒                   |
+| `Shift` + `←` / `→` | 后退 / 前进 15 秒                  |
+| `L`                 | 循环开 / 关                        |
+| `[` / `]` / `\`     | A-B 循环：设 A 点 / 设 B 点 / 清除 |
+| `Shift` + `N` / `P` | 下一首 / 上一首（播放列表）        |
+| `↑` / `↓`           | 音量 ±10%                          |
+| `M`                 | 静音 / 取消静音                    |
+| `F`                 | 全屏 / 退出全屏（双击画面同样）    |
+| `S`                 | 截图                               |
+| `R`                 | 开始 / 停止录制                    |
+| `<` / `>`           | 减速 / 加速                        |
+| `C`                 | 字幕开 / 关                        |
+| `P`                 | 画中画                             |
 
 进度条（`role="slider"`）聚焦时：`←` / `↓` 后退、`→` / `↑` 前进 5 秒，`Home` / `End` 跳到首尾。设置菜单里 `↑` / `↓` 移动、`Esc` 返回上一级 / 关闭。
 
 ## 无障碍
 
-- 根元素 `role="group"`、`aria-label="视频 <title>"`，可 Tab 聚焦，键盘聚焦时控制条常显
+- 根元素 `role="group"`、`aria-label="视频 <title>"`（音频界面为「音频 <title>」），可 Tab 聚焦，键盘聚焦时控制条常显
+- 音频界面的波形是 `role="slider"`（`aria-label="播放进度"`，`aria-valuetext` 如「0:50 / 1:40」）；快退快进、上一首 / 下一首、A-B（`aria-pressed`，名称随状态变化）、下载都有 `aria-label`；时间按钮的名称说明「已播放 / 剩余」
 - 所有按钮都有 `aria-label`（播放 / 暂停、静音 / 取消静音 / 无音轨、循环播放、截图、开始录制 / 停止录制、画中画、设置、全屏 / 退出全屏、开启声音）；开关类按钮带 `aria-pressed`
 - 设置菜单 `role="menu"`，选项为 `menuitemradio`（`aria-checked`）
 - 进度条 `role="slider"`，带 `aria-valuenow` / `aria-valuemax` / `aria-valuetext`；音量为原生 range，`aria-label="音量"`
-- 根元素暴露 `data-paused` / `data-muted` / `data-audio` / `data-aspect` / `data-engine` / `data-media`（`video` / `audio`）/ `data-fullscreen` / `data-recording`，便于测试
+- 根元素暴露 `data-ab`（`none` / `a` / `ab`）/ `data-track`（播放列表下标）/ `data-paused` / `data-muted` / `data-audio` / `data-aspect` / `data-engine` / `data-media`（`video` / `audio`）/ `data-fullscreen` / `data-recording`，便于测试
 - 尊重 `prefers-reduced-motion`
 
 ## 音轨判断

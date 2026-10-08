@@ -2,7 +2,8 @@
  * 播放器的浏览器能力 hooks：全屏（含 webkit 前缀 / iOS 视频全屏）、画中画、录屏，以及控制条的自动隐藏、短暂提示。
  * 能力在挂载后检测（SSR 安全），不支持时对应按钮隐藏。
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { TooltipContext } from './ControlButton';
 import {
   FULLSCREEN_EVENTS,
   enterFullscreen,
@@ -25,6 +26,7 @@ import {
   type RecordingStatus,
 } from './recorder';
 import { PlayerError } from './engines/types';
+import { clampVolume } from './audio';
 
 type ElementRef<T> = React.RefObject<T | null>;
 
@@ -256,4 +258,42 @@ export function useMediaElementSync(
     video.playbackRate = rate;
     video.defaultPlaybackRate = rate;
   }, [rate, videoRef]);
+}
+
+/**
+ * 声音状态：静音、音量，以及「只因自动播放而静音」（用户第一次主动播放或点「开启声音」时恢复声音）
+ */
+export function useSound(initial: { muted: boolean; autoMuted: boolean; defaultVolume: number }) {
+  const [muted, setMuted] = useState(initial.muted);
+  const [autoMuted, setAutoMuted] = useState(initial.autoMuted);
+  const [volume, setVolume] = useState(() => clampVolume(initial.defaultVolume));
+
+  const enableSound = useCallback(() => {
+    setAutoMuted(false);
+    setMuted(false);
+    setVolume((value) => (value > 0 ? value : 1));
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setAutoMuted(false);
+    if (muted && volume === 0) setVolume(1);
+    setMuted(!muted);
+  }, [muted, volume]);
+
+  const changeVolume = useCallback((next: number) => {
+    const value = clampVolume(next);
+    setAutoMuted(false);
+    setVolume(value);
+    setMuted(value === 0);
+  }, []);
+
+  return { muted, autoMuted, volume, setMuted, setVolume, enableSound, toggleMute, changeVolume };
+}
+
+/** 悬停提示的挂载容器：全屏时挂到播放器根元素里（挂到 body 的提示在全屏时看不见） */
+export function useTooltipContext(fullscreen: boolean, root: HTMLElement | null): TooltipContext {
+  return useMemo<TooltipContext>(
+    () => ({ container: fullscreen ? root : null, fullscreen }),
+    [fullscreen, root]
+  );
 }

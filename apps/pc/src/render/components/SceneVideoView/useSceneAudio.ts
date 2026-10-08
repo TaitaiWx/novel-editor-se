@@ -143,7 +143,7 @@ export function useSceneAudio(input: UseSceneAudioInput) {
       if (!providerId) {
         onMessage({
           tone: 'info',
-          text: '还没有配置配音服务：在设置中心「AI → 更多 AI 服务」里填写 OpenAI 兼容配音或 MiniMax 语音合成的 Key',
+          text: '还没有配置配音服务：在设置中心「AI → 语音」里填写 OpenAI 兼容配音或 MiniMax 语音合成的 Key',
         });
         return;
       }

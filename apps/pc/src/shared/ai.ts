@@ -32,13 +32,21 @@ export interface AIProviderInfo {
   /** 视频服务：每秒单价（作者自行填写，用于费用预估） */
   pricePerSecond?: number;
   currency?: 'CNY' | 'USD';
-  /** 作者添加的 OpenAI 兼容文本 AI（id 形如 custom-text-<n>，可改名 / 删除） */
+  /**
+   * 作者自己添加的服务（可改名 / 删除）：文本为 OpenAI 兼容（custom-text-<n>），
+   * 视频 / 图片 / 语音沿用某个内置厂商实现（custom-video-<n> / custom-image-<n> / custom-speech-<n>）
+   */
   custom?: boolean;
+  /** 自定义视频 / 图片 / 语音服务沿用的厂商实现（内置服务 id，例如 seedance-video） */
+  vendor?: string;
   /** 文本服务：是默认写作 AI（续写、分镜、预演、灵感、推演、ai-request 省略 providerId 时使用） */
   isDefaultText?: boolean;
   /** 默认写作 AI 是作者在设置中心选定的（false / 缺省 = 未选择，沿用内置默认） */
   defaultTextChosen?: boolean;
-  /** 文本服务（内置默认除外，它的参数在设置中心 JSON）：温度 / 单次回复长度 / 上下文长度 */
+  /**
+   * 文本服务的生成参数（每个文本服务都有；内置默认的值来自设置中心 JSON，其余在 ai-providers.json）：
+   * 温度 / 单次回复长度（同时是请求 max_tokens 的上限）/ 上下文长度（续写等按它决定上下文预算）
+   */
   temperature?: number;
   maxTokens?: number;
   contextTokens?: number;
@@ -46,13 +54,26 @@ export interface AIProviderInfo {
   voice?: string;
 }
 
-/** ai-providers-add-custom：添加一个 OpenAI 兼容的文本 AI（Key 可同时写入，只写不读） */
-export interface AICustomTextInput {
+/**
+ * ai-providers-add-custom：添加一个自己的服务（Key 可同时写入，只写不读）
+ * - kind 省略或为 text：OpenAI 兼容文本 AI，baseUrl 必填
+ * - kind 为 video / image / speech：vendor 必填（同类内置服务的 id），baseUrl 省略时用该厂商的默认地址
+ */
+export interface AICustomProviderInput {
+  kind?: ProviderKind;
+  vendor?: string;
   label: string;
-  baseUrl: string;
+  baseUrl?: string;
   model?: string;
   apiKey?: string;
+  /** 视频服务：每秒单价 */
+  pricePerSecond?: number;
+  /** 语音服务：默认声音 */
+  voice?: string;
 }
+
+/** 旧名称（只添加文本 AI 时的写法） */
+export type AICustomTextInput = AICustomProviderInput;
 
 export const BUILTIN_TEXT_PROVIDER_ID = 'openai-compatible';
 
@@ -65,7 +86,7 @@ export interface AIProviderUpdate {
   model?: string;
   pricePerSecond?: number | null;
   currency?: 'CNY' | 'USD';
-  /** 只对自定义文本 AI 有效：改名 */
+  /** 只对自己添加的服务有效：改名 */
   label?: string;
   /** 文本服务参数（null 恢复默认） */
   temperature?: number | null;

@@ -8,7 +8,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { VscChevronLeft, VscChevronRight } from 'react-icons/vsc';
 import Tooltip from '../Tooltip';
-import VideoPlayer from '../VideoPlayer';
+import VideoPlayer, { AudioPlayer } from '../VideoPlayer';
 import type { ReferenceItem } from '../../utils/referencePane';
 import { useReferenceMedia } from './useReferenceMedia';
 import styles from './styles.module.scss';
@@ -123,7 +123,7 @@ export const ReferenceMedia: React.FC<{
   if (item.kind === 'audio') {
     // 纯音频：播放器的音频界面（波形 + 进度），不自动播放（参考窗格里突然出声会打扰写作）
     return (
-      <VideoPlayer
+      <AudioPlayer
         key={`${item.path}#${version}`}
         src={{ src: url, audioOnly: true }}
         title={item.title}
