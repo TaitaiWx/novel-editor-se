@@ -27,6 +27,9 @@ function isKnownSafeEvalWarning(warning: { code?: string; id?: string; message?:
   );
 }
 
+/** splash 静态文件的输出根目录（默认 dist；configResolved 时改为实际 outDir） */
+let splashOutRoot = resolve(__dirname, 'dist');
+
 export default defineConfig(({ mode }) => {
   const isElectronMain = process.env.VITE_ELECTRON_MAIN === 'true';
   const isPreload = process.env.VITE_PRELOAD === 'true';
@@ -65,10 +68,14 @@ export default defineConfig(({ mode }) => {
       plugins: [
         {
           name: 'copy-splash',
+          configResolved(config) {
+            // 跟随实际的输出目录（E2E 会构建到临时目录后再整体替换 dist）
+            splashOutRoot = resolve(config.root, config.build.outDir);
+          },
           writeBundle() {
-            // 将 splash 窗口的静态文件复制到 dist/splash
+            // 将 splash 窗口的静态文件复制到 <输出目录>/splash
             const srcDir = resolve(__dirname, 'src/main/static/splash');
-            const outDir = resolve(__dirname, 'dist/splash');
+            const outDir = resolve(splashOutRoot, 'splash');
             mkdirSync(outDir, { recursive: true });
             copyFileSync(resolve(srcDir, 'splash.html'), resolve(outDir, 'splash.html'));
             copyFileSync(resolve(srcDir, 'splash.css'), resolve(outDir, 'splash.css'));
@@ -121,7 +128,7 @@ export default defineConfig(({ mode }) => {
       hmr: true,
       watch: {
         // main/preload 构建会持续写 dist；这些都是生成物，不应触发 renderer 热刷新。
-        ignored: ['**/dist/**', '**/build/**'],
+        ignored: ['**/dist/**', '**/build/**', '**/.dist-staging-*/**', '**/dist.retired-*/**'],
       },
     },
     build: {

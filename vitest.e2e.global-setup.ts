@@ -6,7 +6,7 @@
  *    - 构建产物比所有源码都新时自动跳过，反复运行 E2E 不重复构建
  *    - NOVEL_EDITOR_E2E_SKIP_BUILD=1 时强制跳过（例如发布流程已用生产配置构建过）
  */
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createConnection } from 'node:net';
 import path from 'node:path';
@@ -57,32 +57,52 @@ async function loadVite(): Promise<ViteModule> {
   return (await import(pathToFileURL(requireFromPc.resolve('vite')).href)) as ViteModule;
 }
 
-/** 与 apps/pc 的 `pnpm build` 等价：main → preload → renderer，三者共用 vite.config.ts */
+/**
+ * 与 apps/pc 的 `pnpm build` 等价：main → preload → renderer，三者共用 vite.config.ts。
+ * 先构建到临时目录，全部成功后再整体替换 dist：构建过程中 dist 始终完整可用。
+ * 以前是先删 dist 再构建，正在运行的应用（pnpm dev、其他 E2E 进程）此时加载页面会得到
+ * ERR_FILE_NOT_FOUND，重试用完后进入「启动失败，已进入安全模式」
+ */
 async function buildApp(): Promise<void> {
   const vite = await loadVite();
-  rmSync(DIST_DIR, { recursive: true, force: true });
+  const staging = path.join(PC_ROOT, `.dist-staging-${process.pid}-${Date.now()}`);
+  rmSync(staging, { recursive: true, force: true });
   const targets: Array<{ label: string; env: Record<string, string> }> = [
     { label: 'main', env: { VITE_ELECTRON_MAIN: 'true' } },
     { label: 'preload', env: { VITE_PRELOAD: 'true' } },
     { label: 'renderer', env: {} },
   ];
-  for (const target of targets) {
-    const previous = { ...process.env };
-    Object.assign(process.env, target.env);
-    try {
-      await vite.build({
-        root: PC_ROOT,
-        configFile: path.join(PC_ROOT, 'vite.config.ts'),
-        logLevel: 'warn',
-      });
-    } finally {
-      for (const key of Object.keys(target.env)) {
-        if (previous[key] === undefined) delete process.env[key];
-        else process.env[key] = previous[key];
+  try {
+    for (const target of targets) {
+      const previous = { ...process.env };
+      Object.assign(process.env, target.env);
+      try {
+        await vite.build({
+          root: PC_ROOT,
+          configFile: path.join(PC_ROOT, 'vite.config.ts'),
+          logLevel: 'warn',
+          build: { outDir: staging, emptyOutDir: false },
+        });
+      } finally {
+        for (const key of Object.keys(target.env)) {
+          if (previous[key] === undefined) delete process.env[key];
+          else process.env[key] = previous[key];
+        }
       }
+      console.info(`[e2e] 已构建 ${target.label}`);
     }
-    console.info(`[e2e] 已构建 ${target.label}`);
+    swapDirectory(staging, DIST_DIR);
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/** 用新构建替换 dist：两次 rename（同一磁盘内为原子操作），dist 缺失的时间只有一瞬 */
+export function swapDirectory(source: string, target: string): void {
+  const retired = `${target}.retired-${process.pid}-${Date.now()}`;
+  if (existsSync(target)) renameSync(target, retired);
+  renameSync(source, target);
+  rmSync(retired, { recursive: true, force: true });
 }
 
 /** `pnpm dev` 的 Vite 开发服务器端口；被占用说明开发模式正在运行 */

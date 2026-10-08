@@ -1,3 +1,9 @@
+import {
+  STARTUP_MAX_RETRIES,
+  buildStartupErrorHtml,
+  isStartupRetryUrl,
+  startupRetryDelayMs,
+} from './startup-recovery';
 import { app, BrowserWindow, nativeImage } from 'electron';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -20,8 +26,6 @@ let mainFrameLoadRetryCount = 0;
  * 低配机首次启动（磁盘缓存冷）可能需要 20~30s，放宽到 45s 避免误判
  */
 const SPLASH_FAILSAFE_TIMEOUT_MS = 45_000;
-/** 主帧加载失败时的最大重试次数 */
-const MAIN_FRAME_LOAD_MAX_RETRIES = 2;
 
 function clearSplashFailsafe() {
   if (splashFailsafeTimer) {
@@ -59,95 +63,49 @@ function revealMainWindow() {
 
 function renderStartupErrorPage(reason: string) {
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
-
-  const escapedReason = reason
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-
-  const html = `<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>小说编辑器启动失败</title>
-    <style>
-      :root { color-scheme: dark; }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: #171a21;
-        color: #e6e8ef;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      }
-      .card {
-        width: min(680px, calc(100vw - 48px));
-        background: #1f2430;
-        border: 1px solid #343b4f;
-        border-radius: 14px;
-        padding: 24px;
-        box-sizing: border-box;
-      }
-      h1 { margin: 0 0 12px; font-size: 22px; }
-      p { margin: 0 0 10px; line-height: 1.6; color: #c8cfde; }
-      code {
-        display: block;
-        margin-top: 8px;
-        padding: 10px 12px;
-        border-radius: 8px;
-        background: #131722;
-        color: #9bb2ff;
-        word-break: break-word;
-      }
-      button {
-        margin-top: 16px;
-        border: 0;
-        border-radius: 8px;
-        padding: 10px 14px;
-        background: #3b82f6;
-        color: #fff;
-        font-size: 14px;
-        cursor: pointer;
-      }
-    </style>
-  </head>
-  <body>
-    <section class="card">
-      <h1>启动失败，已进入安全模式</h1>
-      <p>渲染界面加载异常，应用已自动重试但未恢复。</p>
-      <p>你可以点击“重试启动”，或重启应用后再次尝试更新。</p>
-      <code>${escapedReason}</code>
-      <button onclick="location.reload()">重试启动</button>
-    </section>
-  </body>
-</html>`;
-
+  const html = buildStartupErrorHtml(reason);
   void mainWindowRef.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`);
 }
 
+let mainFrameRetryTimer: NodeJS.Timeout | null = null;
+
 function recoverMainFrameLoad(reason: string) {
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+  // 已经排了一次重试：同一次失败可能同时触发 did-fail-load 与超时，不重复计数
+  if (mainFrameRetryTimer) return;
 
-  if (mainFrameLoadRetryCount < MAIN_FRAME_LOAD_MAX_RETRIES) {
+  if (mainFrameLoadRetryCount < STARTUP_MAX_RETRIES) {
     mainFrameLoadRetryCount += 1;
-    console.warn(
-      `主帧加载恢复尝试 ${mainFrameLoadRetryCount}/${MAIN_FRAME_LOAD_MAX_RETRIES}: ${reason}`
-    );
-    // 重试时追加 query，避免命中损坏缓存
-    void loadRendererPage(mainWindowRef, __dirname, {
-      recover: String(Date.now()),
-      retry: String(mainFrameLoadRetryCount),
-    });
+    const attempt = mainFrameLoadRetryCount;
+    const delay = startupRetryDelayMs(attempt);
+    console.warn(`主帧加载恢复尝试 ${attempt}/${STARTUP_MAX_RETRIES}（${delay}ms 后）: ${reason}`);
+    // 等一会儿再试：构建产物被重建时文件通常只缺几百毫秒
+    mainFrameRetryTimer = setTimeout(() => {
+      mainFrameRetryTimer = null;
+      if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+      // 重试时追加 query，避免命中损坏缓存
+      void loadRendererPage(mainWindowRef, __dirname, {
+        recover: String(Date.now()),
+        retry: String(attempt),
+      });
+    }, delay);
     return;
   }
 
   // 多次重试仍失败，加载错误页；错误页本身的 ready-to-show 会触发 revealMainWindow
   console.warn(`启动恢复失败，进入安全模式: ${reason}`);
   renderStartupErrorPage(reason);
+}
+
+/** 安全模式错误页上点了「重试启动」：重新计数并加载渲染界面 */
+function retryStartupFromErrorPage() {
+  if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+  if (mainFrameRetryTimer) {
+    clearTimeout(mainFrameRetryTimer);
+    mainFrameRetryTimer = null;
+  }
+  mainFrameLoadRetryCount = 0;
+  void loadRendererPage(mainWindowRef, __dirname, { recover: String(Date.now()) });
 }
 
 function resolveBrandingIconPath() {
@@ -242,6 +200,11 @@ export function createMainWindow(): BrowserWindow {
       recoverMainFrameLoad(`页面加载失败: ${errorDescription}`);
     }
   );
+
+  // 安全模式错误页的「重试启动」只改 hash（页内导航），由这里重新加载渲染界面
+  mainWindow.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+    if (isMainFrame && isStartupRetryUrl(url)) retryStartupFromErrorPage();
+  });
 
   // 渲染进程崩溃时触发恢复加载
   mainWindow.webContents.on('render-process-gone', (_event, details) => {

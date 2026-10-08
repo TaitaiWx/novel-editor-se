@@ -49,3 +49,7 @@ apps/pc/sample-data/.novel-editor/writing-log.json
 # GUI E2E 失败截图与日志
 apps/pc/e2e/.artifacts/
 coverage/
+
+# E2E 构建的临时目录（构建完成后整体替换 dist）
+apps/pc/.dist-staging-*/
+apps/pc/dist.retired-*/
