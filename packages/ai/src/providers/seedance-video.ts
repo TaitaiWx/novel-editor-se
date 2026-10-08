@@ -40,6 +40,7 @@ import type {
   VideoProvider,
   VideoResult,
 } from '../types';
+import { withArkModelHint } from './ark';
 
 export const SEEDANCE_VIDEO_DEFAULTS = {
   baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
@@ -138,13 +139,15 @@ function taskError(task: SeedanceTask): AIError {
     task.error?.message ||
     (task.status === 'expired' ? 'Seedance 任务已过期' : 'Seedance 视频生成失败');
   const kind = classifyHttpError(0, message, task.error?.code);
-  return new AIError({
-    kind: kind === 'bad-request' ? 'unknown' : kind,
-    message,
-    code: task.error?.code,
-    providerId: 'seedance-video',
-    retryable: false,
-  });
+  return withArkModelHint(
+    new AIError({
+      kind: kind === 'bad-request' ? 'unknown' : kind,
+      message,
+      code: task.error?.code,
+      providerId: 'seedance-video',
+      retryable: false,
+    })
+  );
 }
 
 export interface SeedanceProviderOptions extends ProviderConfig {
@@ -170,6 +173,7 @@ export function createSeedanceVideoProvider(config: SeedanceProviderOptions): Vi
     timeoutMs: config.timeoutMs ?? SEEDANCE_VIDEO_DEFAULTS.timeoutMs,
     retry: config.retry,
     sleep: config.sleep,
+    mapError: withArkModelHint,
   });
   const taskPath = (remoteTaskId: string) =>
     `${SEEDANCE_ENDPOINTS.tasks}/${encodeURIComponent(remoteTaskId)}`;

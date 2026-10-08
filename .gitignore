@@ -42,6 +42,8 @@ large-novel.txt
 apps/pc/sample-data/.novel-editor/*.db*
 apps/pc/sample-data/.novel-editor/session.json
 apps/pc/sample-data/.novel-editor/writing-log.json
+# 用真实 Key 实测 AI 服务的结果（apps/pc/scripts/live-ai-check.mts），只在本机打开示例查看
+apps/pc/sample-data/**/资料/AI实测/
 
 *.db
 *.db-shm

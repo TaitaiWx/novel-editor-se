@@ -4,6 +4,7 @@
  */
 import { appendFile, cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -63,10 +64,32 @@ let project: Project;
 let memory: LoadedMemory;
 let files: string[];
 
+/**
+ * 示例里随仓库分发的文件：在 git 仓库中按已跟踪的文件计算（本机打开示例留下的数据库、AI 实测结果等
+ * 未跟踪文件不算，避免开发者本机的运行产物让检查失败）；不在 git 中时（例如解压的源码包）列出全部文件
+ */
+async function listSampleFiles(): Promise<string[]> {
+  try {
+    const output = execFileSync('git', ['ls-files', '-z', '--', '.'], {
+      cwd: ROOT,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const tracked = output.split('\0').filter(Boolean);
+    if (tracked.length > 0) {
+      const existing = new Set(await listFiles(ROOT));
+      return tracked.filter((file) => existing.has(file)).sort();
+    }
+  } catch {
+    // 不在 git 中
+  }
+  return listFiles(ROOT);
+}
+
 beforeAll(async () => {
   project = await loadProjectFromConfig(getConfigPath(ROOT));
   memory = await loadMemory(STAR_ROOT);
-  files = await listFiles(ROOT);
+  files = await listSampleFiles();
 });
 
 describe('示例作品集 sample-data', () => {

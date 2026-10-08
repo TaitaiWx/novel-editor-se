@@ -265,3 +265,14 @@ describe('预演动作：采样', () => {
     expect(second[1]).toBeLessThan(0);
   });
 });
+
+describe('预演脚本提醒去重', () => {
+  // 回归：AI 在每个关键帧都写了同一个不存在的关节，提醒重复出现，预演面板列表的 key 冲突（React 报错）
+  it('同一条提醒只保留一次', () => {
+    const motion = { tracks: { rootBob: [[0, 0, 0, 0]], head: [[0, 0, 10, 0]] } };
+    const result = scriptOf(motion, [{ t: 2, x: 0, z: 0, pose: 'stand', motion }]);
+    const notes = result.warnings.filter((item) => item.includes('rootBob'));
+    expect(notes).toHaveLength(1);
+    expect(new Set(result.warnings).size).toBe(result.warnings.length);
+  });
+});

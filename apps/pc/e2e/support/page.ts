@@ -195,6 +195,8 @@ export class Page {
     await this.cdp.send('Runtime.enable');
     await this.cdp.send('Page.enable');
     await this.cdp.send('Log.enable');
+    // 窗口在后台运行时没有系统焦点：模拟页面始终有焦点（document.hasFocus、:focus、focus 事件与前台一致）
+    await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
   }
 
   /** 取出并清空目前收集到的控制台错误 / 未捕获异常 */

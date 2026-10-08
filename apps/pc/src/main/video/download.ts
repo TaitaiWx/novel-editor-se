@@ -47,6 +47,8 @@ export interface DownloadOptions {
   signal?: AbortSignal;
   fetch?: (input: string, init?: RequestInit) => Promise<Response>;
   maxBytes?: number;
+  /** 下载需要的请求头（例如 Gemini 文件下载要带 Key）；只在内存中使用，不得写入任务记录或日志 */
+  headers?: Record<string, string>;
 }
 
 export async function downloadToFile(
@@ -60,6 +62,10 @@ export async function downloadToFile(
   } catch {
     throw new AIError({ kind: 'invalid-response', message: '下载地址无效', retryable: false });
   }
+  // 部分服务（Gemini Omni）把成片直接放在结果里：data:video/...;base64,...
+  if (parsed.protocol === 'data:') {
+    return writeDataUrlVideo(url, destination, options.maxBytes ?? MAX_VIDEO_BYTES);
+  }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new AIError({
       kind: 'invalid-response',
@@ -70,7 +76,10 @@ export async function downloadToFile(
   const doFetch = options.fetch ?? ((input, init) => fetch(input, init));
   let response: Response;
   try {
-    response = await doFetch(url, { signal: options.signal });
+    response = await doFetch(url, {
+      signal: options.signal,
+      ...(options.headers ? { headers: options.headers } : {}),
+    });
   } catch (error) {
     if (options.signal?.aborted) throw new AIError({ kind: 'aborted', message: '下载已取消' });
     throw new AIError({
@@ -121,6 +130,28 @@ export async function downloadToFile(
       kind: 'network',
       message: `下载视频失败: ${error instanceof Error ? error.message : String(error)}`,
     });
+  }
+}
+
+/** 写入 data: URL 里的视频（只接受 video/* 的 base64），同样先写 .part 再改名 */
+async function writeDataUrlVideo(url: string, destination: string, maxBytes: number) {
+  const match = /^data:(video\/[\w.+-]+);base64,([A-Za-z0-9+/=\s]+)$/.exec(url);
+  if (!match) {
+    throw new AIError({ kind: 'invalid-response', message: '内嵌视频格式无效', retryable: false });
+  }
+  const bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length === 0) throw new AIError({ kind: 'invalid-response', message: '下载内容为空' });
+  if (bytes.length > maxBytes) {
+    throw new AIError({ kind: 'invalid-response', message: '视频文件过大', retryable: false });
+  }
+  const partial = `${destination}.part`;
+  try {
+    await writeFile(partial, bytes);
+    await rename(partial, destination);
+    return bytes.length;
+  } catch (error) {
+    await rm(partial, { force: true }).catch(() => undefined);
+    throw error;
   }
 }
 

@@ -6,6 +6,16 @@
  */
 import { AIError } from './errors';
 import { createGrokProvider, GROK_DEFAULTS } from './providers/grok';
+import {
+  createGeminiImageProvider,
+  createGeminiSpeechProvider,
+  GEMINI_IMAGE_DEFAULTS,
+  GEMINI_SPEECH_DEFAULTS,
+} from './providers/gemini';
+import { createGeminiVideoProvider, GEMINI_VIDEO_DEFAULTS } from './providers/gemini-video';
+import { createGrokSpeechProvider, GROK_SPEECH_DEFAULTS } from './providers/grok-speech';
+import { createGrokVideoProvider, GROK_VIDEO_DEFAULTS } from './providers/grok-video';
+import { createOpenAIImageProvider, OPENAI_IMAGE_DEFAULTS } from './providers/openai-image';
 import { createMinimaxVideoProvider, MINIMAX_VIDEO_DEFAULTS } from './providers/minimax-video';
 import {
   createOpenAICompatibleProvider,
@@ -102,6 +112,30 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     supportsAudio: true,
   },
   {
+    id: 'grok-video',
+    kind: 'video',
+    label: 'xAI Grok 视频',
+    description: 'Grok Imagine 文生视频 / 图生视频 / 参考图生视频，默认带声音（异步任务）',
+    defaultBaseUrl: GROK_VIDEO_DEFAULTS.baseUrl,
+    defaultModel: GROK_VIDEO_DEFAULTS.model,
+    models: GROK_VIDEO_DEFAULTS.models,
+    envKey: providerEnvKey('grok-video'),
+    docsUrl: 'https://docs.x.ai/developers/model-capabilities/video/generation',
+    supportsAudio: true,
+  },
+  {
+    id: 'gemini-video',
+    kind: 'video',
+    label: 'Gemini Omni 视频',
+    description: 'Gemini Omni Flash 文生视频 / 图生视频，原生生成声音（Interactions API 后台任务）',
+    defaultBaseUrl: GEMINI_VIDEO_DEFAULTS.baseUrl,
+    defaultModel: GEMINI_VIDEO_DEFAULTS.model,
+    models: GEMINI_VIDEO_DEFAULTS.models,
+    envKey: providerEnvKey('gemini-video'),
+    docsUrl: 'https://ai.google.dev/gemini-api/docs/omni',
+    supportsAudio: true,
+  },
+  {
     id: 'seedream-image',
     kind: 'image',
     label: 'Seedream 图片（火山方舟）',
@@ -135,6 +169,28 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     docsUrl: 'https://docs.x.ai/docs/guides/image-generations',
   },
   {
+    id: 'openai-image',
+    kind: 'image',
+    label: 'OpenAI 图片',
+    description: 'GPT Image 文生图，可用参考图保持人物一致（/images/edits）',
+    defaultBaseUrl: OPENAI_IMAGE_DEFAULTS.baseUrl,
+    defaultModel: OPENAI_IMAGE_DEFAULTS.model,
+    models: OPENAI_IMAGE_DEFAULTS.models,
+    envKey: providerEnvKey('openai-image'),
+    docsUrl: 'https://developers.openai.com/api/reference/resources/images/methods/generate',
+  },
+  {
+    id: 'gemini-image',
+    kind: 'image',
+    label: 'Gemini 图片（Nano Banana）',
+    description: 'Gemini 原生出图，可用参考图保持人物一致',
+    defaultBaseUrl: GEMINI_IMAGE_DEFAULTS.baseUrl,
+    defaultModel: GEMINI_IMAGE_DEFAULTS.model,
+    models: GEMINI_IMAGE_DEFAULTS.models,
+    envKey: providerEnvKey('gemini-image'),
+    docsUrl: 'https://ai.google.dev/gemini-api/docs/generate-content/image-generation',
+  },
+  {
     id: 'openai-speech',
     kind: 'speech',
     label: 'OpenAI 兼容配音',
@@ -166,6 +222,28 @@ export const BUILTIN_PROVIDERS: readonly ProviderDescriptor[] = [
     models: VOLCENGINE_SPEECH_DEFAULTS.models,
     envKey: providerEnvKey('volcengine-speech'),
     docsUrl: 'https://www.volcengine.com/docs/6561/1598757',
+  },
+  {
+    id: 'grok-speech',
+    kind: 'speech',
+    label: 'xAI Grok 配音',
+    description: '场景视频的对白配音（/tts，20 种语言，所有音色都能说各种语言）',
+    defaultBaseUrl: GROK_SPEECH_DEFAULTS.baseUrl,
+    defaultModel: GROK_SPEECH_DEFAULTS.model,
+    models: GROK_SPEECH_DEFAULTS.models,
+    envKey: providerEnvKey('grok-speech'),
+    docsUrl: 'https://docs.x.ai/developers/model-capabilities/audio/text-to-speech',
+  },
+  {
+    id: 'gemini-speech',
+    kind: 'speech',
+    label: 'Gemini 配音',
+    description: '场景视频的对白配音（Gemini TTS，30 种预置音色，可用自然语言控制语气）',
+    defaultBaseUrl: GEMINI_SPEECH_DEFAULTS.baseUrl,
+    defaultModel: GEMINI_SPEECH_DEFAULTS.model,
+    models: GEMINI_SPEECH_DEFAULTS.models,
+    envKey: providerEnvKey('gemini-speech'),
+    docsUrl: 'https://ai.google.dev/gemini-api/docs/generate-content/speech-generation',
   },
 ];
 
@@ -309,11 +387,17 @@ export function createDefaultRegistry(): ProviderRegistry {
   registry.registerText(byId('grok'), createGrokProvider);
   registry.registerVideo(byId('minimax-video'), createMinimaxVideoProvider);
   registry.registerVideo(byId('seedance-video'), createSeedanceVideoProvider);
+  registry.registerVideo(byId('grok-video'), createGrokVideoProvider);
+  registry.registerVideo(byId('gemini-video'), createGeminiVideoProvider);
   registry.registerImage(byId('seedream-image'), createSeedreamImageProvider);
   registry.registerImage(byId('minimax-image'), createMinimaxImageProvider);
   registry.registerImage(byId('grok-image'), createGrokImageProvider);
+  registry.registerImage(byId('openai-image'), createOpenAIImageProvider);
+  registry.registerImage(byId('gemini-image'), createGeminiImageProvider);
   registry.registerSpeech(byId('openai-speech'), createOpenAISpeechProvider);
   registry.registerSpeech(byId('minimax-speech'), createMinimaxSpeechProvider);
   registry.registerSpeech(byId('volcengine-speech'), createVolcengineSpeechProvider);
+  registry.registerSpeech(byId('grok-speech'), createGrokSpeechProvider);
+  registry.registerSpeech(byId('gemini-speech'), createGeminiSpeechProvider);
   return registry;
 }

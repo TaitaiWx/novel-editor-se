@@ -38,6 +38,7 @@ extraResources:
       - '!.novel-editor/*.db*'
       - '!.novel-editor/session.json'
       - '!.novel-editor/writing-log.json'
+      - '!**/资料/AI实测/**'
   - from: release-notes.json
     to: release-notes.json
 

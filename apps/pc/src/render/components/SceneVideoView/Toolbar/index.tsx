@@ -36,6 +36,9 @@ export interface ToolbarProps {
   pendingCount: number;
   submitting: boolean;
   canAddShot: boolean;
+  /** 不能确认分镜的原因（没有镜头 / 缺画面描述）；可以确认时为 null */
+  confirmBlocker: string | null;
+  onConfirm: () => void;
   onGenerate: () => void;
   onAddShot: () => void;
   onReveal: () => void;
@@ -52,6 +55,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
   estimateText,
   pendingCount,
   submitting,
+  confirmBlocker,
+  onConfirm,
   canAddShot,
   onGenerate,
   onAddShot,
@@ -209,22 +214,41 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <VscGoToFile />
           </button>
         </Tooltip>
-        <Tooltip
-          content={
-            provider
-              ? '提交还没有成片的镜头；完成后自动保存到资料，全部完成后自动合成样片'
-              : '先配置视频服务'
-          }
-        >
-          <button
-            type="button"
-            className={styles.primary}
-            disabled={!provider || submitting || pendingCount === 0}
-            onClick={onGenerate}
+        {state.storyboardConfirmed ? (
+          <Tooltip
+            content={
+              provider
+                ? '提交还没有成片的镜头；完成后自动保存到资料，全部完成后自动合成样片'
+                : '先配置视频服务'
+            }
           >
-            {generateLabel}
-          </button>
-        </Tooltip>
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={!provider || submitting || pendingCount === 0}
+              onClick={onGenerate}
+            >
+              {generateLabel}
+            </button>
+          </Tooltip>
+        ) : (
+          <Tooltip
+            content={
+              confirmBlocker ??
+              '检查每个镜头的画面、景别、时长与台词，确认后才能生成视频（不会产生费用）'
+            }
+          >
+            <button
+              type="button"
+              className={styles.primary}
+              data-testid="confirm-storyboard"
+              disabled={Boolean(confirmBlocker)}
+              onClick={onConfirm}
+            >
+              确认分镜
+            </button>
+          </Tooltip>
+        )}
       </div>
     </header>
   );

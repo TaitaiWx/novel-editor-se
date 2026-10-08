@@ -231,6 +231,8 @@ describe('设置中心 · AI 模型列表', () => {
       'Kimi',
       '智谱 GLM',
       'Ollama（本地）',
+      'Google Gemini',
+      '豆包（火山方舟）',
       '自定义（OpenAI 兼容）',
     ]);
     chooseOption(getCombobox('服务商', within(form)), 'xAI Grok');
@@ -508,7 +510,12 @@ describe('设置中心 · AI 模型列表', () => {
     const video = section('视频');
     fireEvent.click(await within(video).findByRole('button', { name: '添加模型' }));
     const form = within(video).getByRole('group', { name: '添加模型' });
-    expect(selectOptionTexts('服务商', within(form))).toEqual(['MiniMax 海螺', 'Seedance']);
+    expect(selectOptionTexts('服务商', within(form))).toEqual([
+      'MiniMax 海螺',
+      'Seedance',
+      'xAI Grok Imagine',
+      'Google Gemini Omni',
+    ]);
     chooseOption(getCombobox('服务商', within(form)), 'Seedance');
     fireEvent.change(within(form).getByLabelText('每秒单价'), { target: { value: '0.4' } });
     fireEvent.change(within(form).getByLabelText('API Key'), { target: { value: 'ark' } });
@@ -527,14 +534,20 @@ describe('设置中心 · AI 模型列表', () => {
         '服务商',
         within(within(section('图片')).getByRole('group', { name: '添加模型' }))
       )
-    ).toEqual(['Seedream（火山方舟）', 'MiniMax', 'xAI Grok', 'OpenAI 兼容图片']);
+    ).toEqual([
+      'Seedream（火山方舟）',
+      'MiniMax',
+      'xAI Grok',
+      'OpenAI 图片',
+      'Google Gemini（Nano Banana）',
+    ]);
     fireEvent.click(within(section('语音（配音）')).getByRole('button', { name: '添加模型' }));
     expect(
       selectOptionTexts(
         '服务商',
         within(within(section('语音（配音）')).getByRole('group', { name: '添加模型' }))
       )
-    ).toEqual(['OpenAI 兼容', 'MiniMax', '豆包语音（火山引擎）']);
+    ).toEqual(['OpenAI 兼容', 'MiniMax', 'xAI Grok', 'Google Gemini', '豆包语音（火山引擎）']);
     // 豆包语音：预填接口地址与模型（= 资源 id），Key 说明指向豆包语音控制台；国内服务不默认走代理
     const speechForm = within(section('语音（配音）')).getByRole('group', { name: '添加模型' });
     chooseOption(getCombobox('服务商', within(speechForm)), '豆包语音（火山引擎）');

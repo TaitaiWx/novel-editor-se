@@ -11,12 +11,11 @@
  * - MiniMax：https://platform.minimax.cn/docs/api-reference/image-generation-t2i（模型 image-01 / image-01-live；
  *   国内站 https://api.minimax.cn，国际站 https://api.minimax.io）
  * - xAI：https://docs.x.ai/docs/guides/image-generations（grok-imagine-image 系列；grok-2-image 已不在列表）
- * - OpenAI（同一实现，预设 openai-image）：https://developers.openai.com/api/docs/guides/image-generation
+ * - OpenAI 图片已有独立实现（providers/openai-image.ts）
  *
  * 文档未写明的假设：
  * - Seedream 5.0 沿用 4.x 的请求字段（image 数组参考图、sequential_image_generation）
  * - xAI 已支持 /images/edits 参考图（≤5 张），这里仍只用 /images/generations 文生图（supportsReferences = false）
- * - OpenAI GPT 图片模型默认就返回 base64；请求里仍带 response_format: 'b64_json'，假设被接受
  *
  *
  * - Seedream（火山方舟）：POST {base}/images/generations
@@ -41,6 +40,7 @@ import type {
   ImageProvider,
   ProviderConfig,
 } from '../types';
+import { withArkModelHint } from './ark';
 import { minimaxBaseRespError } from './minimax-video';
 
 export const IMAGE_COUNT_MAX = 4;
@@ -48,11 +48,13 @@ const PROMPT_MAX = 1500;
 
 export const SEEDREAM_IMAGE_DEFAULTS = {
   baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-  model: 'doubao-seedream-5-0-260128',
+  // 2026-10-09 真实 Key 验证：5-0-pro / 5-0-flash 是账号里最常开通的，默认用 pro
+  model: 'doubao-seedream-5-0-pro-260628',
   models: [
-    'doubao-seedream-5-0-260128',
     'doubao-seedream-5-0-pro-260628',
     'doubao-seedream-5-0-flash-260915',
+    'doubao-seedream-5-0-260128',
+    'doubao-seedream-4-5-251128',
   ],
   timeoutMs: 120_000,
   maxReferences: 10,
@@ -130,13 +132,22 @@ function mapOpenAIImages(json: OpenAIImageData, providerId: string): GeneratedIm
 
 // ─── Seedream ───────────────────────────────────────────────────────────
 
+/**
+ * 是否支持组图（sequential_image_generation）。2026-10-09 用真实 Key 验证：5.0 pro / flash 不支持
+ * （报 parameter sequential_image_generation not valid），5.0 基础版与 4.x 支持；不支持时逐张请求
+ */
+export function seedreamSupportsSequential(model: string): boolean {
+  return /seedream-(5-0-2\d{5}|4-)/.test(model);
+}
+
 export function buildSeedreamImageBody(
   request: ImageGenerationRequest,
   defaultModel: string
 ): Record<string, unknown> {
-  const count = clampImageCount(request.count);
+  const modelId = request.model?.trim() || defaultModel;
+  const count = seedreamSupportsSequential(modelId) ? clampImageCount(request.count) : 1;
   const body: Record<string, unknown> = {
-    model: request.model?.trim() || defaultModel,
+    model: modelId,
     prompt: trimPrompt(request.prompt),
     size: SEEDREAM_SIZES[request.aspectRatio ?? '1:1'] ?? SEEDREAM_SIZES['1:1'],
     response_format: 'b64_json',
@@ -168,6 +179,7 @@ export function createSeedreamImageProvider(config: ProviderConfig): ImageProvid
     timeoutMs: config.timeoutMs ?? SEEDREAM_IMAGE_DEFAULTS.timeoutMs,
     retry: config.retry,
     sleep: config.sleep,
+    mapError: withArkModelHint,
   });
   return {
     id,
@@ -175,11 +187,21 @@ export function createSeedreamImageProvider(config: ProviderConfig): ImageProvid
     supportsReferences: true,
     async generate(request, call: CallOptions = {}): Promise<ImageGenerationResult> {
       const body = buildSeedreamImageBody(request, model);
-      const json = await client.json<OpenAIImageData>('POST', IMAGE_ENDPOINTS.seedream, body, {
-        signal: call.signal,
-        retry: NO_RETRY,
-      });
-      return { images: mapOpenAIImages(json, id), model: String(body.model) };
+      const send = () =>
+        client.json<OpenAIImageData>('POST', IMAGE_ENDPOINTS.seedream, body, {
+          signal: call.signal,
+          retry: NO_RETRY,
+        });
+      const count = clampImageCount(request.count);
+      // 不支持组图的模型：并行发 count 次单张请求再合并
+      const responses =
+        count > 1 && !seedreamSupportsSequential(String(body.model))
+          ? await Promise.all(Array.from({ length: count }, send))
+          : [await send()];
+      return {
+        images: responses.flatMap((json) => mapOpenAIImages(json, id)),
+        model: String(body.model),
+      };
     },
     async testConnection(call: CallOptions = {}) {
       // 方舟没有免费的图片探活接口：列出模型验证 Key 与地址

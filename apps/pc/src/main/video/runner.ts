@@ -50,7 +50,9 @@ export interface VideoRunnerDeps {
     url: string,
     destination: string,
     signal: AbortSignal,
-    providerId?: string
+    providerId?: string,
+    /** 下载需要的请求头（来自 fetchResult，可能含 Key：只在内存中传递，不写入任务） */
+    headers?: Record<string, string>
   ): Promise<unknown>;
   writeJson(file: string, data: unknown): Promise<void>;
   listFiles(dir: string): Promise<string[]>;
@@ -258,7 +260,11 @@ export class VideoTaskRunner {
         return;
       }
       const resultUrl = result.resultUrl ?? (await provider.fetchResult(task.remoteTaskId)).url;
-      this.apply(task, { type: 'remote-succeeded', resultUrl });
+      // 内嵌在结果里的成片（data: URL，可能几 MB）不写进任务记录：下载时重新向服务获取
+      this.apply(task, {
+        type: 'remote-succeeded',
+        resultUrl: resultUrl.startsWith('data:') ? '' : resultUrl,
+      });
       // 同一轮内立即开始下载
       this.tickAgain = true;
     } catch (error) {
@@ -281,11 +287,14 @@ export class VideoTaskRunner {
     try {
       // 签名地址可能已过期（重启后恢复的任务），下载前重新获取
       let url = task.resultUrl;
+      let headers: Record<string, string> | undefined;
       if (task.remoteTaskId) {
         try {
-          url = (
-            await this.deps.getProvider(task.providerId).fetchResult(task.remoteTaskId, { signal })
-          ).url;
+          const result = await this.deps
+            .getProvider(task.providerId)
+            .fetchResult(task.remoteTaskId, { signal });
+          url = result.url;
+          headers = result.headers;
         } catch (error) {
           if (!url) throw error;
         }
@@ -298,7 +307,7 @@ export class VideoTaskRunner {
         version: task.version,
       });
       const destination = await this.deps.resolveOutput(task.workPath, layout.file);
-      await this.deps.downloadFile(url, destination, signal, task.providerId);
+      await this.deps.downloadFile(url, destination, signal, task.providerId, headers);
       const promptFile = await this.deps.resolveOutput(task.workPath, layout.promptFile);
       await this.deps.writeJson(
         promptFile,

@@ -68,6 +68,11 @@ export interface SceneVideoState {
   animaticSignature?: string;
   /** 已自动在本章章纲里记录这一场的视频（只记录一次） */
   outlineLinked?: boolean;
+  /**
+   * 分镜是否经作者确认。AI / 按段落拆出的只是草稿，作者检查修改后点「确认分镜」才能生成镜头；
+   * 重新拆分镜会回到草稿。旧版 分镜.json 没有这个字段：已有镜头视为已确认（不影响已经在做的场景）
+   */
+  storyboardConfirmed: boolean;
   updatedAt: string;
 }
 
@@ -116,6 +121,7 @@ export function createSceneVideoState(input: CreateSceneStateInput, now: Date): 
     previz: {},
     previzVideo: {},
     previzScripts: {},
+    storyboardConfirmed: false,
     updatedAt: now.toISOString(),
   };
 }
@@ -271,6 +277,8 @@ export function parseSceneVideoState(
     previz: parseShotImageMap(raw.previz, ids),
     previzVideo: parseShotImageMap(raw.previzVideo, ids),
     previzScripts: parsePrevizScripts(raw.previzScripts, ids),
+    storyboardConfirmed:
+      typeof raw.storyboardConfirmed === 'boolean' ? raw.storyboardConfirmed : ids.size > 0,
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
   if (typeof raw.model === 'string' && raw.model) state.model = raw.model;
@@ -299,7 +307,24 @@ export function replaceStoryboardShots(state: SceneVideoState, shots: Shot[]): S
     nextShotNumber: renumbered.next,
     selectedShotIds: renumbered.shots.map((shot) => shot.id),
     chosenVersions: {},
+    // 新拆出的分镜是草稿：作者确认前不能生成
+    storyboardConfirmed: false,
   };
+}
+
+/** 不能确认分镜的原因（没有镜头 / 有镜头没写画面描述）；可以确认时为 null */
+export function storyboardConfirmBlocker(state: SceneVideoState): string | null {
+  const shots = state.storyboard.shots;
+  if (shots.length === 0) return '还没有镜头';
+  const empty = shots.findIndex((shot) => !shot.description.trim());
+  if (empty >= 0) return `镜头 ${empty + 1} 还没有画面描述`;
+  return null;
+}
+
+/** 作者确认分镜：之后才能生成镜头 */
+export function confirmStoryboard(state: SceneVideoState): SceneVideoState {
+  if (storyboardConfirmBlocker(state)) return state;
+  return { ...state, storyboardConfirmed: true };
 }
 
 /** 新增一个空白镜头（追加到末尾并选中） */

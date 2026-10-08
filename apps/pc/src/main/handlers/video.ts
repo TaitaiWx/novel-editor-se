@@ -152,9 +152,13 @@ export function createDefaultVideoRunner(): VideoTaskRunner {
     repo: storeRepo,
     getProvider: (providerId) => getAIService().getVideoProvider(providerId),
     resolveOutput: resolveInsideWork,
-    downloadFile: (url, destination, signal, providerId) => {
+    downloadFile: (url, destination, signal, providerId, headers) => {
       const fetch = providerId ? getAIService().fetchFor(providerId) : undefined;
-      return downloadToFile(url, destination, { signal, ...(fetch ? { fetch } : {}) });
+      return downloadToFile(url, destination, {
+        signal,
+        ...(fetch ? { fetch } : {}),
+        ...(headers ? { headers } : {}),
+      });
     },
     writeJson: writeJsonFile,
     listFiles: (dir) => readdir(dir),

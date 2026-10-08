@@ -16,12 +16,14 @@ import {
   animaticFiles,
   appendShot,
   chosenVersionFor,
+  confirmStoryboard,
   estimateSceneCost,
   moveShot,
   removeShot,
   replaceStoryboardShots,
   shotProgress,
   shotsNeedingGeneration,
+  storyboardConfirmBlocker,
   updateShot,
 } from './sceneVideoState';
 import { useSceneAnimatic } from './useSceneAnimatic';
@@ -182,11 +184,14 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         setSelectedId(null);
         const base =
           result.source === 'ai'
-            ? `AI 拆出 ${result.shots.length} 个镜头`
-            : `已按段落拆出 ${result.shots.length} 个镜头`;
+            ? `AI 拟了 ${result.shots.length} 个镜头的分镜草稿`
+            : `已按段落拆出 ${result.shots.length} 个镜头的分镜草稿`;
         setMessage({
-          tone: result.notes.length ? 'info' : 'success',
-          text: [`${base}，单击镜头可以修改`, ...result.notes].join('；'),
+          tone: 'info',
+          text: [
+            `${base}：单击镜头修改画面、景别、时长与台词，也可以增删镜头；确认分镜后才能生成视频`,
+            ...result.notes,
+          ].join('；'),
         });
       } finally {
         setSplitting(false);
@@ -363,11 +368,13 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
     }
     const entry = shotById.get(node.id);
     if (!entry) return null;
-    const blocked = !provider
-      ? '先配置视频服务'
-      : !entry.shot.description.trim()
-        ? '先写一句画面描述'
-        : undefined;
+    const blocked = !state.storyboardConfirmed
+      ? '先检查分镜并点「确认分镜」'
+      : !provider
+        ? '先配置视频服务'
+        : !entry.shot.description.trim()
+          ? '先写一句画面描述'
+          : undefined;
     return (
       <ShotNode
         shot={entry.shot}
@@ -527,6 +534,14 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
         pendingCount={pendingShots.length}
         submitting={submitting}
         canAddShot={state.storyboard.shots.length < STORYBOARD_MAX_SHOTS}
+        confirmBlocker={storyboardConfirmBlocker(state)}
+        onConfirm={() => {
+          updateState(confirmStoryboard);
+          setMessage({
+            tone: 'success',
+            text: '分镜已确认：可以「生成」单个镜头，或点「生成 N 个镜头」全部提交',
+          });
+        }}
         onGenerate={() => void submit(pendingShots)}
         onAddShot={() => {
           const id = `shot-${state.nextShotNumber}`;
@@ -540,6 +555,13 @@ const SceneVideoView: React.FC<SceneVideoViewProps> = ({
       />
       {!workPath && (
         <p className={styles.notice}>没有打开作品目录：分镜可以编辑，但无法保存与生成。</p>
+      )}
+      {!state.storyboardConfirmed && state.storyboard.shots.length > 0 && (
+        <p className={styles.notice} data-testid="storyboard-draft-notice">
+          分镜草稿：AI
+          只是帮你起个头。单击镜头修改画面、景别、时长、运镜与台词，用「添加镜头」或检查器里的删除增减镜头；
+          满意后点右上角「确认分镜」，之后才会生成视频。
+        </p>
       )}
       {message && (
         <p className={styles.message} data-tone={message.tone} role="status">

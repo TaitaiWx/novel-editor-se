@@ -110,7 +110,7 @@ export const AI_ERROR_HINTS: Record<AIErrorKind, string> = {
 const CONTENT_SAFETY_PATTERN =
   /(sensitive|content[_\s-]?(policy|filter|safety|moderation)|moderat|safety|unsafe|\u8fdd\u89c4|\u654f\u611f|\u5ba1\u6838|\u5b89\u5168\u7b56\u7565)/i;
 const QUOTA_PATTERN =
-  /(insufficient[_\s-]?(balance|quota|credit)|quota|overdue|balance|billing|exceeded your current|\u6b20\u8d39|\u4f59\u989d|\u989d\u5ea6)/i;
+  /(insufficient[_\s-]?(balance|quota|credit)|credits? (are )?depleted|prepayment|quota|overdue|balance|billing|exceeded your current|\u6b20\u8d39|\u4f59\u989d|\u989d\u5ea6)/i;
 const AUTH_PATTERN =
   /(api[_\s-]?key|unauthori[sz]ed|authenticat|invalid[_\s-]?token|\u9274\u6743|\u5bc6\u94a5)/i;
 
@@ -138,9 +138,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * 从常见的错误响应体中提取信息：
  * - OpenAI 兼容 / xAI / 火山方舟：`{ error: { message, code, type } }` 或 `{ error: "..." }`
+ * - Gemini：`{ error: { code, message, status } }`，OpenAI 兼容端点外面再包一层数组
  * - 其他：`{ message }` / `{ msg }` / `{ detail }`
  */
 export function extractErrorInfo(body: unknown): { message?: string; code?: string } {
+  // Gemini 的 OpenAI 兼容端点把错误包在数组里：[{ error: { code, message, status } }]
+  if (Array.isArray(body) && body.length > 0) return extractErrorInfo(body[0]);
   if (!isRecord(body)) return typeof body === 'string' && body ? { message: body } : {};
   const error = body.error;
   if (typeof error === 'string') return { message: error };

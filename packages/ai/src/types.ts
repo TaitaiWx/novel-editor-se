@@ -98,6 +98,11 @@ export interface VideoResult {
   url: string;
   /** 下载地址过期时间（epoch ms，未知为空） */
   expiresAt?: number;
+  /**
+   * 下载时需要附带的请求头（例如 Gemini 文件下载要 `x-goog-api-key`）。
+   * **可能含 API Key**：调用方只能在发起下载时使用，不得持久化（任务表 / 分镜.json）、写日志或回传渲染进程
+   */
+  headers?: Record<string, string>;
 }
 
 export interface VideoProvider {

@@ -21,6 +21,15 @@
 - 默认模型由主进程 `AIService.resolveDefaultId(capability)` 统一决定：作者选定的 > 第一个已保存 Key 且启用的 > 第一个；省略模型的请求（续写、成长推演、章纲、配音、出图等）都走它
 - 「沿用已保存的 Key」：同协议 + 同地址的模型可在主进程内复制 Key
 - 配音服务：OpenAI 兼容（`openai-speech`）、MiniMax（`minimax-speech`）、豆包语音 / 火山引擎（`volcengine-speech`，`providers/volcengine-speech.ts`：HTTP 单向流式 V3 `POST https://openspeech.bytedance.com/api/v3/tts/unidirectional`，新版控制台的 `X-Api-Key`，`X-Api-Resource-Id` = 模型（seed-tts-2.0 / seed-tts-1.0 / seed-icl-2.0），按音色版本自动纠正（`resourceIdFor`：`*_uranus_*` → 2.0、`*_mars_*` / `*_moon_*` → 1.0、`S_*` → 声音复刻 2.0）；响应逐行 JSON 拼接 base64 音频，结束码 20000000；只有 1.0 多情感音色（`_emo_`）发送情感；未用真实 Key 联调）
+- 各服务能力（2026-10-09，用真实 Key 实测；`apps/pc/scripts/live-ai-check.mts`）：
+  | 服务商 | 文本 | 图片 | 视频 | 配音 |
+  |---|---|---|---|---|
+  | OpenAI | ✓（新模型用 max_completion_tokens、推理模型不传温度，自动适配） | `openai-image`（gpt-image-2，b64，参考图走 /images/edits） | 无（Sora 2026-09-24 停止服务） | `openai-speech` |
+  | xAI Grok | `grok` | `grok-image` | `grok-video`（/videos/generations，自带声音） | `grok-speech`（/tts） |
+  | Google Gemini | OpenAI 兼容端点 | `gemini-image`（generateContent，x-goog-api-key） | `gemini-video`（Omni，Interactions API；Veo 3.1 预览 2026-10-22 下线） | `gemini-speech`（3.8 TTS，PCM 包成 WAV） |
+  | 火山引擎 | 豆包（方舟 OpenAI 兼容） | `seedream-image`（5.0 pro / flash 不支持组图，逐张请求） | `seedance-video` | `volcengine-speech`（豆包语音，独立 Key） |
+  | MiniMax | — | `minimax-image` | `minimax-video`（分辨率只接受 512P / 768P / 1080P，512P 需首帧） | `minimax-speech` |
+  Gemini 文本 / 图片 / 视频 / 配音用同一个 AI Studio Key（图片、视频只在付费层）；方舟模型需在「开通管理」开通，未开通时错误信息带提示。视频下载需要鉴权（Gemini）时 `VideoResult.headers` 只在内存中传给下载，`data:` 内嵌成片不写进任务记录
 - 网络代理：设置中心「AI → 网络代理」一份全局设置（跟随系统代理 / 手动填写 http、https、socks4、socks5 地址，不含账号密码；`shared/ai-proxy.ts` 校验，存 `ai-providers.json` 的 `proxy`）；只有勾选了「通过代理访问」（`useProxy`）的模型走代理，其余直连。境外服务商预设（OpenAI、xAI Grok 及其图片 / 配音）添加时默认勾选（`suggestProxy`）。实现：主进程 `ai/proxy-fetch.ts` 用独立内存会话（`session.fromPartition`）+ `setProxy` + `session.fetch`（Chromium 网络栈，支持系统代理 / PAC 与 SOCKS，流式与取消照常），注入 Provider 配置的 `fetch`；视频成片下载也按该模型的设置。IPC `ai-proxy-get / set`。CLI 不读这份设置（直连）
 - 旧版（schemaVersion 1 的内置服务 + 自定义服务）第一次读取时迁移，原文件备份为 `ai-providers.v1.json`，id / 名称 / 参数 / Key 不变
 

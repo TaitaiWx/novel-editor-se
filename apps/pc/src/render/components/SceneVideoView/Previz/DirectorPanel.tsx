@@ -100,8 +100,8 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
         {summary && <p className={styles.summary}>{summary}</p>}
         {notes.length > 0 && (
           <ul className={styles.notes} role="status">
-            {notes.map((note) => (
-              <li key={note}>{note}</li>
+            {notes.map((note, index) => (
+              <li key={`${index}-${note}`}>{note}</li>
             ))}
           </ul>
         )}

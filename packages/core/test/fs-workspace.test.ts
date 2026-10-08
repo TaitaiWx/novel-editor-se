@@ -13,6 +13,7 @@ import {
   syncSeededDirectory,
   getFileInfo,
   isSeedRuntimeArtifact,
+  LIVE_CHECK_DIR_NAME,
   getFileInfoBatch,
   guessMimeType,
   nextAvailablePath,
@@ -338,6 +339,14 @@ describe('ensureSeededDirectory', () => {
     expect(isSeedRuntimeArtifact('资料/表格.db')).toBe(false);
     expect(isSeedRuntimeArtifact('Thumbs.db')).toBe(true);
     expect(isSeedRuntimeArtifact('')).toBe(false);
+  });
+
+  it('作品资料下的「AI实测」（真实 Key 实测结果）也是本机产物，其他同名目录不是', () => {
+    expect(isSeedRuntimeArtifact('novels/星河旅人/资料/AI实测/Grok-视频.mp4')).toBe(true);
+    expect(isSeedRuntimeArtifact(path.join('资料', 'AI实测', 'a.png'))).toBe(true);
+    expect(isSeedRuntimeArtifact('novels/星河旅人/AI实测/a.png')).toBe(false);
+    expect(isSeedRuntimeArtifact('novels/星河旅人/资料/AI实测说明.md')).toBe(false);
+    expect(LIVE_CHECK_DIR_NAME).toBe('AI实测');
   });
 
   it('种子不存在时创建空目录', async () => {

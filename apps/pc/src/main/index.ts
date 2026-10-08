@@ -6,6 +6,7 @@ import { registerAllShortcuts } from './shortcuts/registerAllShortcuts';
 import { unregisterAllShortcuts } from './shortcuts/unregisterAllShortcuts';
 import { setupAutoUpdater } from './auto-updater';
 import { applySmokeTestPaths, isAutoUpdaterDisabled } from './launch-mode';
+import { installE2EBackgroundMode } from './e2e-background';
 import { ensureWindowsShortcuts } from './windows-shortcut';
 import { detectSystemProfile } from './system-profile';
 import { configureWebAuthn, registerWebAuthnSessionHandlers } from './webauthn';
@@ -15,6 +16,8 @@ import { syncSampleData } from './sample-data';
 import { setupCrashLogUpload } from './log-upload';
 
 applySmokeTestPaths();
+// E2E：静音；NOVEL_EDITOR_E2E_BACKGROUND=1 时在后台运行（透明、不抢焦点、不占 Dock）
+installE2EBackgroundMode();
 // 尽早安装崩溃钩子：崩溃 / 未捕获异常时打包日志（E2E / 烟雾测试模式下跳过）
 setupCrashLogUpload();
 

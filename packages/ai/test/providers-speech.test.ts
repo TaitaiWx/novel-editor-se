@@ -105,7 +105,11 @@ describe('配音 Provider：请求映射', () => {
       'openai-speech',
       'minimax-speech',
       'volcengine-speech',
+      'grok-speech',
+      'gemini-speech',
     ]);
+    expect(registry.createSpeech('grok-speech', { apiKey: 'k' }).id).toBe('grok-speech');
+    expect(registry.createSpeech('gemini-speech', { apiKey: 'k' }).id).toBe('gemini-speech');
     expect(registry.get('openai-speech')?.envKey).toBe('NOVEL_EDITOR_OPENAI_SPEECH_API_KEY');
     expect(registry.createSpeech('openai-speech', { apiKey: 'k' }).kind).toBe('speech');
     expect(() => registry.createSpeech('grok', { apiKey: 'k' })).toThrow('不是配音服务');

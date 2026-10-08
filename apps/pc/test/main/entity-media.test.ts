@@ -19,6 +19,9 @@ const imageProvider = {
 };
 const service = {
   getImageProvider: vi.fn((_id?: string) => imageProvider),
+  // 返回图片地址时的下载通道（这里直连）
+  resolveDefaultId: vi.fn(() => 'image-1'),
+  fetchFor: vi.fn(() => undefined),
 };
 
 vi.mock('electron', () => ({

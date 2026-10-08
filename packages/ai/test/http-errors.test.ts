@@ -39,6 +39,19 @@ describe('错误规范化', () => {
   });
 
   it('提取各种错误体', () => {
+    // Gemini 的 OpenAI 兼容端点：错误包在数组里
+    expect(
+      extractErrorInfo([
+        {
+          error: {
+            code: 402,
+            message: 'Your prepayment credits are depleted.',
+            status: 'RESOURCE_EXHAUSTED',
+          },
+        },
+      ])
+    ).toEqual({ message: 'Your prepayment credits are depleted.', code: '402' });
+    expect(classifyHttpError(429, 'Your prepayment credits are depleted.')).toBe('quota');
     expect(extractErrorInfo({ error: { message: 'm', code: 'c' } })).toEqual({
       message: 'm',
       code: 'c',

@@ -151,6 +151,35 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
     models: ['qwen3:8b', 'llama3.2'],
     keyHint: '本地 Ollama 不校验 Key，随便填一个字符即可。',
   },
+  // 2026-10-09 用真实 Key 验证：Gemini 的 OpenAI 兼容端点（Bearer Key，错误体包在数组里）；
+  // gemini-2.5-flash 对新用户已不可用（404 提示改用 gemini-3.8-flash），https://ai.google.dev/gemini-api/docs/openai
+  {
+    key: 'gemini',
+    suggestProxy: true,
+    capability: 'text',
+    vendor: 'openai-compatible',
+    label: 'Google Gemini',
+    shortLabel: 'Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    models: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-pro-latest'],
+    keyHint:
+      '在 Google AI Studio（aistudio.google.com）创建；同一个 Key 也可用于 Gemini 图片 / 视频 / 配音。',
+  },
+  // 2026-10-09 用真实 Key 验证：火山方舟的 OpenAI 兼容对话接口（与 Seedream / Seedance 同一个方舟 Key）
+  {
+    key: 'doubao',
+    capability: 'text',
+    vendor: 'openai-compatible',
+    label: '豆包（火山方舟）',
+    shortLabel: '豆包',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    models: [
+      'doubao-seed-2-1-pro-260915',
+      'doubao-seed-2-1-lite-260915',
+      'doubao-seed-2-0-mini-260428',
+    ],
+    keyHint: '火山方舟控制台「API Key 管理」创建，并在「开通管理」开通要用的模型。',
+  },
   {
     key: 'custom',
     capability: 'text',
@@ -170,12 +199,13 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
     vendor: 'seedream-image',
     label: 'Seedream（火山方舟）',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    // 2026-10-09 用真实 Key 验证：5.0 pro / flash 默认已开通，5.0 基础版需要在「开通管理」单独开通
     models: [
-      'doubao-seedream-5-0-260128',
       'doubao-seedream-5-0-pro-260628',
       'doubao-seedream-5-0-flash-260915',
+      'doubao-seedream-5-0-260128',
     ],
-    note: '支持多张参考图（人物形象、三视图），出图时保持人物一致。',
+    note: '支持多张参考图（人物形象、三视图），出图时保持人物一致。报「没有权限」时到火山方舟「开通管理」开通该模型。',
   },
   // 2026-10-08 核对 https://platform.minimax.cn/docs/api-reference/image-generation-t2i
   // （国内站 https://api.minimax.cn；国际站为 https://api.minimax.io）
@@ -201,15 +231,31 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
   },
   // 2026-10-08 核对 https://developers.openai.com/api/docs/guides/image-generation
   // （gpt-image-1 已标记弃用，dall-e-3 不在模型列表）
+  // 2026-10-09：改用 OpenAI 自己的图片协议（gpt-image 只返回 base64，支持参考图编辑）；
+  // gpt-image-1 系列 2026-10-23 / 12-01 下线，https://developers.openai.com/api/docs/deprecations
   {
     key: 'openai-image',
     suggestProxy: true,
     capability: 'image',
-    vendor: 'grok-image',
-    label: 'OpenAI 兼容图片',
+    vendor: 'openai-image',
+    label: 'OpenAI 图片',
+    shortLabel: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
-    models: ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2'],
-    note: '兼容 /images/generations 的服务；只支持文生图。',
+    models: ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'],
+    note: '支持参考图（人物形象、三视图）。',
+  },
+  // 2026-10-09 核对 https://ai.google.dev/gemini-api/docs/generate-content/image-generation（预览版 id 已下线）
+  {
+    key: 'gemini-image',
+    suggestProxy: true,
+    capability: 'image',
+    vendor: 'gemini-image',
+    label: 'Google Gemini（Nano Banana）',
+    shortLabel: 'Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    models: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-3-pro-image'],
+    keyHint: 'Google AI Studio 的 Key（与 Gemini 文本同一个）；图片模型需要开通付费。',
+    note: '支持参考图（人物形象、三视图）。',
   },
   // ─── 视频 ───
   // 2026-10-08 核对 https://platform.minimax.cn/docs/api-reference/video-generation-t2v
@@ -220,7 +266,8 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
     vendor: 'minimax-video',
     label: 'MiniMax 海螺',
     baseUrl: 'https://api.minimax.cn',
-    models: ['MiniMax-Hailuo-02', 'MiniMax-Hailuo-2.3', 'T2V-01-Director', 'T2V-01'],
+    models: ['MiniMax-Hailuo-02', 'MiniMax-Hailuo-2.3', 'S2V-01', 'T2V-01-Director', 'T2V-01'],
+    note: '人物参考图（三视图 / 形象图）只有 S2V-01 支持；其他模型只用文字描述与首帧。',
   },
   // 2026-10-08 核对 https://www.volcengine.com/docs/82379/1330310（1.0 pro 系列标「即将下线」，1.0 lite 已不在列表）
   // 与 https://www.volcengine.com/docs/82379/1520757（POST {base}/contents/generations/tasks）
@@ -237,6 +284,31 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
       'doubao-seedance-2-0-mini-260615',
     ],
     note: '支持「生成声音」：在场景视频里打开后，成片带与画面同步的对白 / 音效（按厂商计费）。',
+  },
+  // 2026-10-09 核对 https://docs.x.ai/developers/rest-api-reference/inference/videos.md
+  {
+    key: 'grok-video',
+    suggestProxy: true,
+    capability: 'video',
+    vendor: 'grok-video',
+    label: 'xAI Grok Imagine',
+    shortLabel: 'Grok',
+    baseUrl: 'https://api.x.ai/v1',
+    models: ['grok-imagine-video-1.5', 'grok-imagine-video-1.5-lite', 'grok-imagine-video'],
+    note: '成片自带声音；支持首帧、尾帧与人物参考图。',
+  },
+  // 2026-10-09 核对 https://ai.google.dev/gemini-api/docs/omni（Veo 3.1 预览版 2026-10-22 下线，由 Omni 接替）
+  {
+    key: 'gemini-video',
+    suggestProxy: true,
+    capability: 'video',
+    vendor: 'gemini-video',
+    label: 'Google Gemini Omni',
+    shortLabel: 'Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    models: ['gemini-omni-1.1-flash'],
+    keyHint: 'Google AI Studio 的 Key（与 Gemini 文本同一个）；视频只在付费层可用。',
+    note: '成片自带声音（OpenAI 的 Sora 已于 2026-09-24 停止服务，没有视频预设）。',
   },
   // ─── 语音 ───
   // 2026-10-08 核对 https://developers.openai.com/api/docs/guides/text-to-speech 与模型列表
@@ -259,6 +331,43 @@ export const AI_MODEL_PRESETS: readonly AIModelPreset[] = [
     label: 'MiniMax',
     baseUrl: 'https://api.minimax.cn',
     models: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd', 'speech-02-hd'],
+  },
+  // 2026-10-09 核对 https://docs.x.ai/developers/model-capabilities/audio/text-to-speech.md，
+  // 声音列表用真实 Key 读取 GET /v1/tts/voices（全部多语种）
+  {
+    key: 'grok-speech',
+    suggestProxy: true,
+    capability: 'speech',
+    vendor: 'grok-speech',
+    label: 'xAI Grok',
+    baseUrl: 'https://api.x.ai/v1',
+    models: ['grok-tts'],
+    voices: [
+      'eve',
+      'ara',
+      'aurora',
+      'luna',
+      'iris',
+      'celeste',
+      'rex',
+      'leo',
+      'atlas',
+      'orion',
+      'sal',
+    ],
+  },
+  // 2026-10-09 核对 https://ai.google.dev/gemini-api/docs/generate-content/speech-generation
+  {
+    key: 'gemini-speech',
+    suggestProxy: true,
+    capability: 'speech',
+    vendor: 'gemini-speech',
+    label: 'Google Gemini',
+    shortLabel: 'Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    models: ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'],
+    voices: ['Kore', 'Puck', 'Charon', 'Aoede', 'Leda', 'Fenrir', 'Orus', 'Zephyr'],
+    keyHint: 'Google AI Studio 的 Key（与 Gemini 文本同一个）。',
   },
   // 2026-10-09 核对 https://www.volcengine.com/docs/6561/1598757（HTTP 单向流式 V3，新版控制台 X-Api-Key）
   // 与音色列表 https://www.volcengine.com/docs/6561/1257544；模型 = X-Api-Resource-Id，按音色自动纠正

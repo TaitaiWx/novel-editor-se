@@ -252,7 +252,7 @@ export const OutputNode: React.FC<{
   totalCount: number;
   stitchProgress: number | null;
 }> = ({ aspectRatio, readFile, animatic, doneCount, totalCount, stitchProgress }) => {
-  const { url } = useSceneMediaUrl(readFile, animatic);
+  const { url, error } = useSceneMediaUrl(readFile, animatic);
   return (
     <div className={styles.body}>
       <header className={styles.header}>
@@ -273,6 +273,11 @@ export const OutputNode: React.FC<{
             data-testid="scene-video-animatic"
             aria-label="样片"
           />
+        ) : animatic ? (
+          // 样片已经有了（可能十几 MB）：读取中 / 读取失败时说清楚，不再显示「全部镜头生成后…」
+          <span className={styles.thumbText} data-testid="scene-video-animatic-loading">
+            {error ? `样片无法预览：${error}` : '正在载入样片…'}
+          </span>
         ) : (
           <span className={styles.thumbText}>全部镜头生成后自动合成样片</span>
         )}

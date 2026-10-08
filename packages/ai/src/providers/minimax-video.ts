@@ -15,7 +15,9 @@
  *
  * 假设（文档未写明，集中在常量里便于修正）：
  * - 默认地址为国内站 https://api.minimax.cn（国际站 https://api.minimax.io，可在设置中心改）
- * - duration 只接受 6 / 10 秒，这里就近取值；resolution 取大写形式（720P / 768P / 1080P）
+ * - duration 只接受 6 / 10 秒，这里就近取值；resolution 只接受 512P / 768P / 1080P（2026-10-09 用真实 Key 验证），
+ *   按高度就近映射（480p → 512P，720p → 768P），无法识别时不发送（沿用模型默认）；
+ *   512P 只在提供首帧（图生视频）时可用，文生视频最低 768P
  * - 文档未提供取消接口，cancelTask 不实现（调用方只在本地标记取消）
  * - 声音：公开文档的视频生成接口没有声音相关参数，`withAudio` 不映射（忽略）；
  *   成片若自带音轨，按原始字节下载落盘，不转码，音轨原样保留
@@ -101,12 +103,36 @@ function assertOk(base: BaseResp | undefined): void {
 export const MINIMAX_REFERENCE_LIMIT = 4;
 
 /** MiniMax 只支持 6 / 10 秒 */
+/** 分辨率 → MiniMax 支持的 512P / 768P / 1080P（按高度就近取值；512P 只用于有首帧的图生视频） */
+export function normalizeMinimaxResolution(
+  resolution: string | undefined,
+  hasFirstFrame = false
+): string | undefined {
+  const match = resolution?.trim().match(/^(\d{3,4})\s*p$/i);
+  if (!match) return undefined;
+  const height = Number(match[1]);
+  if (height <= 600) return hasFirstFrame ? '512P' : '768P';
+  if (height <= 900) return '768P';
+  return '1080P';
+}
+
 export function normalizeMinimaxDuration(durationSec: number | undefined): number | undefined {
   if (durationSec === undefined || !Number.isFinite(durationSec)) return undefined;
   return durationSec > 8 ? 10 : 6;
 }
 
 /** 构造提交请求体（导出供测试做请求映射快照） */
+/** 支持人物参考（subject_reference）的模型：S2V 系列 */
+export function minimaxSupportsSubjectReference(model: string): boolean {
+  return /^S2V/i.test(model.trim());
+}
+
+/** 「param 'x' is incompatible with model …」/「param 'x' … only supported …」里的字段名；不是这类错误时为 null */
+export function incompatibleMinimaxParam(message: string): string | null {
+  const match = /param '([a-z_]+)'[^.]*(incompatible|only support|not support)/i.exec(message);
+  return match ? match[1] : null;
+}
+
 export function buildMinimaxSubmitBody(
   request: VideoGenerationRequest,
   defaultModel: string
@@ -118,12 +144,17 @@ export function buildMinimaxSubmitBody(
   };
   const duration = normalizeMinimaxDuration(request.durationSec);
   if (duration !== undefined) body.duration = duration;
-  if (request.resolution) body.resolution = request.resolution.toUpperCase();
+  const resolution = normalizeMinimaxResolution(
+    request.resolution,
+    Boolean(request.firstFrameImage)
+  );
+  if (resolution) body.resolution = resolution;
   if (request.firstFrameImage) body.first_frame_image = request.firstFrameImage;
   if (request.lastFrameImage) body.last_frame_image = request.lastFrameImage;
-  // 人物参考（主体参考 / subject reference）：未用真实 Key 联调，字段名按公开文档，见 MINIMAX_REFERENCE_LIMIT
+  // 人物参考（主体参考 / subject reference）只有 S2V 系列支持；2026-10-09 用真实 Key 验证：
+  // Hailuo-02 报「param 'subject_reference' is incompatible with model MiniMax-Hailuo-02」
   const references = (request.referenceImages ?? []).slice(0, MINIMAX_REFERENCE_LIMIT);
-  if (references.length > 0) {
+  if (references.length > 0 && minimaxSupportsSubjectReference(String(body.model))) {
     body.subject_reference = [{ type: 'character', image: references }];
   }
   return body;
@@ -177,13 +208,24 @@ export function createMinimaxVideoProvider(config: ProviderConfig): VideoProvide
     id,
     kind: 'video',
     async submitTask(request, call = {}) {
-      const json = await client.json<SubmitResponse>(
-        'POST',
-        MINIMAX_ENDPOINTS.submit,
-        buildMinimaxSubmitBody(request, model),
-        { signal: call.signal, retry: NO_RETRY }
-      );
-      assertOk(json.base_resp);
+      const body = buildMinimaxSubmitBody(request, model);
+      let json: SubmitResponse;
+      // 模型不支持某个可选参数时去掉它重新提交（最多 3 次；参数错误说明任务没有创建，不会重复扣费）
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          json = await client.json<SubmitResponse>('POST', MINIMAX_ENDPOINTS.submit, body, {
+            signal: call.signal,
+            retry: NO_RETRY,
+          });
+          assertOk(json.base_resp);
+          break;
+        } catch (error) {
+          const field = error instanceof AIError ? incompatibleMinimaxParam(error.message) : null;
+          const optional = field && !['model', 'prompt'].includes(field) && field in body;
+          if (!optional || attempt >= 2) throw error;
+          delete body[field];
+        }
+      }
       if (!json.task_id) {
         throw new AIError({
           kind: 'invalid-response',

@@ -270,14 +270,29 @@ async function hasNoVisibleEntries(dirPath: string): Promise<boolean> {
   }
 }
 
+/** 资料下存放 AI 实测结果的文件夹名（「AI实测」） */
+export const LIVE_CHECK_DIR_NAME = 'AI\u5b9e\u6d4b';
+/** 资料文件夹名（「资料」） */
+const MATERIAL_DIR_NAME_FOR_SEED = '\u8d44\u6599';
+
 /**
- * 种子目录中不应被拷贝的本机运行产物：SQLite 数据库（含 WAL/SHM）、GUI 会话、写作日志、系统文件。
+ * 种子目录中不应被拷贝的本机运行产物：SQLite 数据库（含 WAL/SHM）、GUI 会话、写作日志、系统文件，
+ * 以及 `<作品>/资料/AI实测/`（用真实 Key 实测 AI 服务的结果，体积大、只给本机看）。
  * 开发时直接打开过 sample-data 会在其中留下这些文件，拷贝给用户会带入别人的数据
  */
 export function isSeedRuntimeArtifact(relativePath: string): boolean {
   const segments = relativePath.split(/[\\/]/).filter(Boolean);
   const name = segments[segments.length - 1] ?? '';
   if (name === '.DS_Store' || name === 'Thumbs.db') return true;
+  // 用真实 Key 实测 AI 服务生成的结果（apps/pc/scripts/live-ai-check.mts），只留在本机
+  if (
+    segments.some(
+      (segment, index) =>
+        segment === LIVE_CHECK_DIR_NAME && segments[index - 1] === MATERIAL_DIR_NAME_FOR_SEED
+    )
+  ) {
+    return true;
+  }
   if (segments.length >= 2 && segments[segments.length - 2] === PROJECT_META_DIR) {
     return (
       /\.db(-wal|-shm|-journal)?$/i.test(name) ||

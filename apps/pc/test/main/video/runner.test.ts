@@ -339,6 +339,63 @@ describe('VideoTaskRunner', () => {
     runner.stop();
   });
 
+  it('成片内嵌在结果里（data: URL）：任务记录不保存这段数据，下载时重新获取', async () => {
+    const inline = `data:video/mp4;base64,${Buffer.from('v').toString('base64')}`;
+    const { provider, polls } = fakeProvider({
+      fetchResult: vi.fn(async () => ({ url: inline })),
+    });
+    polls.push({ state: 'succeeded' });
+    const { runner, repo, downloadFile } = createRunner({ provider });
+    await runner.submit(input);
+    await runner.tick();
+    now += 60_000;
+    await runner.tick();
+    await vi.waitFor(() => expect(downloadFile).toHaveBeenCalled());
+    expect(downloadFile.mock.calls[0][0]).toBe(inline);
+    runner.stop();
+    expect(JSON.stringify(repo.list())).not.toContain('base64');
+  });
+
+  it('下载需要的请求头（例如 Gemini 文件要带 Key）只传给下载，不写进任务记录', async () => {
+    const now = Date.now();
+    const repo = memoryRepo([
+      {
+        providerId: 'minimax-video',
+        workPath: work,
+        chapter: '第一章',
+        scene: '雪夜',
+        prompt: 'p',
+        params: {},
+        attempts: 1,
+        maxAttempts: 3,
+        pollCount: 1,
+        createdAt: now,
+        updatedAt: now,
+        shotIndex: 1,
+        version: 1,
+        id: 'h',
+        status: 'succeeded',
+        remoteTaskId: 'rh',
+        resultUrl: 'https://files.test/v.mp4',
+        progress: 100,
+      } as VideoTask,
+    ]);
+    const { provider } = fakeProvider({
+      fetchResult: vi.fn(async () => ({
+        url: 'https://files.test/v.mp4:download',
+        headers: { 'x-goog-api-key': 'secret-key' },
+      })),
+    });
+    const { runner, downloadFile } = createRunner({ repo, provider });
+    runner.start();
+    await runner.tick();
+    await vi.waitFor(() => expect(repo.get('h')?.outputPath).toBeTruthy());
+    expect(downloadFile.mock.calls[0][0]).toBe('https://files.test/v.mp4:download');
+    expect(downloadFile.mock.calls[0][4]).toEqual({ 'x-goog-api-key': 'secret-key' });
+    expect(JSON.stringify(repo.get('h'))).not.toContain('secret-key');
+    runner.stop();
+  });
+
   it('下载失败：可重试时退避，地址获取失败时回退到已记录的地址', async () => {
     const { provider, polls } = fakeProvider({
       fetchResult: vi
@@ -499,6 +556,33 @@ describe('downloadToFile', () => {
     ).toBe(5);
     expect(await readFile(dest, 'utf-8')).toBe('video');
     expect(await readdir(root)).not.toContain('a.mp4.part');
+  });
+
+  it('内嵌在结果里的成片（data:video/...;base64）直接写入；非视频或格式不对时拒绝', async () => {
+    const dest = path.join(root, 'inline.mp4');
+    const data = Buffer.from('fake-mp4').toString('base64');
+    expect(await downloadToFile(`data:video/mp4;base64,${data}`, dest)).toBe(8);
+    expect(await readFile(dest, 'utf-8')).toBe('fake-mp4');
+    expect(await readdir(root)).not.toContain('inline.mp4.part');
+    await expect(
+      downloadToFile(`data:text/html;base64,${data}`, path.join(root, 'x.mp4'))
+    ).rejects.toThrow('内嵌视频格式无效');
+    await expect(
+      downloadToFile(`data:video/mp4;base64,${data}`, path.join(root, 'y.mp4'), { maxBytes: 4 })
+    ).rejects.toThrow('视频文件过大');
+  });
+
+  it('下载时带上提供的请求头', async () => {
+    const dest = path.join(root, 'h.mp4');
+    let sent: HeadersInit | undefined;
+    await downloadToFile('https://cdn/h.mp4', dest, {
+      headers: { 'x-goog-api-key': 'k' },
+      fetch: async (_url, init) => {
+        sent = init?.headers;
+        return body('video');
+      },
+    });
+    expect(sent).toEqual({ 'x-goog-api-key': 'k' });
   });
 
   it('拒绝非 http(s)、HTTP 错误、过大与空文件，失败时不留下半个文件', async () => {

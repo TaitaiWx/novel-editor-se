@@ -127,6 +127,20 @@ function defaultVoice(
   return configured?.trim() || table.neutral;
 }
 
+/** base64（可带 data: 前缀）→ 字节；格式不对时返回 null */
+export function base64ToBytes(value: string): Uint8Array | null {
+  const clean = value.trim().replace(/^data:[^,]*,/, '');
+  if (!clean) return null;
+  try {
+    const binary = atob(clean);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
 /** 校验厂商返回的字节确实是音频，并推算时长（WAV 可从文件头计算） */
 export function toSpeechResult(
   data: Uint8Array,

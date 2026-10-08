@@ -10,6 +10,9 @@ import {
   MINIMAX_VIDEO_DEFAULTS,
   minimaxBaseRespError,
   normalizeMinimaxDuration,
+  normalizeMinimaxResolution,
+  incompatibleMinimaxParam,
+  minimaxSupportsSubjectReference,
   SEEDANCE_REFERENCE_LIMIT,
   SEEDANCE_VIDEO_DEFAULTS,
 } from '../src';
@@ -169,6 +172,28 @@ describe('minimax-video', () => {
     await expect(provider.testConnection()).rejects.toMatchObject({ kind: 'auth' });
     await expect(provider.testConnection()).resolves.toBeUndefined();
     expect(() => createMinimaxVideoProvider({ apiKey: '' })).toThrow(/MiniMax/);
+  });
+});
+
+describe('minimax-video：分辨率', () => {
+  // 回归：真实接口只接受 512P / 768P / 1080P，曾把 480p 原样发送导致 invalid params
+  it('按高度就近映射到 512P / 768P / 1080P，无法识别时不发送；512P 只用于有首帧的图生视频', () => {
+    expect(normalizeMinimaxResolution('480p')).toBe('768P');
+    expect(normalizeMinimaxResolution('480p', true)).toBe('512P');
+    expect(normalizeMinimaxResolution('720P')).toBe('768P');
+    expect(normalizeMinimaxResolution('768p')).toBe('768P');
+    expect(normalizeMinimaxResolution('1080p')).toBe('1080P');
+    expect(normalizeMinimaxResolution('4k')).toBeUndefined();
+    expect(normalizeMinimaxResolution(undefined)).toBeUndefined();
+    expect(buildMinimaxSubmitBody({ prompt: 'x', resolution: '480p' }, 'm')).toMatchObject({
+      resolution: '768P',
+    });
+    expect(
+      buildMinimaxSubmitBody(
+        { prompt: 'x', resolution: '480p', firstFrameImage: 'https://img/1.png' },
+        'm'
+      )
+    ).toMatchObject({ resolution: '512P' });
   });
 });
 
@@ -343,7 +368,7 @@ describe('人物参考图 / 尾帧', () => {
 
   it('MiniMax：subject_reference 与 last_frame_image 写入请求体', async () => {
     const { fetch, requests } = mockFetch(jsonResponse({ task_id: 't-9', base_resp: ok }));
-    const provider = createMinimaxVideoProvider({ apiKey: 'mm', fetch });
+    const provider = createMinimaxVideoProvider({ apiKey: 'mm', fetch, model: 'S2V-01' });
     await provider.submitTask({
       prompt: 'p',
       firstFrameImage: 'https://img/first.png',
@@ -359,13 +384,59 @@ describe('人物参考图 / 尾帧', () => {
 
   it('MiniMax：参考图超过上限只取前几张；没有参考图时不带字段', () => {
     expect(MINIMAX_REFERENCE_LIMIT).toBe(4);
-    const body = buildMinimaxSubmitBody({ prompt: 'p', referenceImages: many }, 'm');
+    const body = buildMinimaxSubmitBody({ prompt: 'p', referenceImages: many }, 'S2V-01');
     expect(body.subject_reference).toEqual([
       { type: 'character', image: many.slice(0, MINIMAX_REFERENCE_LIMIT) },
     ]);
     const plain = buildMinimaxSubmitBody({ prompt: 'p', referenceImages: [] }, 'm');
     expect(plain).not.toHaveProperty('subject_reference');
     expect(plain).not.toHaveProperty('last_frame_image');
+  });
+
+  // 回归：场景视频按人物带参考图，Hailuo-02 报「param 'subject_reference' is incompatible with model」
+  it('MiniMax：只有 S2V 系列带人物参考；其他模型报参数不兼容时去掉该参数重新提交一次', async () => {
+    expect(minimaxSupportsSubjectReference('S2V-01')).toBe(true);
+    expect(minimaxSupportsSubjectReference('MiniMax-Hailuo-02')).toBe(false);
+    expect(
+      buildMinimaxSubmitBody({ prompt: 'p', referenceImages: refs }, 'MiniMax-Hailuo-02')
+    ).not.toHaveProperty('subject_reference');
+    expect(
+      incompatibleMinimaxParam(
+        "invalid params, param 'subject_reference' is incompatible with model MiniMax-Hailuo-02"
+      )
+    ).toBe('subject_reference');
+    expect(
+      incompatibleMinimaxParam(
+        "invalid params, param 'resolution' only support 512P, 768P and 1080P"
+      )
+    ).toBe('resolution');
+    expect(incompatibleMinimaxParam('invalid api key')).toBeNull();
+
+    const { fetch, requests } = mockFetch(
+      jsonResponse({
+        base_resp: {
+          status_code: 2013,
+          status_msg: "invalid params, param 'last_frame_image' is incompatible with model X",
+        },
+      }),
+      jsonResponse({ task_id: 't-10', base_resp: ok })
+    );
+    const provider = createMinimaxVideoProvider({ apiKey: 'mm', fetch, model: 'X' });
+    expect(
+      (await provider.submitTask({ prompt: 'p', lastFrameImage: 'https://img/last.png' }))
+        .remoteTaskId
+    ).toBe('t-10');
+    expect(requests).toHaveLength(2);
+    expect(requests[0].body).toHaveProperty('last_frame_image');
+    expect(requests[1].body).not.toHaveProperty('last_frame_image');
+
+    const auth = mockFetch(
+      jsonResponse({ base_resp: { status_code: 1004, status_msg: 'login fail' } })
+    );
+    await expect(
+      createMinimaxVideoProvider({ apiKey: 'mm', fetch: auth.fetch }).submitTask({ prompt: 'p' })
+    ).rejects.toBeTruthy();
+    expect(auth.requests).toHaveLength(1);
   });
 
   it('Seedance：首帧 / 尾帧 / 参考图依次追加到 content', async () => {

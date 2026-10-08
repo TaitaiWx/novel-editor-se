@@ -8,6 +8,7 @@ import {
   createGrokImageProvider,
   createMinimaxImageProvider,
   createSeedreamImageProvider,
+  seedreamSupportsSequential,
   IMAGE_COUNT_MAX,
 } from '../src';
 import { instantSleep, jsonResponse, mockFetch } from './helpers';
@@ -22,10 +23,10 @@ describe('图片 Provider：请求映射', () => {
           count: 4,
           referenceImages: ['data:image/png;base64,A', 'data:image/png;base64,B'],
         },
-        'seedream-default'
+        'doubao-seedream-5-0-260128'
       )
     ).toEqual({
-      model: 'seedream-default',
+      model: 'doubao-seedream-5-0-260128',
       prompt: '林舟三视图',
       size: '2560x1440',
       response_format: 'b64_json',
@@ -41,6 +42,29 @@ describe('图片 Provider：请求映射', () => {
     expect(single.image).toBe('u');
     expect(single.size).toBe('2048x2048');
     expect(single).not.toHaveProperty('sequential_image_generation');
+  });
+
+  // 回归：5.0 pro / flash 不支持组图（真实接口报 sequential_image_generation not valid），改为逐张并行请求
+  it('Seedream：只有 5.0 基础版 / 4.x 走组图；pro / flash 并行发多次单张请求再合并', async () => {
+    expect(seedreamSupportsSequential('doubao-seedream-5-0-260128')).toBe(true);
+    expect(seedreamSupportsSequential('doubao-seedream-4-5-251128')).toBe(true);
+    expect(seedreamSupportsSequential('doubao-seedream-5-0-pro-260628')).toBe(false);
+    expect(seedreamSupportsSequential('doubao-seedream-5-0-flash-260915')).toBe(false);
+    expect(
+      buildSeedreamImageBody({ prompt: 'x', count: 4 }, 'doubao-seedream-5-0-pro-260628')
+    ).not.toHaveProperty('sequential_image_generation');
+    const { fetch, requests } = mockFetch(jsonResponse({ data: [{ b64_json: 'QQ==' }] }));
+    const provider = createSeedreamImageProvider({
+      apiKey: 'k',
+      fetch,
+      model: 'doubao-seedream-5-0-pro-260628',
+    });
+    const result = await provider.generate({ prompt: '林舟', count: 3 });
+    expect(requests).toHaveLength(3);
+    expect(result.images).toHaveLength(3);
+    for (const request of requests) {
+      expect(request.body).not.toHaveProperty('sequential_image_generation');
+    }
   });
 
   it('MiniMax：只带第一张参考图（人物参考），返回 base64；Grok 不带参考图', () => {
@@ -78,9 +102,16 @@ describe('图片 Provider：调用与错误', () => {
     const { fetch, requests } = mockFetch(
       jsonResponse({ data: [{ b64_json: 'AAA' }, { url: 'https://cdn/x.png' }] })
     );
-    const provider = createSeedreamImageProvider({ apiKey: 'k', fetch, sleep: instantSleep });
+    // 支持组图的 5.0 基础版：一次请求返回多张
+    const provider = createSeedreamImageProvider({
+      apiKey: 'k',
+      fetch,
+      sleep: instantSleep,
+      model: 'doubao-seedream-5-0-260128',
+    });
     expect(provider.supportsReferences).toBe(true);
     const result = await provider.generate({ prompt: '雪原', count: 2 });
+    expect(requests).toHaveLength(1);
     expect(result.images).toEqual([
       { base64: 'AAA', mimeType: 'image/png' },
       { url: 'https://cdn/x.png', mimeType: 'image/png' },

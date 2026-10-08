@@ -524,5 +524,6 @@ export function validatePrevizScript(
   };
   const summary = asText(pick(root, ['summary', 'description', 'note']));
   if (summary) script.summary = summary.slice(0, 300);
-  return { ok: true, script, warnings };
+  // 同一条提醒（例如每个关键帧都写了同一个不存在的关节）只保留一次
+  return { ok: true, script, warnings: [...new Set(warnings)] };
 }

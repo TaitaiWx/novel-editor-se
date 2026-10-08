@@ -324,6 +324,27 @@ describe('场景视频', () => {
       { timeout: 10_000, message: '自定义风格与时长已保存' }
     );
 
+    // AI 拆出的是草稿：确认前节点上的「生成」不可用，工具栏是「确认分镜」
+    await page.waitForTarget('[data-testid="storyboard-draft-notice"]');
+    expect(
+      await page.evaluate<boolean>(
+        () =>
+          (document.querySelector('button[aria-label="生成镜头 1"]') as HTMLButtonElement | null)
+            ?.disabled ?? false
+      )
+    ).toBe(true);
+    await page.click('[data-testid="confirm-storyboard"]');
+    await page.waitForGone('[data-testid="storyboard-draft-notice"]');
+    await page.waitUntil(
+      async () => {
+        const raw = await readFile(fixture.resolve(...SCENE_DIR, '分镜.json'), 'utf-8').catch(
+          () => '{}'
+        );
+        return (JSON.parse(raw) as { storyboardConfirmed?: boolean }).storyboardConfirmed === true;
+      },
+      { timeout: 10_000, message: '确认分镜已保存' }
+    );
+
     // 只生成镜头 1：直接点节点上的「生成」
     const generateShot1 = 'button[aria-label="生成镜头 1"]';
     await page.waitFor(
@@ -371,12 +392,10 @@ describe('场景视频', () => {
     expect(submit?.auth).toBe(`Bearer ${API_KEY}`);
     expect(String(submit?.body.prompt)).toContain('青石镇镇口的老槐树');
     expect('generate_audio' in (submit?.body ?? {})).toBe(false);
-    // 出场人物的三视图 / 主要形象图作为参考图一起提交（MiniMax subject_reference）
-    const subject = submit?.body.subject_reference as Array<{ image: string[] }> | undefined;
-    expect(subject?.[0]?.image.length).toBeGreaterThan(0);
-    expect(subject?.[0]?.image.every((url) => url.startsWith('data:image/webp;base64,'))).toBe(
-      true
-    );
+    // 人物参考图只发给支持的模型：MiniMax 只有 S2V 系列支持 subject_reference，
+    // 这里用的 Hailuo-02 不带（真实接口会报 incompatible，见 packages/ai minimax-video）
+    expect(String(submit?.body.model)).toBe('MiniMax-Hailuo-02');
+    expect(submit?.body).not.toHaveProperty('subject_reference');
     expect(requests.filter((item) => item.path === '/v1/video_generation')).toHaveLength(1);
 
     // 结果都在资料里：成片 + 提示词记录 + 自动保存的 分镜.json / 分镜.md（不需要手动导出）

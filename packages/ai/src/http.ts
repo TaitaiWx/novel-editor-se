@@ -137,6 +137,8 @@ export interface HttpClientOptions {
   retry?: RetryPolicy;
   /** 测试注入 */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** 调整规范化后的 HTTP 错误（例如按厂商错误信息追加中文提示） */
+  mapError?: (error: AIError) => AIError;
 }
 
 export interface RequestOptions {
@@ -224,9 +226,10 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
 
   const parseFailure = async (response: Response): Promise<AIError> => {
     const { json, text } = await readBody(response).catch(() => ({ json: undefined, text: '' }));
-    return errorFromHttpResponse(response.status, json ?? text.slice(0, 500), {
+    const error = errorFromHttpResponse(response.status, json ?? text.slice(0, 500), {
       providerId: options.providerId,
     });
+    return options.mapError ? options.mapError(error) : error;
   };
 
   return {

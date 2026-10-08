@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adjustQuirksForError,
   buildChatCompletionBody,
+  defaultQuirksFor,
+  isOutputLimitError,
+  resetChatParamQuirks,
   createDefaultRegistry,
   createGrokProvider,
   createOpenAICompatibleProvider,
@@ -163,7 +167,117 @@ describe('openai-compatible：complete', () => {
     const provider = createOpenAICompatibleProvider({ apiKey: 'k', fetch });
     await expect(provider.testConnection()).rejects.toMatchObject({ kind: 'server' });
     expect(requests).toHaveLength(1);
-    expect(requests[0].body).toMatchObject({ max_tokens: 1, temperature: 0 });
+    // 默认地址是 OpenAI 官方接口：回复长度用 max_completion_tokens
+    expect(requests[0].body).toMatchObject({ max_completion_tokens: 1, temperature: 0 });
+    expect(requests[0].body).not.toHaveProperty('max_tokens');
+  });
+});
+
+describe('openai-compatible：不同模型的参数要求', () => {
+  const messages = [{ role: 'user' as const, content: 'ping' }];
+  const reply = jsonResponse({ model: 'm', choices: [{ message: { content: 'pong' } }] });
+  const unsupported = (message: string) => jsonResponse({ error: { message } }, 400);
+
+  it('OpenAI 官方地址发 max_completion_tokens，其他兼容服务发 max_tokens', () => {
+    expect(defaultQuirksFor('https://api.openai.com/v1')).toEqual({
+      tokenParam: 'max_completion_tokens',
+      omitTemperature: false,
+    });
+    expect(defaultQuirksFor('https://api.deepseek.com').tokenParam).toBe('max_tokens');
+    expect(defaultQuirksFor('not a url').tokenParam).toBe('max_tokens');
+    expect(
+      buildChatCompletionBody({ messages, maxTokens: 9 }, { model: 'm' }, false, {
+        tokenParam: 'max_completion_tokens',
+        omitTemperature: true,
+      })
+    ).toEqual({ model: 'm', max_completion_tokens: 9, messages });
+  });
+
+  it('按错误信息调整：max_tokens ↔ max_completion_tokens、只接受默认温度；其他错误不调整', () => {
+    const base = { tokenParam: 'max_tokens' as const, omitTemperature: false };
+    expect(
+      adjustQuirksForError(
+        base,
+        "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."
+      )
+    ).toEqual({ tokenParam: 'max_completion_tokens', omitTemperature: false });
+    expect(
+      adjustQuirksForError(
+        { tokenParam: 'max_completion_tokens', omitTemperature: false },
+        "Unrecognized request argument supplied: 'max_completion_tokens'"
+      )
+    ).toEqual(base);
+    expect(
+      adjustQuirksForError(
+        base,
+        "Unsupported value: 'temperature' does not support 1.3 with this model. Only the default (1) value is supported."
+      )
+    ).toEqual({ tokenParam: 'max_tokens', omitTemperature: true });
+    expect(adjustQuirksForError(base, 'Incorrect API key provided')).toBeNull();
+    expect(
+      isOutputLimitError(
+        'Could not finish the message because max_tokens or model output limit was reached.'
+      )
+    ).toBe(true);
+  });
+
+  it('兼容服务报参数不支持：调整后自动重试，并按「地址 + 模型」记住（下次直接用对的参数）', async () => {
+    resetChatParamQuirks();
+    const { fetch, requests } = mockFetch(
+      unsupported(
+        "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."
+      ),
+      unsupported(
+        "Unsupported value: 'temperature' does not support 1.3 with this model. Only the default (1) value is supported."
+      ),
+      reply
+    );
+    const provider = createOpenAICompatibleProvider({
+      apiKey: 'k',
+      fetch,
+      retry: NO_RETRY,
+      baseUrl: 'https://proxy.example/v1',
+      model: 'reasoner',
+    });
+    expect((await provider.complete({ messages })).text).toBe('pong');
+    expect(requests.map((item) => Object.keys(item.body as object).sort())).toEqual([
+      ['max_tokens', 'messages', 'model', 'temperature'],
+      ['max_completion_tokens', 'messages', 'model', 'temperature'],
+      ['max_completion_tokens', 'messages', 'model'],
+    ]);
+    await provider.complete({ messages });
+    expect(Object.keys(requests[3].body as object).sort()).toEqual([
+      'max_completion_tokens',
+      'messages',
+      'model',
+    ]);
+    // 流式同样使用记住的参数
+    const again = createOpenAICompatibleProvider({
+      apiKey: 'k',
+      fetch,
+      retry: NO_RETRY,
+      baseUrl: 'https://proxy.example/v1',
+      model: 'other',
+    });
+    await again.complete({ messages });
+    expect(requests[4].body).toHaveProperty('max_tokens');
+    resetChatParamQuirks();
+  });
+
+  it('测试连接：推理模型因长度上限报错视为成功；其他 400 照常失败', async () => {
+    resetChatParamQuirks();
+    const limit = mockFetch(
+      unsupported(
+        'Could not finish the message because max_tokens or model output limit was reached. Please try again with higher max_tokens.'
+      )
+    );
+    await expect(
+      createOpenAICompatibleProvider({ apiKey: 'k', fetch: limit.fetch }).testConnection()
+    ).resolves.toBeUndefined();
+    const bad = mockFetch(unsupported('model not found'));
+    await expect(
+      createOpenAICompatibleProvider({ apiKey: 'k', fetch: bad.fetch }).testConnection()
+    ).rejects.toMatchObject({ kind: 'bad-request' });
   });
 });
 
@@ -335,26 +449,44 @@ describe('注册表', () => {
       'grok',
       'minimax-video',
       'seedance-video',
+      'grok-video',
+      'gemini-video',
       'seedream-image',
       'minimax-image',
       'grok-image',
+      'openai-image',
+      'gemini-image',
       'openai-speech',
       'minimax-speech',
       'volcengine-speech',
+      'grok-speech',
+      'gemini-speech',
     ]);
     expect(registry.list('image').map((item) => item.id)).toEqual([
       'seedream-image',
       'minimax-image',
       'grok-image',
+      'openai-image',
+      'gemini-image',
     ]);
     expect(registry.list('video').map((item) => item.id)).toEqual([
       'minimax-video',
       'seedance-video',
+      'grok-video',
+      'gemini-video',
     ]);
+    expect(
+      registry
+        .list('video')
+        .filter((item) => item.supportsAudio)
+        .map((item) => item.id)
+    ).toEqual(['seedance-video', 'grok-video', 'gemini-video']);
     expect(registry.list('speech').map((item) => item.id)).toEqual([
       'openai-speech',
       'minimax-speech',
       'volcengine-speech',
+      'grok-speech',
+      'gemini-speech',
     ]);
     expect(registry.get('grok')?.envKey).toBe('NOVEL_EDITOR_GROK_API_KEY');
     expect(providerEnvKey('minimax-video')).toBe('NOVEL_EDITOR_MINIMAX_VIDEO_API_KEY');
@@ -379,5 +511,81 @@ describe('注册表', () => {
         registry.createText('grok', { apiKey: 'k' })
       )
     ).toThrow();
+  });
+});
+
+describe('openai-compatible：推理模型思考用完回复长度', () => {
+  const messages = [{ role: 'user' as const, content: '写一句' }];
+
+  it('补全：正文为空且 finish_reason = length 时放大回复长度重试一次', async () => {
+    resetChatParamQuirks();
+    const { fetch, requests } = mockFetch(
+      jsonResponse({ choices: [{ message: { content: '' }, finish_reason: 'length' }] }),
+      jsonResponse({ choices: [{ message: { content: '暮色四合。' }, finish_reason: 'stop' }] })
+    );
+    const provider = createOpenAICompatibleProvider({
+      apiKey: 'k',
+      fetch,
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-flash',
+    });
+    const result = await provider.complete({ messages, maxTokens: 100 });
+    expect(result.text).toBe('暮色四合。');
+    expect(requests.map((item) => (item.body as { max_tokens: number }).max_tokens)).toEqual([
+      100, 2048,
+    ]);
+  });
+
+  it('补全：重试后仍为空就返回空（只重试一次）；有正文时不重试', async () => {
+    const empty = jsonResponse({
+      choices: [{ message: { content: '' }, finish_reason: 'length' }],
+    });
+    const twice = mockFetch(empty);
+    const provider = createOpenAICompatibleProvider({
+      apiKey: 'k',
+      fetch: twice.fetch,
+      baseUrl: 'https://x/v1',
+    });
+    expect((await provider.complete({ messages, maxTokens: 9000 })).text).toBe('');
+    expect(twice.requests.map((item) => (item.body as { max_tokens: number }).max_tokens)).toEqual([
+      9000, 32768,
+    ]);
+    const cut = mockFetch(
+      jsonResponse({ choices: [{ message: { content: '半句' }, finish_reason: 'length' }] })
+    );
+    await createOpenAICompatibleProvider({
+      apiKey: 'k',
+      fetch: cut.fetch,
+      baseUrl: 'https://x/v1',
+    }).complete({
+      messages,
+    });
+    expect(cut.requests).toHaveLength(1);
+  });
+
+  it('流式：一个字都没有就因长度结束时重试一次；已经输出正文时不重试', async () => {
+    const lengthOnly = sseResponse([
+      JSON.stringify({ choices: [{ delta: { reasoning_content: '想…' } }] }),
+      JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] }),
+      '[DONE]',
+    ]);
+    const answer = sseResponse([
+      JSON.stringify({ choices: [{ delta: { content: '风起' } }] }),
+      JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
+      '[DONE]',
+    ]);
+    const { fetch, requests } = mockFetch(lengthOnly, answer);
+    const provider = createOpenAICompatibleProvider({
+      apiKey: 'k',
+      fetch,
+      baseUrl: 'https://x/v1',
+    });
+    const chunks = await collect(provider.stream({ messages, maxTokens: 50 }));
+    expect(chunks).toEqual([
+      { type: 'delta', text: '风起' },
+      { type: 'done', finishReason: 'stop', usage: undefined, model: undefined },
+    ]);
+    expect(requests).toHaveLength(2);
+    expect((requests[1].body as { max_tokens: number }).max_tokens).toBe(2048);
   });
 });

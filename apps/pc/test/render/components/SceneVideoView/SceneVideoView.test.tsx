@@ -206,6 +206,8 @@ describe('场景视频画布', () => {
 
     // 没有视频服务：工具栏给出配置入口，生成按钮不可用
     expect(await screen.findByTestId('scene-video-no-provider')).toBeTruthy();
+    // 拆出的是草稿：先确认分镜
+    fireEvent.click(screen.getByTestId('confirm-storyboard'));
     const generate = screen.getByRole('button', { name: '生成 3 个镜头' }) as HTMLButtonElement;
     expect(generate.disabled).toBe(true);
     expect(screen.getByTestId('scene-video-estimate').textContent).toBe(
@@ -242,7 +244,7 @@ describe('场景视频画布', () => {
     expect(request.providerId).toBe('openai-compatible');
     expect(request.messages[1].content).toContain('石板路还湿着');
     expect(request.messages[1].content).toContain('【地点】青石镇');
-    expect(screen.getByText(/AI 拆出 4 个镜头/)).toBeTruthy();
+    expect(screen.getByText(/AI 拟了 4 个镜头的分镜草稿/)).toBeTruthy();
     expect(node('镜头 2').textContent).toContain('中景 · 4s');
     expect(node('镜头 2').textContent).toContain('林舟回头');
     await screen.findByLabelText('视频模型');
@@ -258,6 +260,46 @@ describe('场景视频画布', () => {
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 1, clientY: 1 });
     fireEvent.pointerUp(canvas, { button: 0, pointerId: 2, clientX: 1, clientY: 1 });
     expect(screen.queryByTestId('scene-inspector')).toBeNull();
+  });
+
+  // 分镜由作者做主：AI 拆出的只是草稿，确认前不能生成（工具栏与节点上的「生成」都不可用）
+  it('AI 拆出的分镜是草稿：可以修改、增删；确认前不能生成；确认后保存到 分镜.json，重新拆分又回到草稿', async () => {
+    const { electron } = setup({ textReady: true, videoReady: true });
+    await screen.findByTestId('scene-video-view');
+    await waitFor(() => expect(shotNodes()).toHaveLength(4));
+    await screen.findByLabelText('视频模型');
+    expect(screen.getByTestId('storyboard-draft-notice').textContent).toContain('确认分镜');
+    expect(screen.queryByRole('button', { name: '生成 4 个镜头' })).toBeNull();
+    expect((screen.getByRole('button', { name: '生成镜头 1' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
+
+    // 改一个镜头的画面描述：清空后不能确认
+    const inspector = selectNode('镜头 2');
+    const description = within(inspector).getByLabelText('镜头 2 画面描述');
+    fireEvent.change(description, { target: { value: '' } });
+    fireEvent.blur(description);
+    await waitFor(() =>
+      expect((screen.getByTestId('confirm-storyboard') as HTMLButtonElement).disabled).toBe(true)
+    );
+    fireEvent.change(description, { target: { value: '林舟回头望向铁匠铺，烟囱还没冒烟' } });
+    fireEvent.blur(description);
+    await waitFor(() =>
+      expect((screen.getByTestId('confirm-storyboard') as HTMLButtonElement).disabled).toBe(false)
+    );
+    expect(calls(electron, 'video-task-submit')).toHaveLength(0);
+
+    fireEvent.click(screen.getByTestId('confirm-storyboard'));
+    expect(screen.queryByTestId('storyboard-draft-notice')).toBeNull();
+    expect(screen.getByRole('button', { name: '生成 4 个镜头' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: '生成镜头 1' }) as HTMLButtonElement).disabled).toBe(
+      false
+    );
+    await waitFor(() => {
+      const saves = calls(electron, 'video-scene-save');
+      const last = saves[saves.length - 1]?.[1] as { state: { storyboardConfirmed?: boolean } };
+      expect(last?.state.storyboardConfirmed).toBe(true);
+    });
   });
 
   it('检查器：编辑、前后移、删除、添加镜头；拖动节点保存位置；修改都写回 分镜.json', async () => {
@@ -318,6 +360,7 @@ describe('场景视频画布', () => {
     await screen.findByTestId('scene-video-view');
     await waitFor(() => expect(shotNodes()).toHaveLength(4));
     await screen.findByLabelText('视频模型');
+    fireEvent.click(screen.getByTestId('confirm-storyboard'));
     fireEvent.click(screen.getByRole('button', { name: '生成 4 个镜头' }));
     await waitFor(() => expect(calls(electron, 'video-task-submit')).toHaveLength(4));
     const submitted = calls(electron, 'video-task-submit').map(

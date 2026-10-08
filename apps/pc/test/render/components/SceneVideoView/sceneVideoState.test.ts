@@ -7,6 +7,7 @@ import {
   buildShotVideoPrompt,
   chapterNameFromPath,
   chosenVersionFor,
+  confirmStoryboard,
   createSceneVideoState,
   describeTaskStatus,
   estimateSceneCost,
@@ -21,6 +22,7 @@ import {
   sceneRelativeDir,
   shotNumber,
   shotVersionsFromFiles,
+  storyboardConfirmBlocker,
   updateShot,
   type SceneVideoState,
 } from '@/render/components/SceneVideoView/sceneVideoState';
@@ -353,5 +355,38 @@ describe('版本、任务与费用', () => {
       '镜头 1：资料/视频/001-启程/第一场 清晨的青石镇/镜头1-v2.mp4',
       '镜头 2：资料/视频/001-启程/第一场 清晨的青石镇/镜头2-v1.mp4',
     ]);
+  });
+});
+
+describe('分镜确认（AI 拆出的只是草稿）', () => {
+  const shots = [
+    { id: 'a', shotSize: '远景' as const, durationSec: 6, description: '雨后镇口' },
+    { id: 'b', shotSize: '中景' as const, durationSec: 6, description: '林舟回头' },
+  ];
+
+  it('新场景与重新拆分的分镜都是草稿；画面描述齐全才能确认', () => {
+    const draft = replaceStoryboardShots(baseState(), shots);
+    expect(baseState().storyboardConfirmed).toBe(false);
+    expect(draft.storyboardConfirmed).toBe(false);
+    expect(storyboardConfirmBlocker(baseState())).toBe('还没有镜头');
+    const missing = updateShot(draft, draft.storyboard.shots[1].id, { description: ' ' });
+    expect(storyboardConfirmBlocker(missing)).toBe('镜头 2 还没有画面描述');
+    expect(confirmStoryboard(missing).storyboardConfirmed).toBe(false);
+    const confirmed = confirmStoryboard(draft);
+    expect(confirmed.storyboardConfirmed).toBe(true);
+    // 重新拆分镜：回到草稿
+    expect(replaceStoryboardShots(confirmed, shots).storyboardConfirmed).toBe(false);
+  });
+
+  it('读取：保存的值优先；旧版 分镜.json 没有这个字段时，已有镜头视为已确认', () => {
+    const confirmed = confirmStoryboard(replaceStoryboardShots(baseState(), shots));
+    const roundTrip = parseSceneVideoState(JSON.parse(JSON.stringify(confirmed)));
+    expect(roundTrip?.storyboardConfirmed).toBe(true);
+    const legacy = JSON.parse(JSON.stringify(confirmed)) as Record<string, unknown>;
+    delete legacy.storyboardConfirmed;
+    expect(parseSceneVideoState(legacy)?.storyboardConfirmed).toBe(true);
+    const emptyLegacy = JSON.parse(JSON.stringify(baseState())) as Record<string, unknown>;
+    delete emptyLegacy.storyboardConfirmed;
+    expect(parseSceneVideoState(emptyLegacy)?.storyboardConfirmed).toBe(false);
   });
 });

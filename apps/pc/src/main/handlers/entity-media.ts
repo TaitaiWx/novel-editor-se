@@ -163,9 +163,13 @@ export interface ImageCandidate {
 
 const ASPECT_RE = /^\d{1,2}:\d{1,2}$/;
 
-async function fetchAsDataUrl(url: string, fallbackMime: string): Promise<ImageCandidate | null> {
+async function fetchAsDataUrl(
+  url: string,
+  fallbackMime: string,
+  doFetch: (input: string, init?: RequestInit) => Promise<Response> = fetch
+): Promise<ImageCandidate | null> {
   if (!/^https?:\/\//i.test(url)) return null;
-  const response = await fetch(url);
+  const response = await doFetch(url);
   if (!response.ok) return null;
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.length > MAX_ENTITY_IMAGE_BYTES) return null;
@@ -189,6 +193,9 @@ export async function generateImages(
   const providerId = typeof payload.providerId === 'string' ? payload.providerId : undefined;
   const service = getAIService();
   const provider = service.getImageProvider(providerId);
+  // 厂商只返回图片地址时（例如 Grok），下载也按该模型的网络设置（勾选了代理就走代理）
+  const modelId = providerId ?? service.resolveDefaultId('image');
+  const downloadFetch = (modelId ? service.fetchFor(modelId) : undefined) ?? fetch;
   let references: string[] = [];
   if (provider.supportsReferences && payload.references !== undefined) {
     const workPath = await assertWorkDir(payload.workPath, workspaceRoot);
@@ -208,7 +215,9 @@ export async function generateImages(
         dataUrl: `data:${image.mimeType};base64,${image.base64}`,
       });
     } else if (image.url) {
-      const fetched = await fetchAsDataUrl(image.url, image.mimeType).catch(() => null);
+      const fetched = await fetchAsDataUrl(image.url, image.mimeType, downloadFetch).catch(
+        () => null
+      );
       if (fetched) images.push(fetched);
     }
   }
