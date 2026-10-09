@@ -83,6 +83,7 @@ jobs:
           pnpm test:ut --coverage.enabled=false --reporter=default --reporter=junit
           --outputFile.junit=coverage/native.xml
           packages/core/test/workspace-lock.test.ts
+          packages/core/test/workspace-lock-contention.test.ts
           packages/core/test/atomic-text-save.test.ts
           apps/pc/test/main/path-access.test.ts
           apps/pc/test/main/auto-updater/recovery-contract.test.ts

@@ -34,6 +34,24 @@ const defaultDirectory = path.join(homedir(), '.novel-editor', 'workspace-locks-
 const ticketName = /^(\d+)-[\da-f-]+\.ticket$/;
 const delay = () => new Promise<void>((resolve) => setTimeout(resolve, 15));
 
+/** Short Windows sharing/delete-pending conflicts affect reads, replacement, and removal. */
+async function retryTicketIO<T>(
+  operation: () => Promise<T>,
+  checkTimeout: () => void = () => {}
+): Promise<T> {
+  for (let retry = 0; ; retry++) {
+    if (retry > 0) checkTimeout();
+    try {
+      return await operation();
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (retry >= 8 || !['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '')) throw error;
+      checkTimeout();
+      await delay();
+    }
+  }
+}
+
 function isDead(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -111,18 +129,22 @@ interface Ticket {
   number: number;
   resources: string[] | null;
 }
-async function readTicket(directory: string, name: string): Promise<Ticket | null> {
+async function readTicket(
+  directory: string,
+  name: string,
+  checkTimeout: () => void
+): Promise<Ticket | null> {
   const match = ticketName.exec(name);
   if (!match) return null;
   const file = path.join(directory, name);
   if (isDead(Number(match[1]))) {
-    await unlink(file).catch((error: NodeJS.ErrnoException) => {
+    await retryTicketIO(() => unlink(file), checkTimeout).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== 'ENOENT') throw error;
     });
     return null;
   }
   try {
-    const text = await readFile(file, 'utf8');
+    const text = await retryTicketIO(() => readFile(file, 'utf8'), checkTimeout);
     if (text === '') return { number: 0, resources: null };
     // Old tickets are deliberately wildcard, so legacy live owners remain excluded.
     const value = JSON.parse(text);
@@ -179,29 +201,18 @@ export async function withWorkspaceLease<T>(
     await choosing.close();
     let maximum = 0;
     for (const other of await readdir(directory)) {
-      maximum = Math.max(maximum, (await readTicket(directory, other))?.number ?? 0);
+      maximum = Math.max(maximum, (await readTicket(directory, other, checkTimeout))?.number ?? 0);
     }
     const number = maximum + 1;
     if (!Number.isSafeInteger(number)) throw new Error('Workspace lock ticket overflow');
     await writeFile(temporary, JSON.stringify({ number, resources }), { flag: 'wx', mode: 0o600 });
-    for (let retry = 0; ; retry++) {
-      try {
-        await rename(temporary, file);
-        break;
-      } catch (error) {
-        // Windows can reject replacement while a ticket reader/security scanner holds the
-        // destination. Keep the empty choosing ticket visible throughout bounded retries;
-        // never unlink it to make replacement succeed or admit the task without publication.
-        const code = (error as NodeJS.ErrnoException).code;
-        if (retry >= 8 || !['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '')) throw error;
-        checkTimeout();
-        await delay();
-      }
-    }
+    // Keep the empty choosing ticket visible while replacement is retried; never unlink
+    // it to make publication succeed or admit the task without a published ticket.
+    await retryTicketIO(() => rename(temporary, file), checkTimeout);
     for (const other of await readdir(directory)) {
       if (other === name || !ticketName.test(other)) continue;
       for (;;) {
-        const ticket = await readTicket(directory, other);
+        const ticket = await readTicket(directory, other, checkTimeout);
         if (
           ticket === null ||
           !workspaceResourcesConflict(resources, ticket.resources) ||
@@ -223,8 +234,8 @@ export async function withWorkspaceLease<T>(
     return await leases.run(scope, task);
   } finally {
     scope.active = false;
-    await unlink(temporary).catch(() => undefined);
-    if (ownsTicket) await unlink(file).catch(() => undefined);
+    await retryTicketIO(() => unlink(temporary)).catch(() => undefined);
+    if (ownsTicket) await retryTicketIO(() => unlink(file)).catch(() => undefined);
   }
 }
 
