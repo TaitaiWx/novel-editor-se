@@ -377,13 +377,16 @@ export class Page {
     const special = SPECIAL_KEYS[key];
     const isChar = !special && key.length === 1;
     const upper = key.toUpperCase();
+    // KeyboardEvent.key includes Shift; lowercase Ctrl+Shift+z is interpreted as
+    // Ctrl+z by CodeMirror before its shifted fallback (undo instead of redo).
+    const eventKey = isChar && modifiers.includes('Shift') ? upper : key;
     const code = special?.code ?? (isChar && /[a-z]/i.test(key) ? `Key${upper}` : key);
     const keyCode = special?.keyCode ?? (isChar ? upper.charCodeAt(0) : 0);
     // 带 Ctrl/Meta 的组合键不产生文本输入
     const producesText = modifiers.every((item) => item === 'Shift');
-    const text = producesText ? (special?.text ?? (isChar ? key : undefined)) : undefined;
+    const text = producesText ? (special?.text ?? (isChar ? eventKey : undefined)) : undefined;
     const common: CdpParams = {
-      key,
+      key: eventKey,
       code,
       windowsVirtualKeyCode: keyCode,
       nativeVirtualKeyCode: keyCode,

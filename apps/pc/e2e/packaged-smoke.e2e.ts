@@ -9,7 +9,7 @@
  */
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,60 +24,75 @@ const SMOKE_TIMEOUT_MS = 60_000;
 
 type SmokeOutcome = { kind: 'exited-ok' };
 
-function runSmoke(executable: string, userDataDir: string): Promise<SmokeOutcome> {
-  return new Promise((resolve, reject) => {
-    let stderr = '';
-    let settled = false;
-    const child = spawn(
-      executable,
-      // Linux CI 的 chrome-sandbox 没有 SUID 权限，需要禁用沙箱
-      ['--smoke-test', ...(process.env.CI ? ['--no-sandbox', '--disable-gpu-sandbox'] : [])],
-      {
-        cwd: APP_ROOT,
-        env: {
-          ...process.env,
-          NODE_ENV: 'production',
-          NOVEL_EDITOR_SMOKE_TEST: '1',
-          NOVEL_EDITOR_DISABLE_AUTO_UPDATER: '1',
-          NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR: userDataDir,
-        },
-        // 仅采集 stderr；stdout 不建管道，避免日志过多阻塞子进程
-        stdio: ['ignore', 'ignore', 'pipe'],
-      }
+async function runSmoke(executable: string, userDataDir: string): Promise<SmokeOutcome> {
+  const started = Date.now();
+  let output = '';
+  const append = (label: string, chunk: Buffer) => {
+    output = (output + `[+${Date.now() - started}ms ${label}] ${chunk.toString()}`).slice(
+      -1024 * 1024
     );
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
+  };
+  try {
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+      const child = spawn(
+        executable,
+        // Linux CI 的 chrome-sandbox 没有 SUID 权限，需要禁用沙箱
+        ['--smoke-test', ...(process.env.CI ? ['--no-sandbox', '--disable-gpu-sandbox'] : [])],
+        {
+          cwd: APP_ROOT,
+          env: {
+            ...process.env,
+            NODE_ENV: 'production',
+            NOVEL_EDITOR_SMOKE_TEST: '1',
+            NOVEL_EDITOR_DISABLE_AUTO_UPDATER: '1',
+            NOVEL_EDITOR_SMOKE_TEST_USER_DATA_DIR: userDataDir,
+          },
+          // Consume both streams continuously; keep a bounded tail for CI diagnostics.
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }
+      );
+      child.stdout?.on('data', (chunk: Buffer) => append('stdout', chunk));
+      child.stderr?.on('data', (chunk: Buffer) => append('stderr', chunk));
 
-    const finish = (action: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(absoluteTimer);
-      action();
-    };
+      const finish = (action: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(absoluteTimer);
+        action();
+      };
 
-    child.once('error', (error) => finish(() => reject(error)));
-    child.once('exit', (code, signal) =>
-      finish(() =>
-        code === 0
-          ? resolve({ kind: 'exited-ok' })
-          : reject(
-              new Error(
-                `烟雾测试启动崩溃: code=${code ?? 'null'} signal=${signal ?? 'null'} stderr=${stderr.trim()}`
+      child.once('error', (error) => finish(() => reject(error)));
+      child.once('exit', (code, signal) =>
+        finish(() =>
+          code === 0
+            ? resolve({ kind: 'exited-ok' })
+            : reject(
+                new Error(
+                  `烟雾测试启动崩溃: code=${code ?? 'null'} signal=${signal ?? 'null'} output=${output.trim()}`
+                )
               )
-            )
-      )
-    );
+        )
+      );
 
-    const absoluteTimer = setTimeout(
-      () =>
-        finish(() => {
-          child.kill('SIGKILL');
-          reject(new Error(`烟雾测试绝对超时（${SMOKE_TIMEOUT_MS}ms）`));
-        }),
-      SMOKE_TIMEOUT_MS
+      const absoluteTimer = setTimeout(
+        () =>
+          finish(() => {
+            child.kill('SIGKILL');
+            reject(new Error(`烟雾测试绝对超时（${SMOKE_TIMEOUT_MS}ms） output=${output.trim()}`));
+          }),
+        SMOKE_TIMEOUT_MS
+      );
+    });
+  } finally {
+    const artifacts = path.join(APP_ROOT, 'e2e', '.artifacts');
+    await mkdir(artifacts, { recursive: true });
+    await writeFile(
+      path.join(artifacts, `packaged-smoke-${process.platform}-${Date.now()}.log`),
+      `executable=${executable}\nelapsed=${Date.now() - started}ms\n${output}`,
+      'utf8'
     );
-  });
+  }
 }
 
 const executable = resolvePackagedExecutable(BUILD_DIR);

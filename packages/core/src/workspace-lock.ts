@@ -184,7 +184,20 @@ export async function withWorkspaceLease<T>(
     const number = maximum + 1;
     if (!Number.isSafeInteger(number)) throw new Error('Workspace lock ticket overflow');
     await writeFile(temporary, JSON.stringify({ number, resources }), { flag: 'wx', mode: 0o600 });
-    await rename(temporary, file);
+    for (let retry = 0; ; retry++) {
+      try {
+        await rename(temporary, file);
+        break;
+      } catch (error) {
+        // Windows can reject replacement while a ticket reader/security scanner holds the
+        // destination. Keep the empty choosing ticket visible throughout bounded retries;
+        // never unlink it to make replacement succeed or admit the task without publication.
+        const code = (error as NodeJS.ErrnoException).code;
+        if (retry >= 8 || !['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '')) throw error;
+        checkTimeout();
+        await delay();
+      }
+    }
     for (const other of await readdir(directory)) {
       if (other === name || !ticketName.test(other)) continue;
       for (;;) {

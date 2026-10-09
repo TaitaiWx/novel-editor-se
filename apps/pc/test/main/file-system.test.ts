@@ -394,6 +394,25 @@ describe('文件信息', () => {
     );
   });
 
+  it('get-file-info-batch keeps authorized media candidates when other candidates are outside the workspace', async () => {
+    const media = await touch('media/picture.png', 'image');
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'ne-pc-media-outside-'));
+    const unapproved = path.join(outside, 'secret.png');
+    await writeFile(unapproved, 'private');
+    try {
+      const result = await invoke<Array<{ path: string; info: { size: number } }>>(
+        'get-file-info-batch',
+        [unapproved, media, path.join(dir, 'missing')]
+      );
+      expect(result).toEqual([
+        { path: media, info: expect.objectContaining({ size: 5, isFile: true }) },
+      ]);
+      expect(await invoke('get-file-info-batch', [unapproved])).toEqual([]);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
   it('get-file-info-batch 跳过失败项', async () => {
     const a = await touch('a.md', 'a');
     const result = await invoke<Array<{ path: string; info: { size: number } }>>(

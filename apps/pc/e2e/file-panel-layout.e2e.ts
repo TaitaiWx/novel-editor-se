@@ -1,5 +1,5 @@
 /**
- * 文件面板行布局：人物的「分类 · 定位」、设定的 #标签 紧跟在名字后面（靠左），不被推到行尾
+ * 文件面板行布局：名字、可选角色标签、说明依次紧邻（靠左），不被推到行尾
  */
 import { describe, expect, it } from 'vitest';
 import { captureForReview, ensureSidebarOpen, setupAppSuite } from './support/suite';
@@ -10,11 +10,11 @@ const suite = setupAppSuite({ fixture: { prefix: 'novel-editor-e2e-panel-layout-
 
 interface RowGap {
   name: string;
-  gap: number;
+  gaps: number[];
   metaLeftAligned: boolean;
 }
 
-/** 每一行：名字右边缘到说明文字左边缘的距离；说明文字左对齐 */
+/** 每一行：名字 → 可选角色标签 → 说明的相邻间距；标签自身宽度不是空隙。 */
 function measureRows(section: string): Promise<RowGap[]> {
   return suite.page.evaluate<RowGap[]>((selector: string) => {
     return Array.from(document.querySelectorAll(`${selector} [class*="objectNodePrimary"]`)).map(
@@ -23,11 +23,17 @@ function measureRows(section: string): Promise<RowGap[]> {
         const meta = primary.parentElement?.querySelector(
           '[class*="objectNodeMetaInline"]'
         ) as HTMLElement | null;
-        const primaryRect = primary.getBoundingClientRect();
-        const metaRect = meta?.getBoundingClientRect();
+        const tag = primary.parentElement?.querySelector('[class*="objectNodeTag"]');
+        const parts = [primary, tag, meta].filter((part): part is Element => !!part);
+        const gaps = parts
+          .slice(1)
+          .map(
+            (part, index) =>
+              part.getBoundingClientRect().left - parts[index].getBoundingClientRect().right
+          );
         return {
           name: title?.textContent ?? '',
-          gap: metaRect ? metaRect.left - primaryRect.right : -1,
+          gaps,
           metaLeftAligned: meta ? getComputedStyle(meta).textAlign !== 'right' : false,
         };
       }
@@ -48,8 +54,11 @@ describe('文件面板行布局', () => {
       const rows = await measureRows(section);
       expect(rows.length).toBeGreaterThan(2);
       for (const row of rows) {
-        expect(row.gap, `${row.name} 的说明文字应紧跟名字`).toBeGreaterThanOrEqual(0);
-        expect(row.gap, `${row.name} 的说明文字应紧跟名字`).toBeLessThanOrEqual(16);
+        expect(row.gaps.length).toBeGreaterThan(0);
+        for (const gap of row.gaps) {
+          expect(gap, `${row.name} 的标签与说明应依次紧邻`).toBeGreaterThanOrEqual(0);
+          expect(gap, `${row.name} 的标签与说明应依次紧邻`).toBeLessThanOrEqual(16);
+        }
         expect(row.metaLeftAligned).toBe(true);
       }
     }

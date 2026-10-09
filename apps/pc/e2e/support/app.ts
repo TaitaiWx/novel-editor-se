@@ -175,6 +175,10 @@ export async function launchApp(options: LaunchOptions): Promise<ElectronApp> {
       '--disable-backgrounding-occluded-windows',
       // 测试时不出声（NOVEL_EDITOR_E2E_BACKGROUND=1 时窗口还会在后台运行，见主进程 e2e-background.ts）
       '--mute-audio',
+      // Hosted Linux has no GPU; explicit SwANGLE supplies WebGL for real 3D tests.
+      ...(process.env.CI && process.platform === 'linux'
+        ? ['--use-gl=angle', '--use-angle=swiftshader']
+        : []),
       ...(options.projectDir ? [options.projectDir] : []),
     ],
     env

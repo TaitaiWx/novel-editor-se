@@ -38,6 +38,11 @@ beforeAll(async () => {
     if (typeof event.url !== 'string' || !event.url.startsWith('file:')) return;
     loadedScripts.add(decodeURIComponent(new URL(event.url).pathname.split('/').pop() ?? ''));
   });
+  // Attach the debugger after the committed application document and preload
+  // have initialized. Electron 42 can create an invalid early sandbox context
+  // when debugger instrumentation runs during initial navigation. Script replay
+  // still includes every earlier module, and Page keeps all startup errors.
+  await suite.page.waitForTarget(SEL.workspaceTree);
   await suite.page.cdp.send('Debugger.enable');
 });
 afterAll(() => stopObserving?.());

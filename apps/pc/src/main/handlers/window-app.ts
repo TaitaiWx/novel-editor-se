@@ -91,6 +91,7 @@ export function registerWindowAppHandlers(): void {
     noteUpdaterRendererHealthy();
     // 烟雾测试只验证能启动到健康状态即退出；E2E 测试需要保持应用运行
     if (isSmokeTestMode() && !isE2ETestMode()) {
+      console.info('[smoke] Renderer health confirmed; requesting process exit');
       setTimeout(() => app.exit(0), 300);
     }
     return { success: true };

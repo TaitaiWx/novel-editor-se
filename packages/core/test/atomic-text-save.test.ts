@@ -112,6 +112,48 @@ describe.each([
     expect(await realFs.readFile(path.join(dir, 'missing.md'), 'utf8')).toBe('新目标正文');
   });
 
+  it.each(['EPERM', 'EACCES', 'EBUSY'])(
+    '锁票发布遇到短暂 %s 时保留选择标记并重试后保存',
+    async (code) => {
+      let attempts = 0;
+      let ticket = '';
+      vi.spyOn(fs, 'rename').mockImplementation(async (source, destination) => {
+        if (!String(destination).endsWith('.ticket')) return realFs.rename(source, destination);
+        attempts++;
+        ticket = String(destination);
+        if (attempts <= 3) {
+          // Readers must keep seeing the choosing ticket until publication succeeds.
+          expect(await realFs.readFile(ticket, 'utf8')).toBe('');
+          expect(await realFs.readFile(target, 'utf8')).toBe('原稿\r\n不可丢失');
+          throw Object.assign(new Error('Windows sharing contention'), { code });
+        }
+        return realFs.rename(source, destination);
+      });
+      await save(target, '完整新正文');
+      expect(attempts).toBe(4);
+      expect(await realFs.readFile(target, 'utf8')).toBe('完整新正文');
+      expect(await realFs.lstat(ticket).catch(() => null)).toBeNull();
+      expect(await realFs.lstat(`${ticket}.tmp`).catch(() => null)).toBeNull();
+    }
+  );
+
+  it.each(['EPERM', 'EIO'])('锁票发布持续 %s 时有界失败并清理票据且保留原文', async (code) => {
+    let attempts = 0;
+    let ticket = '';
+    vi.spyOn(fs, 'rename').mockImplementation(async (source, destination) => {
+      if (!String(destination).endsWith('.ticket')) return realFs.rename(source, destination);
+      attempts++;
+      ticket = String(destination);
+      throw Object.assign(new Error('publication denied'), { code });
+    });
+    await expect(save(target, '不能发布')).rejects.toBeDefined();
+    expect(attempts).toBe(code === 'EPERM' ? 9 : 1);
+    expect(await realFs.readFile(target, 'utf8')).toBe('原稿\r\n不可丢失');
+    expect(await realFs.lstat(ticket).catch(() => null)).toBeNull();
+    expect(await realFs.lstat(`${ticket}.tmp`).catch(() => null)).toBeNull();
+    expect(await realFs.readdir(dir)).toEqual(['chapter.md']);
+  });
+
   it('并发保存使用互不冲突的同目录临时文件，最终正文完整', async () => {
     const pendingPaths: string[] = [];
     const contents = Array.from({ length: 8 }, (_, index) => `${index}:` + '正文'.repeat(4096));

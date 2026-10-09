@@ -1,7 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDirectoryAccess,
   assertPathAccess,
@@ -9,13 +10,25 @@ import {
   childPath,
   grantDroppedPathAccess,
   grantPathAccess,
+  movePathAccess,
   resetPathAccessForTest,
 } from '../../src/main/path-access';
+
+vi.mock('node:fs', async (original) => {
+  const actual = await original<typeof import('node:fs')>();
+  return {
+    ...actual,
+    realpathSync: Object.assign(vi.fn(actual.realpathSync), {
+      native: actual.realpathSync.native,
+    }),
+  };
+});
 
 let base: string;
 let root: string;
 let outside: string;
 beforeEach(async () => {
+  vi.mocked(realpathSync).mockReset();
   resetPathAccessForTest();
   base = await mkdtemp(path.join(os.tmpdir(), 'ne-path-access-'));
   root = path.join(base, 'workspace');
@@ -94,6 +107,35 @@ describe('main-process file capabilities', () => {
     await expect(assertPathAccess(1, item)).resolves.toBe(item);
     await expect(assertPathAccess(1, item, true)).rejects.toThrow();
     await expect(assertDirectoryAccess(1, outside)).rejects.toThrow();
+  });
+
+  it('uses the native canonical identity for dropped paths when legacy realpath retains an alias', async () => {
+    const item = path.join(outside, 'import.md');
+    await writeFile(item, 'import');
+    // On Windows the JS realpath resolver can retain 8.3 names, whereas the async
+    // native resolver returns their expanded path. The two must share an identity.
+    vi.mocked(realpathSync).mockReturnValueOnce(path.join(base, 'LEGACY~1'));
+    grantDroppedPathAccess({ id: 1 }, outside);
+    await expect(assertPathAccess(1, item)).resolves.toBe(item);
+    await expect(assertPathAccess(1, item, true)).rejects.toThrow();
+    const escaped = path.join(outside, 'escape.md');
+    const secret = path.join(root, 'secret.md');
+    await writeFile(secret, 'private');
+    await symlink(secret, escaped);
+    await expect(assertPathAccess(1, escaped)).rejects.toThrow('范围之外');
+  });
+
+  it('keeps native canonical identity after renaming an authorized directory', async () => {
+    const item = path.join(root, 'chapter.md');
+    await writeFile(item, 'chapter');
+    await grantPathAccess({ id: 1 }, root, true);
+    const destination = path.join(base, 'renamed');
+    await rename(root, destination);
+    vi.mocked(realpathSync).mockReturnValueOnce(path.join(base, 'LEGACY~2'));
+    movePathAccess(root, destination);
+    const moved = path.join(destination, 'chapter.md');
+    await expect(assertPathAccess(1, moved, true)).resolves.toBe(moved);
+    await expect(assertPathAccess(1, item)).rejects.toThrow('未授权');
   });
 
   it('revokes grants when the owning webContents is destroyed', async () => {

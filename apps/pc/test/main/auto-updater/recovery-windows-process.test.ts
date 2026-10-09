@@ -94,10 +94,14 @@ describe.skipIf(process.platform !== 'win32')('native Windows recovery guardian'
     await writeFile(artifact, 'not an executable');
     await writeFile(join(root, 'artifact'), artifact);
     await writeFile(join(root, 'sha256'), '0'.repeat(64));
-    start(root);
+    const guardian = start(root);
+    const exited = once(guardian, 'exit');
     await phase(root, 'ready');
     await writeFile(join(root, 'commit'), '2147483647');
     await phase(root, 'failed');
+    // The guardian publishes its phase before writing diagnostics and releasing its lock.
+    // Wait for completion so both the log assertion and the replay check observe the final state.
+    expect((await exited)[0]).toBe(1);
     expect(await readFile(join(root, 'error.log'), 'utf16le')).toContain('checksum mismatch');
     const restarted = start(root);
     expect((await once(restarted, 'exit'))[0]).toBe(0);

@@ -23,18 +23,13 @@ installE2EBackgroundMode();
 // 尽早安装崩溃钩子：崩溃 / 未捕获异常时打包日志（E2E / 烟雾测试模式下跳过）
 setupCrashLogUpload();
 
-// 在 app.ready 之前完成系统能力探测，便于决定是否关闭 GPU 加速
+// 系统配置只用于减轻后台任务；CPU / 内存不足并不意味着 GPU 不兼容。
 const systemProfile = detectSystemProfile();
 
-if (
-  process.env.NOVEL_EDITOR_DISABLE_HARDWARE_ACCELERATION === '1' ||
-  // 自动低配模式：低配设备默认禁用硬件加速，避免集显/旧驱动卡顿
-  systemProfile.isLowSpec
-) {
+// 保留显式驱动兼容性覆盖，并在 app.ready 之前执行。自动低配模式不得关闭
+// WebGL，否则两核设备上的场景视频 3D 预演也会失去渲染上下文。
+if (process.env.NOVEL_EDITOR_DISABLE_HARDWARE_ACCELERATION === '1') {
   app.disableHardwareAcceleration();
-  if (systemProfile.isLowSpec) {
-    console.info(`[低配模式] 自动禁用硬件加速；触发原因: ${systemProfile.reasons.join('; ')}`);
-  }
 }
 
 // 设置安全恢复状态支持

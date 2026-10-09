@@ -319,10 +319,13 @@ export function registerFileSystemHandlers(): void {
 
   registerWorkspaceHandler('get-file-info-batch', async (event, filePaths: unknown) => {
     if (!Array.isArray(filePaths) || filePaths.length > 10000) throw new Error('无效的路径列表');
+    const paths = filePaths.map(absolutePath);
+    // Media resolution probes ancestor directories too. Denied candidates must not
+    // discard authorized results or leak metadata through this best-effort lookup.
     const approved = await Promise.all(
-      filePaths.map((item) => assertPathAccess(event?.sender?.id, item))
+      paths.map((item) => assertPathAccess(event?.sender?.id, item).catch(() => null))
     );
-    return getFileInfoBatch(approved);
+    return getFileInfoBatch(approved.filter((item): item is string => item !== null));
   });
 
   // 批量判断候选路径是否存在（只回答工作区内的绝对路径，见 files-exist.ts）

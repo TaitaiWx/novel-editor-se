@@ -70,7 +70,8 @@ export async function grantPathAccess(
 /** Used only for synchronous OS drop dispatch, before renderer drop handlers run. */
 export function grantDroppedPathAccess(sender: Sender, value: unknown): void {
   const target = absolutePath(value);
-  const real = realpathSync(target);
+  // Match fs/promises.realpath, including expansion of Windows 8.3 aliases.
+  const real = realpathSync.native(target);
   let entries = grants.get(sender.id);
   if (!entries) {
     entries = [];
@@ -190,7 +191,7 @@ export async function assertWorkspaceRename(
 }
 
 export function movePathAccess(source: string, destination: string): void {
-  const newReal = realpathSync(destination);
+  const newReal = realpathSync.native(destination);
   for (const entries of grants.values()) {
     for (const entry of entries) {
       if (!within(source, entry.path)) continue;

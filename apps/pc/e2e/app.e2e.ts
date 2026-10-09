@@ -709,7 +709,7 @@ describe('小说编辑器 GUI', () => {
     const original = await readProjectFile(FIXTURE_CHAPTERS.first.file);
     await focusEditorEnd(page);
 
-    // 入口一眼可见：文件栏上是「图标 + 灵感」胶囊，而不是只有图标
+    // 入口可见且有可访问名称；窄文件栏按响应式设计收起文字，保留图标和 Tooltip。
     const pill = await page.evaluate<{ text: string; visible: boolean; first: boolean }>(() => {
       const button = document.querySelector<HTMLElement>('[data-testid="inspiration-pill"]');
       const rect = button?.getBoundingClientRect();
@@ -723,7 +723,13 @@ describe('小说编辑器 GUI', () => {
       );
       return {
         text: button?.textContent?.trim() ?? '',
-        visible: Boolean(rect && rect.width > 30 && rect.height > 0),
+        visible: Boolean(
+          rect &&
+            rect.width > 0 &&
+            rect.height > 0 &&
+            button?.getAttribute('aria-label') === '灵感' &&
+            button.querySelector('svg')
+        ),
         first: leftmost,
       };
     });

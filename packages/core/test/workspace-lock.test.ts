@@ -59,10 +59,13 @@ function child(script: string, withTsx = false) {
     globalThis.process.execPath,
     [
       ...(withTsx
-        ? ['--import', path.resolve('apps/cli/node_modules/tsx/dist/loader.mjs')]
+        ? [
+            '--import',
+            pathToFileURL(path.resolve('apps/cli/node_modules/tsx/dist/loader.mjs')).href,
+          ]
         : ['--experimental-strip-types']),
       '--import',
-      path.join(root, 'isolated-home.mjs'),
+      pathToFileURL(path.join(root, 'isolated-home.mjs')).href,
       '--input-type=module',
       '-e',
       code,
@@ -78,18 +81,48 @@ function child(script: string, withTsx = false) {
   process.stderr!.on('data', (data) => {
     errors += data;
   });
+  let spawnError: Error | undefined;
+  let closed: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+  process.on('error', (error) => {
+    spawnError = error;
+  });
+  process.on('close', (code, signal) => {
+    closed = { code, signal };
+  });
   return {
     process,
-    async until(text: string) {
-      await expect
-        .poll(
-          () => {
-            if (process.exitCode !== null && !output.includes(text)) throw new Error(errors);
-            return output;
-          },
-          { timeout: 5000 }
-        )
-        .toContain(text);
+    until(text: string): Promise<void> {
+      return new Promise((resolve, reject) => {
+        const diagnostic = (reason: string) =>
+          new Error(
+            `Child ${reason} before marker ${JSON.stringify(text)} (exit code ${closed?.code ?? process.exitCode}, signal ${closed?.signal ?? process.signalCode}).` +
+              `\nstdout:\n${output}\nstderr:\n${errors}` +
+              (spawnError ? `\nspawn error: ${spawnError.message}` : '')
+          );
+        const cleanup = () => {
+          clearTimeout(timer);
+          process.stdout!.off('data', check);
+          process.off('close', check);
+          process.off('error', check);
+        };
+        const check = () => {
+          if (output.includes(text)) {
+            cleanup();
+            resolve();
+          } else if (closed || spawnError) {
+            cleanup();
+            reject(diagnostic('exited'));
+          }
+        };
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(diagnostic('timed out'));
+        }, 5000);
+        process.stdout!.on('data', check);
+        process.on('close', check);
+        process.on('error', check);
+        check();
+      });
     },
     output: () => output,
   };
@@ -476,3 +509,43 @@ it('canonicalizes a deeply nested not-yet-created resource without treating pare
   await expect.poll(() => contender.output()).toMatch(/entered|failed:/);
   expect(contender.output()).toContain('entered');
 });
+
+it.each(['script-error', 'loader-error', 'missing-marker'])(
+  'reports child %s immediately with exit status and captured diagnostics',
+  async (failure) => {
+    if (failure === 'loader-error')
+      await writeFile(
+        path.join(root, 'isolated-home.mjs'),
+        "throw new Error('fixture-loader-failed');"
+      );
+    const worker = child(
+      failure === 'script-error'
+        ? "console.log('fixture-output'); console.error('fixture-script-failed'); process.exit(23);"
+        : "console.log('fixture-output');"
+    );
+    await expect(worker.until('never-emitted')).rejects.toThrow(
+      failure === 'loader-error'
+        ? /fixture-loader-failed/
+        : failure === 'script-error'
+          ? /exit code 23[\s\S]*fixture-output[\s\S]*fixture-script-failed/
+          : /exit code 0[\s\S]*fixture-output/
+    );
+  }
+);
+
+it.each([false, true])(
+  'passes file URLs to every child --import argument (tsx=%s)',
+  async (withTsx) => {
+    const worker = child("console.log('loaded');", withTsx);
+    const imports = worker.process.spawnargs.flatMap((argument, index, args) =>
+      argument === '--import' ? [args[index + 1]] : []
+    );
+    expect(imports).toEqual([
+      ...(withTsx
+        ? [pathToFileURL(path.resolve('apps/cli/node_modules/tsx/dist/loader.mjs')).href]
+        : []),
+      pathToFileURL(path.join(root, 'isolated-home.mjs')).href,
+    ]);
+    await worker.until('loaded');
+  }
+);
