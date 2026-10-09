@@ -3,6 +3,7 @@ import { EventEmitter } from 'events';
 import { rollbackAssetNames } from '../../../src/main/auto-updater/rollback-metadata';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
+import { setTimeout as delay } from 'timers/promises';
 import { join } from 'path';
 import type { PersistedUpdaterState, RollbackTarget } from '../../../src/main/auto-updater-state';
 
@@ -149,18 +150,7 @@ vi.mock('../../../src/main/auto-updater/network', () => ({
 
 // ─── 工具函数 ──────────────────────────────────────────────────────────────
 
-const rollbackTarget: RollbackTarget = {
-  version: '1.0.0',
-  tag: 'v1.0.0',
-  rollbackProtocol: 1,
-  sha256: 'a'.repeat(64),
-  platform: process.platform,
-  arch: process.arch,
-  assetName: rollbackAssetNames('1.0.0')[0],
-  assetUrl: 'https://example.invalid/installer.dmg',
-  cachedInstallerPath: '/tmp/installer.dmg',
-  cachedInstallerHash: 'abc',
-};
+let rollbackTarget: RollbackTarget;
 
 async function writeState(state: Partial<PersistedUpdaterState>) {
   await writeFile(join(env.userData, 'updater-state.json'), JSON.stringify(state), 'utf8');
@@ -216,10 +206,11 @@ async function flush(times = 20) {
   }
 }
 
-/** 轮询直到条件成立（只依赖 setImmediate，不推进 fake timers） */
+/** 等待真实 I/O 完成；用真实时间限额，不推进 fake timers 或依赖事件循环转数。 */
 async function waitUntil(predicate: () => boolean) {
-  for (let i = 0; i < 1000 && !predicate(); i++) {
-    await new Promise<void>((resolve) => setImmediate(resolve));
+  const deadline = Date.now() + 3000;
+  while (!predicate() && Date.now() < deadline) {
+    await delay(5);
   }
   if (!predicate()) throw new Error('waitUntil 超时');
 }
@@ -243,6 +234,19 @@ async function waitForPreCacheSettled() {
 describe('auto-updater controller', () => {
   beforeEach(async () => {
     vi.stubEnv('APPIMAGE', '/test/Novel.AppImage');
+    // Asset selection depends on APPIMAGE, so construct the fixture after setting the environment.
+    rollbackTarget = {
+      version: '1.0.0',
+      tag: 'v1.0.0',
+      rollbackProtocol: 1,
+      sha256: 'a'.repeat(64),
+      platform: process.platform,
+      arch: process.arch,
+      assetName: rollbackAssetNames('1.0.0')[0],
+      assetUrl: 'https://example.invalid/installer.dmg',
+      cachedInstallerPath: '/tmp/installer.dmg',
+      cachedInstallerHash: 'abc',
+    };
     vi.resetModules();
     vi.clearAllMocks();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
@@ -262,6 +266,7 @@ describe('auto-updater controller', () => {
   afterEach(async () => {
     vi.useRealTimers();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     await rm(env.userData, { recursive: true, force: true });
   });
 
@@ -498,9 +503,12 @@ describe('auto-updater controller', () => {
       await writeFile(blocker, 'x');
       const originalUserData = env.userData;
       env.userData = blocker;
-      fakeUpdater().emit('update-downloaded', { version: '1.2.0' });
-      await waitUntil(() => env.logError.mock.calls.length > 0);
-      env.userData = originalUserData;
+      try {
+        fakeUpdater().emit('update-downloaded', { version: '1.2.0' });
+        await waitUntil(() => env.logError.mock.calls.length > 0);
+      } finally {
+        env.userData = originalUserData;
+      }
       expect(env.logError).toHaveBeenCalledWith('处理已下载更新失败:', expect.any(Error));
       expect(sentOn('update-downloaded')).toHaveLength(0);
     });
@@ -810,6 +818,30 @@ describe('auto-updater controller', () => {
   });
 
   describe('getUpdateStatus', () => {
+    it.each([
+      { platform: 'darwin', assetName: 'Novel-Editor-1.0.0-mac-x64.zip', appImage: '' },
+      { platform: 'win32', assetName: 'Novel-Editor-1.0.0-win-x64.exe', appImage: '' },
+      {
+        platform: 'linux',
+        assetName: 'Novel-Editor-1.0.0-linux-x64.AppImage',
+        appImage: '/app/Novel.AppImage',
+      },
+      { platform: 'linux', assetName: 'Novel-Editor-1.0.0-linux-amd64.deb', appImage: '' },
+    ])('recognizes a bound rollback artifact $assetName on $platform', async (fixture) => {
+      vi.stubGlobal('process', { ...process, platform: fixture.platform, arch: 'x64' });
+      vi.stubEnv('APPIMAGE', fixture.appImage);
+      await writeState({
+        rollbackTarget: {
+          ...rollbackTarget,
+          platform: fixture.platform,
+          arch: 'x64',
+          assetName: fixture.assetName,
+        },
+      });
+      const { controller } = await loadController();
+      expect((await controller.getUpdateStatus()).rollbackAvailable).toBe(true);
+    });
+
     it('getUpdateStatus 从持久化状态填充快照（通道来自内部环境变量覆盖）', async () => {
       vi.stubEnv('NOVEL_EDITOR_UPDATE_CHANNEL', 'beta');
       await writeState({

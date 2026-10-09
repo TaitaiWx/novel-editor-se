@@ -2,11 +2,31 @@ import { mkdtemp, mkdir, readFile, writeFile, readdir, rm, symlink } from 'node:
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildGuiSession, writeGuiSession } from '@novel-editor/core';
 import { publishGeneratedSample } from '../../scripts/sample-generation.mts';
 const temporary: string[] = [];
+const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
+
+function runWorker(worker: string, args: string[] = []) {
+  return new Promise<{ code: number | null; signal: NodeJS.Signals | null; stderr: string }>(
+    (resolve, reject) => {
+      const child = spawn(process.execPath, ['--import', tsxLoader, worker, ...args], {
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+      let stderr = '';
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk: string) => {
+        stderr += chunk;
+      });
+      child.once('error', reject);
+      child.once('close', (code, signal) => resolve({ code, signal, stderr }));
+    }
+  );
+}
+
 async function fixture() {
   const parent = await mkdtemp(path.join(os.tmpdir(), 'ne-generator-'));
   temporary.push(parent);
@@ -86,11 +106,8 @@ it('强杀两次 rename 之间后，下次预览恢复原稿并清理已知事�
       await writeFile(stage + '/author.txt', 'new');
     }, true, { checkpoint: async phase => { if (phase === 'backed-up') process.kill(process.pid, 'SIGKILL'); } });`
   );
-  const child = spawn(process.execPath, ['--import', 'tsx', worker], { stdio: 'pipe' });
-  const exit = await new Promise((resolve) =>
-    child.once('exit', (code, signal) => resolve({ code, signal }))
-  );
-  expect(exit).toEqual({ code: null, signal: 'SIGKILL' });
+  const exit = await runWorker(worker);
+  expect(exit, exit.stderr).toMatchObject({ code: null, signal: 'SIGKILL' });
   await publishGeneratedSample(root, async () => {}, false);
   expect(await readFile(path.join(root, 'author.txt'), 'utf8')).toBe('keep');
   expect((await readdir(parent)).filter((name) => name.startsWith('.sample'))).toEqual([]);
@@ -129,11 +146,8 @@ it.each(['prepared', 'published'] as const)(
       await writeFile(stage + '/author.txt', 'new');
     }, true, { checkpoint: async phase => { if (phase === ${JSON.stringify(phase)}) process.kill(process.pid, 'SIGKILL'); } });`
     );
-    const child = spawn(process.execPath, ['--import', 'tsx', worker], { stdio: 'pipe' });
-    const exit = await new Promise((resolve) =>
-      child.once('exit', (code, signal) => resolve({ code, signal }))
-    );
-    expect(exit).toEqual({ code: null, signal: 'SIGKILL' });
+    const exit = await runWorker(worker);
+    expect(exit, exit.stderr).toMatchObject({ code: null, signal: 'SIGKILL' });
     await publishGeneratedSample(root, async () => {}, false);
     expect(await readFile(path.join(root, 'author.txt'), 'utf8')).toBe(
       phase === 'published' ? 'new' : 'keep'
@@ -155,18 +169,11 @@ it('两个真实生成进程串行发布，不丢失另一进程新增的文件'
       await writeFile(stage + '/' + process.argv[2] + '.txt', process.argv[2]);
     }, true);`
   );
-  const exits = await Promise.all(
-    ['one', 'two'].map(
-      (name) =>
-        new Promise((resolve) => {
-          const child = spawn(process.execPath, ['--import', 'tsx', worker, name], {
-            stdio: 'pipe',
-          });
-          child.once('exit', (code) => resolve(code));
-        })
-    )
-  );
-  expect(exits).toEqual([0, 0]);
+  const exits = await Promise.all(['one', 'two'].map((name) => runWorker(worker, [name])));
+  expect(
+    exits.map(({ code }) => code),
+    exits.map(({ stderr }) => stderr).join('\n')
+  ).toEqual([0, 0]);
   expect(await readFile(path.join(root, 'one.txt'), 'utf8')).toBe('one');
   expect(await readFile(path.join(root, 'two.txt'), 'utf8')).toBe('two');
 });

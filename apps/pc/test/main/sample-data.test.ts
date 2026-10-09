@@ -65,25 +65,29 @@ let memory: LoadedMemory;
 let files: string[];
 
 /**
- * 示例里随仓库分发的文件：在 git 仓库中按已跟踪的文件计算（本机打开示例留下的数据库、AI 实测结果等
- * 未跟踪文件不算，避免开发者本机的运行产物让检查失败）；不在 git 中时（例如解压的源码包）列出全部文件
+ * 覆盖已跟踪和待提交的非忽略文件，避免新素材在提交前逃过体积检查。
+ * 本机运行产物由 .gitignore 排除；源码归档没有 Git 时列出全部文件。
  */
-async function listSampleFiles(): Promise<string[]> {
+async function listSampleFiles(root = ROOT): Promise<string[]> {
   try {
-    const output = execFileSync('git', ['ls-files', '-z', '--', '.'], {
-      cwd: ROOT,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
+    const output = execFileSync(
+      'git',
+      ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', '.'],
+      {
+        cwd: root,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }
+    );
     const tracked = output.split('\0').filter(Boolean);
     if (tracked.length > 0) {
-      const existing = new Set(await listFiles(ROOT));
+      const existing = new Set(await listFiles(root));
       return tracked.filter((file) => existing.has(file)).sort();
     }
   } catch {
     // 不在 git 中
   }
-  return listFiles(ROOT);
+  return listFiles(root);
 }
 
 beforeAll(async () => {
@@ -93,6 +97,21 @@ beforeAll(async () => {
 });
 
 describe('示例作品集 sample-data', () => {
+  it('素材清单包含尚未提交的新文件，忽略本机产物', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ne-sample-index-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: root });
+      await writeFile(path.join(root, '.gitignore'), '*.db\n');
+      await writeFile(path.join(root, 'tracked.md'), 'chapter');
+      execFileSync('git', ['add', '.gitignore', 'tracked.md'], { cwd: root });
+      await writeFile(path.join(root, 'new-image.jpg'), 'new sample');
+      await writeFile(path.join(root, 'session.db'), 'local');
+      expect(await listSampleFiles(root)).toEqual(['.gitignore', 'new-image.jpg', 'tracked.md']);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('是标准的 ne init 项目：配置有效，作品与卷章顺序正确', async () => {
     expect(project.config).toMatchObject({
       schemaVersion: 1,
@@ -382,11 +401,19 @@ describe('示例作品集 sample-data', () => {
     for (const file of media.filter((item) => !/-alt\.\w+$/.test(item))) {
       expect(media, file).toContain(file.replace(/(\.\w+)$/, '-alt$1'));
     }
-    let total = 0;
-    for (const file of files) total += (await stat(path.join(ROOT, file))).size;
-    // 上限 3MB：示例除了图片、短片，还带了一场完整的场景视频（首帧、预演、两段带声音的成片、带声音的样片，
-    // 720p 用固定 QP 编码，静止画面几乎不占字节）与配乐 / 环境音 / 音效 / 对白占位音（合计约 1MB）；再大就要拆出示例了
-    expect(total).toBeLessThan(3 * 1024 * 1024);
+    let baseBytes = 0;
+    let galleryBytes = 0;
+    for (const file of files) {
+      const size = (await stat(path.join(ROOT, file))).size;
+      if (file.startsWith(`${STAR_WORK_DIR}/资料/图集/人物/`)) {
+        galleryBytes += size;
+        expect(size, `${file} 超出单张示例图片预算`).toBeLessThan(768 * 1024);
+      } else baseBytes += size;
+    }
+    // 原有正文、记忆库、音视频仍保持 3 MiB 预算。v11 新增多版本人物图集，
+    // 为这组素材单独分配 6 MiB（当前约 5.3 MiB），避免图片增长掩盖其他示例膨胀。
+    expect(baseBytes, '正文及音视频示例预算').toBeLessThan(3 * 1024 * 1024);
+    expect(galleryBytes, '人物图集示例预算').toBeLessThan(6 * 1024 * 1024);
   });
 
   it('打包配置排除示例目录中的数据库与系统文件', async () => {

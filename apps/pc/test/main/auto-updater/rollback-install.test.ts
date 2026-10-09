@@ -116,20 +116,30 @@ describe('native rollback handoff', () => {
       expect(env.forward.autoInstallOnAppQuit).toBe(false);
     }
   );
-  it('save failure prevents installer execution', async () => {
-    env.allowed = false;
-    await expect(installRollbackArtifact(target, artifact)).rejects.toThrow('安全保存');
-    expect(env.actions).toEqual(['check', 'download', 'save']);
-  });
-  it('metadata version mismatch prevents downloading and installation', async () => {
-    env.targetVersion = '2.0.0';
-    await expect(installRollbackArtifact(target, artifact)).rejects.toThrow('目标回退版本');
-    expect(env.actions).toEqual(['check']);
-  });
-  it('download failure prevents installation', async () => {
-    env.failDownload = true;
-    await expect(installRollbackArtifact(target, artifact)).rejects.toThrow('disk full');
-    expect(env.actions).toEqual(['check']);
+  describe.each(['darwin', 'win32', 'linux'])('%s failure handling', (platform) => {
+    beforeEach(() => {
+      vi.stubGlobal('process', {
+        ...process,
+        platform,
+        env: { ...process.env, APPIMAGE: '/app/Novel.AppImage' },
+      });
+    });
+
+    it('save failure prevents installer execution', async () => {
+      env.allowed = false;
+      await expect(installRollbackArtifact(target, artifact)).rejects.toThrow('安全保存');
+      expect(env.actions).toEqual(['check', 'download', 'save']);
+    });
+    it('metadata version mismatch prevents downloading and installation', async () => {
+      env.targetVersion = '2.0.0';
+      await expect(installRollbackArtifact(target, artifact)).rejects.toThrow('目标回退版本');
+      expect(env.actions).toEqual(['check']);
+    });
+    it('download failure prevents installation', async () => {
+      env.failDownload = true;
+      await expect(installRollbackArtifact(target, artifact)).rejects.toThrow('disk full');
+      expect(env.actions).toEqual(['check']);
+    });
   });
   it('fails closed for Linux package-manager installations', async () => {
     vi.stubGlobal('process', { ...process, platform: 'linux', env: {} });
