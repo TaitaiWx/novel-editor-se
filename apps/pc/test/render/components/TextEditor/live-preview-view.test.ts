@@ -14,12 +14,14 @@ import {
 } from '@/render/components/TextEditor/live-preview/build-decorations';
 import {
   clearRenderCaches,
+  hasRenderBudget,
+  spendRenderBudget,
   loadMathRenderer,
   renderMath,
 } from '@/render/components/TextEditor/live-preview/render-cache';
 import { MathWidget, toggleTaskAt } from '@/render/components/TextEditor/live-preview/widgets';
 
-// These tests exercise synchronous rendering after the formula dependency is available.
+// Load the dependency up front; rendering may still defer when the frame budget is spent.
 beforeAll(() => loadMathRenderer());
 
 const markdownLang = markdown({ base: markdownLanguage, extensions: [mathMarkdownSyntax] });
@@ -43,6 +45,17 @@ const SAMPLE = [
   '',
   '- [ ] 待办',
 ].join('\n');
+
+/** Simulate a previous heavy render in this task without sleeping or disabling the budget. */
+function exhaustRenderBudget(): void {
+  const clock = vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValueOnce(9);
+  try {
+    spendRenderBudget(() => undefined);
+  } finally {
+    clock.mockRestore();
+  }
+  expect(hasRenderBudget()).toBe(false);
+}
 
 const invoke = vi.fn();
 let view: EditorView | null = null;
@@ -85,33 +98,55 @@ afterEach(() => {
 });
 
 describe('实时预览（真实 EditorView）', () => {
-  it('渲染公式、表格；坏公式显示原文与错误标记，其它照常', () => {
-    const v = mount(SAMPLE);
-    const content = v.contentDOM;
-    expect(content.querySelectorAll('.katex').length).toBeGreaterThanOrEqual(2);
-    expect(content.querySelector('.cm-lp-table table')).not.toBeNull();
-    const marker = content.querySelector('.cm-lp-error-marker');
-    expect(marker?.getAttribute('title')).toContain('公式错误');
-    expect(marker?.parentElement?.textContent).toContain('\\frac{1}{');
-    // 标题的 # 已隐藏
-    expect(lineText(v, 1)).toBe('排版示例');
-  });
+  it.each(['normal', 'exhausted'])(
+    '渲染公式、表格；坏公式显示原文与错误标记，其它照常（预算 %s）',
+    async (budget) => {
+      if (budget === 'exhausted') exhaustRenderBudget();
+      const v = mount(SAMPLE);
+      const content = v.contentDOM;
+      if (budget === 'exhausted') {
+        expect(content.querySelectorAll('.katex')).toHaveLength(0);
+        expect(content.querySelector('.cm-lp-error-marker')).toBeNull();
+        expect(content.querySelector('.cm-lp-pending')).not.toBeNull();
+      }
+      await vi.waitFor(() => {
+        expect(content.querySelectorAll('.katex').length).toBeGreaterThanOrEqual(2);
+        expect(content.querySelector('.cm-lp-table table')).not.toBeNull();
+        const marker = content.querySelector('.cm-lp-error-marker');
+        expect(marker?.getAttribute('title')).toContain('公式错误');
+        expect(marker?.parentElement?.textContent).toContain('\\frac{1}{');
+        // 标题的 # 已隐藏
+        expect(lineText(v, 1)).toBe('排版示例');
+      });
+    }
+  );
 
-  it('示例作品集的 排版示例.md 与 E2E 的预期一致', () => {
-    const doc = readFileSync(
-      path.resolve(__dirname, '../../../../sample-data/排版示例.md'),
-      'utf-8'
-    );
-    const v = mount(doc);
-    const content = v.contentDOM;
-    expect(content.querySelectorAll('.katex').length).toBeGreaterThanOrEqual(3);
-    expect(content.querySelector('.cm-lp-table th')?.textContent).toBe('角色');
-    const markers = content.querySelectorAll('.cm-lp-error-marker');
-    expect(markers).toHaveLength(1);
-    expect(markers[0].getAttribute('title')).toContain('公式错误');
-    expect(markers[0].parentElement?.textContent).toContain('\\frac{1}{2');
-    expect(lineText(v, 1)).toBe('排版示例');
-  });
+  it.each(['normal', 'exhausted'])(
+    '示例作品集的 排版示例.md 与 E2E 的预期一致（预算 %s）',
+    async (budget) => {
+      const doc = readFileSync(
+        path.resolve(__dirname, '../../../../sample-data/排版示例.md'),
+        'utf-8'
+      );
+      if (budget === 'exhausted') exhaustRenderBudget();
+      const v = mount(doc);
+      const content = v.contentDOM;
+      if (budget === 'exhausted') {
+        expect(content.querySelectorAll('.katex')).toHaveLength(0);
+        expect(content.querySelector('.cm-lp-error-marker')).toBeNull();
+        expect(content.querySelector('.cm-lp-pending')).not.toBeNull();
+      }
+      await vi.waitFor(() => {
+        expect(content.querySelectorAll('.katex').length).toBeGreaterThanOrEqual(3);
+        expect(content.querySelector('.cm-lp-table th')?.textContent).toBe('角色');
+        const markers = content.querySelectorAll('.cm-lp-error-marker');
+        expect(markers).toHaveLength(1);
+        expect(markers[0].getAttribute('title')).toContain('公式错误');
+        expect(markers[0].parentElement?.textContent).toContain('\\frac{1}{2');
+        expect(lineText(v, 1)).toBe('排版示例');
+      });
+    }
+  );
 
   it('光标移入标题时显示 #，移出后再次隐藏', async () => {
     const v = mount(SAMPLE);

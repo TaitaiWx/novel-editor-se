@@ -9,10 +9,11 @@ const ROOT = path.resolve(__dirname, '../../..');
 function sourceFiles(): string[] {
   const files: string[] = [];
   const walk = (dir: string) => {
-    for (const name of readdirSync(dir)) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const { name } = entry;
       if (name === 'node_modules' || name === 'dist') continue;
       const full = path.join(dir, name);
-      if (statSync(full).isDirectory()) walk(full);
+      if (entry.isDirectory()) walk(full);
       else if (/\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name)) files.push(full);
     }
   };
@@ -25,13 +26,13 @@ function sourceFiles(): string[] {
       // 没有 src 的包
     }
   }
-  return files;
+  return files.sort();
 }
 
 /** 正则字面量与 RegExp(...) 的字符串参数里出现的非 ASCII 字符（汉字、全角标点等） */
 function findOffenders(file: string): string[] {
   const text = readFileSync(file, 'utf-8');
-  if (!/[^\x00-\x7f]/.test(text)) return [];
+  if (!/\P{ASCII}/u.test(text)) return [];
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const offenders: string[] = [];
   const report = (node: ts.Node) => {
@@ -41,7 +42,7 @@ function findOffenders(file: string): string[] {
   const visit = (node: ts.Node) => {
     if (
       node.kind === ts.SyntaxKind.RegularExpressionLiteral &&
-      /[^\x00-\x7f]/.test(node.getText(sf))
+      /\P{ASCII}/u.test(node.getText(sf))
     ) {
       report(node);
     }
@@ -50,7 +51,7 @@ function findOffenders(file: string): string[] {
       ts.isIdentifier(node.expression) &&
       node.expression.text === 'RegExp' &&
       node.arguments?.[0] &&
-      /[^\x00-\x7f]/.test(node.arguments[0].getText(sf))
+      /\P{ASCII}/u.test(node.arguments[0].getText(sf))
     ) {
       report(node);
     }
@@ -60,9 +61,19 @@ function findOffenders(file: string): string[] {
   return offenders;
 }
 
+// Scan the complete source tree, but bound each synchronous AST task. One test for the
+// entire growing repository can exceed Vitest's per-test limit on shared CI runners.
+const files = sourceFiles();
+const batches = Array.from({ length: Math.ceil(files.length / 32) }, (_, index) => ({
+  batch: index + 1,
+  files: files.slice(index * 32, (index + 1) * 32),
+}));
+
 describe('禁止按汉字做判断', () => {
-  it('源码里的正则不直接写汉字 / 全角字符（需要时用 \\uXXXX 转义）', () => {
-    const offenders = sourceFiles().flatMap(findOffenders);
-    expect(offenders).toEqual([]);
-  });
+  it.each(batches)(
+    '源码正则不直接写汉字 / 全角字符（需要时用 \\uXXXX 转义）批次 $batch',
+    ({ files }) => {
+      expect(files.flatMap(findOffenders)).toEqual([]);
+    }
+  );
 });
