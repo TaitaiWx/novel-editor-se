@@ -10,6 +10,8 @@ env:
   NOVEL_EDITOR_BETA_STAGING_PERCENTAGE: '25'
   NOVEL_EDITOR_CANARY_STAGING_PERCENTAGE: '10'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Explicit, single-tag Beta exception; other tags always require notarization.
+  MAC_NOTARIZE: ${{ vars.NOVEL_EDITOR_UNNOTARIZED_TAG != github.ref_name || !contains(github.ref_name, '-beta.') }}
 
 permissions:
   contents: write
@@ -125,7 +127,7 @@ jobs:
           apps/pc/test/main/packaged-executable.test.ts
 
       - name: Prepare App Store Connect API key
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && env.MAC_NOTARIZE == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -146,7 +148,7 @@ jobs:
 
       - name: Package Electron app (macOS)
         if: runner.os == 'macOS'
-        run: pnpm exec electron-builder ${{ matrix.electron-args }} --config.publish.channel=${{ steps.release_channel.outputs.publish_channel }} --publish never
+        run: pnpm exec electron-builder ${{ matrix.electron-args }} --config.publish.channel=${{ steps.release_channel.outputs.publish_channel }} --config.mac.notarize=${{ env.MAC_NOTARIZE }} --config.forceCodeSigning=true --publish never
         working-directory: apps/pc
         env:
           APPLE_API_KEY: ${{ env.APPLE_API_KEY }}
@@ -370,6 +372,20 @@ jobs:
           RELEASE_CHANNEL: ${{ steps.release_channel.outputs.publish_channel }}
         run: node apps/pc/scripts/merge-release-artifacts.mjs artifacts-by-job artifacts "${GITHUB_REF_NAME#v}" "$RELEASE_CHANNEL"
 
+      - name: Prepare release notes
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const { version } = JSON.parse(fs.readFileSync('apps/pc/package.json', 'utf8'));
+          const notes = JSON.parse(fs.readFileSync('apps/pc/release-notes.json', 'utf8'));
+          let body = notes.versions[version]?.markdown ?? `## v${version}\n`;
+          if (process.env.MAC_NOTARIZE === 'false' && !body.includes('未经过 Apple 公证')) {
+            body += '\n### macOS 安装提示\n\n本次 Beta 保留 Developer ID 签名，未经过 Apple 公证。首次打开如被 macOS 拦截，请在“系统设置 → 隐私与安全性”中确认来源后选择“仍要打开”。参见 https://support.apple.com/102445 。\n';
+          }
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'release-notes.md'), body);
+          NODE
+
       - name: Publish release
         uses: ncipollo/release-action@v1
         with:
@@ -377,6 +393,7 @@ jobs:
           allowUpdates: false
           artifactErrorsFailBuild: true
           generateReleaseNotes: true
+          bodyFile: ${{ runner.temp }}/release-notes.md
           replacesArtifacts: false
           prerelease: ${{ steps.release_channel.outputs.release_type == 'prerelease' }}
           token: ${{ secrets.GITHUB_TOKEN }}

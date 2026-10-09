@@ -59,6 +59,12 @@ NOVEL_EDITOR_CANARY_STAGING_PERCENTAGE: '10'
 
 发布前可先运行 `pnpm preflight:release`（自动更新状态机测试 `pnpm test:pc-updater` → typecheck → 构建 → 本平台轻量打包并生成更新元数据 → 打包产物烟雾测试）。
 
+### 单次 Beta 公证例外
+
+macOS 发布默认执行 Apple 公证，并强制 Developer ID 签名。如明确决定发布未公证的 Beta，可将 GitHub Actions 仓库变量 `NOVEL_EDITOR_UNNOTARIZED_TAG` 设置为完整目标标签（例如 `v1.1.0-beta.45`）。只有标签完全匹配且包含 `-beta.` 时跳过公证；变量缺失、其他版本以及正式版仍执行公证。签名、原生测试、打包启动检查和发布资产校验照常执行。例外不会在公证失败时自动启用。
+
+未公证版本的发行说明必须提示：macOS 首次打开可能被拦截，需要用户确认来源后在“系统设置 → 隐私与安全性”选择“仍要打开”（[Apple 说明](https://support.apple.com/102445)）。这不等于通过 Gatekeeper 默认放行，也不能据此声称已完成公证版同等的安装及更新验收。发布后可删除该变量；不要移动已推送的版本标签。
+
 CI 流程：tag 对应提交先校验版本号一致，并通过 `quality` job 的 lint、typecheck、UT；`build` job 多平台（Windows / macOS / Linux × x64 / arm64）打包 → 写入灰度元数据 → 用 `pnpm test:e2e apps/pc/e2e/packaged-smoke.e2e.ts` 对打包产物做烟雾测试 → `publish` job 发布到 GitHub Release → `sync-mirror.yml` 同步镜像。
 
 ## 推荐节奏
