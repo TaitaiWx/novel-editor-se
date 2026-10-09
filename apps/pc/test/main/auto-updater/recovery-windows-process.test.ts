@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
+import { createHash } from 'node:crypto';
 import { mkdtemp, writeFile, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -34,7 +35,10 @@ describe.skipIf(process.platform !== 'win32')('native Windows recovery guardian'
     );
     return root;
   }
-  function start(root: string) {
+  function psString(value: string) {
+    return "'" + value.replace(/'/g, "''") + "'";
+  }
+  function start(root: string, prelude?: string) {
     const child = spawn(
       join(
         process.env.SystemRoot ?? 'C:\\Windows',
@@ -45,9 +49,12 @@ describe.skipIf(process.platform !== 'win32')('native Windows recovery guardian'
         '-NonInteractive',
         '-ExecutionPolicy',
         'RemoteSigned',
-        '-File',
-        resolve('apps/pc/recovery/guardian.ps1'),
-        root,
+        ...(prelude
+          ? [
+              '-Command',
+              `${prelude}; & ${psString(resolve('apps/pc/recovery/guardian.ps1'))} ${psString(root)}`,
+            ]
+          : ['-File', resolve('apps/pc/recovery/guardian.ps1'), root]),
       ],
       { stdio: 'ignore' }
     );
@@ -88,6 +95,29 @@ describe.skipIf(process.platform !== 'win32')('native Windows recovery guardian'
     await writeFile(join(root, 'cancel'), '1');
     await phase(root, 'cancelled');
   }, 25000);
+  it('verifies SHA256 and hands off matching bytes when Get-FileHash is unavailable', async () => {
+    const root = await fixture();
+    const artifact = join(root, 'installer [verified].exe');
+    const bytes = Buffer.alloc(2 * 1024 * 1024, 0xa5);
+    await writeFile(artifact, bytes);
+    await writeFile(join(root, 'artifact'), artifact);
+    await writeFile(join(root, 'sha256'), createHash('sha256').update(bytes).digest('hex'));
+    // Resume an already claimed recovery, avoiding an unrelated OS boot-time query.
+    await writeFile(join(root, 'decision'), 'restore:nonce123');
+    const called = join(root, 'installer-called');
+    const guardian = start(
+      root,
+      `function Get-FileHash { throw 'Get-FileHash unavailable' }; ` +
+        `function Start-Process { param([string]$FilePath) ` +
+        `[IO.File]::WriteAllText(${psString(called)}, $FilePath); ` +
+        `[IO.File]::WriteAllText(${psString(join(root, 'healthy'))}, 'nonce123:1.0.0'); ` +
+        `return @{ ExitCode = 0 } }`
+    );
+    expect((await once(guardian, 'exit'))[0]).toBe(0);
+    await phase(root, 'recovered');
+    expect(await readFile(called, 'utf8')).toBe(artifact);
+  }, 25000);
+
   it('fails closed on a tampered installer without executing it or replaying recovery', async () => {
     const root = await fixture();
     const artifact = join(root, 'never-execute.exe');

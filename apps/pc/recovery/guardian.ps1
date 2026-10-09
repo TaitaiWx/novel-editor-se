@@ -59,7 +59,15 @@ try {
   New-Item -ItemType Directory -Path 'attempted' -ErrorAction Stop | Out-Null
   Phase 'recovering'
   $artifact = Read 'artifact'; $hash = Read 'sha256'
-  if ((Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant() -cne $hash) { throw 'Recovery artifact checksum mismatch' }
+  # PowerShell 7 -> Node -> Windows PowerShell can inherit incompatible module paths.
+  # Use .NET directly so verification does not depend on Get-FileHash module discovery.
+  $sha256 = [Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [IO.File]::OpenRead($artifact)
+    try { $actualHash = [BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
+    finally { $stream.Dispose() }
+  } finally { $sha256.Dispose() }
+  if ($actualHash -cne $hash) { throw 'Recovery artifact checksum mismatch' }
   # NSIS owns UAC/installation permissions. Never elevate without the system prompt.
   $installer = Start-Process -FilePath $artifact -ArgumentList @('/S', '--force-run', ('/D=' + (Read 'install-dir'))) -PassThru -Wait
   if ($installer.ExitCode -ne 0) { throw ('Installer failed: ' + $installer.ExitCode) }
