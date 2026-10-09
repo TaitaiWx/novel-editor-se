@@ -173,6 +173,16 @@ export const livePreviewTheme = EditorView.theme({
   '.cm-lp-pending': { color: MUTED, fontFamily: MONO_FONT },
 
   // 渲染失败：原文 + 细小的错误标记
+  '.cm-lp-retry': {
+    fontFamily: UI_FONT,
+    color: 'var(--ui-fg-primary)',
+    background: 'var(--ui-bg-elevated)',
+    border: '1px solid var(--ui-border-strong)',
+    borderRadius: '4px',
+    marginLeft: '8px',
+    padding: '2px 6px',
+    cursor: 'pointer',
+  },
   '.cm-lp-render-error': { color: '#c9a99a' },
   '.cm-lp-raw-source': { whiteSpace: 'pre-wrap', fontFamily: MONO_FONT, textAlign: 'left' },
   '.cm-lp-table.cm-lp-render-error, .cm-lp-math-display.cm-lp-render-error': {

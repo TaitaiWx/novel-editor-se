@@ -6,7 +6,13 @@
  * - novels / characters / world-settings / outlines / story-ideas / stats / settings / ai-cache
  * - export-import.ts   全量导出/导入
  */
-export { initDatabase, isDatabaseReady, getDatabase, closeDatabase } from './db/connection';
+export {
+  initDatabase,
+  isDatabaseReady,
+  getDatabase,
+  closeDatabase,
+  backupDatabaseFile,
+} from './db/connection';
 export { novelOps } from './db/novels';
 export { characterOps } from './db/characters';
 export { worldSettingOps } from './db/world-settings';

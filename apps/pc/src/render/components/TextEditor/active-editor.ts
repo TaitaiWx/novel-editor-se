@@ -13,7 +13,9 @@ export interface ActiveEditorSnapshot {
 
 export interface ActiveEditorHandle {
   /** 与 Cmd/Ctrl+S 相同的手动保存 */
-  save: () => void;
+  save: () => boolean | void | Promise<boolean | void>;
+  /** 已确认并完成文件删除后，停止对该文件的保存并清除草稿引用。 */
+  discard?: () => void;
   /** 当前文件路径与内容（另存为使用） */
   getSnapshot: () => ActiveEditorSnapshot;
   /** 打开查找面板 */
@@ -67,7 +69,39 @@ export function registerActiveEditor(handle: ActiveEditorHandle): ActiveEditorRe
 export function getActiveEditor(): ActiveEditorHandle | null {
   let best: Entry | null = null;
   for (const entry of entries.values()) {
+    if (!entry.handle.getSnapshot().filePath) continue;
     if (!best || entry.order > best.order) best = entry;
   }
   return best?.handle ?? null;
+}
+
+/** 删除成功后同步通知所有匹配的编辑器，先停止保存，再关闭标签。 */
+export function discardDeletedEditorFiles(matches: (filePath: string) => boolean): void {
+  for (const { handle } of entries.values()) {
+    const filePath = handle.getSnapshot().filePath;
+    if (filePath && matches(filePath)) handle.discard?.();
+  }
+}
+
+/** Save every mounted pane. Untitled content requires an explicit save before destructive lifecycle actions. */
+export async function saveAllEditors(): Promise<boolean> {
+  const handles = [...entries.values()].map(({ handle }) => handle);
+  if (
+    handles.some((handle) => {
+      const snapshot = handle.getSnapshot();
+      return snapshot.filePath?.startsWith('__untitled__:') && snapshot.content.length > 0;
+    })
+  )
+    return false;
+  for (const handle of handles) {
+    const snapshot = handle.getSnapshot();
+    if (!snapshot.filePath || snapshot.readOnly || snapshot.filePath.startsWith('__untitled__:'))
+      continue;
+    try {
+      if ((await handle.save()) !== true) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }

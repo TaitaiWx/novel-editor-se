@@ -53,19 +53,22 @@ vi.mock('mammoth', () => ({
   default: { convertToHtml: (...args: unknown[]) => convertToHtml(...args) },
 }));
 
+import { grantPathAccess, resetPathAccessForTest } from '../../src/main/path-access';
 const { registerDocumentHandlers } = await import('../../src/main/handlers/documents');
 registerDocumentHandlers();
 
 async function call<T = unknown>(channel: string, ...args: unknown[]): Promise<T> {
   const handler = handlers.get(channel);
   if (!handler) throw new Error(`未注册: ${channel}`);
-  return (await handler({}, ...args)) as T;
+  return (await handler({ sender: { id: 1 } }, ...args)) as T;
 }
 
 let dir = '';
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'ne-docs-'));
+  resetPathAccessForTest();
+  await grantPathAccess({ id: 1 }, dir, true);
   dialogState.open = { canceled: true, filePaths: [] };
   showOpenDialog.mockClear();
   importFile.mockReset();
@@ -352,6 +355,9 @@ describe.each([
   ['export-to-pptx', exportToPptx, '# 幻灯片'],
   ['beautify-pptx', beautifyPptx, '/src.pptx'],
 ])('%s', (channel, fn, firstArg) => {
+  beforeEach(async () => {
+    if (firstArg.startsWith('/')) await grantPathAccess({ id: 1 }, firstArg, false, false);
+  });
   it('成功时返回文件路径并透传参数', async () => {
     fn.mockResolvedValue('/out/file');
     const options = { title: 'T', author: 'A' };

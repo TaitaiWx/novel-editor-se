@@ -1,4 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
+import {
+  discardDeletedEditorFiles,
+  getActiveEditor,
+} from '@/render/components/TextEditor/active-editor';
 import { CHAPTER_MATERIALS_STORAGE_PREFIX } from '@/render/app/types';
 import type { FileNode } from '@/render/types';
 import {
@@ -45,7 +49,14 @@ export type UseFileOperationsContext = Pick<
   | 'workScope'
   | 'workScopePathRef'
 > &
-  Pick<TabsState, 'activeTabRef' | 'setActiveTab' | 'setOpenTabs' | 'setUntitledTabContents'> &
+  Pick<
+    TabsState,
+    | 'activeTabRef'
+    | 'setActiveTab'
+    | 'setOpenTabs'
+    | 'setUntitledTabContents'
+    | 'untitledTabContents'
+  > &
   Pick<EntitiesState, 'setChapterMaterialPaths'> &
   Pick<UiState, 'clipboard' | 'dialog' | 'setClipboard' | 'toast'> &
   Pick<TabActions, 'closeTab' | 'closeTabsByPredicate' | 'openFileInTab'> &
@@ -62,10 +73,11 @@ export type UseFileOperationsContext = Pick<
  * 文件树操作：删除、重命名、移动排序、复制粘贴、拖放导入、保存未命名文件、拆分章节
  */
 export function useFileOperations(ctx: UseFileOperationsContext) {
+  const latestContents = useRef(ctx.untitledTabContents);
+  latestContents.current = ctx.untitledTabContents;
   const {
     activeTabRef,
     clipboard,
-    closeTab,
     closeTabsByPredicate,
     dialog,
     filesRef,
@@ -99,7 +111,8 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
       if (!confirmed) return;
       try {
         await window.electron.ipcRenderer.invoke('delete-file', filePath);
-        closeTab(filePath);
+        discardDeletedEditorFiles((path) => path === filePath);
+        closeTabsByPredicate((path) => path === filePath);
         removeViewportSnapshots((path) => path === filePath);
         await refreshCurrentFolder();
         toast.success(`已删除 "${name}"`);
@@ -107,7 +120,7 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
         toast.error(`删除文件失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [toast, dialog, refreshCurrentFolder, closeTab, removeViewportSnapshots]
+    [toast, dialog, refreshCurrentFolder, closeTabsByPredicate, removeViewportSnapshots]
   );
 
   const handleDeleteDirectory = useCallback(
@@ -121,6 +134,7 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
       if (!confirmed) return;
       try {
         await window.electron.ipcRenderer.invoke('delete-directory', dirPath);
+        discardDeletedEditorFiles((path) => isPathInside(path, dirPath));
         // Close any tabs under this directory
         setOpenTabs((prev) => prev.filter((t) => !isPathInside(t, dirPath)));
         removeViewportSnapshots((path) => isPathInside(path, dirPath));
@@ -386,13 +400,23 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
       const currentFolder = folderPathRef.current;
       if (!currentFolder || !window.electron?.ipcRenderer) {
         toast.error('请先打开一个文件夹');
-        return;
+        return false;
       }
       const fileName = await dialog.prompt('保存文件', '请输入文件名', '');
-      if (!fileName) return;
+      if (!fileName) return false;
       const newPath = `${currentFolder}/${fileName}`;
       try {
         await window.electron.ipcRenderer.invoke('write-file', newPath, content);
+        const snapshot = getActiveEditor()?.getSnapshot();
+        const latestContent =
+          snapshot?.filePath === untitledPath
+            ? snapshot.content
+            : (latestContents.current[untitledPath] ?? content);
+        if (latestContent !== content) {
+          toast.info('已保存此前的内容；新输入仍保留在草稿中，请再次保存');
+          await refreshCurrentFolder();
+          return false;
+        }
         // Replace untitled tab with real file path
         setOpenTabs((prev) => prev.map((t) => (t === untitledPath ? newPath : t)));
         setUntitledTabContents((prev) => {
@@ -406,8 +430,10 @@ export function useFileOperations(ctx: UseFileOperationsContext) {
         }
         await refreshCurrentFolder();
         toast.success(`文件 "${fileName}" 已保存`);
+        return true;
       } catch (error) {
         toast.error(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`);
+        return false;
       }
     },
     [

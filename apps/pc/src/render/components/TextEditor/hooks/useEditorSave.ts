@@ -10,9 +10,9 @@ interface UseEditorSaveOptions {
   currentContentRef: React.MutableRefObject<string>;
   currentOriginalContentRef: React.MutableRefObject<string>;
   readOnlyRef: React.MutableRefObject<boolean>;
-  filePathRef: React.MutableRefObject<string | null>;
   onSaveUntitledRef: React.MutableRefObject<
-    ((untitledPath: string, content: string) => void) | undefined
+    | ((untitledPath: string, content: string) => boolean | void | Promise<boolean | void>)
+    | undefined
   >;
   autoSaveTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   toast: { success: (message: string) => void; error: (message: string) => void };
@@ -24,39 +24,47 @@ export function useEditorSave({
   currentContentRef,
   currentOriginalContentRef,
   readOnlyRef,
-  filePathRef,
   onSaveUntitledRef,
   autoSaveTimeoutRef,
   toast,
 }: UseEditorSaveOptions) {
+  const pendingSaveCountRef = useRef(0);
+  const scheduleAutoSaveRef = useRef<() => void>(() => {});
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const handleManualSaveRef = useRef<() => void>(() => {});
+  const handleManualSaveRef = useRef<() => Promise<boolean>>(async () => false);
 
   const autoSaveFile = useCallback(async () => {
     const targetPath = currentFilePathRef.current;
     const targetContent = currentContentRef.current;
 
-    if (!targetPath || readOnlyRef.current || targetContent === currentOriginalContentRef.current)
+    if (
+      !targetPath ||
+      readOnlyRef.current ||
+      (targetContent === currentOriginalContentRef.current && pendingSaveCountRef.current === 0)
+    )
       return;
     if (isUntitledPath(targetPath) || isChangelogPath(targetPath)) return;
 
+    pendingSaveCountRef.current += 1;
     setAutoSaving(true);
     try {
       await window.electron.ipcRenderer.invoke('write-file', targetPath, targetContent);
-      if (targetPath === filePathRef.current) {
+      if (targetPath === currentFilePathRef.current) {
         currentOriginalContentRef.current = targetContent;
-        setHasChanges(false);
+        setHasChanges(currentContentRef.current !== targetContent);
         setLastSaved(new Date());
+        if (currentContentRef.current !== targetContent) scheduleAutoSaveRef.current();
       }
       emitFileSaved(targetPath, 'auto');
     } catch (err) {
       console.error('Auto-save failed:', err);
     } finally {
-      setAutoSaving(false);
+      pendingSaveCountRef.current -= 1;
+      setAutoSaving(pendingSaveCountRef.current > 0);
     }
-  }, [currentContentRef, currentFilePathRef, currentOriginalContentRef, filePathRef, readOnlyRef]);
+  }, [currentContentRef, currentFilePathRef, currentOriginalContentRef, readOnlyRef]);
 
   const scheduleAutoSave = useCallback(() => {
     if (autoSaveTimeoutRef.current) {
@@ -64,49 +72,59 @@ export function useEditorSave({
     }
     if (!readOnlyRef.current) {
       autoSaveTimeoutRef.current = setTimeout(() => {
-        autoSaveFile();
+        autoSaveTimeoutRef.current = null;
+        void autoSaveFile();
       }, AUTO_SAVE_DELAY);
     }
   }, [autoSaveFile, autoSaveTimeoutRef, readOnlyRef]);
 
   const handleManualSave = useCallback(async () => {
     const targetPath = currentFilePathRef.current;
-    if (!targetPath || readOnlyRef.current) return;
+    const targetContent = currentContentRef.current;
+    if (!targetPath) return false;
+    if (readOnlyRef.current) return true;
 
     if (isUntitledPath(targetPath)) {
-      if (onSaveUntitledRef.current) {
-        onSaveUntitledRef.current(targetPath, currentContentRef.current);
-      }
-      return;
+      if (!onSaveUntitledRef.current) return false;
+      return (await onSaveUntitledRef.current(targetPath, targetContent)) === true;
     }
-    if (isChangelogPath(targetPath)) return;
+    if (isChangelogPath(targetPath)) return true;
 
-    if (currentContentRef.current === currentOriginalContentRef.current) {
+    if (
+      currentContentRef.current === currentOriginalContentRef.current &&
+      pendingSaveCountRef.current === 0
+    ) {
       toast.success('文件已是最新状态');
-      return;
+      return true;
     }
 
+    pendingSaveCountRef.current += 1;
     setAutoSaving(true);
     try {
-      await window.electron.ipcRenderer.invoke('write-file', targetPath, currentContentRef.current);
-      if (targetPath === filePathRef.current) {
-        currentOriginalContentRef.current = currentContentRef.current;
-        setHasChanges(false);
+      await window.electron.ipcRenderer.invoke('write-file', targetPath, targetContent);
+      if (targetPath === currentFilePathRef.current) {
+        currentOriginalContentRef.current = targetContent;
+        setHasChanges(currentContentRef.current !== targetContent);
         setLastSaved(new Date());
+        if (currentContentRef.current !== targetContent) scheduleAutoSaveRef.current();
       }
       emitFileSaved(targetPath, 'manual');
       toast.success('保存成功');
+      return (
+        currentFilePathRef.current === targetPath && currentContentRef.current === targetContent
+      );
     } catch (err) {
       console.error('Manual save failed:', err);
       toast.error('保存失败');
+      return false;
     } finally {
-      setAutoSaving(false);
+      pendingSaveCountRef.current -= 1;
+      setAutoSaving(pendingSaveCountRef.current > 0);
     }
   }, [
     currentContentRef,
     currentFilePathRef,
     currentOriginalContentRef,
-    filePathRef,
     onSaveUntitledRef,
     readOnlyRef,
     toast,
@@ -114,9 +132,19 @@ export function useEditorSave({
 
   useEffect(() => {
     handleManualSaveRef.current = handleManualSave;
-  }, [handleManualSave]);
+    scheduleAutoSaveRef.current = scheduleAutoSave;
+  }, [handleManualSave, scheduleAutoSave]);
+
+  useEffect(
+    () => () => {
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+      scheduleAutoSaveRef.current = () => {};
+    },
+    [autoSaveTimeoutRef]
+  );
 
   return {
+    pendingSaveCountRef,
     autoSaving,
     lastSaved,
     setLastSaved,

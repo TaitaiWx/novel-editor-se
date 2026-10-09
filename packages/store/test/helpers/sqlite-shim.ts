@@ -106,6 +106,14 @@ export class SqliteShim {
     };
   }
 
+  async backup(destination: string): Promise<void> {
+    const require = createRequire(import.meta.url);
+    const { backup } = require('node:sqlite') as {
+      backup: (db: NodeDatabase, destination: string) => Promise<number>;
+    };
+    await backup(this.db, destination);
+  }
+
   close() {
     this.db.close();
   }

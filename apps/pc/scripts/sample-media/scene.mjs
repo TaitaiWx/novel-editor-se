@@ -141,11 +141,13 @@ export const SAMPLE_SCENE = {
 };
 
 /** 配音占位音的文件名：镜头N-台词-<id>.m4a（与 dialogueAudioFileName 一致） */
+/** @param {number} shotNumber @param {string} lineId */
 export function sampleVoiceFile(shotNumber, lineId) {
   return `镜头${shotNumber}-台词-${lineId}.m4a`;
 }
 
 /** 预演文件名：镜头N-预演.png / .mp4（与 previzFileName 一致） */
+/** @param {number} shotNumber @param {string} ext */
 export function samplePrevizFile(shotNumber, ext) {
   return `镜头${shotNumber}-预演.${ext}`;
 }

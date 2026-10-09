@@ -8,11 +8,13 @@ const repoRoot = path.resolve(__dirname, '..');
 const rootPackagePath = path.join(repoRoot, 'package.json');
 const appsDirectory = path.join(repoRoot, 'apps');
 
+/** @param {string} filePath @returns {Promise<Record<string, unknown> & {version?: string}>} */
 const readJson = async (filePath) => {
   const content = await fs.readFile(filePath, 'utf8');
   return JSON.parse(content);
 };
 
+/** @param {string} filePath @param {Record<string, unknown>} data */
 const writeJson = async (filePath, data) => {
   await fs.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
 };

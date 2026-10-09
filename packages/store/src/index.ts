@@ -3,6 +3,7 @@ export {
   isDatabaseReady,
   getDatabase,
   closeDatabase,
+  backupDatabaseFile,
   novelOps,
   characterOps,
   outlineOps,

@@ -1,3 +1,4 @@
+import { isBoundRollbackTarget } from './rollback-metadata';
 /** 持久化的更新状态（版本指针、灰度分桶、回滚目标）读写 */
 import type { UpdateInfo } from 'electron-updater';
 import { app } from 'electron';
@@ -51,7 +52,9 @@ export async function loadUpdaterState() {
   updaterStatus.channel = updaterState.channel;
   updaterStatus.channelFile = getChannelMetadataFile(updaterState.channel);
   updaterStatus.rolloutBucket = updaterState.rolloutBucket;
-  updaterStatus.rollbackAvailable = Boolean(updaterState.rollbackTarget);
+  updaterStatus.rollbackAvailable = Boolean(
+    updaterState.rollbackTarget && isBoundRollbackTarget(updaterState.rollbackTarget)
+  );
   updaterStatus.rollbackVersion = updaterState.rollbackTarget?.version ?? null;
   updaterStatus.pendingVersion = updaterState.pendingVersion;
   return updaterState;
@@ -97,7 +100,9 @@ export async function syncStatusFromUpdateInfo(
     state.rolloutBucket,
     updateInfo?.stagingPercentage
   );
-  updaterStatus.rollbackAvailable = Boolean(state.rollbackTarget);
+  updaterStatus.rollbackAvailable = Boolean(
+    state.rollbackTarget && isBoundRollbackTarget(state.rollbackTarget)
+  );
   updaterStatus.rollbackVersion = state.rollbackTarget?.version ?? null;
   updaterStatus.pendingVersion = state.pendingVersion;
 }

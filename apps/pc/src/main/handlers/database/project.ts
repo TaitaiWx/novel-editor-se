@@ -1,4 +1,6 @@
-import { ipcMain, app } from 'electron';
+import { CHARACTER_DESIGN_FIELDS } from '@novel-editor/core/entity-media';
+import { registerWorkspaceHandler } from '../../workspace-ipc';
+import { app } from 'electron';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import {
@@ -36,7 +38,7 @@ export function seedProjectFromDbDir(dbDir: string): SeedProjectResult | null {
 export function registerProjectHandlers(): void {
   // ─── Init / Close ──────────────────────────────────────────────────────────
 
-  ipcMain.handle('db-init', async (_event, dbDir: string) => {
+  registerWorkspaceHandler('db-init', async (_event, dbDir: string) => {
     initDatabase(dbDir, 'novel-editor.db', getNativeBinding());
     seedProjectFromDbDir(dbDir);
     // 明文 AI Key 迁移到安全存储、恢复视频任务轮询
@@ -49,40 +51,40 @@ export function registerProjectHandlers(): void {
     return { success: true, unassignedRecords: scopes?.unassignedRecords ?? false };
   });
 
-  ipcMain.handle('db-init-default', () => {
+  registerWorkspaceHandler('db-init-default', () => {
     const defaultDbDir = path.join(app.getPath('userData'), '.novel-editor');
     initDatabase(defaultDbDir, 'novel-editor.db', getNativeBinding());
     handleDatabaseOpened();
     return { success: true, dbDir: defaultDbDir };
   });
 
-  ipcMain.handle('db-close', () => {
+  registerWorkspaceHandler('db-close', () => {
     closeDatabase();
     return { success: true };
   });
 
   // ─── Novel CRUD ────────────────────────────────────────────────────────────
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-novel-create',
     (_event, name: string, folderPath: string, description?: string) =>
       novelOps.create(name, folderPath, description)
   );
-  ipcMain.handle('db-novel-list', () => novelOps.getAll());
-  ipcMain.handle('db-novel-get', (_event, id: number) => novelOps.getById(id));
-  ipcMain.handle('db-novel-get-by-folder', (_event, folderPath: string) =>
+  registerWorkspaceHandler('db-novel-list', () => novelOps.getAll());
+  registerWorkspaceHandler('db-novel-get', (_event, id: number) => novelOps.getById(id));
+  registerWorkspaceHandler('db-novel-get-by-folder', (_event, folderPath: string) =>
     novelOps.getByFolder(folderPath)
   );
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-novel-update',
     (_event, id: number, fields: { name?: string; description?: string }) =>
       novelOps.update(id, fields)
   );
-  ipcMain.handle('db-novel-delete', (_event, id: number) => novelOps.delete(id));
+  registerWorkspaceHandler('db-novel-delete', (_event, id: number) => novelOps.delete(id));
 
   // ─── Character CRUD ────────────────────────────────────────────────────────
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-character-create',
     (
       _event,
@@ -93,20 +95,55 @@ export function registerProjectHandlers(): void {
       attributes?: string
     ) => characterOps.create(novelId, name, role, description, attributes)
   );
-  ipcMain.handle('db-character-list', (_event, novelId: number) =>
+  registerWorkspaceHandler('db-character-list', (_event, novelId: number) =>
     characterOps.getByNovel(novelId)
   );
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-character-update',
-    (
-      _event,
-      id: number,
-      fields: { name?: string; role?: string; description?: string; attributes?: string }
-    ) => characterOps.update(id, fields)
+    (_event, id: number, fields: Parameters<typeof characterOps.update>[1]) =>
+      characterOps.update(id, fields)
   );
-  ipcMain.handle('db-character-reorder', (_event, ids: number[]) => characterOps.reorder(ids));
-  ipcMain.handle('db-character-delete', (_event, id: number) => characterOps.delete(id));
-  ipcMain.handle('db-character-clear-by-novel', (_event, novelId: number) =>
+  registerWorkspaceHandler(
+    'db-character-patch-design',
+    (_event, id: number, patch: unknown, expected: unknown) => {
+      if (
+        !Number.isSafeInteger(id) ||
+        id <= 0 ||
+        !patch ||
+        typeof patch !== 'object' ||
+        Array.isArray(patch) ||
+        !expected ||
+        typeof expected !== 'object' ||
+        Array.isArray(expected)
+      )
+        throw new Error('人物设计参数无效');
+      const fields = patch as Record<string, unknown>;
+      const base = expected as Record<string, unknown>;
+      const allowed = new Set<string>(CHARACTER_DESIGN_FIELDS.map((field) => field.key));
+      if (
+        !Object.keys(fields).length ||
+        Object.keys(fields).some(
+          (key) =>
+            !allowed.has(key) ||
+            typeof fields[key] !== 'string' ||
+            Array.from(fields[key] as string).length > 800 ||
+            typeof base[key] !== 'string'
+        )
+      )
+        throw new Error('人物设计字段无效或超过 800 字');
+      return characterOps.patchAttributeFields(
+        id,
+        'design',
+        fields as Record<string, string>,
+        base as Record<string, string>
+      );
+    }
+  );
+  registerWorkspaceHandler('db-character-reorder', (_event, ids: number[]) =>
+    characterOps.reorder(ids)
+  );
+  registerWorkspaceHandler('db-character-delete', (_event, id: number) => characterOps.delete(id));
+  registerWorkspaceHandler('db-character-clear-by-novel', (_event, novelId: number) =>
     characterOps.clearByNovel(novelId)
   );
 }

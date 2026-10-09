@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 正文结构规则 IPC：project-structure-get / project-structure-set（「设置 → 正文结构」）
  *
@@ -6,7 +7,7 @@
  *   写入还要求窗口已上报工作区；配置按 core assertValidStructureConfig 严格校验（预设白名单、正则安全检查）
  * - 保存成功后向所有窗口广播 project-structure-changed，打开的编辑器立即按新规则刷新
  */
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow } from 'electron';
 import { realpath, stat } from 'fs/promises';
 import path from 'path';
 import {
@@ -84,7 +85,7 @@ function broadcast(event: ProjectStructureChangedEvent): void {
 export function registerProjectStructureHandlers(
   workspaceRootFor: (senderId: number | undefined) => string | null = getWorkspaceRootForSender
 ): void {
-  ipcMain.handle(PROJECT_STRUCTURE_GET, (event, folderPath: unknown) =>
+  registerWorkspaceHandler(PROJECT_STRUCTURE_GET, (event, folderPath: unknown) =>
     guard(async () => {
       const folder = await assertStructureFolder(
         folderPath,
@@ -94,7 +95,7 @@ export function registerProjectStructureHandlers(
       return toInfo(folder, await readStructureConfig(folder));
     })
   );
-  ipcMain.handle(PROJECT_STRUCTURE_SET, (event, folderPath: unknown, config: unknown) =>
+  registerWorkspaceHandler(PROJECT_STRUCTURE_SET, (event, folderPath: unknown, config: unknown) =>
     guard(async () => {
       const folder = await assertStructureFolder(
         folderPath,

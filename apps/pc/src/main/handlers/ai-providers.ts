@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * AI Provider 配置 / 一次性补全 / 流式输出 IPC
  *
@@ -10,7 +11,7 @@
  * - ai-stream-start / ai-stream-cancel：流式补全，片段通过 webContents.send('ai-stream-event') 推送，
  *   只推给发起请求的窗口；窗口关闭时自动取消该窗口的所有流
  */
-import { BrowserWindow, ipcMain, type WebContents } from 'electron';
+import { BrowserWindow, type WebContents } from 'electron';
 import { randomUUID } from 'crypto';
 import { AIError, toAIError, type StreamChunk } from '@novel-editor/ai';
 import {
@@ -173,28 +174,30 @@ export function registerAIProviderHandlers(
   getService: () => AIService = getAIService,
   streams: AIStreamManager = new AIStreamManager(getService)
 ): AIStreamManager {
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'ai-providers-list',
     (): Promise<AIIpcResult<AIProviderInfo[]>> => guard(() => getService().listProviders())
   );
-  ipcMain.handle('ai-providers-get', (_event, providerId: unknown) =>
+  registerWorkspaceHandler('ai-providers-get', (_event, providerId: unknown) =>
     guard(() => getService().getProviderInfo(providerId))
   );
-  ipcMain.handle('ai-providers-set', (_event, providerId: unknown, update: AIProviderUpdate) =>
-    guardAndNotify(() => getService().updateProvider(providerId, update))
+  registerWorkspaceHandler(
+    'ai-providers-set',
+    (_event, providerId: unknown, update: AIProviderUpdate) =>
+      guardAndNotify(() => getService().updateProvider(providerId, update))
   );
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'ai-models-add',
     (_event, input: AIModelInput): Promise<AIIpcResult<AIProviderInfo>> =>
       guardAndNotify(() => getService().addModel(input))
   );
-  ipcMain.handle('ai-models-update', (_event, id: unknown, update: AIProviderUpdate) =>
+  registerWorkspaceHandler('ai-models-update', (_event, id: unknown, update: AIProviderUpdate) =>
     guardAndNotify(() => getService().updateModel(id, update))
   );
-  ipcMain.handle('ai-models-remove', (_event, id: unknown) =>
+  registerWorkspaceHandler('ai-models-remove', (_event, id: unknown) =>
     guardAndNotify(() => ({ removed: getService().removeModel(id) }))
   );
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'ai-models-set-default',
     (_event, capability: unknown, id: unknown): Promise<AIIpcResult<AIProviderInfo[]>> =>
       guardAndNotify(() => getService().setDefaultModel(capability, id))
@@ -205,18 +208,18 @@ export function registerAIProviderHandlers(
       await getService().testProvider(id, AbortSignal.timeout(30_000));
       return { latencyMs: Date.now() - started };
     });
-  ipcMain.handle('ai-models-test', (_event, id: unknown) => test(id));
-  ipcMain.handle(
+  registerWorkspaceHandler('ai-models-test', (_event, id: unknown) => test(id));
+  registerWorkspaceHandler(
     'ai-proxy-get',
     (): Promise<AIIpcResult<AIProxySettings>> => guard(() => getService().getProxySettings())
   );
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'ai-proxy-set',
     (_event, value: unknown): Promise<AIIpcResult<AIProxySettings>> =>
       guardAndNotify(() => getService().setProxySettings(value))
   );
-  ipcMain.handle('ai-providers-test', (_event, id: unknown) => test(id));
-  ipcMain.handle(
+  registerWorkspaceHandler('ai-providers-test', (_event, id: unknown) => test(id));
+  registerWorkspaceHandler(
     'ai-complete',
     (_event, payload: AICompletePayload): Promise<AIIpcResult<AICompleteResult>> =>
       guard(async () => {
@@ -224,10 +227,10 @@ export function registerAIProviderHandlers(
         return { text: result.text, model: result.model, finishReason: result.finishReason };
       })
   );
-  ipcMain.handle('ai-stream-start', (event, payload: AICompletePayload) =>
+  registerWorkspaceHandler('ai-stream-start', (event, payload: AICompletePayload) =>
     guard(() => ({ streamId: streams.start(toSender(event.sender), payload) }))
   );
-  ipcMain.handle('ai-stream-cancel', (event, streamId: unknown) =>
+  registerWorkspaceHandler('ai-stream-cancel', (event, streamId: unknown) =>
     guard(() => ({ cancelled: streams.cancel(streamId, event.sender.id) }))
   );
   return streams;

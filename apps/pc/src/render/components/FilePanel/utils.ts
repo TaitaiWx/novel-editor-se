@@ -137,25 +137,37 @@ export function filterLoreEntries(loreEntries: LoreEntry[], normalizedQuery: str
 }
 
 export interface CharacterGroup {
-  key: CharacterCategory;
+  /** 分组名（也是 React key）：作者自定义的分组，或默认的「主要角色 / 次要角色」 */
+  key: string;
   label: string;
+  /** 默认分组（没有自定义分组名的人物）；自定义分组为 null */
+  category: CharacterCategory | null;
   items: Character[];
 }
 
-/** 按主要/次要角色分组 */
+/** 人物所在的分组名：自定义分组优先，否则按主要 / 次要角色 */
+export function characterGroupLabel(item: Pick<Character, 'group' | 'category'>): string {
+  return item.group?.trim() || getCharacterCategoryLabel(item.category);
+}
+
+/**
+ * 按分组组织人物：默认的「主要角色 / 次要角色」在前，作者自定义的分组按出现顺序排在后面；
+ * 自定义分组与默认分组同名时合并（例如把分组改回「主要角色」）
+ */
 export function groupCharacters(characters: Character[]): CharacterGroup[] {
-  return [
-    {
-      key: 'major' as const,
-      label: '主要角色',
-      items: characters.filter((item) => item.category === 'major'),
-    },
-    {
-      key: 'secondary' as const,
-      label: '次要角色',
-      items: characters.filter((item) => item.category === 'secondary'),
-    },
-  ];
+  const groups = new Map<string, CharacterGroup>();
+  const defaults: CharacterCategory[] = ['major', 'secondary'];
+  for (const category of defaults) {
+    const label = getCharacterCategoryLabel(category);
+    groups.set(label, { key: label, label, category, items: [] });
+  }
+  for (const item of characters) {
+    const label = characterGroupLabel(item);
+    const group = groups.get(label) ?? { key: label, label, category: null, items: [] };
+    group.items.push(item);
+    groups.set(label, group);
+  }
+  return Array.from(groups.values());
 }
 
 /** 搜索时是否保留"角色"分区 */

@@ -1,10 +1,12 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * Version Snapshot IPC Handlers
  *
  * Handles: create/list/delete/rename/restore snapshots
  */
 import { ipcMain } from 'electron';
-import { versionOps } from '@novel-editor/store';
+import { withBackgroundWorkspaceMutation } from '../workspace-mutation-gate';
+import { getDatabase, versionOps } from '@novel-editor/store';
 
 interface SnapshotJobState {
   id: string;
@@ -37,8 +39,16 @@ function createSnapshotJob(folderPath: string, message?: string): string {
     error: null,
   });
 
-  void versionOps
-    .createSnapshot(folderPath, message, (progress) => {
+  let database: ReturnType<typeof getDatabase> | undefined;
+  try {
+    database = getDatabase();
+  } catch {
+    /* Preserve asynchronous job failure when the connection is unavailable. */
+  }
+  void withBackgroundWorkspaceMutation(() => {
+    if (!database || getDatabase() !== database)
+      throw new Error('项目数据库已切换，请重新创建版本快照');
+    return versionOps.createSnapshot(folderPath, message, (progress) => {
       const current = snapshotJobs.get(id);
       if (!current) return;
       snapshotJobs.set(id, {
@@ -50,7 +60,8 @@ function createSnapshotJob(folderPath: string, message?: string): string {
         processedBytes: progress.processedBytes,
         totalBytes: progress.totalBytes,
       });
-    })
+    });
+  })
     .then((snapshotId) => {
       const current = snapshotJobs.get(id);
       if (!current) return;
@@ -73,12 +84,15 @@ function createSnapshotJob(folderPath: string, message?: string): string {
 }
 
 export function registerVersionHandlers(): void {
-  ipcMain.handle('db-version-create', async (_event, folderPath: string, message?: string) =>
-    versionOps.createSnapshot(folderPath, message)
+  registerWorkspaceHandler(
+    'db-version-create',
+    async (_event, folderPath: string, message?: string) =>
+      versionOps.createSnapshot(folderPath, message)
   );
 
-  ipcMain.handle('db-version-start-create', (_event, folderPath: string, message?: string) =>
-    createSnapshotJob(folderPath, message)
+  registerWorkspaceHandler(
+    'db-version-start-create',
+    (_event, folderPath: string, message?: string) => createSnapshotJob(folderPath, message)
   );
 
   ipcMain.handle(
@@ -86,29 +100,32 @@ export function registerVersionHandlers(): void {
     (_event, jobId: string) => snapshotJobs.get(jobId) || null
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-version-list',
     (_event, folderPath: string, filePath?: string, limit?: number) =>
       versionOps.listSnapshots(folderPath, filePath, limit)
   );
 
-  ipcMain.handle('db-version-delete', async (_event, snapshotId: number) => {
+  registerWorkspaceHandler('db-version-delete', async (_event, snapshotId: number) => {
     versionOps.deleteSnapshot(snapshotId);
     return { success: true };
   });
 
-  ipcMain.handle('db-version-rename', async (_event, snapshotId: number, message: string) => {
-    versionOps.renameSnapshot(snapshotId, message);
-    return { success: true };
-  });
+  registerWorkspaceHandler(
+    'db-version-rename',
+    async (_event, snapshotId: number, message: string) => {
+      versionOps.renameSnapshot(snapshotId, message);
+      return { success: true };
+    }
+  );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-version-get-file-content',
     (_event, folderPath: string, snapshotId: number, filePath: string) =>
       versionOps.getSnapshotFileContent(folderPath, snapshotId, filePath)
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-version-restore-file',
     async (_event, folderPath: string, snapshotId: number, filePath: string) => {
       await versionOps.restoreFileFromSnapshot(folderPath, snapshotId, filePath);

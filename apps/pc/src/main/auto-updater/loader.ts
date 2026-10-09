@@ -58,9 +58,9 @@ export async function getAutoUpdater(): Promise<AppUpdater | null> {
 
 export function configureAutoUpdater(updater: AppUpdater, channel: UpdateChannel) {
   const mappedChannel = mapUpdateChannel(channel);
-  updater.autoDownload = true;
-  // oneClick: true NSIS 不运行卸载程序，直接覆盖文件，静默安装安全可靠。
-  updater.autoInstallOnAppQuit = true;
+  updater.autoDownload = false;
+  // 下载由控制器过滤已回退的问题版本；安装必须经过保存与恢复包校验。
+  updater.autoInstallOnAppQuit = false;
   updater.allowPrerelease = mappedChannel !== 'latest';
   updater.allowDowngrade = true;
   updater.channel = mappedChannel;

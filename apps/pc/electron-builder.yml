@@ -23,11 +23,22 @@ asarUnpack:
 
 files:
   - dist/**/*
+  # Build graph/budget reports are CI diagnostics, not runtime application data.
+  - '!dist/bundle-*.json'
   - package.json
   - node_modules/**/*
   - resources/branding/**/*
 
 extraResources:
+  # OS-native guardian survives application replacement; contains no Electron runtime.
+  - from: recovery
+    to: recovery
+    filter:
+      - guardian.sh
+      - guardian.ps1
+      - launch.ps1
+      - restore.sh
+      - publish-mac.sh
   # 示例作品集：排除开发时打开示例留下的本机数据库、会话、写作日志与系统文件
   - from: sample-data
     to: sample-data
@@ -43,6 +54,7 @@ extraResources:
     to: release-notes.json
 
 mac:
+  sign: ./signing/mac-sign.mjs
   icon: resources/icon.icns
   category: public.app-category.productivity
   target:

@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * 格式转换与导出（txt / md / docx）
  *
@@ -7,7 +8,7 @@
  */
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
+import type { Paragraph } from 'docx';
 import { CoreError } from './errors';
 import { isStoryFile, walkFiles } from './fs-ops';
 import { listChapters, resolveNovelPath, type Project } from './project';
@@ -82,15 +83,6 @@ export function convertText(content: string, from: 'md' | 'txt', to: 'md' | 'txt
   return from === 'md' ? markdownToPlainText(content) : plainTextToMarkdown(content);
 }
 
-const HEADING_LEVELS = [
-  HeadingLevel.HEADING_1,
-  HeadingLevel.HEADING_2,
-  HeadingLevel.HEADING_3,
-  HeadingLevel.HEADING_4,
-  HeadingLevel.HEADING_5,
-  HeadingLevel.HEADING_6,
-];
-
 export interface DocxSection {
   /** 章节标题（为空则不额外插入标题） */
   title?: string;
@@ -100,6 +92,16 @@ export interface DocxSection {
 
 /** 生成 docx 二进制；每个 section 的标题自动分页 */
 export async function buildDocx(sections: DocxSection[], documentTitle?: string): Promise<Buffer> {
+  // Text operations share this module with Word export. Load the encoder only for Word.
+  const { Document, HeadingLevel, Packer, Paragraph, TextRun } = await import('docx');
+  const headingLevels = [
+    HeadingLevel.HEADING_1,
+    HeadingLevel.HEADING_2,
+    HeadingLevel.HEADING_3,
+    HeadingLevel.HEADING_4,
+    HeadingLevel.HEADING_5,
+    HeadingLevel.HEADING_6,
+  ];
   const children: Paragraph[] = [];
   if (documentTitle) {
     children.push(new Paragraph({ text: documentTitle, heading: HeadingLevel.TITLE }));
@@ -124,7 +126,7 @@ export async function buildDocx(sections: DocxSection[], documentTitle?: string)
         children.push(
           new Paragraph({
             text: heading[2].replace(/\s+#+\s*$/, ''),
-            heading: HEADING_LEVELS[heading[1].length - 1],
+            heading: headingLevels[heading[1].length - 1],
             pageBreakBefore: !firstHeadingUsed && pageBreak && heading[1].length === 1,
           })
         );
@@ -155,13 +157,18 @@ export async function exportFile(
   output: string,
   format: ExportFormat
 ): Promise<void> {
-  const content = await readFile(source, 'utf-8');
-  const from = detectSourceFormat(source);
-  if (format === 'docx') {
-    await writeOutput(output, await buildDocx([{ content, format: from }]));
-  } else {
-    await writeOutput(output, convertText(content, from, format));
-  }
+  return withWorkspaceLease(
+    async () => {
+      const content = await readFile(source, 'utf-8');
+      const from = detectSourceFormat(source);
+      if (format === 'docx') {
+        await writeOutput(output, await buildDocx([{ content, format: from }]));
+      } else {
+        await writeOutput(output, convertText(content, from, format));
+      }
+    },
+    { resources: [source, output] }
+  );
 }
 
 function replaceExtension(file: string, format: ExportFormat): string {
@@ -174,20 +181,25 @@ export async function batchExport(
   format: ExportFormat,
   outDir: string
 ): Promise<ExportedFile[]> {
-  const absTarget = path.resolve(target);
-  const absOut = path.resolve(outDir);
-  const files = (await walkFiles(absTarget, { storyOnly: true })).filter(
-    (file) => !file.startsWith(absOut + path.sep)
+  return withWorkspaceLease(
+    async () => {
+      const absTarget = path.resolve(target);
+      const absOut = path.resolve(outDir);
+      const files = (await walkFiles(absTarget, { storyOnly: true })).filter(
+        (file) => !file.startsWith(absOut + path.sep)
+      );
+      const isSingleFile = files.length === 1 && files[0] === absTarget;
+      const result: ExportedFile[] = [];
+      for (const file of files) {
+        const relative = isSingleFile ? path.basename(file) : path.relative(absTarget, file);
+        const output = replaceExtension(path.join(absOut, relative), format);
+        await exportFile(file, output, format);
+        result.push({ source: file, output });
+      }
+      return result;
+    },
+    { resources: [target, outDir] }
   );
-  const isSingleFile = files.length === 1 && files[0] === absTarget;
-  const result: ExportedFile[] = [];
-  for (const file of files) {
-    const relative = isSingleFile ? path.basename(file) : path.relative(absTarget, file);
-    const output = replaceExtension(path.join(absOut, relative), format);
-    await exportFile(file, output, format);
-    result.push({ source: file, output });
-  }
-  return result;
 }
 
 export interface ConvertOptions {
@@ -207,21 +219,28 @@ export async function batchConvert(
   if (from === 'docx')
     throw new CoreError('UNSUPPORTED', '暂不支持从 docx 转换（只支持 md/txt 作为源格式）');
   if (from === to) throw new CoreError('INVALID_ARGUMENT', '--from 与 --to 不能相同');
-  const absTarget = path.resolve(target);
-  const files = (await walkFiles(absTarget, { storyOnly: true })).filter(
-    (file) => detectSourceFormat(file) === from && isStoryFile(file)
+  // A file converted in place creates a sibling path; lease its containing directory too.
+  const sourceScope = (await stat(target)).isFile() ? path.dirname(path.resolve(target)) : target;
+  return withWorkspaceLease(
+    async () => {
+      const absTarget = path.resolve(target);
+      const files = (await walkFiles(absTarget, { storyOnly: true })).filter(
+        (file) => detectSourceFormat(file) === from && isStoryFile(file)
+      );
+      const base = (await stat(absTarget)).isFile() ? path.dirname(absTarget) : absTarget;
+      const result: ExportedFile[] = [];
+      for (const file of files) {
+        const output = options.outDir
+          ? replaceExtension(path.join(path.resolve(options.outDir), path.relative(base, file)), to)
+          : replaceExtension(file, to);
+        await exportFile(file, output, to);
+        if (options.deleteSource && output !== file) await rm(file);
+        result.push({ source: file, output });
+      }
+      return result;
+    },
+    { resources: [sourceScope, ...(options.outDir ? [options.outDir] : [])] }
   );
-  const base = (await stat(absTarget)).isFile() ? path.dirname(absTarget) : absTarget;
-  const result: ExportedFile[] = [];
-  for (const file of files) {
-    const output = options.outDir
-      ? replaceExtension(path.join(path.resolve(options.outDir), path.relative(base, file)), to)
-      : replaceExtension(file, to);
-    await exportFile(file, output, to);
-    if (options.deleteSource && output !== file) await rm(file);
-    result.push({ source: file, output });
-  }
-  return result;
 }
 
 export interface NovelExportResult {
@@ -243,39 +262,47 @@ export async function exportNovel(
   format: ExportFormat,
   output: string
 ): Promise<NovelExportResult> {
-  await resolveNovelPath(project, novel);
-  const chapters = await listChapters(project, novel);
-  const parts: Array<{ title: string; content: string; format: 'md' | 'txt' }> = [];
-  for (const chapter of chapters) {
-    parts.push({
-      title: chapter.title,
-      content: await readFile(chapter.path, 'utf-8'),
-      format: detectSourceFormat(chapter.path),
-    });
-  }
+  const novelPath = await resolveNovelPath(project, novel);
+  return withWorkspaceLease(
+    async () => {
+      const chapters = await listChapters(project, novel);
+      const parts: Array<{ title: string; content: string; format: 'md' | 'txt' }> = [];
+      for (const chapter of chapters) {
+        parts.push({
+          title: chapter.title,
+          content: await readFile(chapter.path, 'utf-8'),
+          format: detectSourceFormat(chapter.path),
+        });
+      }
 
-  const absOutput = path.resolve(output);
-  if (format === 'docx') {
-    const sections = parts.map((part) => ({
-      format: 'md' as const,
-      content: ensureChapterHeading(part.title, convertText(part.content, part.format, 'md')),
-    }));
-    await writeOutput(absOutput, await buildDocx(sections, novel));
-  } else if (format === 'md') {
-    const body = parts
-      .map((part) =>
-        ensureChapterHeading(part.title, convertText(part.content, part.format, 'md')).trimEnd()
-      )
-      .join('\n\n');
-    await writeOutput(absOutput, `${body}\n`);
-  } else {
-    const body = parts
-      .map((part) => {
-        const md = ensureChapterHeading(part.title, convertText(part.content, part.format, 'md'));
-        return markdownToPlainText(md).trim();
-      })
-      .join('\n\n\n');
-    await writeOutput(absOutput, `${novel}\n\n\n${body}\n`);
-  }
-  return { novel, format, output: absOutput, chapterCount: chapters.length };
+      const absOutput = path.resolve(output);
+      if (format === 'docx') {
+        const sections = parts.map((part) => ({
+          format: 'md' as const,
+          content: ensureChapterHeading(part.title, convertText(part.content, part.format, 'md')),
+        }));
+        await writeOutput(absOutput, await buildDocx(sections, novel));
+      } else if (format === 'md') {
+        const body = parts
+          .map((part) =>
+            ensureChapterHeading(part.title, convertText(part.content, part.format, 'md')).trimEnd()
+          )
+          .join('\n\n');
+        await writeOutput(absOutput, `${body}\n`);
+      } else {
+        const body = parts
+          .map((part) => {
+            const md = ensureChapterHeading(
+              part.title,
+              convertText(part.content, part.format, 'md')
+            );
+            return markdownToPlainText(md).trim();
+          })
+          .join('\n\n\n');
+        await writeOutput(absOutput, `${novel}\n\n\n${body}\n`);
+      }
+      return { novel, format, output: absOutput, chapterCount: chapters.length };
+    },
+    { resources: [project.root, project.novelsPath, novelPath, output] }
+  );
 }

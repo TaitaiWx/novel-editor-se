@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type { EditorView } from '@codemirror/view';
 import { useActiveEditorRegistration } from '@/render/components/TextEditor/hooks/useActiveEditorRegistration';
-import { getActiveEditor } from '@/render/components/TextEditor/active-editor';
+import {
+  discardDeletedEditorFiles,
+  getActiveEditor,
+} from '@/render/components/TextEditor/active-editor';
 
 vi.mock('@codemirror/search', () => ({ openSearchPanel: vi.fn() }));
 
@@ -20,6 +23,9 @@ function setup(filePath: string) {
       viewRef: { current: view },
       currentFilePathRef: { current: filePath },
       currentContentRef: { current: `${filePath} 内容` },
+      currentOriginalContentRef: { current: 'original' },
+      autoSaveTimeoutRef: { current: null },
+      setHasChanges: vi.fn(),
       readOnlyRef: { current: false },
       handleManualSaveRef: { current: save },
     })
@@ -32,6 +38,17 @@ afterEach(() => {
 });
 
 describe('useActiveEditorRegistration', () => {
+  it('文件删除后立即停止该编辑器保存资格，其他文档不受影响', () => {
+    const a = setup('/w/a.md');
+    const b = setup('/w/b.md');
+    const bHandle = getActiveEditor()!;
+    discardDeletedEditorFiles((path) => path === '/w/b.md');
+    expect(bHandle.getSnapshot()).toEqual({ filePath: null, content: '', readOnly: false });
+    expect(getActiveEditor()?.getSnapshot().filePath).toBe('/w/a.md');
+    a.unmount();
+    b.unmount();
+  });
+
   it('挂载登记、聚焦切换目标、卸载移除', async () => {
     const a = setup('/w/a.md');
     const b = setup('/w/b.md');

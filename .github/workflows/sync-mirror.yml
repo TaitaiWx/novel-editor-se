@@ -15,6 +15,10 @@ env:
   MIRROR_USER: ${{ secrets.MIRROR_SSH_USER }}
   MIRROR_BASE: /var/www/dl.wayintech.net/novel-editor
 
+concurrency:
+  group: release-mirror
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -27,19 +31,22 @@ jobs:
       github.event_name == 'workflow_dispatch'
 
     steps:
-      - uses: actions/checkout@v5
-
       - name: Resolve release tag
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          SOURCE_TAG: ${{ github.event.workflow_run.head_branch }}
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
+          set -euo pipefail
+          TAG="${INPUT_TAG:-$SOURCE_TAG}"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "Invalid release tag"; exit 1; }
+          if [ -n "$INPUT_TAG" ]; then
             # 手动触发：使用输入的 tag
-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "workflow_run" ]; then
             # workflow_run 触发：从触发分支的 tag 获取
-            TAG="${{ github.event.workflow_run.head_branch }}"
+            TAG="$SOURCE_TAG"
             if [ -z "$TAG" ]; then
               echo "::error::Cannot resolve tag from workflow_run event"
               exit 1
@@ -49,6 +56,14 @@ jobs:
             echo "::error::Unable to resolve release tag"
             exit 1
           fi
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || steps.resolve.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
 
       - name: Download release assets from GitHub
         env:
@@ -119,6 +134,12 @@ jobs:
             done
           fi
 
+          # Immutable rollback release directory: never point a requested old version at /latest.
+          RELEASE="mirror-out/releases/${TAG}"
+          mkdir -p "$RELEASE"
+          cp artifacts/* "$RELEASE/"
+          node apps/pc/scripts/create-rollback-manifest.mjs "$RELEASE" "${TAG#v}"
+
           echo "=== Mirror structure ==="
           find mirror-out -type f | sort
 
@@ -129,7 +150,7 @@ jobs:
           username: ${{ secrets.MIRROR_SSH_USER }}
           key: ${{ secrets.MIRROR_SSH_KEY }}
           source: mirror-out/*
-          target: ${{ env.MIRROR_BASE }}/.staging
+          target: ${{ env.MIRROR_BASE }}/.staging-${{ github.run_id }}-${{ github.run_attempt }}
           strip_components: 1
           overwrite: true
 
@@ -143,17 +164,43 @@ jobs:
             set -euo pipefail
             BASE="${{ env.MIRROR_BASE }}"
 
-            if [ ! -d "$BASE/.staging/latest" ]; then
-              echo "::error::Staging directory not found, aborting swap"
-              exit 1
+            STAGE="$BASE/.staging-${{ github.run_id }}-${{ github.run_attempt }}"
+            TAG="${{ steps.resolve.outputs.tag }}"
+            test -d "$STAGE/latest"
+            test -f "$STAGE/releases/$TAG/manifest.json"
+            mkdir -p "$BASE/releases"
+
+            # On the first migration, preserve the previous live release too.
+            if [ -f "$BASE/latest/version.json" ]; then
+              PREVIOUS=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^" ]*\)".*/v\1/p' "$BASE/latest/version.json")
+              [[ "$PREVIOUS" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+              if [ ! -d "$BASE/releases/$PREVIOUS" ]; then
+                cp -a "$BASE/latest" "$STAGE/previous"
+                # Historical binaries cannot acknowledge this recovery protocol.
+                printf '{"version":"%s","rollbackProtocol":0,"assets":[]}\n' "${PREVIOUS#v}" > "$STAGE/previous/manifest.json"
+                mv "$STAGE/previous" "$BASE/releases/$PREVIOUS"
+              fi
+            fi
+            if [ -d "$BASE/releases/$TAG" ]; then
+              # Re-runs must not overwrite an existing version with different bytes.
+              cmp "$BASE/releases/$TAG/manifest.json" "$STAGE/releases/$TAG/manifest.json"
+            else
+              mv "$STAGE/releases/$TAG" "$BASE/releases/$TAG"
             fi
 
-            # Atomic swap: old → backup, staging → live, cleanup
+            # Preserve untouched channels and the versioned artifacts their metadata references.
+            # Incoming release files win; publishing beta must not remove the stable feed.
+            if [ -d "$BASE/latest" ]; then cp -an "$BASE/latest/." "$STAGE/latest/"; fi
+
+            # Version archives are permanent; latest remains the forward update feed.
             rm -rf "$BASE/latest.old"
-            [ -d "$BASE/latest" ] && mv "$BASE/latest" "$BASE/latest.old"
-            mv "$BASE/.staging/latest" "$BASE/latest"
-            rm -rf "$BASE/latest.old" "$BASE/.staging"
-            echo "Atomic swap complete"
+            if [ -d "$BASE/latest" ]; then mv "$BASE/latest" "$BASE/latest.old"; fi
+            if ! mv "$STAGE/latest" "$BASE/latest"; then
+              [ ! -d "$BASE/latest.old" ] || mv "$BASE/latest.old" "$BASE/latest"
+              exit 1
+            fi
+            rm -rf "$BASE/latest.old" "$STAGE"
+            echo "Published immutable $TAG and retained previous releases"
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3

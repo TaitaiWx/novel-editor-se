@@ -4,6 +4,7 @@ import {
   type MediaItem,
 } from '@novel-editor/core/entity-media';
 import type { LoreCategory, LoreEntry } from './types';
+import { normalizeEntityGroup } from './utils/character-attributes';
 
 export interface LoreAuditSection {
   key: 'missing' | 'conflict' | 'template' | 'other';
@@ -30,12 +31,15 @@ export interface LoreDraft {
   tags?: string[];
   /** 分类目录（例如「地理/北境」） */
   folder?: string;
+  /** 自定义分组名（空字符串清除） */
+  group?: string;
   cover?: string;
   media?: MediaItem[];
 }
 
 export interface LoreAttributes {
   folder: string;
+  group?: string;
   cover?: string;
   media: MediaItem[];
 }
@@ -52,8 +56,10 @@ export function parseLoreAttributes(raw: string | null | undefined): LoreAttribu
     parsed = {};
   }
   const cover = typeof parsed.cover === 'string' && parsed.cover.trim() ? parsed.cover.trim() : '';
+  const group = normalizeEntityGroup(parsed.group);
   return {
     folder: normalizeLoreFolder(parsed.folder),
+    ...(group ? { group } : {}),
     ...(cover ? { cover } : {}),
     media: parseMediaItems(parsed.media),
   };
@@ -62,8 +68,10 @@ export function parseLoreAttributes(raw: string | null | undefined): LoreAttribu
 export function stringifyLoreAttributes(attributes: Partial<LoreAttributes>): string {
   const folder = normalizeLoreFolder(attributes.folder);
   const media = parseMediaItems(attributes.media);
+  const group = normalizeEntityGroup(attributes.group);
   return JSON.stringify({
     ...(folder ? { folder } : {}),
+    ...(group ? { group } : {}),
     ...(attributes.cover ? { cover: attributes.cover } : {}),
     ...(media.length ? { media } : {}),
   });

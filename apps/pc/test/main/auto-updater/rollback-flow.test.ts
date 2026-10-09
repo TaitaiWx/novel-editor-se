@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { EventEmitter } from 'events';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import type { PersistedUpdaterState } from '../../../src/main/auto-updater-state';
@@ -11,6 +12,7 @@ const env = vi.hoisted(() => ({
   version: '1.1.0',
   windows: [] as unknown[],
   openPath: vi.fn(async (_path: string) => ''),
+  install: vi.fn(async () => undefined),
 }));
 
 vi.mock('electron', () => ({
@@ -21,6 +23,21 @@ vi.mock('electron', () => ({
   },
   BrowserWindow: { getAllWindows: () => env.windows },
   shell: { openPath: env.openPath },
+}));
+
+vi.mock('../../../src/main/auto-updater/rollback-install', () => ({
+  installRollbackArtifact: env.install,
+}));
+
+vi.mock('../../../src/main/auto-updater/native-install', () => ({
+  prepareNativeUpdate: vi.fn(),
+  handoffNativeUpdate: vi.fn(),
+}));
+vi.mock('../../../src/main/graceful-shutdown', () => ({
+  prepareAppForExit: vi.fn(async (exit: () => void) => {
+    exit();
+    return true;
+  }),
 }));
 
 vi.mock('electron-log/main', () => {
@@ -56,27 +73,30 @@ async function readState(): Promise<PersistedUpdaterState> {
 function createFakeWindow() {
   return {
     isDestroyed: () => false,
-    webContents: {
+    webContents: Object.assign(new EventEmitter(), {
       send: vi.fn(),
       isCrashed: () => false,
       isLoadingMainFrame: () => false,
       getURL: () => 'file:///index.html',
-      once: vi.fn(),
-      removeListener: vi.fn(),
-    },
+    }),
   };
 }
 
 describe('auto-updater 版本指针与回滚流程', () => {
   beforeEach(async () => {
+    vi.stubEnv('APPIMAGE', '/test/Novel.AppImage');
     vi.resetModules();
     env.userData = await mkdtemp(join(tmpdir(), 'ne-updater-'));
     env.version = '1.1.0';
     env.windows = [];
     env.openPath.mockClear();
+    env.install.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     await rm(env.userData, { recursive: true, force: true });
   });
 
@@ -107,7 +127,7 @@ describe('auto-updater 版本指针与回滚流程', () => {
     expect(updaterStatus.channelVersion).toBe('1.2.0');
   });
 
-  it('新版本连续启动失败后提示可回退', async () => {
+  it('新版本连续启动失败后自动回退失败仍保留诊断状态', async () => {
     await writeState({
       channel: 'stable',
       rolloutBucket: 1,
@@ -117,12 +137,13 @@ describe('auto-updater 版本指针与回滚流程', () => {
       pendingFromVersion: '1.0.0',
       pendingLaunchAttempts: 1,
     });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     const { trackPendingLaunchState } = await import('../../../src/main/auto-updater/health');
     const { getUpdateStatus } = await import('../../../src/main/auto-updater');
 
     await trackPendingLaunchState();
     const status = await getUpdateStatus();
-    expect(status.rollbackAvailable).toBe(true);
+    expect(status.rollbackAvailable).toBe(false);
     expect(status.rollbackVersion).toBe('1.0.0');
     expect(status.lastError).toContain('连续启动异常');
     expect((await readState()).pendingLaunchAttempts).toBe(2);
@@ -157,8 +178,15 @@ describe('auto-updater 版本指针与回滚流程', () => {
     });
   });
 
-  it('使用校验通过的本地缓存执行回滚并清除待确认状态', async () => {
-    const installerPath = join(env.userData, 'installer.dmg');
+  it('使用版本绑定缓存自动安装，旧版本健康前保留待确认状态', async () => {
+    const { rollbackAssetNames } = await import('../../../src/main/auto-updater/rollback-metadata');
+    const assetName = rollbackAssetNames('1.0.0')[0];
+    await mkdir(join(env.userData, 'rollback-cache'));
+    const installerPath = join(
+      env.userData,
+      'rollback-cache',
+      `${process.platform}-${process.arch}-${assetName}`
+    );
     const content = Buffer.alloc(1_100_000, 7);
     await writeFile(installerPath, content);
     const hash = createHash('sha256').update(content).digest('hex');
@@ -168,6 +196,11 @@ describe('auto-updater 版本指针与回滚流程', () => {
       lastKnownGoodVersion: '1.0.0',
       rollbackTarget: {
         ...rollbackTarget,
+        assetName,
+        rollbackProtocol: 1,
+        sha256: hash,
+        platform: process.platform,
+        arch: process.arch,
         cachedInstallerPath: installerPath,
         cachedInstallerHash: hash,
       },
@@ -179,11 +212,91 @@ describe('auto-updater 版本指针与回滚流程', () => {
 
     const result = await rollbackToPreviousVersion();
     expect(result).toEqual({ version: '1.0.0', installerPath });
-    expect(env.openPath).toHaveBeenCalledWith(installerPath);
+    expect(env.openPath).not.toHaveBeenCalled();
+    expect(env.install).toHaveBeenCalled();
     const state = await readState();
-    expect(state.pendingVersion).toBeNull();
-    expect(state.pendingLaunchAttempts).toBe(0);
+    expect(state.pendingVersion).toBe('1.1.0');
+    expect(state.pendingLaunchAttempts).toBe(2);
+    expect(state.rollbackPendingVersion).toBe('1.0.0');
   });
+
+  it('the old binary confirms successful rollback only after its renderer becomes healthy', async () => {
+    await writeState({
+      lastKnownGoodVersion: '1.0.0',
+      pendingVersion: '1.1.0',
+      pendingFromVersion: '1.0.0',
+      pendingLaunchAttempts: 2,
+      rollbackPendingVersion: '1.0.0',
+      rejectedVersion: '1.1.0',
+    });
+    env.version = '1.0.0';
+    env.windows = [createFakeWindow()];
+    const health = await import('../../../src/main/auto-updater/health');
+    health.resetStartupHealthState();
+    health.armHealthyStartupObservers();
+    health.noteMainProcessReady();
+    health.noteUpdaterRendererReady();
+    expect((await readState()).pendingVersion).toBe('1.1.0');
+    health.noteUpdaterRendererHealthy();
+    await vi.waitFor(async () => {
+      const state = await readState();
+      expect(state.rollbackPendingVersion).toBeNull();
+      expect(state.pendingVersion).toBeNull();
+      expect(state.lastKnownGoodVersion).toBe('1.0.0');
+      expect(state.rejectedVersion).toBe('1.1.0');
+    });
+  });
+
+  it.each(['crash', 'timeout', 'repeated'])(
+    'automatically installs the verified old release on %s',
+    async (failure) => {
+      const { rollbackAssetNames } = await import(
+        '../../../src/main/auto-updater/rollback-metadata'
+      );
+      const assetName = rollbackAssetNames('1.0.0')[0];
+      const bytes = Buffer.alloc(1_100_000, 7);
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
+      const path = join(
+        env.userData,
+        'rollback-cache',
+        `${process.platform}-${process.arch}-${assetName}`
+      );
+      await mkdir(join(env.userData, 'rollback-cache'));
+      await writeFile(path, bytes);
+      await writeState({
+        lastKnownGoodVersion: '1.0.0',
+        pendingVersion: '1.1.0',
+        pendingFromVersion: '1.0.0',
+        pendingLaunchAttempts: 1,
+        rollbackTarget: {
+          ...rollbackTarget,
+          rollbackProtocol: 1,
+          platform: process.platform,
+          arch: process.arch,
+          assetName,
+          sha256,
+          cachedInstallerPath: path,
+          cachedInstallerHash: sha256,
+        },
+      });
+      const win = createFakeWindow();
+      env.windows = [win];
+      const health = await import('../../../src/main/auto-updater/health');
+      if (failure === 'repeated') await health.trackPendingLaunchState();
+      else {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        health.armHealthyStartupObservers();
+        if (failure === 'crash') win.webContents.emit('render-process-gone');
+        else await vi.advanceTimersByTimeAsync(60_000);
+        vi.useRealTimers();
+      }
+      await vi.waitFor(() => expect(env.install).toHaveBeenCalledTimes(1));
+      const state = await readState();
+      expect(state.pendingVersion).toBe('1.1.0');
+      expect(state.rollbackPendingVersion).toBe('1.0.0');
+      health.resetStartupHealthState();
+    }
+  );
 
   it('没有回滚目标时拒绝回滚', async () => {
     await writeState({ channel: 'stable', rolloutBucket: 1, lastKnownGoodVersion: '1.0.0' });
@@ -200,7 +313,7 @@ describe('auto-updater 版本指针与回滚流程', () => {
 
     const big = join(env.userData, 'big.dmg');
     await writeFile(big, Buffer.alloc(1_100_000, 1));
-    expect(await isCachedInstallerValid(big)).toBe(true);
+    expect(await isCachedInstallerValid(big)).toBe(false);
     expect(await isCachedInstallerValid(big, 'deadbeef')).toBe(false);
   });
 });

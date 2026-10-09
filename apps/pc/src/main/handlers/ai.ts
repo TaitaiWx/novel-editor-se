@@ -1,13 +1,16 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
+import { guardWindowClose } from '../graceful-shutdown';
 /**
  * AI IPC Handlers
  *
  * Handles: AI API requests, analysis report saving, AI assistant window
  * Provider 配置、流式输出见 ./ai-providers.ts；视频任务见 ./video.ts
  */
-import { ipcMain, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import { devToolsAllowed } from '../devtools-policy';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { assertDirectoryAccess, grantPathAccess } from '../path-access';
 import { fileURLToPath } from 'url';
 import { getAIService } from '../ai/runtime';
 import type { AIRequestPayload } from '../ai/service';
@@ -33,11 +36,11 @@ export function invokeConfiguredAI(payload: AIRequestPayload) {
 }
 
 export function registerAIHandlers(): void {
-  ipcMain.handle('ai-request', async (_event, payload: AIRequestPayload) =>
+  registerWorkspaceHandler('ai-request', async (_event, payload: AIRequestPayload) =>
     invokeConfiguredAI(payload)
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'save-analysis-file',
     async (_event, folderPath: string, fileName: string, content: string) => {
       try {
@@ -52,11 +55,13 @@ export function registerAIHandlers(): void {
     }
   );
 
-  ipcMain.handle('open-ai-assistant-window', (_event, folderPath: string) => {
+  registerWorkspaceHandler('open-ai-assistant-window', async (event, folderPath: string) => {
+    if (folderPath) await assertDirectoryAccess(event.sender.id, folderPath);
     const existing = BrowserWindow.getAllWindows().find(
       (w) => !w.isDestroyed() && w.webContents.getURL().includes('mode=ai-assistant')
     );
     if (existing) {
+      if (folderPath) await grantPathAccess(existing.webContents, folderPath, true);
       existing.focus();
       return { success: true, reused: true };
     }
@@ -84,6 +89,8 @@ export function registerAIHandlers(): void {
       frame: false,
     });
 
+    guardWindowClose(aiWindow);
+    if (folderPath) await grantPathAccess(aiWindow.webContents, folderPath, true);
     void loadRendererPage(aiWindow, __dist_dir, {
       mode: 'ai-assistant',
       folderPath: folderPath || '',
@@ -103,13 +110,15 @@ export function registerAIHandlers(): void {
   });
 
   // ── 右侧面板独立窗口 ──────────────────────────────────────
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'open-right-panel-window',
-    (_event, folderPath: string, _content?: string, hasActiveTab?: boolean) => {
+    async (event, folderPath: string, _content?: string, hasActiveTab?: boolean) => {
+      if (folderPath) await assertDirectoryAccess(event.sender.id, folderPath);
       const existing = BrowserWindow.getAllWindows().find(
         (w) => !w.isDestroyed() && w.webContents.getURL().includes('mode=right-panel')
       );
       if (existing) {
+        if (folderPath) await grantPathAccess(existing.webContents, folderPath, true);
         // 重新建立 MessagePort 通道（旧端口在窗口 reload 时已失效）
         const mainWin = BrowserWindow.getAllWindows().find(
           (w) =>
@@ -154,6 +163,8 @@ export function registerAIHandlers(): void {
         frame: false,
       });
 
+      guardWindowClose(panelWindow);
+      if (folderPath) await grantPathAccess(panelWindow.webContents, folderPath, true);
       void loadRendererPage(panelWindow, __dist_dir, {
         mode: 'right-panel',
         folderPath: folderPath || '',
@@ -193,7 +204,7 @@ export function registerAIHandlers(): void {
   );
 
   // AI 独立窗口请求主窗口打开文件
-  ipcMain.handle('ai-window-request-open-file', (_event, filePath: string) => {
+  registerWorkspaceHandler('ai-window-request-open-file', (_event, filePath: string) => {
     const mainWin = BrowserWindow.getAllWindows().find(
       (w) => !w.isDestroyed() && !w.webContents.getURL().includes('mode=ai-assistant')
     );
@@ -205,7 +216,7 @@ export function registerAIHandlers(): void {
   });
 
   // AI 独立窗口请求主窗口打开设置
-  ipcMain.handle('ai-window-request-open-settings', () => {
+  registerWorkspaceHandler('ai-window-request-open-settings', () => {
     const mainWin = BrowserWindow.getAllWindows().find(
       (w) => !w.isDestroyed() && !w.webContents.getURL().includes('mode=ai-assistant')
     );
@@ -217,7 +228,7 @@ export function registerAIHandlers(): void {
   });
 
   // AI 独立窗口提交修复到主窗口（展示 diff 确认）
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'ai-window-apply-fix',
     (
       _event,
@@ -242,7 +253,7 @@ export function registerAIHandlers(): void {
   );
 
   // 保存/读取 AI 会话状态（用于窗口间状态同步）
-  ipcMain.handle('ai-save-session-state', (_event, state: string) => {
+  registerWorkspaceHandler('ai-save-session-state', (_event, state: string) => {
     if (state === '__read__') {
       // 读取模式：返回当前保存的状态
       const saved = (global as Record<string, unknown>).__aiSessionState as string | undefined;

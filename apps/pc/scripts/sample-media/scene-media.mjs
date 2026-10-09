@@ -25,13 +25,16 @@ const PREVIZ_QP = 32;
 const AUDIO_BITRATE = 48_000;
 
 /** 在页面里执行一段返回 base64 的脚本 */
+/** @param {import("electron").BrowserWindow} win @param {string} code @returns {Promise<string>} */
 const run = (win, code) => win.webContents.executeJavaScript(`(async () => { ${code} })()`);
 
 const specs = JSON.stringify(
   SAMPLE_CHARACTER_ART.filter((item) => SAMPLE_SCENE.characters.includes(item.name))
 );
 
+/** @param {import("electron").BrowserWindow} win @param {(relative: string, base64: string) => Promise<void>} save */
 export async function generateSampleAudio(win, save) {
+  /** @type {[string, string, number][]} */
   const items = [
     [SAMPLE_AUDIO.bgm, 'renderBgm()', 48000],
     [SAMPLE_AUDIO.harbor, 'renderHarbor()', 48000],
@@ -49,15 +52,18 @@ export async function generateSampleAudio(win, save) {
 }
 
 /** 页面里重建每句配音占位音与样片混音用到的声音（与单独保存的文件同一套合成） */
+/** @param {{pitch: number, seconds: number}} voice */
 function voiceExpression(voice) {
   return `SampleAudio.renderVoice(${voice.pitch}, ${voice.seconds})`;
 }
 
+/** @param {import("electron").BrowserWindow} win @param {(relative: string, base64: string) => Promise<void>} save */
 export async function generateSceneMedia(win, save) {
   const dir = SAMPLE_SCENE.dir;
   const shots = SAMPLE_SCENE.shots;
 
   // 场景时间轴：每个镜头的起点（秒），以及每个镜头的声音提示（绝对时间）
+  /** @type {number[]} */
   const starts = [];
   let total = 0;
   for (const shot of shots) {
@@ -66,8 +72,12 @@ export async function generateSceneMedia(win, save) {
   }
   const shotCues = shots.map((shot, index) => [
     ...shot.dialogue
-      .filter((line) => line.voice)
-      .map((line) => ({ at: starts[index] + line.startSec, gain: 0.9, voice: line.voice })),
+      .filter((line) => 'voice' in line && line.voice)
+      .map((line) => ({
+        at: starts[index] + line.startSec,
+        gain: 0.9,
+        voice: 'voice' in line ? line.voice : undefined,
+      })),
     ...shot.sfx.map((cue) => ({ at: starts[index] + cue.atSec, gain: cue.volume, sfx: cue.file })),
   ]);
 
@@ -135,7 +145,7 @@ export async function generateSceneMedia(win, save) {
   // 配音占位音（示例占位音，不是真人语音）
   for (const shot of shots) {
     for (const line of shot.dialogue) {
-      if (!line.voice) continue;
+      if (!('voice' in line) || !line.voice) continue;
       await save(
         `${dir}/${sampleVoiceFile(shot.number, line.id)}`,
         await run(

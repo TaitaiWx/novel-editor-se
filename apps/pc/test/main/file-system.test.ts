@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import dirTree from 'directory-tree';
@@ -21,11 +31,13 @@ const mocks = vi.hoisted(() => ({
   availableFormats: vi.fn(),
   readText: vi.fn(),
   addRecentFolder: vi.fn(),
+  getRecentFolders: vi.fn(() => []),
   app: { isPackaged: false } as { isPackaged: boolean },
 }));
 
 vi.mock('electron', () => ({
   ipcMain: {
+    on: vi.fn(),
     handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
       mocks.handlers.set(channel, handler);
     },
@@ -53,14 +65,22 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('../../src/main/recent-folders', () => ({ addRecentFolder: mocks.addRecentFolder }));
+vi.mock('../../src/main/renderer-preparation', () => ({
+  requestRendererPreparation: vi.fn(async () => ({ release: vi.fn() })),
+}));
 
+vi.mock('../../src/main/recent-folders', () => ({
+  addRecentFolder: mocks.addRecentFolder,
+  getRecentFolders: mocks.getRecentFolders,
+}));
+
+import { grantPathAccess, resetPathAccessForTest } from '../../src/main/path-access';
 import { registerFileSystemHandlers } from '../../src/main/handlers/file-system';
 
 function invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T> {
   const handler: Handler | undefined = mocks.handlers.get(channel);
   if (!handler) throw new Error(`未注册的通道: ${channel}`);
-  return Promise.resolve(handler({}, ...args)) as Promise<T>;
+  return Promise.resolve(handler({ sender: { id: 1, send: mocks.send } }, ...args)) as Promise<T>;
 }
 
 let dir: string;
@@ -85,6 +105,8 @@ beforeAll(() => {
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'ne-pc-fs-'));
+  resetPathAccessForTest();
+  await grantPathAccess({ id: 1 }, dir, true);
   vi.clearAllMocks();
   mocks.app.isPackaged = false;
   return async () => {
@@ -460,9 +482,9 @@ describe('生成资料清理', () => {
 describe('Electron 专属能力', () => {
   it('open-in-system-app 透传 shell.openPath 结果', async () => {
     mocks.openPath.mockResolvedValueOnce('');
-    expect(await invoke('open-in-system-app', '/x')).toEqual({ success: true });
+    expect(await invoke('open-in-system-app', dir)).toEqual({ success: true });
     mocks.openPath.mockResolvedValueOnce('no app');
-    await expect(invoke('open-in-system-app', '/x')).rejects.toThrow('无法打开文件: no app');
+    await expect(invoke('open-in-system-app', dir)).rejects.toThrow('无法打开文件: no app');
   });
 
   it('show-item-in-folder 只接受已存在的绝对路径', async () => {
@@ -541,4 +563,186 @@ describe('Electron 专属能力', () => {
       expect(await invoke('read-clipboard-file-paths')).toEqual(['/a/b.md']);
     }
   );
+});
+
+describe('IPC path authorization regressions', () => {
+  it('rejects arbitrary files from a renderer without an approved workspace', async () => {
+    const secret = await touch('private.txt', 'secret');
+    const handler = mocks.handlers.get('read-file')!;
+    await expect(
+      Promise.resolve().then(() => handler({ sender: { id: 999 } }, secret))
+    ).rejects.toThrow();
+  });
+
+  it('does not follow an in-workspace symbolic link to write outside', async () => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'ne-outside-'));
+    try {
+      const secret = path.join(outside, 'secret.txt');
+      await writeFile(secret, 'original');
+      await symlink(outside, path.join(dir, 'escape'));
+      await expect(
+        invoke('write-file', path.join(dir, 'escape', 'secret.txt'), 'changed')
+      ).rejects.toThrow();
+      expect(await readFile(secret, 'utf8')).toBe('original');
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects deleting and renaming managed data and folders containing it', async () => {
+    const managed = await touch('资料/记忆/规则.json', '{}');
+    await expect(invoke('delete-file', managed)).rejects.toThrow();
+    await expect(invoke('rename-file', managed, path.join(dir, 'rules.json'))).rejects.toThrow();
+    await expect(invoke('delete-directory', path.join(dir, '资料'))).rejects.toThrow();
+    expect(await readFile(managed, 'utf8')).toBe('{}');
+  });
+});
+
+it('renames a structural work folder together with its managed material subtree', async () => {
+  await touch('work/资料/记忆/规则.json', '{}');
+  const renamed = path.join(dir, 'renamed');
+  await expect(invoke('rename-file', path.join(dir, 'work'), renamed)).resolves.toEqual({
+    success: true,
+    newPath: renamed,
+  });
+  expect(await readFile(path.join(renamed, '资料/记忆/规则.json'), 'utf8')).toBe('{}');
+  await expect(
+    invoke('rename-file', path.join(renamed, '资料/记忆'), path.join(dir, 'exposed'))
+  ).rejects.toThrow();
+});
+
+it('renames an approved workspace only to an unused sibling and moves its grants', async () => {
+  const original = dir;
+  const renamed = `${dir}-renamed`;
+  await touch('.novel-editor/config.json', '{}');
+  await touch('chapter.md', 'text');
+  await expect(
+    invoke('rename-file', original, path.join(os.tmpdir(), 'nested', 'elsewhere'))
+  ).rejects.toThrow();
+  await expect(invoke('rename-file', original, renamed)).resolves.toEqual({
+    success: true,
+    newPath: renamed,
+  });
+  dir = renamed;
+  expect(await invoke('read-file', path.join(dir, 'chapter.md'))).toBe('text');
+  await expect(invoke('write-file', path.join(original, 'chapter.md'), 'bad')).rejects.toThrow();
+});
+
+it('rejects malformed mutation requests and protected paste destinations', async () => {
+  const source = await touch('rules.json', '{}');
+  await mkdir(path.join(dir, '资料/记忆'), { recursive: true });
+  for (const channel of ['create-file', 'create-directory']) {
+    for (const name of ['../escape', '/absolute', 'a/b', null])
+      await expect(invoke(channel, dir, name)).rejects.toThrow();
+  }
+  await expect(invoke('paste-files', [source], path.join(dir, '资料/记忆'))).rejects.toThrow();
+  await expect(invoke('write-file', source, { data: 'bad' })).rejects.toThrow();
+  await expect(invoke('get-file-info-batch', 'not-an-array')).rejects.toThrow();
+});
+
+it('keeps observing the file after repeated atomic replacement and isolates the sender', async () => {
+  const file = await touch('watched.md', 'old');
+  await invoke('watch-file', file);
+  try {
+    for (const content of ['one', 'two']) {
+      mocks.send.mockClear();
+      const temporary = await touch('temporary.md', content);
+      await rename(temporary, file);
+      await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledWith('file-changed', file), {
+        timeout: 2000,
+      });
+    }
+  } finally {
+    await invoke('unwatch-file', file);
+  }
+});
+
+it('deletes a whole work with managed data while refusing direct material-subtree deletion', async () => {
+  await touch('work/资料/记忆/规则.json', '{}');
+  await expect(invoke('delete-directory', path.join(dir, 'work/资料'))).rejects.toThrow();
+  await expect(invoke('delete-directory', path.join(dir, 'work'))).resolves.toEqual({
+    success: true,
+  });
+  expect(await exists(path.join(dir, 'work'))).toBe(false);
+});
+
+it('deleting a file or directory waits for previously submitted saves', async () => {
+  const file = await touch('pending/chapter.md', 'old');
+  const saves = Array.from({ length: 8 }, (_, index) =>
+    invoke('write-file', file, `version ${index}\n${'text'.repeat(50000)}`)
+  );
+  await invoke('delete-directory', path.dirname(file));
+  await Promise.all(saves);
+  expect(await exists(path.dirname(file))).toBe(false);
+  const standalone = await touch('pending.txt', 'old');
+  const write = invoke('write-file', standalone, 'new');
+  await invoke('delete-file', standalone);
+  await write;
+  expect(await exists(standalone)).toBe(false);
+});
+
+it('native folder selection grants the requesting window access', async () => {
+  const file = await touch('selected.md', 'selected');
+  mocks.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [dir] });
+  const event = { sender: { id: 999 } };
+  await mocks.handlers.get('open-local-folder')!(event);
+  expect(await mocks.handlers.get('read-file')!(event, file)).toBe('selected');
+});
+
+it('folder refresh never exposes symlink targets or migrates materials outside the workspace', async () => {
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'ne-outside-tree-'));
+  try {
+    await mkdir(path.join(outside, 'book'));
+    await writeFile(path.join(outside, 'secret.txt'), 'secret');
+    await symlink(outside, path.join(dir, 'external'));
+    await touch('资料/note.md', 'keep');
+    await touch('.novel-editor/config.json', JSON.stringify({ novelsDir: outside }));
+    const result = await invoke<{ files: LegacyNode[]; project: unknown }>('refresh-folder', dir);
+    expect(result.files.map((node) => node.name)).not.toContain('external');
+    expect(result.project).toBeNull();
+    expect(await readFile(path.join(dir, '资料/note.md'), 'utf8')).toBe('keep');
+    expect(await exists(path.join(outside, 'book/资料'))).toBe(false);
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+it('rejects new saves while deletion is draining and releases the mutation lock afterwards', async () => {
+  const file = await touch('deleting/chapter.md', 'old');
+  const first = invoke('write-file', file, 'already queued');
+  const deletion = invoke('delete-directory', path.dirname(file));
+  await expect(invoke('write-file', file, 'late timer')).rejects.toThrow('正在删除或移动');
+  await Promise.all([first, deletion]);
+  expect(await exists(path.dirname(file))).toBe(false);
+  const recreated = await touch('deleting/chapter.md', 'new intentional file');
+  await expect(invoke('write-file', recreated, 'new save')).resolves.toEqual({ success: true });
+});
+
+it('saving a chapter cannot write its log through external metadata symlinks', async () => {
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'ne-outside-log-'));
+  try {
+    await writeFile(path.join(outside, 'config.json'), '{}');
+    await symlink(outside, path.join(dir, '.novel-editor'));
+    const chapter = await touch('novels/book/chapter.md', 'old');
+    await expect(invoke('write-file', chapter, 'new text')).resolves.toEqual({ success: true });
+    expect(await exists(path.join(outside, 'writing-log.json'))).toBe(false);
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+it('rejects late saves as soon as a rename across two authorized roots is admitted', async () => {
+  const file = await touch('moving/chapter.md', 'old');
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'ne-rename-destination-'));
+  try {
+    await grantPathAccess({ id: 1 }, outside, true);
+    const first = invoke('write-file', file, 'already queued');
+    const destination = path.join(outside, 'moved');
+    const rename = invoke('rename-file', path.dirname(file), destination);
+    await expect(invoke('write-file', file, 'late timer')).rejects.toThrow('正在删除或移动');
+    await Promise.all([first, rename]);
+    expect(await readFile(path.join(destination, 'chapter.md'), 'utf8')).toBe('already queued');
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
 });

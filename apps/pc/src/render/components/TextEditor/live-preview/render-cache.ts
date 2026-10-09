@@ -6,10 +6,44 @@
  * - 结果按源码字符串缓存在 LRU 中：滚动回来、重复公式、撤销重做都直接命中
  * - KaTeX 输出 MathML（Chromium 原生渲染），无需全局 CSS 与字体文件
  */
-import katex from 'katex';
 import { LruCache } from './lru';
 
-export type RenderResult = { ok: true; html: string } | { ok: false; error: string };
+export type RenderResult = ({ ok: true; html: string } | { ok: false; error: string }) & {
+  pending?: boolean;
+  retryable?: boolean;
+};
+
+let katex: typeof import('katex').default | null = null;
+let mathLoadError: string | null = null;
+let mathLoad: Promise<void> | null = null;
+const mathLoadListeners = new Set<() => void>();
+
+/** Pending/failed widgets observe subsequent shared load attempts until ready or retired. */
+export function subscribeMathRenderer(listener: () => void): () => void {
+  mathLoadListeners.add(listener);
+  return () => {
+    mathLoadListeners.delete(listener);
+  };
+}
+
+/** Only formula widgets/cells request this dependency. A failed load can be retried. */
+export function loadMathRenderer(): Promise<void> {
+  if (katex) return Promise.resolve();
+  if (mathLoad) return mathLoad;
+  mathLoadError = null;
+  mathLoad = import('katex')
+    .then((module) => {
+      katex = module.default;
+    })
+    .catch((error: unknown) => {
+      mathLoadError = errorMessage(error);
+    })
+    .finally(() => {
+      mathLoad = null;
+      for (const listener of [...mathLoadListeners]) listener();
+    });
+  return mathLoad;
+}
 
 const MATH_CACHE_SIZE = 600;
 const TABLE_CACHE_SIZE = 200;
@@ -37,6 +71,11 @@ export function renderMath(source: string, display: boolean): RenderResult {
   let result: RenderResult;
   if (!source.trim()) {
     result = { ok: false, error: '公式为空' };
+  } else if (!katex) {
+    if (mathLoadError)
+      return { ok: false, error: `公式组件加载失败：${mathLoadError}`, retryable: true };
+    void loadMathRenderer();
+    return { ok: false, error: '公式加载中', pending: true };
   } else {
     try {
       // 用 throwOnError 拿到具体错误信息，再由外层 catch 转成结果对象，绝不向上抛出
@@ -139,7 +178,9 @@ export function renderInlineCell(text: string): string {
       const math = renderMath(match[3], false);
       html += math.ok
         ? math.html
-        : `<span class="cm-lp-render-error" title="${escapeHtml(math.error)}">${escapeHtml(match[0])}</span>`;
+        : math.pending
+          ? `<span class="cm-lp-pending">${escapeHtml(match[0])}</span>`
+          : `<span class="cm-lp-render-error" title="${escapeHtml(math.error)}">${escapeHtml(match[0])}</span>`;
     } else if (match[4] !== undefined) {
       html += `<strong>${escapeHtml(match[4])}</strong>`;
     } else if (match[5] !== undefined) {
@@ -161,6 +202,9 @@ export function renderTable(source: string): RenderResult {
   let result: RenderResult;
   try {
     const table = parseTable(source);
+    const containsFormula = [...table.header, ...table.rows.flat()].some((cell) =>
+      [...cell.matchAll(INLINE_TOKEN)].some((match) => match[3] !== undefined)
+    );
     const head = table.header
       .map((cell, i) => `<th${alignAttr(table.align[i])}>${renderInlineCell(cell)}</th>`)
       .join('');
@@ -173,11 +217,16 @@ export function renderTable(source: string): RenderResult {
     result = {
       ok: true,
       html: `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`,
+      ...(containsFormula && !katex
+        ? mathLoadError
+          ? { retryable: true }
+          : { pending: true }
+        : {}),
     };
   } catch (err) {
     result = { ok: false, error: errorMessage(err) };
   }
-  tableCache.set(source, result);
+  if (!result.pending && !result.retryable) tableCache.set(source, result);
   return result;
 }
 

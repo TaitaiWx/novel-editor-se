@@ -1,3 +1,4 @@
+import { useUnsavedChangesGuard } from '@/render/hooks/useUnsavedChangesGuard';
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { VscClose } from 'react-icons/vsc';
 import {
@@ -25,6 +26,9 @@ interface LoreEntryDetailProps {
   onDelete: () => void;
   onOpenEntry: (entry: LoreEntry) => void;
 }
+
+/** 分组下拉里自定义分组的值前缀（与默认分类的值区分开） */
+const CUSTOM_GROUP_PREFIX = 'group:';
 
 /** 已有的分类目录（含各级父目录），给目录输入框做候选 */
 export function collectLoreFolders(entries: readonly Pick<LoreEntry, 'folder'>[]): string[] {
@@ -70,16 +74,33 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
   const [folder, setFolder] = useState(entry.folder);
   const [tagInput, setTagInput] = useState('');
   const [saved, setSaved] = useState('');
+  // 每个字段只跟随自己的保存结果，避免其他字段的异步回填覆盖正在输入的草稿。
   useEffect(() => {
     setTitle(entry.title);
+  }, [entry.id, entry.title]);
+  useEffect(() => {
     setSummary(entry.summary);
+  }, [entry.id, entry.summary]);
+  useEffect(() => {
     setFolder(entry.folder);
-  }, [entry.id, entry.title, entry.summary, entry.folder]);
+  }, [entry.id, entry.folder]);
 
   const folders = useMemo(() => collectLoreFolders(entries), [entries]);
+  // 作者自定义过的分组（与默认四类同名的不重复列出）
+  const customGroups = useMemo(() => {
+    const defaults = new Set(Object.values(LORE_CATEGORY_LABELS));
+    const names = new Set<string>();
+    for (const item of entries) {
+      const name = item.group?.trim();
+      if (name && !defaults.has(name)) names.add(name);
+    }
+    return Array.from(names);
+  }, [entries]);
   const related = useMemo(() => relatedLoreEntries(entry, entries), [entry, entries]);
   const cover = resolveCover(entry.media, entry.cover);
   const dirty = title.trim() !== entry.title || summary.trim() !== entry.summary;
+
+  useUnsavedChangesGuard(dirty || folder !== entry.folder || Boolean(tagInput.trim()));
 
   const save = async (patch: Partial<LoreDraft>, message = '已保存') => {
     await onUpdate(patch);
@@ -126,16 +147,43 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
           />
           <div className={styles.metaRow}>
             <label className={styles.metaField}>
-              <span>分类</span>
-              <Select<LoreCategory>
+              <span>分组</span>
+              {/* 默认四类（世界观 / 势力 / 体系 / 术语）+ 作者自定义的分组，也可以在列表底部新建 */}
+              <Select<string>
                 className={styles.select}
-                aria-label="设定分类"
-                value={entry.category}
-                options={(Object.keys(LORE_CATEGORY_LABELS) as LoreCategory[]).map((item) => ({
-                  value: item,
-                  label: LORE_CATEGORY_LABELS[item],
-                }))}
-                onChange={(category) => void save({ category })}
+                aria-label="设定分组"
+                value={
+                  entry.group
+                    ? (Object.entries(LORE_CATEGORY_LABELS).find(
+                        ([, label]) => label === entry.group?.trim()
+                      )?.[0] ?? `${CUSTOM_GROUP_PREFIX}${entry.group.trim()}`)
+                    : entry.category
+                }
+                options={[
+                  ...(Object.keys(LORE_CATEGORY_LABELS) as LoreCategory[]).map((item) => ({
+                    value: item,
+                    label: LORE_CATEGORY_LABELS[item],
+                  })),
+                  ...customGroups.map((group) => ({
+                    value: `${CUSTOM_GROUP_PREFIX}${group}`,
+                    label: group,
+                  })),
+                ]}
+                custom={{
+                  label: '新建分组',
+                  placeholder: '分组名，例如：背景',
+                  normalize: (text) => {
+                    const name = text.trim().slice(0, 30);
+                    return name ? `${CUSTOM_GROUP_PREFIX}${name}` : null;
+                  },
+                }}
+                onChange={(value) => {
+                  if (value.startsWith(CUSTOM_GROUP_PREFIX)) {
+                    void save({ group: value.slice(CUSTOM_GROUP_PREFIX.length) });
+                  } else {
+                    void save({ category: value as LoreCategory, group: '' });
+                  }
+                }}
               />
             </label>
             <label className={styles.metaField}>

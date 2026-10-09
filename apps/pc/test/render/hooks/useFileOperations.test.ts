@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useFileOperations, type UseFileOperationsContext } from '@/render/hooks/useFileOperations';
 import type { FileNode } from '@/render/types';
 import type { StoryOrderMap } from '@/render/utils/workspace';
+import { registerActiveEditor } from '@/render/components/TextEditor/active-editor';
 import { CHAPTER_MATERIALS_STORAGE_PREFIX } from '@/render/app/types';
 import { installElectronMock, uninstallElectronMock, type InvokeHandler } from './electronMock';
 import { makeDialog, makeToast, ref, type DialogSpy } from './hookCtx';
@@ -53,6 +54,7 @@ function setup(
   const activeTabRef = ref<string | null>(options.activeTab ?? null);
   const ctx = {
     activeTabRef,
+    untitledTabContents: {} as Record<string, string>,
     clipboard: options.clipboard ?? [],
     closeTab: vi.fn(),
     closeTabsByPredicate: vi.fn(),
@@ -96,12 +98,60 @@ describe('useFileOperations · 删除', () => {
     const { result, ctx, toast, electron } = setup();
     await act(() => result.current.handleDeleteFile('/w/正文/第1章.md'));
     expect(electron?.invoke).toHaveBeenCalledWith('delete-file', '/w/正文/第1章.md');
-    expect(ctx.closeTab).toHaveBeenCalledWith('/w/正文/第1章.md');
+    expect(ctx.closeTabsByPredicate).toHaveBeenCalledOnce();
+    expect(ctx.closeTab).not.toHaveBeenCalled();
     const predicate = ctx.removeViewportSnapshots.mock.calls[0][0] as (p: string) => boolean;
     expect(predicate('/w/正文/第1章.md')).toBe(true);
     expect(predicate('/w/x.md')).toBe(false);
     expect(ctx.refreshCurrentFolder).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('已删除 "第1章.md"');
+  });
+
+  it('删除成功后先让已加载编辑器丢弃保存资格，再关闭标签，避免重新写回', async () => {
+    const save = vi.fn();
+    const discard = vi.fn();
+    const registration = registerActiveEditor({
+      save,
+      discard,
+      getSnapshot: () => ({ filePath: '/w/a.md', content: '未保存正文', readOnly: false }),
+      openSearch: vi.fn(),
+    });
+    try {
+      const { result, ctx } = setup();
+      ctx.closeTabsByPredicate.mockImplementation((predicate: (path: string) => boolean) => {
+        expect(predicate('/w/a.md')).toBe(true);
+        expect(predicate('/w/b.md')).toBe(false);
+        expect(discard).toHaveBeenCalledOnce();
+      });
+      await act(() => result.current.handleDeleteFile('/w/a.md'));
+      expect(discard).toHaveBeenCalledOnce();
+      expect(ctx.closeTabsByPredicate).toHaveBeenCalledOnce();
+      expect(ctx.closeTab).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
+    } finally {
+      registration.dispose();
+    }
+  });
+
+  it('删除失败不丢弃编辑器草稿', async () => {
+    const discard = vi.fn();
+    const registration = registerActiveEditor({
+      save: vi.fn(),
+      discard,
+      getSnapshot: () => ({ filePath: '/w/a.md', content: '未保存正文', readOnly: false }),
+      openSearch: vi.fn(),
+    });
+    try {
+      const { result } = setup({
+        handler: () => {
+          throw new Error('EACCES');
+        },
+      });
+      await act(() => result.current.handleDeleteFile('/w/a.md'));
+      expect(discard).not.toHaveBeenCalled();
+    } finally {
+      registration.dispose();
+    }
   });
 
   it('取消确认时不删除', async () => {
@@ -410,6 +460,42 @@ describe('useFileOperations · 复制粘贴 / 拖放', () => {
 });
 
 describe('useFileOperations · 保存未命名', () => {
+  it('写入等待期间的新输入保留为草稿，不能当作全部保存成功', async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const { result, ctx } = setup({
+      dialog: makeDialog({ prompts: ['草稿.md'] }),
+      handler: () => pending,
+      activeTab: '__untitled__:1',
+    });
+    let content = '旧内容';
+    const registration = registerActiveEditor({
+      save: () => true,
+      getSnapshot: () => ({ filePath: '__untitled__:1', content, readOnly: false }),
+      openSearch: () => {},
+    });
+    try {
+      const save = result.current.handleSaveUntitled('__untitled__:1', content);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      content = '旧内容加上新输入';
+      finish();
+      let saved: unknown;
+      await act(async () => {
+        saved = await save;
+      });
+      expect(saved).toBe(false);
+      expect(ctx.setOpenTabs).not.toHaveBeenCalled();
+      expect(ctx.setUntitledTabContents).not.toHaveBeenCalled();
+      expect(ctx.setActiveTab).not.toHaveBeenCalled();
+    } finally {
+      registration.dispose();
+    }
+  });
+
   it('写入磁盘并替换标签、迁移内容与视口', async () => {
     const { result, ctx, electron, toast } = setup({
       dialog: makeDialog({ prompts: ['新文.md'] }),

@@ -56,7 +56,7 @@ coverage/
 apps/pc/.dist-staging-*/
 apps/pc/dist.retired-*/
 
-# pnpm dev / start 用的本地化 Electron 副本（macOS 菜单栏显示「小说编辑器」）
+# 旧开发启动器留下的缓存（新启动器不再生成）
 apps/pc/.electron-dev/
 004-test-bignovel.txt
 
@@ -68,3 +68,7 @@ todo.md
 # 各处打开项目时产生的本机数据（示例作品集的配置 / 种子 / 版本需要随仓库分发，单独放行）
 .novel-editor/
 !apps/pc/sample-data/.novel-editor/
+apps/pc/sample-data/.novel-editor/*
+!apps/pc/sample-data/.novel-editor/config.json
+!apps/pc/sample-data/.novel-editor/seed.json
+!apps/pc/sample-data/.novel-editor/sample.json

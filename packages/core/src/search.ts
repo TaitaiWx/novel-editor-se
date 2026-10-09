@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * 内容搜索与批量查找替换
  *
@@ -167,38 +168,43 @@ export async function findReplace(
   target: string,
   options: FindReplaceOptions = {}
 ): Promise<FindReplaceResult> {
-  buildMatcher(pattern, options);
-  const files = await walkFiles(target, {
-    glob: options.glob,
-    includeHidden: options.includeHidden,
-  });
-  const changed: FindReplaceFileResult[] = [];
-  let filesScanned = 0;
-  let totalReplacements = 0;
+  return withWorkspaceLease(
+    async () => {
+      buildMatcher(pattern, options);
+      const files = await walkFiles(target, {
+        glob: options.glob,
+        includeHidden: options.includeHidden,
+      });
+      const changed: FindReplaceFileResult[] = [];
+      let filesScanned = 0;
+      let totalReplacements = 0;
 
-  for (const file of files) {
-    const content = await readSearchableText(file);
-    if (content === null) continue;
-    filesScanned += 1;
-    const result = replaceInText(content, pattern, replacement, options);
-    if (result.count === 0) continue;
-    totalReplacements += result.count;
-    if (!options.dryRun) await writeFile(file, result.content, 'utf-8');
-    changed.push({
-      path: file,
-      replacements: result.count,
-      previousChars: analyzeContentStats(content).charCount,
-      chars: analyzeContentStats(result.content).charCount,
-    });
-  }
+      for (const file of files) {
+        const content = await readSearchableText(file);
+        if (content === null) continue;
+        filesScanned += 1;
+        const result = replaceInText(content, pattern, replacement, options);
+        if (result.count === 0) continue;
+        totalReplacements += result.count;
+        if (!options.dryRun) await writeFile(file, result.content, 'utf-8');
+        changed.push({
+          path: file,
+          replacements: result.count,
+          previousChars: analyzeContentStats(content).charCount,
+          chars: analyzeContentStats(result.content).charCount,
+        });
+      }
 
-  return {
-    pattern,
-    replacement,
-    dryRun: Boolean(options.dryRun),
-    filesScanned,
-    filesChanged: changed.length,
-    totalReplacements,
-    files: changed,
-  };
+      return {
+        pattern,
+        replacement,
+        dryRun: Boolean(options.dryRun),
+        filesScanned,
+        filesChanged: changed.length,
+        totalReplacements,
+        files: changed,
+      };
+    },
+    { resources: [target] }
+  );
 }

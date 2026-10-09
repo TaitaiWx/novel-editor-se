@@ -6,71 +6,126 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint-and-build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test:ut
-
-      - name: Build
-        run: pnpm build
-
-  e2e:
-    # 真实 Electron GUI 端到端测试（apps/pc/e2e），通过 CDP 驱动，无需 Playwright
-    needs: lint-and-build
-    runs-on: ubuntu-latest
-    continue-on-error: false
+  quality:
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
-
     steps:
       - uses: actions/checkout@v5
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:ut --reporter=default --reporter=junit --outputFile.junit=coverage/ut.xml
+      - name: Save unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: warn
 
+  native:
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x64
+          - os: macos-15
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+          - os: windows-2025
+            arch: x64
+          - os: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    env:
+      # A PR never imports signing credentials or publishes anything.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NOVEL_EDITOR_E2E_SKIP_BUILD: '1'
+      NOVEL_EDITOR_REQUIRE_PACKAGED_SMOKE: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Verify native runner architecture
+        run: node -e "if(process.arch !== '${{ matrix.arch }}') throw new Error('Unexpected runner architecture ' + process.arch)"
       - name: Install Electron runtime libraries
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             xvfb libnss3 libgtk-3-0t64 libxss1 libasound2t64 libgbm1 libxshmfence1 \
             libdrm2 libatk-bridge2.0-0t64 libcups2t64 libxkbcommon0 libxcomposite1 \
             libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libsecret-1-0
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: E2E
-        # Linux CI 下 launcher 会自动追加 --no-sandbox（runner 未配置 chrome-sandbox SUID）
-        run: xvfb-run -a --server-args="-screen 0 1440x900x24" pnpm test:e2e
-
-      - name: Upload E2E artifacts
-        if: failure()
+      - run: pnpm install --frozen-lockfile
+      - name: Native filesystem, security and recovery tests
+        run: >-
+          pnpm test:ut --coverage.enabled=false --reporter=default --reporter=junit
+          --outputFile.junit=coverage/native.xml
+          packages/core/test/workspace-lock.test.ts
+          packages/core/test/atomic-text-save.test.ts
+          apps/pc/test/main/path-access.test.ts
+          apps/pc/test/main/auto-updater/recovery-contract.test.ts
+          apps/pc/test/main/auto-updater/recovery-health.test.ts
+          apps/pc/test/main/auto-updater/recovery-process.test.ts
+          apps/pc/test/main/auto-updater/recovery-windows-process.test.ts
+          apps/pc/test/main/auto-updater/recovery-syntax.test.ts
+          apps/pc/test/main/provisioning-plist.test.ts
+          apps/pc/test/main/packaged-executable.test.ts
+      - run: pnpm build
+      - run: pnpm check:bundles
+      - name: Package native application directory
+        working-directory: apps/pc
+        run: pnpm exec electron-builder --dir --${{ matrix.arch }} --publish never
+      - name: Full Electron integration and packaged startup (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a --server-args="-screen 0 1440x900x24" pnpm test:e2e --reporter=verbose --reporter=junit --outputFile.junit=coverage/e2e.xml
+      - name: Native Electron files, close and packaged startup (macOS/Windows)
+        if: runner.os != 'Linux'
+        run: pnpm test:e2e apps/pc/e2e/app.e2e.ts apps/pc/e2e/lazy-loading.e2e.ts apps/pc/e2e/graceful-close.e2e.ts apps/pc/e2e/packaged-smoke.e2e.ts --testNamePattern="native window close|a hidden untitled draft|打包产物|1[.] 启动|3[.] 编辑章节|4[.] 文件操作|6[.]1 灵感|7[.] GUI 与 CLI 共享|10[.] Markdown|10[.]1 复杂公式|按需加载窗口与公式" --reporter=verbose --reporter=junit --outputFile.junit=coverage/e2e.xml
+      - name: Save native verification evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-artifacts
-          path: apps/pc/e2e/.artifacts/
-          if-no-files-found: ignore
+          name: native-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            coverage/native.xml
+            coverage/e2e.xml
+            apps/pc/e2e/.artifacts/
+            apps/pc/dist/bundle-*.json
+            apps/pc/build/builder-debug.yml
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
+
+  required:
+    if: always()
+    needs: [quality, native]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every platform check
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          NATIVE: ${{ needs.native.result }}
+        run: test "$QUALITY" = success && test "$NATIVE" = success

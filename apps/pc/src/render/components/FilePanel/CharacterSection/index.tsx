@@ -15,6 +15,7 @@ import CharacterAvatar from '../../CharacterAvatar';
 import Tooltip from '../../Tooltip';
 import SectionHeader from '../SectionHeader';
 import ObjectItemRow from '../ObjectItemRow';
+import GroupLabel from '../GroupLabel';
 import CharacterGenerationHint from '../CharacterGenerationHint';
 import {
   WORKSPACE_TAB_CHARACTERS,
@@ -23,13 +24,46 @@ import {
   createGrowthWorkspaceTab,
 } from '../../../utils/workspace';
 import { formatGrowthSheetMeta, type GrowthSheetSummary } from '../../../utils/growthIndex';
-import { getCharacterCategoryLabel, type CharacterGroup } from '../utils';
+import type { CharacterGroup } from '../utils';
 import type { ObjectContextMenuTarget } from '../types';
 import type { AssistantArtifactGenerationStatus } from '../../../utils/assistantGeneration';
 import styles from './styles.module.scss';
 
 export const CHARACTER_SECTION_HINT =
   '人物卡里有人物设计、图集（形象图 / 三视图）和成长档案（等级、经验、技能），几百章后也能一眼看清';
+
+/**
+ * 人物的「角色定位 · 身份」：「主角 · 旅人」→ 定位「主角」+ 身份「旅人」；只有一段时视为身份
+ * （分隔符为间隔号 / 中点 / 竖线 / 斜杠，按 Unicode 码点匹配）
+ */
+export function splitCharacterRole(role: string | undefined): {
+  position?: string;
+  identity: string;
+} {
+  const parts = (role ?? '')
+    .split(/\s*[\u00b7\u30fb\uff65|/]\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) return { position: parts[0], identity: parts.slice(1).join(' · ') };
+  return { identity: parts[0] ?? '' };
+}
+
+/** 角色定位标签的颜色：按文字稳定地取一个柔和的颜色（同一个定位总是同一种颜色） */
+const ROLE_TAG_COLORS = [
+  '#7fb0d8',
+  '#8fc29a',
+  '#d8b07a',
+  '#c79ad6',
+  '#d89292',
+  '#7fc4c0',
+  '#b9b47c',
+];
+
+export function roleTagColor(position: string): string {
+  let hash = 0;
+  for (const char of position) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
+  return ROLE_TAG_COLORS[hash % ROLE_TAG_COLORS.length];
+}
 
 /** 成长卡按人物名匹配到人物；匹配不到人物的成长卡单独列出 */
 export function splitGrowthSheets(
@@ -64,6 +98,8 @@ interface CharacterSectionProps {
   onToggle: () => void;
   onOpenCharacter: (id: number) => void;
   onRenameCharacter: (id: number, name: string) => void;
+  /** 重命名分组（这一组的人物都改成新的分组名）；未提供时分组名不可改 */
+  onRenameGroup?: (characterIds: readonly number[], name: string) => void;
   onDeleteCharacter: (id: number) => void;
   onCreateCharacter: () => void;
   /** 打开成长档案：传人物名为单个成长卡，null 为总览；未提供时不显示成长相关入口 */
@@ -90,6 +126,7 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
   onToggle,
   onOpenCharacter,
   onRenameCharacter,
+  onRenameGroup,
   onDeleteCharacter,
   onCreateCharacter,
   onOpenGrowth,
@@ -159,19 +196,32 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
           {groups.map((group) =>
             group.items.length === 0 ? null : (
               <div key={group.key} className={styles.subgroup}>
-                <div className={styles.subgroupLabel}>
-                  <span>{group.label}</span>
-                  <span className={styles.subgroupCount}>{group.items.length}</span>
-                </div>
+                <GroupLabel
+                  label={group.label}
+                  count={group.items.length}
+                  onRename={
+                    onRenameGroup
+                      ? (name) =>
+                          onRenameGroup(
+                            group.items.map((item) => item.id),
+                            name
+                          )
+                      : undefined
+                  }
+                />
                 {group.items.map((item) => {
                   const sheet = byCharacter.get(item.name);
+                  const { position, identity } = splitCharacterRole(item.role);
                   return (
                     <ObjectItemRow
                       key={item.id}
                       kindLabel="人物"
                       title={item.name}
                       badge={sheet ? `Lv.${sheet.level}` : undefined}
-                      meta={`${getCharacterCategoryLabel(item.category)} · ${item.role || '未填写角色定位'}`}
+                      // 分类（主要 / 次要）已经是分组标题，不再重复；角色定位用标签，身份是文字
+                      tag={position}
+                      tagColor={position ? roleTagColor(position) : undefined}
+                      meta={identity}
                       icon={
                         <CharacterAvatar
                           name={item.name}

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { beforeAll, afterEach, describe, expect, it } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { ensureSyntaxTree } from '@codemirror/language';
@@ -10,9 +10,13 @@ import { markdownLivePreview } from '@/render/components/TextEditor/live-preview
 import { mathMarkdownSyntax } from '@/render/components/TextEditor/live-preview/math-syntax';
 import {
   clearRenderCaches,
+  loadMathRenderer,
   renderMath,
   setRenderBudgetUnlimitedForTests,
 } from '@/render/components/TextEditor/live-preview/render-cache';
+
+// These tests exercise synchronous rendering after the formula dependency is available.
+beforeAll(() => loadMathRenderer());
 
 /** 示例作品集根目录的复杂公式演示（项目说明文档） */
 const DEMO = readFileSync(path.resolve(__dirname, '../../../../sample-data/公式示例.md'), 'utf-8');

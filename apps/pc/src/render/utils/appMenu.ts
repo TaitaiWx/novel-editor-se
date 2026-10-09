@@ -17,7 +17,7 @@ export function describeManualUpdateCheck(status: UpdateStatus | null | undefine
   if (status.updateReady && status.downloadedVersion) {
     return {
       type: 'success',
-      message: `新版本 ${status.downloadedVersion} 已下载，重启后即可完成更新`,
+      message: `新版本 ${status.downloadedVersion} 已下载，${status.recovery?.authorization === 'system-prompt' ? '重启安装时需要系统授权' : '重启后即可完成更新'}`,
     };
   }
   if (status.availableVersion) {

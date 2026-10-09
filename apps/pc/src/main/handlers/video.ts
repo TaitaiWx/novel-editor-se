@@ -1,3 +1,6 @@
+import { withWorkspaceMutation, withBackgroundWorkspaceMutation } from '../workspace-mutation-gate';
+import { registerWorkspaceHandler } from '../workspace-ipc';
+import { getVideoWorkspaceResources } from '../video/workspace-resources';
 import { isSafeMediaPath } from '@novel-editor/core/entity-media';
 /**
  * 场景视频任务 IPC：video-task-submit / list / cancel / retry，video-settings-get / set
@@ -8,11 +11,11 @@ import { isSafeMediaPath } from '@novel-editor/core/entity-media';
  * - 任务每次变化通过 video-task-updated 广播给所有窗口
  * - 场景视频工作区（分镜.json / 分镜.md / 成片预览 / 拼接样片）的读写见 video-scene.ts
  */
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow } from 'electron';
 import { readdir, realpath, stat } from 'fs/promises';
 import path from 'path';
 import { AIError, toAIError } from '@novel-editor/ai';
-import { isDatabaseReady, videoTaskOps } from '@novel-editor/store';
+import { getDatabase, isDatabaseReady, videoTaskOps } from '@novel-editor/store';
 import { perSecondEstimator, type VideoTask } from '@novel-editor/video';
 import {
   VIDEO_TASK_EVENT,
@@ -147,8 +150,22 @@ function broadcast(task: VideoTask): void {
   }
 }
 
+/** Background queue work touches the current database and the works represented in it. */
+function withVideoResources<T>(task: () => Promise<T> | T, detached: boolean): Promise<T> {
+  const { database, resources } = getVideoWorkspaceResources();
+  const invoke = () => {
+    if (database && getDatabase() !== database) throw new Error('项目数据库已切换，请重试视频任务');
+    return task();
+  };
+  return detached
+    ? withBackgroundWorkspaceMutation(invoke, { resources })
+    : withWorkspaceMutation(invoke, { resources });
+}
+
 export function createDefaultVideoRunner(): VideoTaskRunner {
   return new VideoTaskRunner({
+    withMutation: (task) => withVideoResources(task, false),
+    withBackgroundMutation: (task) => withVideoResources(task, true),
     repo: storeRepo,
     getProvider: (providerId) => getAIService().getVideoProvider(providerId),
     resolveOutput: resolveInsideWork,
@@ -187,7 +204,7 @@ export function registerVideoHandlers(
     runner.start();
   });
 
-  ipcMain.handle('video-task-submit', (event, raw: unknown) =>
+  registerWorkspaceHandler('video-task-submit', (event, raw: unknown) =>
     guard(async () => {
       const payload = sanitizeSubmitPayload(raw);
       const workPath = await assertWorkPath(
@@ -197,7 +214,7 @@ export function registerVideoHandlers(
       return runner.submit({ ...payload, workPath });
     })
   );
-  ipcMain.handle('video-task-list', (_event, filter: unknown) =>
+  registerWorkspaceHandler('video-task-list', (_event, filter: unknown) =>
     guard(() => {
       const workPath =
         typeof filter === 'object' &&
@@ -208,18 +225,18 @@ export function registerVideoHandlers(
       return runner.list(workPath ? { workPath } : undefined);
     })
   );
-  ipcMain.handle('video-task-cancel', (_event, id: unknown) =>
+  registerWorkspaceHandler('video-task-cancel', (_event, id: unknown) =>
     guard(() => runner.cancel(String(id)))
   );
-  ipcMain.handle('video-task-retry', (_event, id: unknown) =>
+  registerWorkspaceHandler('video-task-retry', (_event, id: unknown) =>
     guard(() => runner.retry(String(id)))
   );
   registerVideoSceneHandlers({ assertWorkPath, workspaceRootFor });
   registerSceneAudioHandlers({ assertWorkPath, workspaceRootFor });
-  ipcMain.handle('video-settings-get', () =>
+  registerWorkspaceHandler('video-settings-get', () =>
     guard((): VideoSettingsInfo => getProviderConfigStore().getVideoSettings())
   );
-  ipcMain.handle('video-settings-set', (_event, update: unknown) =>
+  registerWorkspaceHandler('video-settings-set', (_event, update: unknown) =>
     guard(
       (): VideoSettingsInfo =>
         getProviderConfigStore().updateVideoSettings(

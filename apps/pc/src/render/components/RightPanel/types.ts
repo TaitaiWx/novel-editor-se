@@ -16,6 +16,8 @@ export interface LoreEntry {
   tags: string[];
   /** 分类目录（例如「地理/北境」，空字符串表示未分类） */
   folder: string;
+  /** 作者自定义的分组名（文件面板「设定」按它分组；空 = 按世界观 / 势力 / 体系 / 术语） */
+  group?: string;
   /** 封面（图集中选中的图片路径） */
   cover?: string;
   /** 图集：概念图、场景、细节 */
@@ -118,6 +120,8 @@ export interface Character {
   name: string;
   role: string;
   category: CharacterCategory;
+  /** 作者自定义的分组名（空 = 按主要 / 次要角色分组） */
+  group?: string;
   description: string;
   currentState: CharacterCurrentStateItem[];
   /** 形象图（图集中选为封面的图片路径；旧数据可能是 资料/人物头像/ 下的文件或 data URL） */

@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 单个媒体文件导出 IPC：media-export
  *
@@ -11,7 +12,7 @@
  * E2E 测试（NOVEL_EDITOR_E2E=1）可用 NOVEL_EDITOR_E2E_SAVE_PATH 跳过对话框，其他情况忽略该变量。
  * 播放器截图 / 录制生成的字节（没有源文件）走 media-save-generated（见 media-save.ts）。
  */
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import { copyFile, realpath, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import { isPathInWorkspace } from './database/workspace-path';
@@ -216,23 +217,26 @@ export function e2eSavePath(): string | null {
 
 export function registerMediaExportHandlers(): void {
   registerMediaSaveHandler();
-  ipcMain.handle('media-export', async (event, request: unknown): Promise<MediaExportResult> => {
-    try {
-      const window = BrowserWindow.fromWebContents(event.sender);
-      return await exportMedia(request, {
-        workspaceRoot: getWorkspaceRootForSender(event.sender.id),
-        defaultDir: app.getPath('downloads'),
-        showSaveDialog: async (options) => {
-          const override = e2eSavePath();
-          if (override) return { canceled: false, filePath: override };
-          const result = window
-            ? await dialog.showSaveDialog(window, options)
-            : await dialog.showSaveDialog(options);
-          return { canceled: result.canceled, filePath: result.filePath };
-        },
-      });
-    } catch (error) {
-      return { saved: false, error: error instanceof Error ? error.message : String(error) };
+  registerWorkspaceHandler(
+    'media-export',
+    async (event, request: unknown): Promise<MediaExportResult> => {
+      try {
+        const window = BrowserWindow.fromWebContents(event.sender);
+        return await exportMedia(request, {
+          workspaceRoot: getWorkspaceRootForSender(event.sender.id),
+          defaultDir: app.getPath('downloads'),
+          showSaveDialog: async (options) => {
+            const override = e2eSavePath();
+            if (override) return { canceled: false, filePath: override };
+            const result = window
+              ? await dialog.showSaveDialog(window, options)
+              : await dialog.showSaveDialog(options);
+            return { canceled: result.canceled, filePath: result.filePath };
+          },
+        });
+      } catch (error) {
+        return { saved: false, error: error instanceof Error ? error.message : String(error) };
+      }
     }
-  });
+  );
 }

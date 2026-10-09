@@ -64,6 +64,11 @@ export function applyPendingLaunch(
 
 /** 当前版本确认健康：推进版本指针并清理待确认标记（会修改传入的 state） */
 export function applyHealthyVersion(state: PersistedUpdaterState, currentVersion: string): void {
+  if (state.rollbackPendingVersion) {
+    if (state.rollbackPendingVersion !== currentVersion) return;
+    clearPendingState(state);
+    state.rollbackPendingVersion = null;
+  }
   state.lastKnownGoodVersion = currentVersion;
   state.pendingLaunchAttempts = 0;
   if (state.pendingVersion === currentVersion) {

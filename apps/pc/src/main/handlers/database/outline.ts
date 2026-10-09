@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { registerWorkspaceHandler } from '../../workspace-ipc';
 import { novelOps, outlineOps, outlineVersionOps, type OutlineScope } from '@novel-editor/store';
 
 type OutlineTreeInput = {
@@ -30,7 +30,7 @@ function normalizeOutlineScope(folderPath: string, scope?: OutlineScopeInput): O
 export function registerOutlineHandlers(): void {
   // ─── Outline CRUD ─────────────────────────────────────────────────────────
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-outline-list-by-folder',
     (_event, folderPath: string, scope?: OutlineScopeInput) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
@@ -39,7 +39,7 @@ export function registerOutlineHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-outline-replace-by-folder',
     (_event, folderPath: string, entries: OutlineTreeInput[], scope?: OutlineScopeInput) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
@@ -50,7 +50,7 @@ export function registerOutlineHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-outline-clear-by-folder',
     (_event, folderPath: string, scope?: OutlineScopeInput) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
@@ -59,16 +59,19 @@ export function registerOutlineHandlers(): void {
     }
   );
 
-  ipcMain.handle('db-outline-reorder-by-folder', (_event, folderPath: string, ids: number[]) => {
-    const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
-    if (!novel) {
-      throw new Error('项目不存在，无法排序大纲');
+  registerWorkspaceHandler(
+    'db-outline-reorder-by-folder',
+    (_event, folderPath: string, ids: number[]) => {
+      const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
+      if (!novel) {
+        throw new Error('项目不存在，无法排序大纲');
+      }
+      outlineOps.reorder(ids);
+      return { changes: ids.length };
     }
-    outlineOps.reorder(ids);
-    return { changes: ids.length };
-  });
+  );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-outline-version-list-by-folder',
     (_event, folderPath: string, scope?: OutlineScopeInput) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
@@ -77,7 +80,7 @@ export function registerOutlineHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-outline-version-create-by-folder',
     (
       _event,
@@ -111,7 +114,7 @@ export function registerOutlineHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-outline-version-apply-by-folder',
     (_event, folderPath: string, versionId: number, scope?: OutlineScopeInput) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
@@ -134,7 +137,7 @@ export function registerOutlineHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-outline-version-update',
     (
       _event,
@@ -148,7 +151,7 @@ export function registerOutlineHandlers(): void {
     }
   );
 
-  ipcMain.handle('db-outline-version-delete', (_event, versionId: number) => {
+  registerWorkspaceHandler('db-outline-version-delete', (_event, versionId: number) => {
     return outlineVersionOps.delete(versionId);
   });
 }

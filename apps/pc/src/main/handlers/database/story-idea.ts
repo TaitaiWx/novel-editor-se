@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { registerWorkspaceHandler } from '../../workspace-ipc';
 import { novelOps, storyIdeaOps } from '@novel-editor/store';
 
 type StoryIdeaCardSource = 'manual' | 'ai';
@@ -15,13 +15,13 @@ type StoryIdeaOutputType = 'logline' | 'scene_hook' | 'outline_direction';
 export function registerStoryIdeaHandlers(): void {
   // ─── Story Idea / 三签创作法 ───────────────────────────────────────────
 
-  ipcMain.handle('db-story-idea-card-list-by-folder', (_event, folderPath: string) => {
+  registerWorkspaceHandler('db-story-idea-card-list-by-folder', (_event, folderPath: string) => {
     const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
     if (!novel) return [];
     return storyIdeaOps.listCardsByNovel(novel.id);
   });
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-story-idea-card-create-by-folder',
     (
       _event,
@@ -53,7 +53,7 @@ export function registerStoryIdeaHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-story-idea-card-update',
     (
       _event,
@@ -79,15 +79,15 @@ export function registerStoryIdeaHandlers(): void {
     ) => storyIdeaOps.updateCard(cardId, fields)
   );
 
-  ipcMain.handle('db-story-idea-card-delete', (_event, cardId: number) => {
+  registerWorkspaceHandler('db-story-idea-card-delete', (_event, cardId: number) => {
     return storyIdeaOps.deleteCard(cardId);
   });
 
-  ipcMain.handle('db-story-idea-output-list', (_event, cardId: number) => {
+  registerWorkspaceHandler('db-story-idea-output-list', (_event, cardId: number) => {
     return storyIdeaOps.listOutputsByCard(cardId);
   });
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-story-idea-output-replace-by-folder',
     (
       _event,
@@ -104,7 +104,7 @@ export function registerStoryIdeaHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-story-idea-output-update',
     (
       _event,
@@ -113,11 +113,11 @@ export function registerStoryIdeaHandlers(): void {
     ) => storyIdeaOps.updateOutput(outputId, fields)
   );
 
-  ipcMain.handle('db-story-idea-output-select', (_event, outputId: number) => {
+  registerWorkspaceHandler('db-story-idea-output-select', (_event, outputId: number) => {
     return storyIdeaOps.selectOutput(outputId);
   });
 
-  ipcMain.handle('db-story-idea-output-delete', (_event, outputId: number) => {
+  registerWorkspaceHandler('db-story-idea-output-delete', (_event, outputId: number) => {
     return storyIdeaOps.deleteOutput(outputId);
   });
 }

@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * 作品作用域：资料、记忆库（成长档案）以及 GUI 数据库中的人物 / 设定 / 大纲都「跟随作品」。
  *
@@ -172,23 +173,34 @@ export interface LegacyMaterialMigration {
 export async function migrateLegacyProjectMaterials(
   projectRoot: string
 ): Promise<LegacyMaterialMigration> {
-  const project = await resolveProject({ cwd: projectRoot });
-  if (!project || path.resolve(project.root) !== path.resolve(projectRoot)) {
-    return { migrated: false, reason: 'not-project' };
-  }
-  const from = path.join(project.root, GENERATED_MATERIAL_ROOT_NAME);
-  if (!(await isDirectory(from))) return { migrated: false, reason: 'no-legacy' };
-  const names = await listNovelNames(project);
-  if (names.length === 0) return { migrated: false, reason: 'no-work', from };
-  if (names.length > 1) return { migrated: false, reason: 'multiple-works', from };
-  const to = path.join(project.novelsPath, names[0], GENERATED_MATERIAL_ROOT_NAME);
-  if (await isNonEmptyDirectory(to)) return { migrated: false, reason: 'target-exists', from, to };
-  if (await isDirectory(to)) {
-    // 空目录：先移除再整体移动（rmdir 只能删空目录，不会误删内容）
-    await rmdir(to);
-  }
-  await rename(from, to);
-  return { migrated: true, reason: 'migrated', from, to };
+  return withWorkspaceLease(
+    async () => {
+      const project = await resolveProject({ cwd: projectRoot });
+      if (!project || path.resolve(project.root) !== path.resolve(projectRoot)) {
+        return { migrated: false, reason: 'not-project' };
+      }
+      const from = path.join(project.root, GENERATED_MATERIAL_ROOT_NAME);
+      if (!(await isDirectory(from))) return { migrated: false, reason: 'no-legacy' };
+      const names = await listNovelNames(project);
+      if (names.length === 0) return { migrated: false, reason: 'no-work', from };
+      if (names.length > 1) return { migrated: false, reason: 'multiple-works', from };
+      const to = path.join(project.novelsPath, names[0], GENERATED_MATERIAL_ROOT_NAME);
+      if (await isNonEmptyDirectory(to))
+        return { migrated: false, reason: 'target-exists', from, to };
+      if (await isDirectory(to)) {
+        // 空目录：先移除再整体移动（rmdir 只能删空目录，不会误删内容）
+        await rmdir(to);
+      }
+      await rename(from, to);
+      return { migrated: true, reason: 'migrated', from, to };
+    },
+    {
+      resources: [
+        projectRoot,
+        (await resolveProject({ cwd: projectRoot }))?.novelsPath ?? projectRoot,
+      ],
+    }
+  );
 }
 
 /**
@@ -196,12 +208,22 @@ export async function migrateLegacyProjectMaterials(
  * 只删除已知作用域的空子目录（见 `cleanupEmptyGeneratedMaterialDirectories`）。
  */
 export async function cleanupEmptyWorkMaterialDirectories(folderPath: string): Promise<string[]> {
-  const removed = await cleanupEmptyGeneratedMaterialDirectories(folderPath);
-  const project = await resolveProject({ cwd: folderPath });
-  if (!project || path.resolve(project.root) !== path.resolve(folderPath)) return removed;
-  for (const scope of await listWorkScopes(project)) {
-    if (scope.kind !== 'work') continue;
-    removed.push(...(await cleanupEmptyGeneratedMaterialDirectories(scope.root)));
-  }
-  return removed;
+  return withWorkspaceLease(
+    async () => {
+      const removed = await cleanupEmptyGeneratedMaterialDirectories(folderPath);
+      const project = await resolveProject({ cwd: folderPath });
+      if (!project || path.resolve(project.root) !== path.resolve(folderPath)) return removed;
+      for (const scope of await listWorkScopes(project)) {
+        if (scope.kind !== 'work') continue;
+        removed.push(...(await cleanupEmptyGeneratedMaterialDirectories(scope.root)));
+      }
+      return removed;
+    },
+    {
+      resources: [
+        folderPath,
+        (await resolveProject({ cwd: folderPath }))?.novelsPath ?? folderPath,
+      ],
+    }
+  );
 }

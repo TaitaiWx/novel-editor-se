@@ -1,3 +1,4 @@
+import { registerPreparationParticipant } from '../utils/rendererPreparation';
 import React, { useCallback, useRef } from 'react';
 import type { EditorViewportSnapshot } from '@/render/components/TextEditor';
 import type { FileNode } from '@/render/types';
@@ -71,46 +72,61 @@ export function useEditorSession(ctx: UseEditorSessionContext) {
     return node?.type === 'file';
   }, []);
 
-  const schedulePersistEditorSession = useCallback(() => {
-    const ipc = window.electron?.ipcRenderer;
-    if (!ipc || !editorSessionKey || !editorSessionHydratedRef.current) return;
+  const schedulePersistEditorSession = useCallback(
+    (immediate = false) => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc || !editorSessionKey || !editorSessionHydratedRef.current) return;
 
-    const persistedActiveTab = isPersistableTabPath(activeTabRef.current, filesRef.current)
-      ? activeTabRef.current
-      : null;
-    const persistedOpenTabs = openTabsRef.current.filter((path) =>
-      isPersistableTabPath(path, filesRef.current)
-    );
-    const nextOpenTabs = persistedActiveTab
-      ? Array.from(new Set([...persistedOpenTabs, persistedActiveTab]))
-      : persistedOpenTabs;
-    const viewportSnapshots = Object.fromEntries(
-      Object.entries(editorViewportSnapshotsRef.current).filter(([path]) =>
+      const persistedActiveTab = isPersistableTabPath(activeTabRef.current, filesRef.current)
+        ? activeTabRef.current
+        : null;
+      const persistedOpenTabs = openTabsRef.current.filter((path) =>
         isPersistableTabPath(path, filesRef.current)
-      )
-    ) as Record<string, EditorViewportSnapshot>;
-    const nextSession: PersistedEditorSession = {
-      openTabs: nextOpenTabs,
-      activeTab: persistedActiveTab,
-      viewportSnapshots,
-    };
+      );
+      const nextOpenTabs = persistedActiveTab
+        ? Array.from(new Set([...persistedOpenTabs, persistedActiveTab]))
+        : persistedOpenTabs;
+      const viewportSnapshots = Object.fromEntries(
+        Object.entries(editorViewportSnapshotsRef.current).filter(([path]) =>
+          isPersistableTabPath(path, filesRef.current)
+        )
+      ) as Record<string, EditorViewportSnapshot>;
+      const nextSession: PersistedEditorSession = {
+        openTabs: nextOpenTabs,
+        activeTab: persistedActiveTab,
+        viewportSnapshots,
+      };
 
-    if (persistEditorSessionTimerRef.current) {
-      window.clearTimeout(persistEditorSessionTimerRef.current);
-    }
-    persistEditorSessionTimerRef.current = window.setTimeout(() => {
-      ipc.invoke('db-settings-set', editorSessionKey, JSON.stringify(nextSession)).catch(() => {});
-    }, 180);
-  }, [
-    activeTabRef,
-    editorSessionHydratedRef,
-    editorSessionKey,
-    editorViewportSnapshotsRef,
-    filesRef,
-    isPersistableTabPath,
-    openTabsRef,
-    persistEditorSessionTimerRef,
-  ]);
+      if (persistEditorSessionTimerRef.current) {
+        window.clearTimeout(persistEditorSessionTimerRef.current);
+      }
+      const persist = () =>
+        ipc.invoke('db-settings-set', editorSessionKey, JSON.stringify(nextSession));
+      if (immediate) {
+        persistEditorSessionTimerRef.current = null;
+        return persist().then(() => undefined);
+      }
+      persistEditorSessionTimerRef.current = window.setTimeout(() => {
+        persistEditorSessionTimerRef.current = null;
+        void persist().catch(() => {});
+      }, 180);
+    },
+    [
+      activeTabRef,
+      editorSessionHydratedRef,
+      editorSessionKey,
+      editorViewportSnapshotsRef,
+      filesRef,
+      isPersistableTabPath,
+      openTabsRef,
+      persistEditorSessionTimerRef,
+    ]
+  );
+
+  React.useEffect(
+    () => registerPreparationParticipant(() => schedulePersistEditorSession(true)),
+    [schedulePersistEditorSession]
+  );
 
   const remapPathReferences = useCallback(
     (oldPath: string, newPath: string) => {

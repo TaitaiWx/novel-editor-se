@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorState, StateEffect } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { ensureSyntaxTree } from '@codemirror/language';
@@ -14,9 +14,13 @@ import {
 } from '@/render/components/TextEditor/live-preview/build-decorations';
 import {
   clearRenderCaches,
+  loadMathRenderer,
   renderMath,
 } from '@/render/components/TextEditor/live-preview/render-cache';
 import { MathWidget, toggleTaskAt } from '@/render/components/TextEditor/live-preview/widgets';
+
+// These tests exercise synchronous rendering after the formula dependency is available.
+beforeAll(() => loadMathRenderer());
 
 const markdownLang = markdown({ base: markdownLanguage, extensions: [mathMarkdownSyntax] });
 

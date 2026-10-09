@@ -42,6 +42,7 @@ interface UnmountFlushRefs {
   currentContentRef: React.MutableRefObject<string>;
   currentOriginalContentRef: React.MutableRefObject<string>;
   readOnlyRef: React.MutableRefObject<boolean>;
+  pendingSaveCountRef: React.MutableRefObject<number>;
 }
 
 /**
@@ -62,7 +63,7 @@ function flushEditorOnUnmount(refs: UnmountFlushRefs) {
   const content = refs.currentContentRef.current;
   if (
     isPersistablePath(filePath) &&
-    content !== refs.currentOriginalContentRef.current &&
+    (content !== refs.currentOriginalContentRef.current || refs.pendingSaveCountRef.current > 0) &&
     !refs.readOnlyRef.current
   ) {
     window.electron.ipcRenderer.invoke('write-file', filePath, content).catch((err) => {
@@ -94,6 +95,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   onContentChange,
   onCursorChange,
   onSaveUntitled,
+  onLoadBlocked,
   onScrollProcessed,
   onTransientHighlightProcessed,
   settingsComponent,
@@ -118,8 +120,11 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const onContentChangeRef = useSyncedRef(onContentChange);
   const onCursorChangeRef = useSyncedRef(onCursorChange);
   const onSaveUntitledRef = useSyncedRef(onSaveUntitled);
-  const readOnlyRef = useSyncedRef(readOnly);
-  const filePathRef = useSyncedRef(filePath);
+  // 保存状态绑定当前已加载文件，目标文件的只读属性不能抑制旧草稿落盘。
+  const readOnlyRef = useRef(readOnly);
+  useEffect(() => {
+    if (currentFilePathRef.current === filePath) readOnlyRef.current = readOnly;
+  }, [filePath, readOnly]);
 
   const { saveViewportSnapshot, restoreViewportSnapshot } = useViewportSnapshots({
     viewRef,
@@ -144,6 +149,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   );
 
   const {
+    pendingSaveCountRef,
     autoSaving,
     lastSaved,
     setLastSaved,
@@ -157,18 +163,20 @@ const TextEditor: React.FC<TextEditorProps> = ({
     currentContentRef,
     currentOriginalContentRef,
     readOnlyRef,
-    filePathRef,
     onSaveUntitledRef,
     autoSaveTimeoutRef,
     toast,
   });
-  useDirtyStateBroadcast(filePath, hasChanges);
+  useDirtyStateBroadcast(currentFilePathRef.current, hasChanges);
   // 应用菜单的 保存 / 另存为 / 查找 作用于最近聚焦的编辑器
   useActiveEditorRegistration({
     editorContainerRef,
     viewRef,
     currentFilePathRef,
     currentContentRef,
+    currentOriginalContentRef,
+    autoSaveTimeoutRef,
+    setHasChanges,
     readOnlyRef,
     handleManualSaveRef,
   });
@@ -211,8 +219,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
         currentContentRef,
         currentOriginalContentRef,
         readOnlyRef,
+        pendingSaveCountRef,
       });
-  }, [readOnlyRef]);
+  }, [readOnlyRef, pendingSaveCountRef]);
 
   const { loading, error, isLargeFile, handleRetry } = useEditorFileLoader({
     editorReady,
@@ -229,6 +238,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
     currentContentRef,
     currentOriginalContentRef,
     readOnlyRef,
+    pendingSaveCountRef,
     readOnlyCompartment,
     wordWrapCompartment,
     setHasChanges,
@@ -238,6 +248,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
     saveViewportSnapshot,
     onContentChange,
     onCursorChange,
+    onLoadBlocked: (previousPath) => {
+      toast.error('保存失败，未保存的内容已保留');
+      onLoadBlocked?.(previousPath);
+    },
   });
 
   useEditorRequests({

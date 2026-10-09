@@ -1,3 +1,4 @@
+import { stringifyLoreAttributes } from '../components/RightPanel/lore-data';
 import { useCallback } from 'react';
 import { sceneVideoTargetFromStoryboard } from '@/render/components/SceneVideoView/events';
 import { internalDataMessage, resolveInternalOpenTarget } from '@/render/utils/internalData';
@@ -17,7 +18,6 @@ import { areCharactersEqual, areLoreEntriesEqual } from '@/render/app/entityEqua
 import {
   createGraphLayoutStorageKey,
   createRelationStorageKey,
-  stringifyCharacterAttributes,
 } from '@/render/components/RightPanel/utils';
 import { findNodeInTree, getNodeDisplayName } from '@/render/app/fileTreeUtils';
 import type { WorkspaceState } from './state/useWorkspaceState';
@@ -264,37 +264,7 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
       if (!normalizedName || normalizedName === target.name) return;
 
       try {
-        const novelId = await getCurrentNovelId();
-        const existingRows = novelId
-          ? ((await ipc.invoke('db-character-list', novelId)) as Array<{
-              id: number;
-              name: string;
-              role: string;
-              description: string;
-              attributes: string;
-            }>)
-          : [];
-        const matchedRow = existingRows.find((item) => item.id === characterId);
-        await ipc.invoke('db-character-update', characterId, {
-          name: normalizedName,
-          role: target.role,
-          description: target.description,
-          attributes:
-            matchedRow?.attributes ||
-            stringifyCharacterAttributes(
-              {
-                avatar: target.avatar,
-                design: target.design,
-                media: target.media,
-                voice: target.voice,
-                aliases: target.aliases,
-                category: target.category,
-                highlightColor: target.highlightColor,
-                highlightFirstMentionOnly: target.highlightFirstMentionOnly,
-              },
-              target.role
-            ),
-        });
+        await ipc.invoke('db-character-update', characterId, { name: normalizedName });
         setWorkspaceCharacters((prev) =>
           prev.map((item) => (item.id === characterId ? { ...item, name: normalizedName } : item))
         );
@@ -303,7 +273,60 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
         toast.error(`修改人物名失败: ${error instanceof Error ? error.message : '未知错误'}`);
       }
     },
-    [dialog, getCurrentNovelId, setWorkspaceCharacters, toast, workspaceCharacters]
+    [dialog, setWorkspaceCharacters, toast, workspaceCharacters]
+  );
+
+  /** 重命名人物分组：把这一组人物的分组名都改成新名字（只改 attributes.group，其他字段原样保留） */
+  const handleRenameCharacterGroup = useCallback(
+    async (characterIds: readonly number[], nextGroup: string) => {
+      const ipc = window.electron?.ipcRenderer;
+      const group = nextGroup.trim();
+      if (!ipc || !group || characterIds.length === 0) return;
+      try {
+        const novelId = await getCurrentNovelId();
+        if (!novelId) return;
+        const rows = (await ipc.invoke('db-character-list', novelId)) as Array<{
+          id: number;
+          name: string;
+          role: string;
+          description: string;
+          attributes: string;
+        }>;
+        for (const row of rows.filter((item) => characterIds.includes(item.id))) {
+          await ipc.invoke('db-character-update', row.id, { attributePatch: { group } });
+        }
+        setWorkspaceCharacters((prev) =>
+          prev.map((item) => (characterIds.includes(item.id) ? { ...item, group } : item))
+        );
+        toast.success(`分组已更名为 "${group}"`);
+      } catch (error) {
+        toast.error(`修改分组名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [getCurrentNovelId, setWorkspaceCharacters, toast]
+  );
+
+  /** 重命名设定分组：把这一组设定的分组名都改成新名字 */
+  const handleRenameLoreGroup = useCallback(
+    async (entryIds: readonly number[], nextGroup: string) => {
+      const ipc = window.electron?.ipcRenderer;
+      const group = nextGroup.trim();
+      if (!ipc || !group || entryIds.length === 0) return;
+      try {
+        for (const entry of workspaceLoreEntries.filter((item) => entryIds.includes(item.id))) {
+          await ipc.invoke('db-world-setting-update', entry.id, {
+            attributes: stringifyLoreAttributes({ ...entry, group }),
+          });
+        }
+        setWorkspaceLoreEntries((prev) =>
+          prev.map((item) => (entryIds.includes(item.id) ? { ...item, group } : item))
+        );
+        toast.success(`分组已更名为 "${group}"`);
+      } catch (error) {
+        toast.error(`修改分组名失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    },
+    [setWorkspaceLoreEntries, toast, workspaceLoreEntries]
   );
 
   const handleDeleteLoreNode = useCallback(
@@ -457,6 +480,8 @@ export function useWorkspaceEntityActions(ctx: UseWorkspaceEntityActionsContext)
     handleRenameCharacterNode,
     handleDeleteLoreNode,
     handleRenameLoreNode,
+    handleRenameCharacterGroup,
+    handleRenameLoreGroup,
     handleClearCharacters,
     handleClearLoreEntries,
   };

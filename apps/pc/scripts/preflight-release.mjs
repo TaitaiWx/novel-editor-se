@@ -23,6 +23,7 @@ function getPreflightPackageArgs() {
   return ['--linux', 'AppImage'];
 }
 
+/** @param {string} command @param {string[]} args @param {NodeJS.ProcessEnv} [extraEnv] */
 function runCommand(command, args, extraEnv = {}) {
   const result = spawnSync(command, args, {
     cwd: repoRoot,
@@ -38,12 +39,14 @@ function runCommand(command, args, extraEnv = {}) {
   }
 }
 
+/** @param {string} filePath @param {string} description */
 async function ensureFileExists(filePath, description) {
   if (!existsSync(filePath)) {
     throw new Error(`缺少${description}: ${filePath}`);
   }
 }
 
+/** @param {string} dir @param {(fullPath: string, fileName: string) => boolean} predicate @param {string[]} [collected] @returns {Promise<string[]>} */
 async function collectFiles(dir, predicate, collected = []) {
   if (!existsSync(dir)) {
     return collected;

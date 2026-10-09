@@ -20,11 +20,13 @@ let lastDroppedPaths: string[] = [];
 document.addEventListener(
   'drop',
   (e) => {
+    if (!e.isTrusted) return;
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
       lastDroppedPaths = Array.from(files)
         .map((f) => webUtils.getPathForFile(f))
         .filter(Boolean);
+      if (!ipcRenderer.sendSync('authorize-dropped-paths', lastDroppedPaths)) lastDroppedPaths = [];
     }
   },
   { capture: true }
@@ -48,6 +50,7 @@ contextBridge.exposeInMainWorld('electron', {
         'write-file',
         // GUI 会话文件（供 CLI ne status 读取打开的文件与未保存变更）
         'gui-session-publish',
+        'renderer-preparation-result',
         'get-file-info',
         'get-file-info-batch',
         'get-files-exist',
@@ -108,6 +111,7 @@ contextBridge.exposeInMainWorld('electron', {
         'db-character-create',
         'db-character-list',
         'db-character-update',
+        'db-character-patch-design',
         'db-character-reorder',
         'db-character-delete',
         'db-character-clear-by-novel',
@@ -265,6 +269,8 @@ contextBridge.exposeInMainWorld('electron', {
     },
     on: (channel: string, listener: IpcListener) => {
       const validChannels = [
+        'renderer-preparation-request',
+        'renderer-preparation-release',
         'shortcut-new-file',
         'shortcut-open-folder',
         'shortcut-save-file',
@@ -314,6 +320,8 @@ contextBridge.exposeInMainWorld('electron', {
     },
     removeListener: (channel: string, listener: IpcListener) => {
       const validChannels = [
+        'renderer-preparation-request',
+        'renderer-preparation-release',
         'shortcut-new-file',
         'shortcut-open-folder',
         'shortcut-save-file',
@@ -354,6 +362,8 @@ contextBridge.exposeInMainWorld('electron', {
     },
     removeAllListeners: (channel: string) => {
       const validChannels = [
+        'renderer-preparation-request',
+        'renderer-preparation-release',
         'shortcut-new-file',
         'shortcut-open-folder',
         'shortcut-save-file',

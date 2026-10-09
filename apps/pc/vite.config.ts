@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import { builtinModules } from 'node:module';
 import { copyFileSync, mkdirSync } from 'node:fs';
+import { bundleReport } from './scripts/bundle-report.mjs';
 
 const MAIN_RUNTIME_EXTERNAL_PACKAGES = new Set([
   'electron',
@@ -66,6 +67,7 @@ export default defineConfig(({ mode }) => {
     // 主进程构建配置
     return {
       plugins: [
+        bundleReport('main'),
         {
           name: 'copy-splash',
           configResolved(config) {
@@ -121,7 +123,7 @@ export default defineConfig(({ mode }) => {
 
   // 渲染进程构建配置
   return {
-    plugins: [react()],
+    plugins: [react(), bundleReport('renderer')],
     server: {
       port: 5173,
       strictPort: true,

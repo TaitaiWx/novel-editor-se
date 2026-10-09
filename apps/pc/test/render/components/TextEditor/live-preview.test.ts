@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorState, type Extension } from '@codemirror/state';
 import { Decoration, type DecorationSet, WidgetType } from '@codemirror/view';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -16,6 +16,7 @@ import {
 } from '@/render/components/TextEditor/live-preview/field';
 import {
   clearRenderCaches,
+  loadMathRenderer,
   getRenderCacheStats,
   parseTable,
   renderInlineCell,
@@ -38,6 +39,9 @@ import {
 import { resolveImageSource } from '@/render/components/TextEditor/live-preview/image-loader';
 import { LruCache } from '@/render/components/TextEditor/live-preview/lru';
 import { syntaxTree } from '@codemirror/language';
+
+// These tests exercise synchronous rendering after the formula dependency is available.
+beforeAll(() => loadMathRenderer());
 
 const markdownLang = markdown({ base: markdownLanguage, extensions: [mathMarkdownSyntax] });
 const OPTIONS = { filePath: '/书/资料/示例.md' };

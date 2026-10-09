@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * 写作日志（stats today / history 的数据来源）
  *
@@ -118,8 +119,13 @@ function enqueue(projectRoot: string, task: () => Promise<void>): Promise<void> 
 
 /** 记录一批写入事件（同一次命令的多个文件只读写一次日志） */
 export async function recordWrites(projectRoot: string, events: WriteEvent[]): Promise<void> {
-  if (events.length === 0) return;
-  await enqueue(projectRoot, () => applyWrites(projectRoot, events));
+  return withWorkspaceLease(
+    async () => {
+      if (events.length === 0) return;
+      await enqueue(projectRoot, () => applyWrites(projectRoot, events));
+    },
+    { resources: [projectRoot] }
+  );
 }
 
 async function applyWrites(projectRoot: string, events: WriteEvent[]): Promise<void> {
@@ -197,36 +203,38 @@ export async function recordProjectWrites(
   events: WriteEvent[],
   options: { fallbackRoot?: string | null } = {}
 ): Promise<ProjectWritesResult[]> {
-  const groups = new Map<string, WriteEvent[]>();
-  const configuredRoots = new Map<string, boolean>();
-  for (const event of events) {
-    if (!isStoryFile(event.path)) continue;
-    const root = await resolveWritingLogRoot(event.path, options.fallbackRoot);
-    if (!root) continue;
-    let configured = configuredRoots.get(root);
-    if (configured === undefined) {
-      configured = await pathExists(getConfigPath(root));
-      configuredRoots.set(root, configured);
+  return (async () => {
+    const groups = new Map<string, WriteEvent[]>();
+    const configuredRoots = new Map<string, boolean>();
+    for (const event of events) {
+      if (!isStoryFile(event.path)) continue;
+      const root = await resolveWritingLogRoot(event.path, options.fallbackRoot);
+      if (!root) continue;
+      let configured = configuredRoots.get(root);
+      if (configured === undefined) {
+        configured = await pathExists(getConfigPath(root));
+        configuredRoots.set(root, configured);
+      }
+      if (!isTrackedStoryPath(event.path, root, { configured })) continue;
+      const list = groups.get(root) ?? [];
+      list.push(event);
+      groups.set(root, list);
     }
-    if (!isTrackedStoryPath(event.path, root, { configured })) continue;
-    const list = groups.get(root) ?? [];
-    list.push(event);
-    groups.set(root, list);
-  }
-  const results: ProjectWritesResult[] = [];
-  for (const [root, list] of groups) {
-    try {
-      await recordWrites(root, list);
-      results.push({ root, count: list.length });
-    } catch (error) {
-      results.push({
-        root,
-        count: 0,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
+    const results: ProjectWritesResult[] = [];
+    for (const [root, list] of groups) {
+      try {
+        await recordWrites(root, list);
+        results.push({ root, count: list.length });
+      } catch (error) {
+        results.push({
+          root,
+          count: 0,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
     }
-  }
-  return results;
+    return results;
+  })();
 }
 
 export interface StoryFileSave {
@@ -246,20 +254,22 @@ export interface StoryFileSave {
  * 内容未变化时不记录（避免无改动的重复保存虚增写入次数与时长）。
  */
 export async function recordStoryFileSave(save: StoryFileSave): Promise<ProjectWritesResult[]> {
-  if (save.previousContent === save.content) return [];
-  if (!isStoryFile(save.path)) return [];
-  return recordProjectWrites(
-    [
-      {
-        path: path.resolve(save.path),
-        previousChars:
-          save.previousContent === null ? 0 : analyzeContentStats(save.previousContent).charCount,
-        chars: analyzeContentStats(save.content).charCount,
-        at: save.at,
-      },
-    ],
-    { fallbackRoot: save.workspaceRoot }
-  );
+  return (async () => {
+    if (save.previousContent === save.content) return [];
+    if (!isStoryFile(save.path)) return [];
+    return recordProjectWrites(
+      [
+        {
+          path: path.resolve(save.path),
+          previousChars:
+            save.previousContent === null ? 0 : analyzeContentStats(save.previousContent).charCount,
+          chars: analyzeContentStats(save.content).charCount,
+          at: save.at,
+        },
+      ],
+      { fallbackRoot: save.workspaceRoot }
+    );
+  })();
 }
 
 export async function getTodayStats(projectRoot: string, now = new Date()): Promise<WritingDay> {

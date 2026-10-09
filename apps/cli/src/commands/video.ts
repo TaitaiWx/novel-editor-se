@@ -6,7 +6,8 @@
  * - validate：校验 / 规范化 AI 返回的分镜 JSON（容忍代码块、字段别名），输出 Markdown 分镜表
  * 视频生成本身需要异步任务队列与落盘，只在 GUI 中进行。
  */
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { writeTextFile, withWorkspaceLease } from '@novel-editor/core';
 import {
   buildStoryboardPrompt,
   parseStoryboardResponse,
@@ -39,7 +40,8 @@ async function readInput(ctx: CliContext, args: ParsedCommandArgs, what: string)
   if (bool(args, 'stdin')) return ctx.readStdin();
   if (!file) throw new CliError('USAGE', `缺少${what}：传入文件路径或使用 --stdin`);
   try {
-    return await readFile(resolvePath(ctx, file), 'utf-8');
+    const target = resolvePath(ctx, file);
+    return await withWorkspaceLease(() => readFile(target, 'utf-8'), { resources: [target] });
   } catch {
     throw new CliError('NOT_FOUND', `文件不存在: ${file}`);
   }
@@ -62,7 +64,7 @@ async function finishStoryboard(
   const out = str(args, 'out');
   if (out) {
     const target = resolvePath(ctx, out);
-    await writeFile(target, `${JSON.stringify(parsed.storyboard, null, 2)}\n`, 'utf-8');
+    await writeTextFile(target, `${JSON.stringify(parsed.storyboard, null, 2)}\n`);
     ctx.logger.info(`已保存分镜: ${target}`);
   }
   return {

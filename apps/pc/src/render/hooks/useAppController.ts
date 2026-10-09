@@ -1,3 +1,4 @@
+import { useRendererPreparation } from './useRendererPreparation';
 import { useRendererReadyReporting } from './useRendererReadyReporting';
 import { useWorkspaceState } from './state/useWorkspaceState';
 import { useTabsState } from './state/useTabsState';
@@ -74,7 +75,7 @@ export function useAppController() {
   const layout = usePaneLayout(layoutState);
 
   // ─── 动作（无 effect，仅 useCallback / useMemo） ───────────────
-  const tabs = useTabActions({ ...tabsState, ...layoutState });
+  const tabs = useTabActions({ ...tabsState, ...layoutState, ...uiState });
   const settingsActions = useAppSettingsActions({ ...settingsState, ...uiState });
   const loader = useProjectLoader({
     ...workspaceState,
@@ -164,6 +165,7 @@ export function useAppController() {
   useWorkspaceEntities({ ...workspaceState, ...entitiesState });
   // GUI 会话发布（.novel-editor/session.json，供 CLI ne status 读取）；只读状态，无顺序依赖
   useGuiSessionPublisher({ ...workspaceState, ...tabsState });
+  useRendererPreparation(tabsState.untitledTabContents, uiState.toast);
 
   // ─── AI 生成与右键菜单 ─────────────────────────────────────────
   const libraryGeneration = useLibraryGeneration({

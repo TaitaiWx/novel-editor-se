@@ -6,12 +6,14 @@
 import path from 'node:path';
 import {
   recordProjectWrites,
+  withWorkspaceLease,
   resolveProject,
   type Project,
   type WriteEvent,
 } from '@novel-editor/core';
 import { stat } from 'node:fs/promises';
 import { commands as defaultCommands } from './commands';
+import { commandWorkspaceResources } from './workspace-resources';
 import { CliError, exitCodeFor, normalizeError } from './errors';
 import { describeCommands, renderHelp } from './help';
 import { createDefaultGlobals, extractGlobals, parseArgv } from './parser';
@@ -197,7 +199,18 @@ export async function runCli(
     };
 
     logger.debug(`命令: ${command.path.join(' ')}，cwd: ${cwd}`);
-    const result = await command.run(ctx, args);
+    // Network commands take short input/output leases themselves. Extension commands are
+    // wildcard unless their own implementation takes a complete operation boundary lease.
+    const control = new Set(['serve', 'ping', 'shutdown', 'version', 'update', 'open']);
+    const builtin = defaultCommands.includes(command);
+    const phased = builtin && (command.path[0] === 'ai' || command.path[0] === 'video');
+    const resources =
+      builtin && !phased && !control.has(command.path[0])
+        ? await commandWorkspaceResources(command, ctx, args)
+        : undefined;
+    const result = await (builtin && (control.has(command.path[0]) || phased)
+      ? command.run(ctx, args)
+      : withWorkspaceLease(() => command.run(ctx, args), { resources }));
     return emit({ ok: true, data: result.data }, 0, result.text, result.raw);
   } catch (rawError) {
     const error = normalizeError(rawError);

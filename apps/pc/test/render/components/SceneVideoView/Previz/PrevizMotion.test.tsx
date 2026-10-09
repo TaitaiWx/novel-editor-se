@@ -140,7 +140,13 @@ function renderDialog(
 }
 
 async function generate() {
-  await waitFor(() => expect(invoke).toHaveBeenCalledWith('ai-providers-list'));
+  // 请求发出不等于模型与舞台已经就绪；禁用按钮上的点击会被忽略。
+  await waitFor(() => {
+    expect((screen.getByLabelText('预演模型') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: '生成预演' }) as HTMLButtonElement).disabled).toBe(
+      false
+    );
+  });
   fireEvent.click(screen.getByRole('button', { name: '生成预演' }));
   await waitFor(() => expect(screen.getByText(SCRIPT.summary, { selector: 'p' })).toBeTruthy());
 }

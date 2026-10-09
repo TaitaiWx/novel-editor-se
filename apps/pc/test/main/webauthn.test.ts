@@ -18,13 +18,18 @@ const mocks = vi.hoisted(() => ({
   configureWebAuthn: vi.fn(),
   showMessageBox: vi.fn(),
   sessionOn: vi.fn(),
+  readGroup: vi.fn(),
+  canPromptTouchID: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
   app: { configureWebAuthn: mocks.configureWebAuthn },
   dialog: { showMessageBox: mocks.showMessageBox },
   session: { defaultSession: { on: mocks.sessionOn } },
+  systemPreferences: { canPromptTouchID: mocks.canPromptTouchID },
 }));
+
+vi.mock('../../src/main/webauthn-signature', () => ({ readSignedWebAuthnGroup: mocks.readGroup }));
 
 type WebAuthnModule = typeof import('../../src/main/webauthn');
 
@@ -48,6 +53,8 @@ const ENV_KEYS = [
 describe('webauthn', () => {
   beforeEach(() => {
     mocks.configureWebAuthn.mockReset();
+    mocks.readGroup.mockReset().mockReturnValue('ABCDEFGHIJ.com.novel-editor.app.webauthn');
+    mocks.canPromptTouchID.mockReset().mockReturnValue(true);
     mocks.showMessageBox.mockReset();
     mocks.sessionOn.mockReset();
     for (const key of ENV_KEYS) vi.stubEnv(key, '');
@@ -75,48 +82,43 @@ describe('webauthn', () => {
       expect(mocks.configureWebAuthn).not.toHaveBeenCalled();
     });
 
-    it('缺少 team id 时记录配置错误', async () => {
+    it('签名未绑定 Touch ID 时安全禁用，不信任环境变量', async () => {
+      vi.stubEnv('APPLE_TEAM_ID', 'ABCDEFGHIJ');
+      vi.stubEnv('NOVEL_EDITOR_WEBAUTHN_KEYCHAIN_ACCESS_GROUP', 'EXPLICIT.group');
+      mocks.readGroup.mockImplementation(() => {
+        throw new Error('没有有效签名');
+      });
       const { configureWebAuthn } = await loadModule();
-      const info = configureWebAuthn();
-      expect(info.configurationError).toMatch(/APPLE_TEAM_ID/);
-      expect(info.touchIdAvailable).toBe(false);
+      expect(configureWebAuthn()).toMatchObject({
+        configurationError: '没有有效签名',
+        touchIdAvailable: false,
+      });
       expect(mocks.configureWebAuthn).not.toHaveBeenCalled();
     });
 
-    it('优先使用显式 keychain access group', async () => {
-      vi.stubEnv('NOVEL_EDITOR_WEBAUTHN_KEYCHAIN_ACCESS_GROUP', '  EXPLICIT.group ');
-      vi.stubEnv('APPLE_TEAM_ID', 'TEAM');
+    it('从实际签名取得组，环境不能覆盖证书团队', async () => {
+      vi.stubEnv('NOVEL_EDITOR_WEBAUTHN_KEYCHAIN_ACCESS_GROUP', 'WRONG.group');
       const { configureWebAuthn } = await loadModule();
-      const info = configureWebAuthn();
-      expect(mocks.configureWebAuthn).toHaveBeenCalledWith({
-        touchID: { keychainAccessGroup: 'EXPLICIT.group', promptReason: 'sign in to $1' },
-      });
-      expect(info).toMatchObject({
+      expect(configureWebAuthn()).toMatchObject({
         touchIdConfigured: true,
         touchIdAvailable: true,
-        keychainAccessGroup: 'EXPLICIT.group',
-        configurationError: null,
+        keychainAccessGroup: 'ABCDEFGHIJ.com.novel-editor.app.webauthn',
+      });
+      expect(mocks.configureWebAuthn).toHaveBeenCalledWith({
+        touchID: {
+          keychainAccessGroup: 'ABCDEFGHIJ.com.novel-editor.app.webauthn',
+          promptReason: 'sign in to $1',
+        },
       });
     });
 
-    it('按优先级从 team id 环境变量推导，并去掉末尾的点', async () => {
-      vi.stubEnv('APPLE_TEAM_ID', 'APPLE.');
-      vi.stubEnv('CSC_TEAM_ID', 'CSC');
+    it('配置成功仍须设备可用才能宣称可用', async () => {
+      mocks.canPromptTouchID.mockReturnValue(false);
       const { configureWebAuthn } = await loadModule();
-      expect(configureWebAuthn().keychainAccessGroup).toBe('APPLE.com.novel-editor.app.webauthn');
-    });
-
-    it('NOVEL_EDITOR_APPLE_TEAM_ID 优先于其它变量；空白值被跳过', async () => {
-      vi.stubEnv('NOVEL_EDITOR_APPLE_TEAM_ID', 'NE');
-      vi.stubEnv('APPLE_TEAM_ID', 'APPLE');
-      let mod = await loadModule();
-      expect(mod.configureWebAuthn().keychainAccessGroup).toBe('NE.com.novel-editor.app.webauthn');
-
-      vi.stubEnv('NOVEL_EDITOR_APPLE_TEAM_ID', '   ');
-      vi.stubEnv('APPLE_TEAM_ID', '');
-      vi.stubEnv('CSC_TEAM_ID', 'CSC');
-      mod = await loadModule();
-      expect(mod.configureWebAuthn().keychainAccessGroup).toBe('CSC.com.novel-editor.app.webauthn');
+      expect(configureWebAuthn()).toMatchObject({
+        touchIdConfigured: true,
+        touchIdAvailable: false,
+      });
     });
 
     it('app.configureWebAuthn 抛错时记录错误信息', async () => {
@@ -148,7 +150,9 @@ describe('webauthn', () => {
       expect(mocks.configureWebAuthn).toHaveBeenCalledTimes(1);
       expect(getWebAuthnSupportInfo().touchIdConfigured).toBe(true);
 
-      vi.stubEnv('APPLE_TEAM_ID', '');
+      mocks.readGroup.mockImplementation(() => {
+        throw new Error('signature failed');
+      });
       const failing = await loadModule();
       failing.configureWebAuthn();
       vi.stubEnv('APPLE_TEAM_ID', 'T');

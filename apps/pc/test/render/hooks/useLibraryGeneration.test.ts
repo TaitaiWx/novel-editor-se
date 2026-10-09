@@ -130,10 +130,11 @@ describe('useLibraryGeneration · 人物', () => {
 
     const update = electron.invoke.mock.calls.find((c) => c[0] === 'db-character-update');
     expect(update?.[1]).toBe(2);
-    const updatePayload = update?.[2] as { name: string; role: string; attributes: string };
-    expect(updatePayload.name).toBe('王五');
-    expect(updatePayload.role).toBe('师兄');
-    expect(JSON.parse(updatePayload.attributes).aliases).toEqual(['老王', '王师兄']);
+    const updatePayload = update?.[2] as { role: string; appendAliases: string[] };
+    expect(updatePayload).not.toHaveProperty('name');
+    expect(updatePayload).not.toHaveProperty('attributes');
+    expect(updatePayload).not.toHaveProperty('role');
+    expect(updatePayload.appendAliases).toEqual(['王师兄']);
 
     const create = electron.invoke.mock.calls.find((c) => c[0] === 'db-character-create');
     expect(create?.slice(1, 5)).toEqual([1, '林', '主角', '少年']);

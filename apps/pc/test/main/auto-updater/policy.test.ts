@@ -180,6 +180,23 @@ describe('auto-updater/policy', () => {
     expect(state.lastKnownGoodVersion).toBe('1.1.0');
   });
 
+  it('only the requested rollback version becoming healthy commits the rollback', () => {
+    const state = makeState({
+      pendingVersion: '1.1.0',
+      pendingFromVersion: '1.0.0',
+      pendingLaunchAttempts: 2,
+      rollbackPendingVersion: '1.0.0',
+      rejectedVersion: '1.1.0',
+    });
+    applyHealthyVersion(state, '1.1.0');
+    expect(state.lastKnownGoodVersion).toBe('1.0.0');
+    expect(state.pendingVersion).toBe('1.1.0');
+    applyHealthyVersion(state, '1.0.0');
+    expect(state.pendingVersion).toBeNull();
+    expect(state.rollbackPendingVersion).toBeNull();
+    expect(state.rejectedVersion).toBe('1.1.0');
+  });
+
   it('下载完成记录待确认版本，回滚后清空', () => {
     const state = makeState({ pendingLaunchAttempts: 2 });
     applyDownloadedUpdate(state, '1.1.0', '1.0.0');

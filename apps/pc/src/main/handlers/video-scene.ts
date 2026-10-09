@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 场景视频工作区 IPC：video-scene-load / save / read-file / write-animatic / write-image
  *
@@ -9,7 +10,6 @@
  *   镜头N-首帧-<时间>.<图片> / 镜头N-预演.png|mp4|webm（首帧候选采用后保存；
  *   预演第一帧与预演视频每个镜头一份，覆盖写入：先删除旧文件再独占写入，不会经符号链接写穿）
  */
-import { ipcMain } from 'electron';
 import { readdir, readFile, realpath, rm, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import { AIError, toAIError } from '@novel-editor/ai';
@@ -182,11 +182,11 @@ export async function loadScene(scene: ResolvedScene): Promise<VideoSceneLoadRes
 }
 
 export function registerVideoSceneHandlers(deps: VideoSceneHandlerDeps): void {
-  ipcMain.handle('video-scene-load', (event, raw: unknown) =>
+  registerWorkspaceHandler('video-scene-load', (event, raw: unknown) =>
     guard(async () => loadScene(await resolveScene(raw, deps, event?.sender?.id)))
   );
 
-  ipcMain.handle('video-scene-save', (event, raw: unknown) =>
+  registerWorkspaceHandler('video-scene-save', (event, raw: unknown) =>
     guard(async (): Promise<VideoSceneSaveResult> => {
       const scene = await resolveScene(raw, deps, event?.sender?.id);
       const payload = raw as { state?: unknown; markdown?: unknown };
@@ -213,7 +213,7 @@ export function registerVideoSceneHandlers(deps: VideoSceneHandlerDeps): void {
     })
   );
 
-  ipcMain.handle('video-scene-read-file', (event, raw: unknown) =>
+  registerWorkspaceHandler('video-scene-read-file', (event, raw: unknown) =>
     guard(async (): Promise<Uint8Array> => {
       const scene = await resolveScene(raw, deps, event?.sender?.id);
       const fileName = (raw as { fileName?: unknown }).fileName;
@@ -226,7 +226,7 @@ export function registerVideoSceneHandlers(deps: VideoSceneHandlerDeps): void {
     })
   );
 
-  ipcMain.handle('video-scene-write-animatic', (event, raw: unknown) =>
+  registerWorkspaceHandler('video-scene-write-animatic', (event, raw: unknown) =>
     guard(async (): Promise<{ fileName: string; path: string }> => {
       const scene = await resolveScene(raw, deps, event?.sender?.id);
       const payload = raw as { ext?: unknown; data?: unknown };
@@ -246,7 +246,7 @@ export function registerVideoSceneHandlers(deps: VideoSceneHandlerDeps): void {
     })
   );
 
-  ipcMain.handle('video-scene-write-image', (event, raw: unknown) =>
+  registerWorkspaceHandler('video-scene-write-image', (event, raw: unknown) =>
     guard(async (): Promise<{ fileName: string; relativePath: string }> => {
       const scene = await resolveScene(raw, deps, event?.sender?.id);
       const payload = raw as { kind?: unknown; shotIndex?: unknown; data?: unknown };
@@ -268,7 +268,7 @@ export function registerVideoSceneHandlers(deps: VideoSceneHandlerDeps): void {
     })
   );
 
-  ipcMain.handle('video-scene-write-media', (event, raw: unknown) =>
+  registerWorkspaceHandler('video-scene-write-media', (event, raw: unknown) =>
     guard(async (): Promise<{ fileName: string; relativePath: string }> => {
       const scene = await resolveScene(raw, deps, event?.sender?.id);
       const payload = raw as { kind?: unknown; shotIndex?: unknown; ext?: unknown; data?: unknown };

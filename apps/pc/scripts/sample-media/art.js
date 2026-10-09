@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * 示例作品集的程序化插画（在 Electron 隐藏窗口里运行，见 ../generate-sample-media.mjs）：
  * - 人物：扁平插画风格的全身像，支持 正面 / 侧面 / 背面，用于「形象图」与「三视图」
@@ -11,33 +10,59 @@
 
   // ─── 工具 ────────────────────────────────────────────────────────────────
 
+  /**
+   * @param {string} hex
+   */
   function hexToRgb(hex) {
     const value = hex.replace('#', '');
     return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
   }
+  /**
+   * @param {number[]} rgb
+   */
   function rgbToHex(rgb) {
     return (
       '#' +
       rgb
-        .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'))
+        .map((v) =>
+          Math.max(0, Math.min(255, Math.round(v)))
+            .toString(16)
+            .padStart(2, '0')
+        )
         .join('')
     );
   }
   /** amount > 0 变亮，< 0 变暗 */
+  /**
+   * @param {string} hex
+   * @param {number} amount
+   */
   function shade(hex, amount) {
     const rgb = hexToRgb(hex);
     return rgbToHex(rgb.map((v) => (amount >= 0 ? v + (255 - v) * amount : v * (1 + amount))));
   }
+  /**
+   * @param {string} a
+   * @param {string} b
+   * @param {number} t
+   */
   function mix(a, b, t) {
     const x = hexToRgb(a);
     const y = hexToRgb(b);
     return rgbToHex(x.map((v, i) => v + (y[i] - v) * t));
   }
+  /**
+   * @param {string} hex
+   * @param {number} alpha
+   */
   function rgba(hex, alpha) {
     const [r, g, b] = hexToRgb(hex);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
   /** 固定种子的伪随机 */
+  /**
+   * @param {number} seed
+   */
   function seeded(seed) {
     let state = seed >>> 0;
     return () => {
@@ -46,6 +71,13 @@
     };
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number[][]} points
+   * @param {CanvasPaint | null} fill
+   * @param {CanvasPaint | null} [stroke]
+   * @param {number} [lineWidth]
+   */
   function poly(ctx, points, fill, stroke, lineWidth) {
     ctx.beginPath();
     points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
@@ -56,16 +88,24 @@
     }
     if (stroke) {
       ctx.strokeStyle = stroke;
-      ctx.lineWidth = lineWidth;
+      ctx.lineWidth = lineWidth ?? 1;
       ctx.lineJoin = 'round';
       ctx.stroke();
     }
   }
 
   /** 平滑闭合曲线（经过各点的二次贝塞尔中点法） */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number[][]} points
+   * @param {CanvasPaint | null} fill
+   * @param {CanvasPaint | null} [stroke]
+   * @param {number} [lineWidth]
+   */
   function smooth(ctx, points, fill, stroke, lineWidth) {
     ctx.beginPath();
     const n = points.length;
+    /** @param {number[]} a @param {number[]} b */
     const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     const start = mid(points[n - 1], points[0]);
     ctx.moveTo(start[0], start[1]);
@@ -81,12 +121,23 @@
     }
     if (stroke) {
       ctx.strokeStyle = stroke;
-      ctx.lineWidth = lineWidth;
+      ctx.lineWidth = lineWidth ?? 1;
       ctx.lineJoin = 'round';
       ctx.stroke();
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x
+   * @param {number} y
+   * @param {number} rx
+   * @param {number} ry
+   * @param {CanvasPaint | null} fill
+   * @param {CanvasPaint | null} [stroke]
+   * @param {number} [lineWidth]
+   * @param {number} [rotation]
+   */
   function ellipse(ctx, x, y, rx, ry, fill, stroke, lineWidth, rotation) {
     ctx.beginPath();
     ctx.ellipse(x, y, Math.abs(rx), Math.abs(ry), rotation || 0, 0, Math.PI * 2);
@@ -96,22 +147,39 @@
     }
     if (stroke) {
       ctx.strokeStyle = stroke;
-      ctx.lineWidth = lineWidth;
+      ctx.lineWidth = lineWidth ?? 1;
       ctx.stroke();
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number[][]} points
+   * @param {CanvasPaint} stroke
+   * @param {number} [lineWidth]
+   * @param {CanvasLineCap} [cap]
+   */
   function line(ctx, points, stroke, lineWidth, cap) {
     ctx.beginPath();
     points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = lineWidth;
+    ctx.lineWidth = lineWidth ?? 1;
     ctx.lineCap = cap || 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
   }
 
   /** 两点之间的锥形肢体（起点宽 w1，终点宽 w2） */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number[]} a
+   * @param {number[]} b
+   * @param {number} w1
+   * @param {number} w2
+   * @param {CanvasPaint | null} fill
+   * @param {CanvasPaint | null} [stroke]
+   * @param {number} [lineWidth]
+   */
   function limb(ctx, a, b, w1, w2, fill, stroke, lineWidth) {
     const dx = b[0] - a[0];
     const dy = b[1] - a[1];
@@ -124,11 +192,11 @@
         [a[0] + nx * w1, a[1] + ny * w1],
         [(a[0] + b[0]) / 2 + nx * (w1 + w2) * 0.52, (a[1] + b[1]) / 2 + ny * (w1 + w2) * 0.52],
         [b[0] + nx * w2, b[1] + ny * w2],
-        [b[0] + dx / len * w2 * 0.6, b[1] + dy / len * w2 * 0.6],
+        [b[0] + (dx / len) * w2 * 0.6, b[1] + (dy / len) * w2 * 0.6],
         [b[0] - nx * w2, b[1] - ny * w2],
         [(a[0] + b[0]) / 2 - nx * (w1 + w2) * 0.52, (a[1] + b[1]) / 2 - ny * (w1 + w2) * 0.52],
         [a[0] - nx * w1, a[1] - ny * w1],
-        [a[0] - dx / len * w1 * 0.5, a[1] - dy / len * w1 * 0.5],
+        [a[0] - (dx / len) * w1 * 0.5, a[1] - (dy / len) * w1 * 0.5],
       ],
       fill,
       stroke,
@@ -142,6 +210,12 @@
    * 计算人物骨架。H 为身高（像素），脚底在 footY。
    * u：头高；w：身体宽度单位（成人头高，儿童按身体比例缩小）
    */
+  /**
+   * @param {SampleCharacter} spec
+   * @param {number} cx
+   * @param {number} footY
+   * @param {number} H
+   */
   function skeleton(spec, cx, footY, H) {
     const heads = spec.heads || 6.6;
     const u = H / heads;
@@ -149,6 +223,7 @@
     const chin = top + u;
     const body = footY - chin;
     const w = (body / 5.6) * (spec.build || 1);
+    /** @param {number} fraction */
     const at = (fraction) => chin + body * fraction;
     return {
       cx,
@@ -169,10 +244,17 @@
     };
   }
 
+  /**
+   * @param {string} color
+   */
   function outlineOf(color) {
     return shade(color, -0.45);
   }
 
+  /**
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   */
   function hemFor(spec, s) {
     switch (spec.top.style) {
       case 'robe':
@@ -188,6 +270,12 @@
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   */
   function drawLegsFront(ctx, spec, s, lw) {
     const pants = spec.pants;
     const o = outlineOf(pants);
@@ -198,8 +286,26 @@
       const ankleX = s.cx + side * s.w * 0.3;
       if (shortLegs) {
         // 小腿露出皮肤
-        limb(ctx, [kneeX, s.knee - s.w * 0.1], [ankleX, s.ankle], s.w * 0.13, s.w * 0.1, spec.skin, outlineOf(spec.skin), lw);
-        limb(ctx, [hipX, s.hip], [kneeX, s.knee + s.w * 0.02], s.w * 0.27, s.w * 0.21, pants, o, lw);
+        limb(
+          ctx,
+          [kneeX, s.knee - s.w * 0.1],
+          [ankleX, s.ankle],
+          s.w * 0.13,
+          s.w * 0.1,
+          spec.skin,
+          outlineOf(spec.skin),
+          lw
+        );
+        limb(
+          ctx,
+          [hipX, s.hip],
+          [kneeX, s.knee + s.w * 0.02],
+          s.w * 0.27,
+          s.w * 0.21,
+          pants,
+          o,
+          lw
+        );
       } else {
         limb(ctx, [kneeX, s.knee], [ankleX, s.ankle], s.w * 0.17, s.w * 0.13, pants, o, lw);
         limb(ctx, [hipX, s.hip], [kneeX, s.knee], s.w * 0.27, s.w * 0.18, pants, o, lw);
@@ -208,12 +314,30 @@
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} x
+   * @param {number} side
+   * @param {number} lw
+   */
   function drawFootFront(ctx, spec, s, x, side, lw) {
     if (spec.barefoot) {
-      ellipse(ctx, x + side * s.w * 0.02, s.footY - s.w * 0.06, s.w * 0.12, s.w * 0.07, spec.skin, outlineOf(spec.skin), lw);
+      ellipse(
+        ctx,
+        x + side * s.w * 0.02,
+        s.footY - s.w * 0.06,
+        s.w * 0.12,
+        s.w * 0.07,
+        spec.skin,
+        outlineOf(spec.skin),
+        lw
+      );
       return;
     }
     const boot = spec.boots;
+    if (!boot) throw new Error(`Missing boot color: ${spec.name}`);
     smooth(
       ctx,
       [
@@ -230,6 +354,12 @@
   }
 
   /** 正 / 背面上衣轮廓 */
+  /**
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {ReturnType<typeof hemFor>} hem
+   * @param {boolean} back
+   */
   function torsoPoints(spec, s, hem, back) {
     const sw = s.w * 0.92;
     const ww = s.w * 0.6;
@@ -255,6 +385,13 @@
     ];
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   * @param {boolean} back
+   */
   function drawTorsoFront(ctx, spec, s, lw, back) {
     const hem = hemFor(spec, s);
     const top = spec.top;
@@ -272,6 +409,7 @@
 
     if (!back) {
       if (top.style === 'long-coat') {
+        if (!top.inner) throw new Error(`Missing coat lining: ${spec.name}`);
         // 敞开的长外套：内衬 + 两条翻领
         poly(
           ctx,
@@ -285,19 +423,77 @@
           outlineOf(top.inner),
           lw
         );
-        line(ctx, [[s.cx - s.w * 0.17, s.shoulder], [s.cx - s.w * 0.32, s.chest + s.w * 0.1], [s.cx - s.w * 0.16, hem.y]], top.trim, s.w * 0.08);
-        line(ctx, [[s.cx + s.w * 0.17, s.shoulder], [s.cx + s.w * 0.32, s.chest + s.w * 0.1], [s.cx + s.w * 0.16, hem.y]], top.trim, s.w * 0.08);
+        line(
+          ctx,
+          [
+            [s.cx - s.w * 0.17, s.shoulder],
+            [s.cx - s.w * 0.32, s.chest + s.w * 0.1],
+            [s.cx - s.w * 0.16, hem.y],
+          ],
+          top.trim,
+          s.w * 0.08
+        );
+        line(
+          ctx,
+          [
+            [s.cx + s.w * 0.17, s.shoulder],
+            [s.cx + s.w * 0.32, s.chest + s.w * 0.1],
+            [s.cx + s.w * 0.16, hem.y],
+          ],
+          top.trim,
+          s.w * 0.08
+        );
         for (let i = 0; i < 3; i += 1) {
-          ellipse(ctx, s.cx - s.w * 0.3, s.chest + s.w * (0.45 + i * 0.32), s.w * 0.035, s.w * 0.035, top.trim);
+          ellipse(
+            ctx,
+            s.cx - s.w * 0.3,
+            s.chest + s.w * (0.45 + i * 0.32),
+            s.w * 0.035,
+            s.w * 0.035,
+            top.trim
+          );
         }
       } else if (top.style === 'shirt') {
-        line(ctx, [[s.cx - s.w * 0.16, s.shoulder], [s.cx, s.chest - s.w * 0.05], [s.cx + s.w * 0.16, s.shoulder]], shade(top.color, -0.3), lw);
+        line(
+          ctx,
+          [
+            [s.cx - s.w * 0.16, s.shoulder],
+            [s.cx, s.chest - s.w * 0.05],
+            [s.cx + s.w * 0.16, s.shoulder],
+          ],
+          shade(top.color, -0.3),
+          lw
+        );
       } else {
         // 交领右衽：左襟压右襟
-        line(ctx, [[s.cx - s.w * 0.17, s.shoulder - s.w * 0.02], [s.cx + s.w * 0.28, s.waist - s.w * 0.05]], top.trim, s.w * 0.09);
-        line(ctx, [[s.cx + s.w * 0.17, s.shoulder - s.w * 0.02], [s.cx + s.w * 0.02, s.chest - s.w * 0.08]], top.trim, s.w * 0.09);
+        line(
+          ctx,
+          [
+            [s.cx - s.w * 0.17, s.shoulder - s.w * 0.02],
+            [s.cx + s.w * 0.28, s.waist - s.w * 0.05],
+          ],
+          top.trim,
+          s.w * 0.09
+        );
+        line(
+          ctx,
+          [
+            [s.cx + s.w * 0.17, s.shoulder - s.w * 0.02],
+            [s.cx + s.w * 0.02, s.chest - s.w * 0.08],
+          ],
+          top.trim,
+          s.w * 0.09
+        );
         if (top.style === 'robe') {
-          line(ctx, [[s.cx + s.w * 0.28, s.waist], [s.cx + s.w * 0.4, hem.y - s.w * 0.02]], shade(top.color, -0.22), lw);
+          line(
+            ctx,
+            [
+              [s.cx + s.w * 0.28, s.waist],
+              [s.cx + s.w * 0.4, hem.y - s.w * 0.02],
+            ],
+            shade(top.color, -0.22),
+            lw
+          );
         }
       }
       if (spec.patch) {
@@ -315,7 +511,15 @@
         );
       }
     } else {
-      line(ctx, [[s.cx, s.shoulder + s.w * 0.05], [s.cx, hem.y - s.w * 0.05]], shade(top.color, -0.18), lw * 0.8);
+      line(
+        ctx,
+        [
+          [s.cx, s.shoulder + s.w * 0.05],
+          [s.cx, hem.y - s.w * 0.05],
+        ],
+        shade(top.color, -0.18),
+        lw * 0.8
+      );
     }
     if (spec.apron && !back) {
       poly(
@@ -330,8 +534,24 @@
         outlineOf(spec.apron),
         lw
       );
-      line(ctx, [[s.cx - s.w * 0.34, s.chest - s.w * 0.05], [s.cx - s.w * 0.2, s.shoulder]], shade(spec.apron, -0.2), s.w * 0.06);
-      line(ctx, [[s.cx + s.w * 0.34, s.chest - s.w * 0.05], [s.cx + s.w * 0.2, s.shoulder]], shade(spec.apron, -0.2), s.w * 0.06);
+      line(
+        ctx,
+        [
+          [s.cx - s.w * 0.34, s.chest - s.w * 0.05],
+          [s.cx - s.w * 0.2, s.shoulder],
+        ],
+        shade(spec.apron, -0.2),
+        s.w * 0.06
+      );
+      line(
+        ctx,
+        [
+          [s.cx + s.w * 0.34, s.chest - s.w * 0.05],
+          [s.cx + s.w * 0.2, s.shoulder],
+        ],
+        shade(spec.apron, -0.2),
+        s.w * 0.06
+      );
       ellipse(ctx, s.cx, s.waist + s.w * 0.55, s.w * 0.2, s.w * 0.12, shade(spec.apron, -0.12));
     }
     // 腰带 / 腰封
@@ -350,12 +570,34 @@
         lw
       );
       if (spec.top.style === 'robe' && !back) {
-        line(ctx, [[s.cx + s.w * 0.3, s.waist + s.w * 0.05], [s.cx + s.w * 0.36, s.waist + s.w * 0.7]], spec.belt, s.w * 0.1);
-        line(ctx, [[s.cx + s.w * 0.36, s.waist + s.w * 0.05], [s.cx + s.w * 0.5, s.waist + s.w * 0.6]], spec.belt, s.w * 0.09);
+        line(
+          ctx,
+          [
+            [s.cx + s.w * 0.3, s.waist + s.w * 0.05],
+            [s.cx + s.w * 0.36, s.waist + s.w * 0.7],
+          ],
+          spec.belt,
+          s.w * 0.1
+        );
+        line(
+          ctx,
+          [
+            [s.cx + s.w * 0.36, s.waist + s.w * 0.05],
+            [s.cx + s.w * 0.5, s.waist + s.w * 0.6],
+          ],
+          spec.belt,
+          s.w * 0.09
+        );
       }
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   */
   function drawArmsFront(ctx, spec, s, lw) {
     const sleeve = spec.top.color;
     for (const side of [-1, 1]) {
@@ -364,30 +606,80 @@
       const wrist = [s.cx + side * s.w * 1.06, s.crotch - s.w * 0.08];
       if (spec.rolledSleeves) {
         limb(ctx, elbow, wrist, s.w * 0.15, s.w * 0.11, spec.skin, outlineOf(spec.skin), lw);
-        limb(ctx, shoulder, [elbow[0], elbow[1] + s.w * 0.08], s.w * 0.22, s.w * 0.19, sleeve, outlineOf(sleeve), lw);
+        limb(
+          ctx,
+          shoulder,
+          [elbow[0], elbow[1] + s.w * 0.08],
+          s.w * 0.22,
+          s.w * 0.19,
+          sleeve,
+          outlineOf(sleeve),
+          lw
+        );
       } else {
         limb(ctx, shoulder, elbow, s.w * 0.21, s.w * 0.17, sleeve, outlineOf(sleeve), lw);
         limb(ctx, elbow, wrist, s.w * 0.17, s.w * 0.15, sleeve, outlineOf(sleeve), lw);
-        line(ctx, [[wrist[0] - s.w * 0.14, wrist[1] - s.w * 0.02], [wrist[0] + s.w * 0.14, wrist[1] - s.w * 0.02]], spec.top.trim || shade(sleeve, -0.25), s.w * 0.06);
+        line(
+          ctx,
+          [
+            [wrist[0] - s.w * 0.14, wrist[1] - s.w * 0.02],
+            [wrist[0] + s.w * 0.14, wrist[1] - s.w * 0.02],
+          ],
+          spec.top.trim || shade(sleeve, -0.25),
+          s.w * 0.06
+        );
       }
-      ellipse(ctx, wrist[0], wrist[1] + s.w * 0.12, s.w * 0.11, s.w * 0.13, spec.skin, outlineOf(spec.skin), lw);
+      ellipse(
+        ctx,
+        wrist[0],
+        wrist[1] + s.w * 0.12,
+        s.w * 0.11,
+        s.w * 0.13,
+        spec.skin,
+        outlineOf(spec.skin),
+        lw
+      );
       // 绷带缠在人物左臂（正面视图的画面右侧）
       if (spec.bandage && side === 1) {
         for (let i = 0; i < 3; i += 1) {
           const t = 0.25 + i * 0.22;
           const x = elbow[0] + (wrist[0] - elbow[0]) * t;
           const y = elbow[1] + (wrist[1] - elbow[1]) * t;
-          line(ctx, [[x - s.w * 0.17, y - s.w * 0.03], [x + s.w * 0.17, y + s.w * 0.04]], '#efe9dc', s.w * 0.06);
+          line(
+            ctx,
+            [
+              [x - s.w * 0.17, y - s.w * 0.03],
+              [x + s.w * 0.17, y + s.w * 0.04],
+            ],
+            '#efe9dc',
+            s.w * 0.06
+          );
         }
       }
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} x
+   * @param {number} y
+   * @param {number} lw
+   * @param {number} angle
+   */
   function drawHammer(ctx, s, x, y, lw, angle) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle || 0);
-    line(ctx, [[0, -s.w * 0.1], [0, s.w * 0.95]], '#7a5a3a', s.w * 0.08);
+    line(
+      ctx,
+      [
+        [0, -s.w * 0.1],
+        [0, s.w * 0.95],
+      ],
+      '#7a5a3a',
+      s.w * 0.08
+    );
     poly(
       ctx,
       [
@@ -404,6 +696,12 @@
   }
 
   /** 正 / 背面的后发（长发 / 披肩）：正面时画在身体后面 */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   */
   function drawBackHair(ctx, spec, s, lw) {
     const u = s.u;
     const hx = s.cx;
@@ -431,6 +729,13 @@
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   * @param {boolean} back
+   */
   function drawHeadFront(ctx, spec, s, lw, back) {
     const u = s.u;
     const hx = s.cx;
@@ -454,23 +759,73 @@
     );
     // 耳朵
     for (const side of [-1, 1]) {
-      ellipse(ctx, hx + side * u * 0.385, hy + u * 0.06, u * 0.07, u * 0.1, spec.skin, outlineOf(spec.skin), lw);
+      ellipse(
+        ctx,
+        hx + side * u * 0.385,
+        hy + u * 0.06,
+        u * 0.07,
+        u * 0.1,
+        spec.skin,
+        outlineOf(spec.skin),
+        lw
+      );
     }
     if (spec.earring) {
       // 人物左耳（正面视图的画面右侧，背面视图的画面左侧）
       const side = back ? -1 : 1;
-      line(ctx, [[hx + side * u * 0.39, hy + u * 0.15], [hx + side * u * 0.39, hy + u * 0.24]], '#cfd6de', lw);
-      ellipse(ctx, hx + side * u * 0.39, hy + u * 0.29, u * 0.055, u * 0.055, '#e8ecf0', '#8a939e', lw);
-      line(ctx, [[hx + side * u * 0.39, hy + u * 0.25], [hx + side * u * 0.39, hy + u * 0.33]], '#6d7884', lw * 0.6);
+      line(
+        ctx,
+        [
+          [hx + side * u * 0.39, hy + u * 0.15],
+          [hx + side * u * 0.39, hy + u * 0.24],
+        ],
+        '#cfd6de',
+        lw
+      );
+      ellipse(
+        ctx,
+        hx + side * u * 0.39,
+        hy + u * 0.29,
+        u * 0.055,
+        u * 0.055,
+        '#e8ecf0',
+        '#8a939e',
+        lw
+      );
+      line(
+        ctx,
+        [
+          [hx + side * u * 0.39, hy + u * 0.25],
+          [hx + side * u * 0.39, hy + u * 0.33],
+        ],
+        '#6d7884',
+        lw * 0.6
+      );
     }
     // 脸
-    ellipse(ctx, hx, hy + u * 0.02, u * 0.39, u * 0.49, back ? shade(spec.skin, -0.06) : spec.skin, outlineOf(spec.skin), lw);
+    ellipse(
+      ctx,
+      hx,
+      hy + u * 0.02,
+      u * 0.39,
+      u * 0.49,
+      back ? shade(spec.skin, -0.06) : spec.skin,
+      outlineOf(spec.skin),
+      lw
+    );
     if (!back) {
       // 五官
       const eyeY = hy + u * 0.1;
       for (const side of [-1, 1]) {
         ellipse(ctx, hx + side * u * 0.155, eyeY, u * 0.045, u * 0.06, '#2a2420');
-        ellipse(ctx, hx + side * u * 0.155 + u * 0.015, eyeY - u * 0.02, u * 0.014, u * 0.016, '#ffffff');
+        ellipse(
+          ctx,
+          hx + side * u * 0.155 + u * 0.015,
+          eyeY - u * 0.02,
+          u * 0.014,
+          u * 0.016,
+          '#ffffff'
+        );
         line(
           ctx,
           [
@@ -480,9 +835,26 @@
           shade(hair, -0.2),
           u * 0.03
         );
-        if (spec.blush) ellipse(ctx, hx + side * u * 0.21, hy + u * 0.25, u * 0.07, u * 0.035, rgba('#e8877a', 0.35));
+        if (spec.blush)
+          ellipse(
+            ctx,
+            hx + side * u * 0.21,
+            hy + u * 0.25,
+            u * 0.07,
+            u * 0.035,
+            rgba('#e8877a', 0.35)
+          );
       }
-      line(ctx, [[hx + u * 0.01, hy + u * 0.17], [hx - u * 0.015, hy + u * 0.25], [hx + u * 0.02, hy + u * 0.26]], shade(spec.skin, -0.3), u * 0.018);
+      line(
+        ctx,
+        [
+          [hx + u * 0.01, hy + u * 0.17],
+          [hx - u * 0.015, hy + u * 0.25],
+          [hx + u * 0.02, hy + u * 0.26],
+        ],
+        shade(spec.skin, -0.3),
+        u * 0.018
+      );
       ctx.beginPath();
       ctx.arc(hx, hy + u * 0.28, u * 0.075, Math.PI * 0.2, Math.PI * 0.8);
       ctx.strokeStyle = shade(spec.skin, -0.45);
@@ -558,10 +930,28 @@
       }
     }
     // 高光
-    ellipse(ctx, hx - u * 0.15, hy - u * 0.38, u * 0.14, u * 0.04, rgba('#ffffff', 0.18), null, 0, -0.3);
+    ellipse(
+      ctx,
+      hx - u * 0.15,
+      hy - u * 0.38,
+      u * 0.14,
+      u * 0.04,
+      rgba('#ffffff', 0.18),
+      null,
+      0,
+      -0.3
+    );
     if (style === 'topknot') {
       ellipse(ctx, hx, s.top - u * 0.02, u * 0.17, u * 0.14, hair, ho, lw);
-      line(ctx, [[hx - u * 0.15, s.top + u * 0.08], [hx + u * 0.15, s.top + u * 0.08]], spec.hair.band || '#8a5a3a', u * 0.05);
+      line(
+        ctx,
+        [
+          [hx - u * 0.15, s.top + u * 0.08],
+          [hx + u * 0.15, s.top + u * 0.08],
+        ],
+        spec.hair.band || '#8a5a3a',
+        u * 0.05
+      );
     }
     if (style === 'spiky') {
       const spikes = [-0.4, -0.22, -0.05, 0.12, 0.3];
@@ -584,30 +974,107 @@
       const bx = back ? hx : hx - u * 0.38;
       const by = back ? hy + u * 0.4 : hy + u * 0.35;
       for (let i = 0; i < 6; i += 1) {
-        ellipse(ctx, bx + (back ? 0 : -u * 0.02 * i), by + i * u * 0.2, u * 0.11, u * 0.13, i % 2 ? hair : shade(hair, 0.08), ho, lw);
+        ellipse(
+          ctx,
+          bx + (back ? 0 : -u * 0.02 * i),
+          by + i * u * 0.2,
+          u * 0.11,
+          u * 0.13,
+          i % 2 ? hair : shade(hair, 0.08),
+          ho,
+          lw
+        );
       }
-      ellipse(ctx, bx + (back ? 0 : -u * 0.12), by + 6 * u * 0.2, u * 0.06, u * 0.06, spec.hair.band || '#c98f5a');
+      ellipse(
+        ctx,
+        bx + (back ? 0 : -u * 0.12),
+        by + 6 * u * 0.2,
+        u * 0.06,
+        u * 0.06,
+        spec.hair.band || '#c98f5a'
+      );
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   * @param {CharacterView} view
+   */
   function drawSwordBack(ctx, spec, s, lw, view) {
+    if (!spec.sword) throw new Error(`Missing sword design: ${spec.name}`);
     const sheath = spec.sword.sheath;
     const hilt = spec.sword.hilt;
     if (view === 'front') {
       // 正面：剑柄从画面左肩后露出，斜挎的背带
-      line(ctx, [[s.cx - s.w * 0.62, s.shoulder - s.w * 0.6], [s.cx - s.w * 0.45, s.shoulder + s.w * 0.1]], hilt, s.w * 0.1);
-      line(ctx, [[s.cx - s.w * 0.75, s.shoulder - s.w * 0.42], [s.cx - s.w * 0.4, s.shoulder - s.w * 0.25]], shade(hilt, -0.2), s.w * 0.06);
+      line(
+        ctx,
+        [
+          [s.cx - s.w * 0.62, s.shoulder - s.w * 0.6],
+          [s.cx - s.w * 0.45, s.shoulder + s.w * 0.1],
+        ],
+        hilt,
+        s.w * 0.1
+      );
+      line(
+        ctx,
+        [
+          [s.cx - s.w * 0.75, s.shoulder - s.w * 0.42],
+          [s.cx - s.w * 0.4, s.shoulder - s.w * 0.25],
+        ],
+        shade(hilt, -0.2),
+        s.w * 0.06
+      );
       return;
     }
-    const from = view === 'back' ? [s.cx - s.w * 0.62, s.shoulder - s.w * 0.55] : [s.cx - s.w * 0.25, s.shoulder - s.w * 0.6];
-    const to = view === 'back' ? [s.cx + s.w * 0.55, s.hip + s.w * 0.25] : [s.cx - s.w * 0.55, s.hip + s.w * 0.2];
-    limb(ctx, [from[0] + (to[0] - from[0]) * 0.18, from[1] + (to[1] - from[1]) * 0.18], to, s.w * 0.09, s.w * 0.08, sheath, outlineOf(sheath), lw);
-    line(ctx, [from, [from[0] + (to[0] - from[0]) * 0.18, from[1] + (to[1] - from[1]) * 0.18]], hilt, s.w * 0.08);
+    const from =
+      view === 'back'
+        ? [s.cx - s.w * 0.62, s.shoulder - s.w * 0.55]
+        : [s.cx - s.w * 0.25, s.shoulder - s.w * 0.6];
+    const to =
+      view === 'back'
+        ? [s.cx + s.w * 0.55, s.hip + s.w * 0.25]
+        : [s.cx - s.w * 0.55, s.hip + s.w * 0.2];
+    limb(
+      ctx,
+      [from[0] + (to[0] - from[0]) * 0.18, from[1] + (to[1] - from[1]) * 0.18],
+      to,
+      s.w * 0.09,
+      s.w * 0.08,
+      sheath,
+      outlineOf(sheath),
+      lw
+    );
+    line(
+      ctx,
+      [from, [from[0] + (to[0] - from[0]) * 0.18, from[1] + (to[1] - from[1]) * 0.18]],
+      hilt,
+      s.w * 0.08
+    );
     const gx = from[0] + (to[0] - from[0]) * 0.18;
     const gy = from[1] + (to[1] - from[1]) * 0.18;
-    line(ctx, [[gx - s.w * 0.14, gy + s.w * 0.06], [gx + s.w * 0.14, gy - s.w * 0.06]], shade(hilt, -0.2), s.w * 0.06);
+    line(
+      ctx,
+      [
+        [gx - s.w * 0.14, gy + s.w * 0.06],
+        [gx + s.w * 0.14, gy - s.w * 0.06],
+      ],
+      shade(hilt, -0.2),
+      s.w * 0.06
+    );
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   * @param {number} x
+   * @param {number} y
+   * @param {number} width
+   * @param {number} height
+   */
   function drawBasket(ctx, s, lw, x, y, width, height) {
     const wicker = '#b38a52';
     poly(
@@ -623,22 +1090,47 @@
       lw
     );
     for (let i = 1; i < 4; i += 1) {
-      line(ctx, [[x - width * 0.48, y + (height * i) / 4], [x + width * 0.48, y + (height * i) / 4]], shade(wicker, -0.25), lw * 0.7);
+      line(
+        ctx,
+        [
+          [x - width * 0.48, y + (height * i) / 4],
+          [x + width * 0.48, y + (height * i) / 4],
+        ],
+        shade(wicker, -0.25),
+        lw * 0.7
+      );
     }
     // 露出的草药
     const leaves = ['#6f9a5a', '#88b06c', '#5d8a4c'];
     for (let i = 0; i < 5; i += 1) {
-      ellipse(ctx, x - width * 0.35 + i * width * 0.17, y - s.w * 0.08, s.w * 0.09, s.w * 0.18, leaves[i % 3], shade(leaves[i % 3], -0.35), lw * 0.7, (i - 2) * 0.35);
+      ellipse(
+        ctx,
+        x - width * 0.35 + i * width * 0.17,
+        y - s.w * 0.08,
+        s.w * 0.09,
+        s.w * 0.18,
+        leaves[i % 3],
+        shade(leaves[i % 3], -0.35),
+        lw * 0.7,
+        (i - 2) * 0.35
+      );
     }
   }
 
   /** 侧面（面向画面右侧） */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   */
   function drawSide(ctx, spec, s, lw) {
     const hem = hemFor(spec, s);
     const top = spec.top;
     const u = s.u;
     // 背后的道具
-    if (spec.basket) drawBasket(ctx, s, lw, s.cx - s.w * 0.55, s.shoulder - s.w * 0.15, s.w * 0.5, s.w * 1.1);
+    if (spec.basket)
+      drawBasket(ctx, s, lw, s.cx - s.w * 0.55, s.shoulder - s.w * 0.15, s.w * 0.5, s.w * 1.1);
     if (spec.sword) drawSwordBack(ctx, spec, s, lw, 'side');
     // 后腿 / 前腿
     for (const [offset, darken] of [
@@ -648,15 +1140,52 @@
       const color = shade(spec.pants, darken);
       const x = s.cx + s.w * offset;
       if (spec.shorts) {
-        limb(ctx, [x, s.knee], [x, s.ankle], s.w * 0.12, s.w * 0.1, shade(spec.skin, darken), outlineOf(spec.skin), lw);
-        limb(ctx, [x, s.hip], [x, s.knee + s.w * 0.02], s.w * 0.24, s.w * 0.2, color, outlineOf(color), lw);
+        limb(
+          ctx,
+          [x, s.knee],
+          [x, s.ankle],
+          s.w * 0.12,
+          s.w * 0.1,
+          shade(spec.skin, darken),
+          outlineOf(spec.skin),
+          lw
+        );
+        limb(
+          ctx,
+          [x, s.hip],
+          [x, s.knee + s.w * 0.02],
+          s.w * 0.24,
+          s.w * 0.2,
+          color,
+          outlineOf(color),
+          lw
+        );
       } else {
-        limb(ctx, [x, s.knee], [x + s.w * 0.02, s.ankle], s.w * 0.16, s.w * 0.12, color, outlineOf(color), lw);
+        limb(
+          ctx,
+          [x, s.knee],
+          [x + s.w * 0.02, s.ankle],
+          s.w * 0.16,
+          s.w * 0.12,
+          color,
+          outlineOf(color),
+          lw
+        );
         limb(ctx, [x, s.hip], [x, s.knee], s.w * 0.25, s.w * 0.17, color, outlineOf(color), lw);
       }
       if (spec.barefoot) {
-        ellipse(ctx, x + s.w * 0.1, s.footY - s.w * 0.06, s.w * 0.17, s.w * 0.07, shade(spec.skin, darken), outlineOf(spec.skin), lw);
+        ellipse(
+          ctx,
+          x + s.w * 0.1,
+          s.footY - s.w * 0.06,
+          s.w * 0.17,
+          s.w * 0.07,
+          shade(spec.skin, darken),
+          outlineOf(spec.skin),
+          lw
+        );
       } else {
+        if (!spec.boots) throw new Error(`Missing boot color: ${spec.name}`);
         const boot = shade(spec.boots, darken);
         smooth(
           ctx,
@@ -691,7 +1220,15 @@
     ];
     poly(ctx, pts, top.color, outlineOf(top.color), lw);
     if (top.style !== 'shirt' && top.style !== 'tunic') {
-      line(ctx, [[s.cx + s.w * 0.1, s.shoulder - s.w * 0.04], [s.cx + s.w * 0.3, s.chest + s.w * 0.3]], top.trim, s.w * 0.08);
+      line(
+        ctx,
+        [
+          [s.cx + s.w * 0.1, s.shoulder - s.w * 0.04],
+          [s.cx + s.w * 0.3, s.chest + s.w * 0.3],
+        ],
+        top.trim,
+        s.w * 0.08
+      );
     }
     if (spec.apron) {
       poly(
@@ -727,7 +1264,16 @@
     const wrist = [s.cx + s.w * 0.16, s.crotch - s.w * 0.08];
     if (spec.rolledSleeves) {
       limb(ctx, elbow, wrist, s.w * 0.14, s.w * 0.11, spec.skin, outlineOf(spec.skin), lw);
-      limb(ctx, shoulder, [elbow[0], elbow[1] + s.w * 0.08], s.w * 0.21, s.w * 0.18, top.color, outlineOf(top.color), lw);
+      limb(
+        ctx,
+        shoulder,
+        [elbow[0], elbow[1] + s.w * 0.08],
+        s.w * 0.21,
+        s.w * 0.18,
+        top.color,
+        outlineOf(top.color),
+        lw
+      );
     } else {
       limb(ctx, shoulder, elbow, s.w * 0.2, s.w * 0.16, top.color, outlineOf(top.color), lw);
       limb(ctx, elbow, wrist, s.w * 0.16, s.w * 0.14, top.color, outlineOf(top.color), lw);
@@ -737,10 +1283,27 @@
         const t = 0.25 + i * 0.22;
         const x = elbow[0] + (wrist[0] - elbow[0]) * t;
         const y = elbow[1] + (wrist[1] - elbow[1]) * t;
-        line(ctx, [[x - s.w * 0.15, y - s.w * 0.03], [x + s.w * 0.15, y + s.w * 0.04]], '#efe9dc', s.w * 0.05);
+        line(
+          ctx,
+          [
+            [x - s.w * 0.15, y - s.w * 0.03],
+            [x + s.w * 0.15, y + s.w * 0.04],
+          ],
+          '#efe9dc',
+          s.w * 0.05
+        );
       }
     }
-    ellipse(ctx, wrist[0] + s.w * 0.02, wrist[1] + s.w * 0.12, s.w * 0.1, s.w * 0.13, spec.skin, outlineOf(spec.skin), lw);
+    ellipse(
+      ctx,
+      wrist[0] + s.w * 0.02,
+      wrist[1] + s.w * 0.12,
+      s.w * 0.1,
+      s.w * 0.13,
+      spec.skin,
+      outlineOf(spec.skin),
+      lw
+    );
     if (spec.hammer) drawHammer(ctx, s, wrist[0] + s.w * 0.04, wrist[1] + s.w * 0.12, lw, -0.15);
 
     // 头部（侧面）
@@ -749,7 +1312,8 @@
     const hair = spec.hair.color;
     const ho = outlineOf(hair);
     if (spec.hair.style === 'long-braid' || spec.hair.style === 'shoulder') {
-      const length = spec.hair.style === 'long-braid' ? s.chest + s.w * 0.3 : s.shoulder + s.w * 0.15;
+      const length =
+        spec.hair.style === 'long-braid' ? s.chest + s.w * 0.3 : s.shoulder + s.w * 0.15;
       smooth(
         ctx,
         [
@@ -793,11 +1357,37 @@
       outlineOf(spec.skin),
       lw
     );
-    ellipse(ctx, hx - u * 0.04, hy + u * 0.06, u * 0.07, u * 0.1, spec.skin, outlineOf(spec.skin), lw);
+    ellipse(
+      ctx,
+      hx - u * 0.04,
+      hy + u * 0.06,
+      u * 0.07,
+      u * 0.1,
+      spec.skin,
+      outlineOf(spec.skin),
+      lw
+    );
     ellipse(ctx, hx + u * 0.24, hy + u * 0.08, u * 0.035, u * 0.055, '#2a2420');
-    line(ctx, [[hx + u * 0.16, hy - u * 0.04], [hx + u * 0.3, hy - u * 0.05]], shade(hair, -0.2), u * 0.03);
-    line(ctx, [[hx + u * 0.3, hy + u * 0.3], [hx + u * 0.37, hy + u * 0.31]], shade(spec.skin, -0.45), u * 0.022);
-    if (spec.blush) ellipse(ctx, hx + u * 0.22, hy + u * 0.24, u * 0.06, u * 0.03, rgba('#e8877a', 0.35));
+    line(
+      ctx,
+      [
+        [hx + u * 0.16, hy - u * 0.04],
+        [hx + u * 0.3, hy - u * 0.05],
+      ],
+      shade(hair, -0.2),
+      u * 0.03
+    );
+    line(
+      ctx,
+      [
+        [hx + u * 0.3, hy + u * 0.3],
+        [hx + u * 0.37, hy + u * 0.31],
+      ],
+      shade(spec.skin, -0.45),
+      u * 0.022
+    );
+    if (spec.blush)
+      ellipse(ctx, hx + u * 0.22, hy + u * 0.24, u * 0.06, u * 0.03, rgba('#e8877a', 0.35));
     if (spec.beard) {
       smooth(
         ctx,
@@ -813,7 +1403,15 @@
       );
     }
     if (spec.earring) {
-      line(ctx, [[hx - u * 0.04, hy + u * 0.15], [hx - u * 0.04, hy + u * 0.24]], '#cfd6de', lw);
+      line(
+        ctx,
+        [
+          [hx - u * 0.04, hy + u * 0.15],
+          [hx - u * 0.04, hy + u * 0.24],
+        ],
+        '#cfd6de',
+        lw
+      );
       ellipse(ctx, hx - u * 0.04, hy + u * 0.29, u * 0.055, u * 0.055, '#e8ecf0', '#8a939e', lw);
     }
     const hairPts = [
@@ -830,7 +1428,15 @@
     smooth(ctx, hairPts, hair, ho, lw);
     if (spec.hair.style === 'topknot') {
       ellipse(ctx, hx - u * 0.06, s.top - u * 0.02, u * 0.16, u * 0.14, hair, ho, lw);
-      line(ctx, [[hx - u * 0.2, s.top + u * 0.08], [hx + u * 0.08, s.top + u * 0.08]], spec.hair.band || '#8a5a3a', u * 0.05);
+      line(
+        ctx,
+        [
+          [hx - u * 0.2, s.top + u * 0.08],
+          [hx + u * 0.08, s.top + u * 0.08],
+        ],
+        spec.hair.band || '#8a5a3a',
+        u * 0.05
+      );
     }
     if (spec.hair.style === 'spiky') {
       [-0.38, -0.2, -0.02, 0.16].forEach((x, i) =>
@@ -849,12 +1455,28 @@
     }
     if (spec.hair.style === 'long-braid') {
       for (let i = 0; i < 6; i += 1) {
-        ellipse(ctx, hx - u * 0.42 - i * u * 0.01, hy + u * 0.3 + i * u * 0.2, u * 0.1, u * 0.12, i % 2 ? hair : shade(hair, 0.08), ho, lw);
+        ellipse(
+          ctx,
+          hx - u * 0.42 - i * u * 0.01,
+          hy + u * 0.3 + i * u * 0.2,
+          u * 0.1,
+          u * 0.12,
+          i % 2 ? hair : shade(hair, 0.08),
+          ho,
+          lw
+        );
       }
     }
   }
 
   /** 正面 / 背面 */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {ReturnType<typeof skeleton>} s
+   * @param {number} lw
+   * @param {boolean} back
+   */
   function drawFrontOrBack(ctx, spec, s, lw, back) {
     if (!back) {
       if (spec.basket) {
@@ -873,11 +1495,35 @@
       drawArmsFront(ctx, spec, s, lw);
     }
     if (spec.basket && !back) {
-      line(ctx, [[s.cx - s.w * 0.45, s.shoulder + s.w * 0.05], [s.cx - s.w * 0.55, s.chest + s.w * 0.5]], '#7a5a3a', s.w * 0.07);
-      line(ctx, [[s.cx + s.w * 0.45, s.shoulder + s.w * 0.05], [s.cx + s.w * 0.55, s.chest + s.w * 0.5]], '#7a5a3a', s.w * 0.07);
+      line(
+        ctx,
+        [
+          [s.cx - s.w * 0.45, s.shoulder + s.w * 0.05],
+          [s.cx - s.w * 0.55, s.chest + s.w * 0.5],
+        ],
+        '#7a5a3a',
+        s.w * 0.07
+      );
+      line(
+        ctx,
+        [
+          [s.cx + s.w * 0.45, s.shoulder + s.w * 0.05],
+          [s.cx + s.w * 0.55, s.chest + s.w * 0.5],
+        ],
+        '#7a5a3a',
+        s.w * 0.07
+      );
     }
     if (spec.sword && !back) {
-      line(ctx, [[s.cx - s.w * 0.5, s.shoulder + s.w * 0.05], [s.cx + s.w * 0.55, s.waist - s.w * 0.1]], '#5a4632', s.w * 0.07);
+      line(
+        ctx,
+        [
+          [s.cx - s.w * 0.5, s.shoulder + s.w * 0.05],
+          [s.cx + s.w * 0.55, s.waist - s.w * 0.1],
+        ],
+        '#5a4632',
+        s.w * 0.07
+      );
     }
     if (spec.hammer) {
       const side = back ? 1 : -1;
@@ -890,6 +1536,14 @@
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {SampleCharacter} spec
+   * @param {CharacterView} view
+   * @param {number} cx
+   * @param {number} footY
+   * @param {number} H
+   */
   function drawCharacter(ctx, spec, view, cx, footY, H) {
     const s = skeleton(spec, cx, footY, H);
     const lw = Math.max(1, H / 260);
@@ -898,6 +1552,12 @@
     return s;
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} cx
+   * @param {number} y
+   * @param {number} width
+   */
   function groundShadow(ctx, cx, y, width) {
     const gradient = ctx.createRadialGradient(cx, y, 0, cx, y, width);
     gradient.addColorStop(0, 'rgba(0, 0, 0, 0.22)');
@@ -913,6 +1573,15 @@
 
   // ─── 背景 ────────────────────────────────────────────────────────────────
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} height
+   * @param {number} count
+   * @param {number} seed
+   * @param {number} maxY
+   * @param {number} [twinkle]
+   */
   function drawStars(ctx, width, height, count, seed, maxY, twinkle) {
     const random = seeded(seed);
     for (let i = 0; i < count; i += 1) {
@@ -920,11 +1589,21 @@
       const y = random() * maxY;
       const r = 0.6 + random() * 1.4;
       const phase = random() * Math.PI * 2;
-      const alpha = 0.35 + 0.55 * (twinkle === undefined ? random() : 0.5 + 0.5 * Math.sin(twinkle * 3 + phase));
+      const alpha =
+        0.35 +
+        0.55 * (twinkle === undefined ? random() : 0.5 + 0.5 * Math.sin(twinkle * 3 + phase));
       ellipse(ctx, x, y, r, r, `rgba(255, 248, 230, ${alpha.toFixed(3)})`);
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} baseY
+   * @param {string} color
+   * @param {number} seed
+   * @param {number} amplitude
+   */
   function drawMountains(ctx, width, baseY, color, seed, amplitude) {
     const random = seeded(seed);
     ctx.beginPath();
@@ -941,6 +1620,12 @@
     ctx.fill();
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} height
+   * @param {SampleCharacter['theme']} theme
+   */
   function portraitBackground(ctx, width, height, theme) {
     const sky = ctx.createLinearGradient(0, 0, 0, height);
     sky.addColorStop(0, theme.top);
@@ -956,19 +1641,46 @@
       const random = seeded(theme.seed);
       for (let i = 0; i < 40; i += 1) {
         const r = 1 + random() * 3;
-        ellipse(ctx, random() * width, height * (0.3 + random() * 0.7), r, r, `rgba(255, ${170 + Math.round(random() * 60)}, 90, ${(0.25 + random() * 0.5).toFixed(2)})`);
+        ellipse(
+          ctx,
+          random() * width,
+          height * (0.3 + random() * 0.7),
+          r,
+          r,
+          `rgba(255, ${170 + Math.round(random() * 60)}, 90, ${(0.25 + random() * 0.5).toFixed(2)})`
+        );
       }
     }
     // 光晕与暗角
-    const glow = ctx.createRadialGradient(width * 0.5, height * 0.35, 10, width * 0.5, height * 0.4, width * 0.8);
+    const glow = ctx.createRadialGradient(
+      width * 0.5,
+      height * 0.35,
+      10,
+      width * 0.5,
+      height * 0.4,
+      width * 0.8
+    );
     glow.addColorStop(0, rgba(theme.glow, 0.35));
     glow.addColorStop(1, rgba(theme.glow, 0));
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, width, height);
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} height
+   * @param {number} strength
+   */
   function vignette(ctx, width, height, strength) {
-    const gradient = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.35, width / 2, height / 2, Math.max(width, height) * 0.75);
+    const gradient = ctx.createRadialGradient(
+      width / 2,
+      height / 2,
+      Math.min(width, height) * 0.35,
+      width / 2,
+      height / 2,
+      Math.max(width, height) * 0.75
+    );
     gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
     gradient.addColorStop(1, `rgba(0, 0, 0, ${strength})`);
     ctx.fillStyle = gradient;
@@ -977,8 +1689,13 @@
 
   // ─── 对外：形象图 / 三视图 ────────────────────────────────────────────────
 
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {SampleCharacter} spec
+   */
   function renderPortrait(canvas, spec) {
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context is unavailable');
     const { width, height } = canvas;
     portraitBackground(ctx, width, height, spec.theme);
     const H = height * (spec.heads && spec.heads < 5.5 ? 1.25 : 1.62);
@@ -987,8 +1704,13 @@
     vignette(ctx, width, height, 0.45);
   }
 
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {SampleCharacter} spec
+   */
   function renderTurnaround(canvas, spec) {
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context is unavailable');
     const { width, height } = canvas;
     ctx.fillStyle = '#efe9dd';
     ctx.fillRect(0, 0, width, height);
@@ -1027,6 +1749,7 @@
     ctx.font = '15px "PingFang SC", "Microsoft YaHei", sans-serif';
     ctx.fillStyle = '#7a6a58';
     ctx.fillText(spec.note || '', 40, 80);
+    /** @type {[CharacterView, string, number][]} */
     const columns = [
       ['front', '正面', width * 0.24],
       ['side', '侧面', width * 0.52],
@@ -1045,6 +1768,15 @@
 
   // ─── 对外：设定图 ────────────────────────────────────────────────────────
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} horizon
+   * @param {number} height
+   * @param {string} top
+   * @param {string} bottom
+   * @param {number} t
+   */
   function drawSea(ctx, width, horizon, height, top, bottom, t) {
     const sea = ctx.createLinearGradient(0, horizon, 0, height);
     sea.addColorStop(0, top);
@@ -1056,10 +1788,26 @@
       const y = horizon + 6 + Math.pow(random(), 1.6) * (height - horizon);
       const x = ((random() * width + (t || 0) * (20 + (y - horizon) * 0.2)) % (width + 80)) - 40;
       const len = 10 + (y - horizon) * 0.12;
-      line(ctx, [[x, y], [x + len, y]], 'rgba(255, 255, 255, 0.10)', 1.2);
+      line(
+        ctx,
+        [
+          [x, y],
+          [x + len, y],
+        ],
+        'rgba(255, 255, 255, 0.10)',
+        1.2
+      );
     }
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x
+   * @param {number} baseY
+   * @param {number} scale
+   * @param {number | null} beamAngle
+   * @param {number} glowAlpha
+   */
   function drawLighthouse(ctx, x, baseY, scale, beamAngle, glowAlpha) {
     // 礁石
     smooth(
@@ -1141,8 +1889,12 @@
     }
   }
 
+  /**
+   * @param {HTMLCanvasElement} canvas
+   */
   function renderLighthouse(canvas) {
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context is unavailable');
     const { width, height } = canvas;
     const horizon = height * 0.66;
     const sky = ctx.createLinearGradient(0, 0, 0, horizon);
@@ -1175,6 +1927,14 @@
     vignette(ctx, width, height, 0.5);
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x
+   * @param {number} waterY
+   * @param {number} scale
+   * @param {string} sail
+   * @param {string} hullColor
+   */
   function drawShip(ctx, x, waterY, scale, sail, hullColor) {
     // 船体
     smooth(
@@ -1189,8 +1949,24 @@
       shade(hullColor, -0.5),
       1.5 * scale
     );
-    line(ctx, [[x - 4 * scale, waterY - 16 * scale], [x - 4 * scale, waterY - 120 * scale]], '#3a2e24', 3 * scale);
-    line(ctx, [[x + 40 * scale, waterY - 16 * scale], [x + 40 * scale, waterY - 86 * scale]], '#3a2e24', 2.5 * scale);
+    line(
+      ctx,
+      [
+        [x - 4 * scale, waterY - 16 * scale],
+        [x - 4 * scale, waterY - 120 * scale],
+      ],
+      '#3a2e24',
+      3 * scale
+    );
+    line(
+      ctx,
+      [
+        [x + 40 * scale, waterY - 16 * scale],
+        [x + 40 * scale, waterY - 86 * scale],
+      ],
+      '#3a2e24',
+      2.5 * scale
+    );
     smooth(
       ctx,
       [
@@ -1217,6 +1993,12 @@
     );
   }
 
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} baseY
+   * @param {boolean} dusk
+   */
   function drawCity(ctx, width, baseY, dusk) {
     const random = seeded(77);
     // 远山与城墙
@@ -1252,8 +2034,12 @@
     }
   }
 
+  /**
+   * @param {HTMLCanvasElement} canvas
+   */
   function renderHarbor(canvas) {
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context is unavailable');
     const { width, height } = canvas;
     const horizon = height * 0.64;
     const sky = ctx.createLinearGradient(0, 0, 0, horizon);
@@ -1270,13 +2056,15 @@
     ctx.fillStyle = '#2a1f1c';
     ctx.fillRect(0, horizon + 50, width * 0.62, 16);
     for (let i = 0; i < 9; i += 1) ctx.fillRect(20 + i * 86, horizon + 50, 8, 60);
+    /** @type {[number, number, number, string][]} */
     const ships = [
       [140, horizon + 70, 0.9, '#e9dcc0'],
       [330, horizon + 82, 1.05, '#d8c7a6'],
       [560, horizon + 74, 0.85, '#efe3c8'],
       [860, horizon + 96, 1.35, '#1b1d24'],
     ];
-    for (const [x, y, scale, sail] of ships) drawShip(ctx, x, y, scale, sail, sail === '#1b1d24' ? '#20222a' : '#5a4232');
+    for (const [x, y, scale, sail] of ships)
+      drawShip(ctx, x, y, scale, sail, sail === '#1b1d24' ? '#20222a' : '#5a4232');
     drawLighthouse(ctx, width * 0.9, horizon + 4, 0.45, null, 0.7);
     vignette(ctx, width, height, 0.4);
   }
@@ -1284,9 +2072,16 @@
   // ─── 对外：《离港》短片的一帧 ────────────────────────────────────────────
 
   /** t：0 → 1 */
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {number} t
+   * @param {SampleCharacter} hero
+   */
   function drawDepartureFrame(canvas, t, hero) {
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context is unavailable');
     const { width, height } = canvas;
+    /** @param {number} v */
     const ease = (v) => v * v * (3 - 2 * v);
     const horizon = height * 0.62;
     const pan = -ease(t) * width * 0.08;
@@ -1307,7 +2102,14 @@
     ctx.restore();
     drawSea(ctx, width, horizon, height, mix('#6b4a62', '#2a2a48', t), '#120f1e', t * 4);
     // 远处灯塔，光柱缓慢扫过
-    drawLighthouse(ctx, width * 0.86 + pan * 0.4, horizon + 2, 0.32, -2.6 + Math.sin(t * Math.PI * 1.5) * 0.5, 0.6 + t * 0.4);
+    drawLighthouse(
+      ctx,
+      width * 0.86 + pan * 0.4,
+      horizon + 2,
+      0.32,
+      -2.6 + Math.sin(t * Math.PI * 1.5) * 0.5,
+      0.6 + t * 0.4
+    );
     // 码头（随镜头后移）
     ctx.fillStyle = '#231a18';
     ctx.fillRect(pan * 1.6 - 20, horizon + 46, width * 0.42, 12);
@@ -1319,8 +2121,14 @@
     drawShip(ctx, shipX, horizon + 70 + bob - t * 18, scale, '#1b1d24', '#2a2c34');
     // 船尾的林舟（小剪影）
     if (hero) {
-      const figure = { ...hero, theme: undefined };
-      drawCharacter(ctx, figure, 'back', shipX - 34 * scale, horizon + 70 + bob - t * 18 - 16 * scale, 54 * scale);
+      drawCharacter(
+        ctx,
+        hero,
+        'back',
+        shipX - 34 * scale,
+        horizon + 70 + bob - t * 18 - 16 * scale,
+        54 * scale
+      );
     }
     // 航迹
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';

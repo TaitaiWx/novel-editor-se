@@ -15,7 +15,12 @@ import {
   type ContextGrowth,
   type ContinuationLength,
 } from '@novel-editor/ai';
-import { loadMemory, resolveWorkScope, summarizeSheetForContext } from '@novel-editor/core';
+import {
+  loadMemory,
+  resolveWorkScope,
+  summarizeSheetForContext,
+  withWorkspaceLease,
+} from '@novel-editor/core';
 import { CliError } from '../errors';
 import type { CliContext, CommandSpec } from '../types';
 import {
@@ -128,12 +133,6 @@ export const aiCommands: CommandSpec[] = [
     ],
     async run(ctx, args) {
       const file = resolvePath(ctx, requireStr(args, 'file'));
-      let chapterText: string;
-      try {
-        chapterText = await readFile(file, 'utf-8');
-      } catch {
-        throw new CliError('NOT_FOUND', `文件不存在: ${file}`);
-      }
       const budget = num(args, 'budget') ?? DEFAULT_BUDGET;
       if (!Number.isFinite(budget) || budget < 200) {
         throw new CliError('INVALID_ARGUMENT', 'budget 至少为 200');
@@ -147,15 +146,36 @@ export const aiCommands: CommandSpec[] = [
         throw new CliError('INVALID_ARGUMENT', 'chars 必须在 1–5000 之间');
       }
       const outlineFile = str(args, 'outline');
-      const outline = outlineFile
-        ? await readFile(resolvePath(ctx, outlineFile), 'utf-8').catch(() => {
-            throw new CliError('NOT_FOUND', `章纲文件不存在: ${outlineFile}`);
-          })
-        : undefined;
-      const memory =
-        args.options.memory === false
-          ? { rules: [], growth: [], characters: [] }
-          : await loadMemoryContext(ctx, file);
+      const resources = [file, ...(outlineFile ? [resolvePath(ctx, outlineFile)] : [])];
+      let knownResources = true;
+      if (args.options.memory !== false) {
+        try {
+          resources.push((await resolveWorkScope(path.dirname(file), { filePath: file })).root);
+        } catch {
+          knownResources = false;
+        } // Unknown memory scope must exclude conservatively.
+      }
+      const { chapterText, outline, memory } = await withWorkspaceLease(
+        async () => {
+          let chapterText: string;
+          try {
+            chapterText = await readFile(file, 'utf-8');
+          } catch {
+            throw new CliError('NOT_FOUND', `文件不存在: ${file}`);
+          }
+          const outline = outlineFile
+            ? await readFile(resolvePath(ctx, outlineFile), 'utf-8').catch(() => {
+                throw new CliError('NOT_FOUND', `章纲文件不存在: ${outlineFile}`);
+              })
+            : undefined;
+          const memory =
+            args.options.memory === false
+              ? { rules: [], growth: [], characters: [] }
+              : await loadMemoryContext(ctx, file);
+          return { chapterText, outline, memory };
+        },
+        { resources: knownResources ? resources : undefined }
+      );
 
       const context = assembleWritingContext({
         chapterText,

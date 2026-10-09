@@ -1,7 +1,5 @@
-import { app, dialog, session } from 'electron';
-
-const MACOS_BUNDLE_ID = 'com.novel-editor.app';
-const WEBAUTHN_GROUP_SUFFIX = 'webauthn';
+import { app, dialog, session, systemPreferences } from 'electron';
+import { readSignedWebAuthnGroup } from './webauthn-signature';
 
 export interface WebAuthnSupportInfo {
   platform: NodeJS.Platform;
@@ -16,28 +14,6 @@ export interface WebAuthnSupportInfo {
 let configured = false;
 let configurationError: string | null = null;
 let configuredKeychainAccessGroup: string | null = null;
-
-function normalizeTeamId(raw: string | undefined): string | null {
-  const teamId = raw?.trim().replace(/\.$/, '');
-  return teamId || null;
-}
-
-function getAppleTeamId(): string | null {
-  return (
-    normalizeTeamId(process.env.NOVEL_EDITOR_APPLE_TEAM_ID) ??
-    normalizeTeamId(process.env.APPLE_TEAM_ID) ??
-    normalizeTeamId(process.env.CSC_TEAM_ID)
-  );
-}
-
-function getKeychainAccessGroup(): string | null {
-  const explicit = process.env.NOVEL_EDITOR_WEBAUTHN_KEYCHAIN_ACCESS_GROUP?.trim();
-  if (explicit) return explicit;
-
-  const teamId = getAppleTeamId();
-  if (!teamId) return null;
-  return `${teamId}.${MACOS_BUNDLE_ID}.${WEBAUTHN_GROUP_SUFFIX}`;
-}
 
 function getAccountLabel(account: {
   name?: string;
@@ -81,14 +57,8 @@ export function configureWebAuthn(): WebAuthnSupportInfo {
     return getWebAuthnSupportInfo();
   }
 
-  const keychainAccessGroup = getKeychainAccessGroup();
-  if (!keychainAccessGroup) {
-    configurationError =
-      'macOS Touch ID passkey requires NOVEL_EDITOR_WEBAUTHN_KEYCHAIN_ACCESS_GROUP or APPLE_TEAM_ID/CSC_TEAM_ID.';
-    return getWebAuthnSupportInfo();
-  }
-
   try {
+    const keychainAccessGroup = readSignedWebAuthnGroup();
     app.configureWebAuthn({
       touchID: {
         keychainAccessGroup,
@@ -128,13 +98,22 @@ export function registerWebAuthnSessionHandlers(): void {
   );
 }
 
+function canUseTouchId(): boolean {
+  if (process.platform !== 'darwin' || !configured) return false;
+  try {
+    return systemPreferences.canPromptTouchID();
+  } catch {
+    return false;
+  }
+}
+
 export function getWebAuthnSupportInfo(): WebAuthnSupportInfo {
   return {
     platform: process.platform,
     standardApiAvailable: true,
     roamingAuthenticatorSupported: true,
     touchIdConfigured: configured,
-    touchIdAvailable: process.platform === 'darwin' && configured,
+    touchIdAvailable: canUseTouchId(),
     keychainAccessGroup: configuredKeychainAccessGroup,
     configurationError,
   };

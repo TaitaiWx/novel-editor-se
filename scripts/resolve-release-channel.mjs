@@ -1,11 +1,13 @@
 import { appendFile } from 'fs/promises';
 
+/** @param {string | undefined} rawTagName */
 function normalizeTagName(rawTagName) {
   return (rawTagName ?? '').replace(/^v/u, '');
 }
 
+/** @param {string} tagName */
 function resolveReleaseChannel(tagName) {
-  if (tagName.includes('-alpha.')) {
+  if (tagName.includes('-alpha.') || tagName.includes('-canary.')) {
     return {
       publishChannel: 'alpha',
       releaseType: 'prerelease',

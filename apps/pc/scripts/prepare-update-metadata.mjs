@@ -5,7 +5,9 @@ import { fileURLToPath } from 'url';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptDir, '..');
 
+/** @param {string} channel */
 function getRolloutPercentage(channel) {
+  /** @type {Record<string, string | undefined>} */
   const envMap = {
     latest: process.env.NOVEL_EDITOR_STABLE_STAGING_PERCENTAGE,
     beta: process.env.NOVEL_EDITOR_BETA_STAGING_PERCENTAGE,
@@ -24,6 +26,7 @@ function getRolloutPercentage(channel) {
   return 100;
 }
 
+/** @param {string} outputDir @param {string} [channel] */
 export async function applyUpdateMetadata(
   outputDir,
   channel = process.env.NOVEL_EDITOR_RELEASE_CHANNEL ?? 'latest'
@@ -54,6 +57,7 @@ export async function applyUpdateMetadata(
   return modifiedFiles;
 }
 
+/** @param {{ outDir: string }} context */
 export default async function afterAllArtifactBuild(context) {
   return applyUpdateMetadata(context.outDir);
 }

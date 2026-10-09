@@ -3,18 +3,12 @@ import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
 import { PanelResizer } from './components/PanelResizer';
-import { AIAssistantDialog } from './components/RightPanel/AIAssistantDialog';
+import { deferredDialog } from './components/deferred-dialog';
 import { AiConfigProvider } from './components/RightPanel/useAiConfig';
 import StatusBar from './components/StatusBar';
 import ContextMenu from './components/ContextMenu';
-import ShortcutsHelp from './components/ShortcutsHelp';
-import AppSettingsCenter from './components/AppSettingsCenter';
-import KnowledgeExportDialog from './components/KnowledgeExportDialog';
-import AboutDialog from './components/AboutDialog';
-import InspirationDialog from './components/InspirationDialog';
 import InspirationButton from './components/InspirationButton';
 import ContinuationButton from './components/ContinuationButton';
-import EditorGrowthRecord from './components/EditorGrowthRecord';
 import SceneVideoButton from './components/SceneVideoButton';
 import ReferenceButton from './components/ReferenceButton';
 import styles from './App.module.scss';
@@ -24,6 +18,40 @@ import { useAppController } from '@/render/hooks/useAppController';
 import { useProjectStructureRules } from '@/render/hooks/useProjectStructureRules';
 import { formatShortcutLabel } from '@/render/utils/appSettings';
 import { isReadOnlyDataFile } from '@/render/utils/internalData';
+
+const ShortcutsHelp = deferredDialog(
+  () => import('./components/ShortcutsHelp'),
+  (p) => p.visible
+);
+const AppSettingsCenter = deferredDialog(
+  () => import('./components/AppSettingsCenter'),
+  (p) => p.visible
+);
+const AboutDialog = deferredDialog(
+  () => import('./components/AboutDialog'),
+  (p) => p.visible
+);
+const InspirationDialog = deferredDialog(
+  () => import('./components/InspirationDialog'),
+  (p) => p.visible
+);
+const EditorGrowthRecord = deferredDialog(
+  () => import('./components/EditorGrowthRecord'),
+  (p) => Boolean(p.request)
+);
+const KnowledgeExportDialog = deferredDialog(
+  () => import('./components/KnowledgeExportDialog'),
+  () => true
+);
+const AIAssistantDialog = deferredDialog<
+  React.ComponentProps<typeof import('./components/RightPanel/AIAssistantDialog').AIAssistantDialog>
+>(
+  () =>
+    import('./components/RightPanel/AIAssistantDialog').then((module) => ({
+      default: module.AIAssistantDialog,
+    })),
+  (p) => p.visible
+);
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
 const DiffEditor = lazy(() => import('./components/DiffEditor'));
@@ -178,6 +206,8 @@ const App: React.FC = () => {
     handleRenameCharacterNode,
     handleDeleteLoreNode,
     handleRenameLoreNode,
+    handleRenameCharacterGroup,
+    handleRenameLoreGroup,
   } = entityActions;
   const {
     handleRename,
@@ -285,6 +315,8 @@ const App: React.FC = () => {
                 onDeleteLoreNode={handleDeleteLoreNode}
                 onRenameCharacterNode={handleRenameCharacterNode}
                 onRenameLoreNode={handleRenameLoreNode}
+                onRenameCharacterGroup={handleRenameCharacterGroup}
+                onRenameLoreGroup={handleRenameLoreGroup}
                 onRenameNode={handleRename}
                 storyOrderMap={storyOrderMap}
                 onReorderStoryNode={(sourcePath, targetPath, mode) =>
@@ -381,6 +413,12 @@ const App: React.FC = () => {
                   workScopeApi.revealWorkForDocument(filePath);
                 }}
                 onTabClose={closeTab}
+                onLoadBlocked={(previousPath) => {
+                  tabsState.setOpenTabs((prev) =>
+                    prev.includes(previousPath) ? prev : [...prev, previousPath]
+                  );
+                  setActiveTab(previousPath);
+                }}
                 onToggleThousandCharMarkers={handleToggleThousandCharMarkers}
                 onFormatCurrentChapter={handleFormatCurrentChapter}
                 onCloseOtherTabs={handleCloseOtherTabs}

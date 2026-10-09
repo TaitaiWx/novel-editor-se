@@ -1,3 +1,4 @@
+import { installRendererPreparation } from './utils/rendererPreparation';
 import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import type { Root } from 'react-dom/client';
@@ -16,6 +17,8 @@ const AIStandaloneApp = lazy(async () => ({
 const RightPanelStandaloneApp = lazy(async () => ({
   default: (await import('./RightPanelStandaloneApp')).RightPanelStandaloneApp,
 }));
+
+installRendererPreparation();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Failed to find the root element');

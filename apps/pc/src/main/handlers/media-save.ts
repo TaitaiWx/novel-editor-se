@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 播放器截图 / 录制结果保存 IPC：media-save-generated
  *
@@ -6,7 +7,7 @@
  * - 不信任渲染进程：格式必须在白名单内且与文件头一致，大小有上限，文件名清洗为单个路径段
  * E2E 测试（NOVEL_EDITOR_E2E=1）可用 NOVEL_EDITOR_E2E_SAVE_PATH 跳过对话框。
  */
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import { writeFile } from 'fs/promises';
 import path from 'path';
 import { detectImageExtension } from './character-avatar';
@@ -110,7 +111,7 @@ export async function saveGeneratedMedia(
 }
 
 export function registerMediaSaveHandler(): void {
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'media-save-generated',
     async (event, request: unknown): Promise<MediaExportResult> => {
       try {

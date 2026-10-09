@@ -11,27 +11,31 @@ import {
   resolveCover,
   type LoreFolderNode,
 } from '@novel-editor/core/entity-media';
-import type { LoreEntry } from '../../RightPanel/types';
+import type { LoreCategory, LoreEntry } from '../../RightPanel/types';
 import { LORE_CATEGORY_LABELS } from '../../RightPanel/constants';
 import CharacterAvatar from '../../CharacterAvatar';
 import Tooltip from '../../Tooltip';
 import SectionHeader from '../SectionHeader';
 import ObjectItemRow from '../ObjectItemRow';
+import GroupLabel from '../GroupLabel';
 import { WORKSPACE_TAB_LORE, createLoreWorkspaceTab } from '../../../utils/workspace';
 import type { ObjectContextMenuTarget } from '../types';
 import styles from './styles.module.scss';
 
 export const LORE_SECTION_HINT = '世界观、势力、体系、地点和物品；可以分目录、打标签、配图';
 
-/** 行内说明：标签优先（#北境 #禁地），没有标签时用分类 + 摘要 */
+/** 行内说明：标签优先（#北境 #禁地），没有标签时用摘要（分类已经是分组标题，不再重复） */
 export function loreRowMeta(entry: Pick<LoreEntry, 'tags' | 'category' | 'summary'>): string {
   if (entry.tags.length > 0)
     return entry.tags
       .slice(0, 3)
       .map((tag) => `#${tag}`)
       .join(' ');
-  return entry.summary || LORE_CATEGORY_LABELS[entry.category];
+  return entry.summary || '';
 }
+
+/** 分组顺序：世界观 / 势力 / 体系 / 术语 */
+const LORE_GROUP_ORDER: readonly LoreCategory[] = ['world', 'faction', 'system', 'term'];
 
 interface LoreSectionProps {
   entries: LoreEntry[];
@@ -43,6 +47,8 @@ interface LoreSectionProps {
   onOpenAll: () => void;
   onOpen: (id: number) => void;
   onRename: (id: number, name: string) => void;
+  /** 重命名分组（这一组的设定都改成新的分组名）；未提供时分组名不可改 */
+  onRenameGroup?: (entryIds: readonly number[], name: string) => void;
   onDelete: (id: number) => void;
   onCreate: () => void;
   onContextMenu: (event: React.MouseEvent, target: ObjectContextMenuTarget) => void;
@@ -62,11 +68,31 @@ const LoreSection: React.FC<LoreSectionProps> = ({
   onOpenAll,
   onOpen,
   onRename,
+  onRenameGroup,
   onDelete,
   onCreate,
   onContextMenu,
 }) => {
-  const tree = useMemo(() => buildLoreFolderTree(entries, (entry) => entry.title), [entries]);
+  // 先按分组（作者自定义的分组名，没有时按世界观 / 势力 / 体系 / 术语），组内再按目录组织成树；
+  // 默认分组在前，自定义分组按出现顺序排在后面，与默认分组同名时合并
+  const groups = useMemo(() => {
+    const buckets = new Map<string, LoreEntry[]>();
+    for (const category of LORE_GROUP_ORDER) buckets.set(LORE_CATEGORY_LABELS[category], []);
+    for (const entry of entries) {
+      const category = LORE_GROUP_ORDER.includes(entry.category) ? entry.category : 'world';
+      const label = entry.group?.trim() || LORE_CATEGORY_LABELS[category];
+      const bucket = buckets.get(label) ?? [];
+      bucket.push(entry);
+      buckets.set(label, bucket);
+    }
+    return Array.from(buckets.entries())
+      .filter(([, items]) => items.length > 0)
+      .map(([label, items]) => ({
+        label,
+        items,
+        tree: buildLoreFolderTree(items, (entry) => entry.title),
+      }));
+  }, [entries]);
   const [closed, setClosed] = useState<Set<string>>(new Set());
 
   const renderEntry = (entry: LoreEntry, depth: number) => (
@@ -94,11 +120,16 @@ const LoreSection: React.FC<LoreSectionProps> = ({
     </div>
   );
 
-  const renderFolder = (node: LoreFolderNode<LoreEntry>, depth: number): React.ReactNode => {
-    // 搜索时目录全部展开
-    const open = filtering || !closed.has(node.path);
+  const renderFolder = (
+    node: LoreFolderNode<LoreEntry>,
+    depth: number,
+    scope: string
+  ): React.ReactNode => {
+    // 不同分类下可能有同名目录：折叠状态按「分类/目录」记录；搜索时目录全部展开
+    const key = `${scope}/${node.path}`;
+    const open = filtering || !closed.has(key);
     return (
-      <div key={node.path} role="group" aria-label={`设定目录 ${node.path}`}>
+      <div key={key} role="group" aria-label={`设定目录 ${node.path}`}>
         <button
           type="button"
           className={styles.folder}
@@ -107,8 +138,8 @@ const LoreSection: React.FC<LoreSectionProps> = ({
           onClick={() =>
             setClosed((prev) => {
               const next = new Set(prev);
-              if (next.has(node.path)) next.delete(node.path);
-              else next.add(node.path);
+              if (next.has(key)) next.delete(key);
+              else next.add(key);
               return next;
             })
           }
@@ -120,7 +151,7 @@ const LoreSection: React.FC<LoreSectionProps> = ({
         </button>
         {open && (
           <>
-            {node.folders.map((child) => renderFolder(child, depth + 1))}
+            {node.folders.map((child) => renderFolder(child, depth + 1, scope))}
             {node.items.map((entry) => renderEntry(entry, depth + 1))}
           </>
         )}
@@ -166,8 +197,30 @@ const LoreSection: React.FC<LoreSectionProps> = ({
       />
       {!collapsed && (
         <div className={styles.children}>
-          {tree.folders.map((folder) => renderFolder(folder, 0))}
-          {tree.items.map((entry) => renderEntry(entry, 0))}
+          {groups.map((group) => (
+            <div
+              key={group.label}
+              className={styles.subgroup}
+              role="group"
+              aria-label={`设定分组 ${group.label}`}
+            >
+              <GroupLabel
+                label={group.label}
+                count={group.items.length}
+                onRename={
+                  onRenameGroup
+                    ? (name) =>
+                        onRenameGroup(
+                          group.items.map((entry) => entry.id),
+                          name
+                        )
+                    : undefined
+                }
+              />
+              {group.tree.folders.map((folder) => renderFolder(folder, 0, group.label))}
+              {group.tree.items.map((entry) => renderEntry(entry, 0))}
+            </div>
+          ))}
           {entries.length === 0 && (
             <div className={styles.empty}>
               {filtering ? '当前筛选条件下没有设定' : '还没有设定，点 + 新建'}

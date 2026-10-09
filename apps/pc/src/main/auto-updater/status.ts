@@ -1,6 +1,7 @@
 /** 对渲染进程暴露的更新状态快照，以及广播工具 */
 import { app, BrowserWindow } from 'electron';
 import type { UpdateChannel } from '../auto-updater-state';
+import { recoveryCapability } from './recovery-supervisor';
 import { getChannelMetadataFile, resolveUpdateChannel } from './channel';
 
 export type UpdateNetworkPhase = 'online' | 'recovering' | 'offline';
@@ -27,6 +28,8 @@ export interface UpdateStatus {
   /** 下载完成后正在预缓存当前版本安装包（用于回滚） */
   preCaching: boolean;
   lastError: string | null;
+  recovery: ReturnType<typeof recoveryCapability>;
+  recoveryPhase: string | null;
 }
 
 interface UpdaterConnectivityState {
@@ -57,6 +60,8 @@ export const updaterStatus: UpdateStatus = {
   networkCheckedAt: null,
   preCaching: false,
   lastError: null,
+  recovery: recoveryCapability(process.platform, Boolean(process.env.APPIMAGE)),
+  recoveryPhase: null,
 };
 
 export const connectivityState: UpdaterConnectivityState = {

@@ -1,3 +1,4 @@
+import { useUnsavedChangesGuard } from '@/render/hooks/useUnsavedChangesGuard';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { Character, CharacterCategory } from '../types';
 import {
@@ -37,6 +38,7 @@ export function useCharacterListEditor({
   const [categoryFilter, setCategoryFilter] = useState<CharacterCategoryFilter>('all');
   const [characterSearch, setCharacterSearch] = useState('');
   const [bulkUpdatingCategory, setBulkUpdatingCategory] = useState<CharacterCategory | null>(null);
+  useUnsavedChangesGuard(adding && Boolean(newName || newRole || newDesc || newAvatar));
   const dragCounter = useRef(0);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -209,23 +211,7 @@ export function useCharacterListEditor({
         await Promise.all(
           filteredCharacters.map((character) =>
             ipc.invoke('db-character-update', character.id, {
-              name: character.name,
-              role: character.role,
-              description: character.description,
-              attributes: stringifyCharacterAttributes(
-                {
-                  avatar: character.avatar,
-                  design: character.design,
-                  media: character.media,
-                  voice: character.voice,
-                  aliases: character.aliases,
-                  category: nextCategory,
-                  highlightColor: character.highlightColor,
-                  highlightFirstMentionOnly: character.highlightFirstMentionOnly,
-                  currentState: character.currentState,
-                },
-                character.role
-              ),
+              attributePatch: { category: nextCategory },
             })
           )
         );

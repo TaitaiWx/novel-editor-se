@@ -99,7 +99,12 @@ export function useLoreEntries(folderPath: string | null) {
         draft.title,
         draft.summary,
         JSON.stringify(draft.tags || []),
-        stringifyLoreAttributes({ folder: draft.folder, cover: draft.cover, media: draft.media })
+        stringifyLoreAttributes({
+          folder: draft.folder,
+          group: draft.group,
+          cover: draft.cover,
+          media: draft.media,
+        })
       );
       await reload();
     },
@@ -112,7 +117,10 @@ export function useLoreEntries(folderPath: string | null) {
       if (!ipc) return;
       const current = entries.find((entry) => entry.id === id);
       const touchesAttributes =
-        patch.folder !== undefined || patch.cover !== undefined || patch.media !== undefined;
+        patch.folder !== undefined ||
+        patch.group !== undefined ||
+        patch.cover !== undefined ||
+        patch.media !== undefined;
       await ipc.invoke('db-world-setting-update', id, {
         category: patch.category,
         title: patch.title,
@@ -121,6 +129,7 @@ export function useLoreEntries(folderPath: string | null) {
         attributes: touchesAttributes
           ? stringifyLoreAttributes({
               folder: patch.folder ?? current?.folder,
+              group: patch.group ?? current?.group,
               cover: patch.cover ?? current?.cover,
               media: patch.media ?? current?.media,
             })

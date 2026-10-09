@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTodayStats, initProject, readGuiSession, readWritingLog } from '@novel-editor/core';
 
 // ─── electron mock：捕获 ipcMain.handle 注册 ───
@@ -10,10 +10,13 @@ type Handler = (event: unknown, ...args: unknown[]) => unknown;
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>(),
+  closePause: null as null | (() => Promise<void>),
+  leaseDirectory: `${process.env.TMPDIR ?? process.cwd()}/ne-session-leases-${process.pid}-${Math.random()}`,
 }));
 
 vi.mock('electron', () => ({
   ipcMain: {
+    on: vi.fn(),
     handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
       mocks.handlers.set(channel, handler);
     },
@@ -25,10 +28,38 @@ vi.mock('electron', () => ({
   clipboard: { read: vi.fn(), availableFormats: vi.fn(), readText: vi.fn() },
 }));
 
-vi.mock('../../src/main/recent-folders', () => ({ addRecentFolder: vi.fn() }));
+vi.mock('@novel-editor/core', async (original) => {
+  const actual = await original<typeof import('@novel-editor/core')>();
+  return {
+    ...actual,
+    withWorkspaceLease: (task: () => unknown, options = {}) =>
+      actual.withWorkspaceLease(task, { lockDirectory: mocks.leaseDirectory, ...options }),
+    withWorkspaceWriterLease: (task: () => unknown, options = {}) =>
+      actual.withWorkspaceWriterLease(task, { lockDirectory: mocks.leaseDirectory, ...options }),
+    markGuiSessionClosed: async (...args: Parameters<typeof actual.markGuiSessionClosed>) => {
+      await mocks.closePause?.();
+      return actual.markGuiSessionClosed(...args);
+    },
+  };
+});
+import {
+  withWorkspaceMutation,
+  withWorkspaceSnapshot,
+} from '../../src/main/workspace-mutation-gate';
+afterAll(() => rm(mocks.leaseDirectory, { recursive: true, force: true }));
 
+vi.mock('../../src/main/recent-folders', () => ({
+  addRecentFolder: vi.fn(),
+  getRecentFolders: () => [],
+}));
+
+import { grantPathAccess, resetPathAccessForTest } from '../../src/main/path-access';
 import { registerFileSystemHandlers } from '../../src/main/handlers/file-system';
-import { registerSessionHandlers, resetGuiSessionsForTest } from '../../src/main/handlers/session';
+import {
+  registerSessionHandlers,
+  resetGuiSessionsForTest,
+  moveGuiSessionRoot,
+} from '../../src/main/handlers/session';
 
 /** 模拟 webContents：记录 destroyed 监听，便于手动触发窗口关闭 */
 function createSender(id: number) {
@@ -58,6 +89,8 @@ beforeAll(() => {
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'ne-session-'));
   resetGuiSessionsForTest();
+  resetPathAccessForTest();
+  for (const id of [1, 2, 3, 4, 5, 7]) await grantPathAccess({ id }, dir, true);
 });
 
 afterEach(async () => {
@@ -71,7 +104,9 @@ describe('write-file 记录写作日志', () => {
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, '一二三', 'utf-8');
 
-    await expect(invoke('write-file', {}, file, '一二三四五')).resolves.toEqual({ success: true });
+    await expect(invoke('write-file', { sender: { id: 1 } }, file, '一二三四五')).resolves.toEqual({
+      success: true,
+    });
     expect(await readFile(file, 'utf-8')).toBe('一二三四五');
     await vi.waitFor(async () => {
       const today = await getTodayStats(project.root);
@@ -80,9 +115,14 @@ describe('write-file 记录写作日志', () => {
     });
 
     // 内容不变：不再计入
-    await invoke('write-file', {}, file, '一二三四五');
+    await invoke('write-file', { sender: { id: 1 } }, file, '一二三四五');
     // 新建文件：从 0 计
-    await invoke('write-file', {}, path.join(project.novelsPath, '书', '002.md'), '甲乙');
+    await invoke(
+      'write-file',
+      { sender: { id: 1 } },
+      path.join(project.novelsPath, '书', '002.md'),
+      '甲乙'
+    );
     await vi.waitFor(async () => {
       expect(await getTodayStats(project.root)).toMatchObject({ added: 4, writes: 2 });
     });
@@ -91,15 +131,16 @@ describe('write-file 记录写作日志', () => {
   it('资料/ 与非正文文件不计入；未 init 且未上报会话时不写日志', async () => {
     const { project } = await initProject(dir);
     await mkdir(path.join(dir, '资料'), { recursive: true });
-    await invoke('write-file', {}, path.join(dir, '资料', 'a.md'), '资料内容');
-    await invoke('write-file', {}, path.join(dir, 'data.json'), '{}');
+    await invoke('write-file', { sender: { id: 1 } }, path.join(dir, '资料', 'a.md'), '资料内容');
+    await invoke('write-file', { sender: { id: 1 } }, path.join(dir, 'data.json'), '{}');
     // 给异步记录留出时间
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect((await readWritingLog(project.root)).days).toEqual({});
 
     const plain = await mkdtemp(path.join(os.tmpdir(), 'ne-plain-'));
     try {
-      await invoke('write-file', {}, path.join(plain, 'a.md'), '正文');
+      await grantPathAccess({ id: 1 }, plain, true);
+      await invoke('write-file', { sender: { id: 1 } }, path.join(plain, 'a.md'), '正文');
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect((await readWritingLog(plain)).days).toEqual({});
     } finally {
@@ -181,6 +222,7 @@ describe('gui-session-publish', () => {
     const other = await mkdtemp(path.join(os.tmpdir(), 'ne-session-other-'));
     try {
       const sender = createSender(2);
+      await grantPathAccess(sender, other, true);
       const snapshot = (root: string) => ({ workspaceRoot: root, activeFile: null, openFiles: [] });
       await invoke('gui-session-publish', { sender }, snapshot(dir));
       await invoke('gui-session-publish', { sender }, snapshot(other));
@@ -220,4 +262,111 @@ describe('gui-session-publish', () => {
       )
     ).resolves.toEqual({ success: false });
   });
+});
+
+it('renderer session publication cannot authorize an arbitrary directory', async () => {
+  const unapproved = await mkdtemp(path.join(os.tmpdir(), 'ne-session-unapproved-'));
+  try {
+    const sender = createSender(1);
+    expect(
+      await invoke(
+        'gui-session-publish',
+        { sender },
+        { workspaceRoot: unapproved, activeFile: null, openFiles: [] }
+      )
+    ).toEqual({ success: false });
+    await expect(
+      invoke('write-file', { sender }, path.join(unapproved, 'attack.md'), 'bad')
+    ).rejects.toThrow('未授权');
+    await expect(readFile(path.join(unapproved, '.novel-editor/session.json'))).rejects.toThrow();
+  } finally {
+    await rm(unapproved, { recursive: true, force: true });
+  }
+});
+
+it('gives a session destroy callback its own lease when triggered inside an admitted operation', async () => {
+  const sender = createSender(1);
+  await invoke(
+    'gui-session-publish',
+    { sender },
+    { workspaceRoot: dir, activeFile: null, openFiles: [] }
+  );
+  let started!: () => void;
+  let release!: () => void;
+  const begun = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const pause = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  mocks.closePause = async () => {
+    started();
+    await pause;
+  };
+  const owner = withWorkspaceMutation(
+    async () => {
+      sender.destroy();
+      await begun;
+    },
+    { resources: [dir] }
+  );
+  await owner;
+  let read = false;
+  const snapshot = withWorkspaceSnapshot(
+    async () => {
+      read = true;
+      return readGuiSession(dir);
+    },
+    { resources: [dir] }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  const before = read;
+  release();
+  const result = await snapshot;
+  mocks.closePause = null;
+  await vi.waitFor(async () => expect((await readGuiSession(dir)).status).toBe('closed'));
+  expect(before).toBe(false);
+  expect(result.status).toBe('closed');
+});
+
+it('redeclares a destroyed session root after an earlier queued workspace rename', async () => {
+  const sender = createSender(1);
+  await invoke(
+    'gui-session-publish',
+    { sender },
+    { workspaceRoot: dir, activeFile: null, openFiles: [] }
+  );
+  const destination = `${dir}-moved`;
+  let held!: () => void;
+  let destroy!: () => void;
+  const begun = new Promise<void>((resolve) => {
+    held = resolve;
+  });
+  const trigger = new Promise<void>((resolve) => {
+    destroy = resolve;
+  });
+  const owner = withWorkspaceMutation(
+    async () => {
+      held();
+      await trigger;
+      sender.destroy();
+    },
+    { resources: [dir] }
+  );
+  await begun;
+  const moving = withWorkspaceSnapshot(
+    async () => {
+      await rename(dir, destination);
+      moveGuiSessionRoot(dir, destination);
+    },
+    { resources: [dir, destination] }
+  );
+  destroy();
+  await Promise.all([owner, moving]);
+  try {
+    await vi.waitFor(async () => expect((await readGuiSession(destination)).status).toBe('closed'));
+    expect(await stat(dir).catch(() => null)).toBeNull();
+  } finally {
+    await rm(destination, { recursive: true, force: true });
+  }
 });

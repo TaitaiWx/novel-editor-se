@@ -3,6 +3,8 @@ import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useTabActions, type UseTabActionsContext } from '@/render/hooks/useTabActions';
+import { registerActiveEditor } from '@/render/components/TextEditor/active-editor';
+import { deferred, makeDialog, makeToast } from './hookCtx';
 
 interface HarnessOptions {
   openTabs?: string[];
@@ -10,6 +12,7 @@ interface HarnessOptions {
   untitled?: Record<string, string>;
   sidebarCollapsed?: boolean;
   rightPanelCollapsed?: boolean;
+  confirmClose?: boolean;
 }
 
 /** 用真实 useState 模拟 TabsState / LayoutState 中与标签页相关的切片 */
@@ -49,6 +52,9 @@ function useHarness(options: HarnessOptions = {}) {
     setUntitledTabContents,
     sidebarCollapsedRef,
     untitledCounterRef,
+    untitledTabContents,
+    dialog: makeDialog({ confirm: options.confirmClose ?? true }),
+    toast: makeToast(),
   } as unknown as UseTabActionsContext;
 
   const actions = useTabActions(ctx);
@@ -57,6 +63,7 @@ function useHarness(options: HarnessOptions = {}) {
     openTabs,
     activeTab,
     untitledTabContents,
+    setUntitledTabContents,
     focusMode,
     sidebarCollapsed,
     rightPanelCollapsed,
@@ -109,14 +116,40 @@ describe('useTabActions', () => {
     expect(result.current.activeTab).toBe('/a');
   });
 
-  it('closeTab 关闭未命名标签时清理其内容', () => {
+  it('closeTab 确认放弃未命名稿后才清理内容', async () => {
     const u = '__untitled__:Untitled-1';
     const { result } = renderHook(() =>
       useHarness({ openTabs: [u, '/a'], activeTab: '/a', untitled: { [u]: 'hello', x: 'y' } })
     );
-    act(() => result.current.actions.closeTab(u));
+    await act(async () => {
+      await result.current.actions.closeTab(u);
+    });
     expect(result.current.untitledTabContents).toEqual({ x: 'y' });
   });
+
+  it.each(['closeTab', 'handleCloseAllTabs', 'handleCloseOtherTabs'] as const)(
+    '%s 取消关闭时保留未命名稿及标签',
+    async (action) => {
+      const u = '__untitled__:draft';
+      const { result } = renderHook(() =>
+        useHarness({
+          openTabs: [u, '/a'],
+          activeTab: u,
+          untitled: { [u]: '重要草稿' },
+          confirmClose: false,
+        })
+      );
+      await act(async () => {
+        if (action === 'closeTab') await result.current.actions.closeTab(u);
+        else if (action === 'handleCloseOtherTabs')
+          await result.current.actions.handleCloseOtherTabs('/a');
+        else await result.current.actions.handleCloseAllTabs();
+      });
+      expect(result.current.openTabs).toEqual([u, '/a']);
+      expect(result.current.untitledTabContents[u]).toBe('重要草稿');
+      expect(result.current.activeTab).toBe(u);
+    }
+  );
 
   it('closeTab 关闭不存在内容的未命名标签时保持对象引用', () => {
     const u = '__untitled__:Untitled-9';
@@ -199,21 +232,74 @@ describe('useTabActions', () => {
     expect(result.current.activeTab).toBe('/other');
   });
 
-  it('handleCloseAllAndSave 先派发 Cmd+S，再延迟关闭所有标签', () => {
-    const keydowns: KeyboardEvent[] = [];
-    const listener = (e: KeyboardEvent) => keydowns.push(e);
-    document.addEventListener('keydown', listener);
+  it('handleCloseAllAndSave 等待真实保存完成，不能依赖200ms定时器', async () => {
+    const pending = deferred<boolean>();
+    const registration = registerActiveEditor({
+      save: () => pending.promise,
+      getSnapshot: () => ({ filePath: '/a', content: '草稿', readOnly: false }),
+      openSearch: () => {},
+    });
     const { result } = renderHook(() => useHarness({ openTabs: ['/a'], activeTab: '/a' }));
-    act(() => result.current.actions.handleCloseAllAndSave());
-    expect(keydowns).toHaveLength(1);
-    expect(keydowns[0].key).toBe('s');
-    expect(keydowns[0].metaKey).toBe(true);
-    expect(result.current.openTabs).toEqual(['/a']);
+    let closing: unknown;
     act(() => {
-      vi.advanceTimersByTime(200);
+      closing = result.current.actions.handleCloseAllAndSave();
+    });
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(result.current.openTabs).toEqual(['/a']);
+    await act(async () => {
+      pending.resolve(true);
+      await closing;
     });
     expect(result.current.openTabs).toEqual([]);
     expect(result.current.activeTab).toBeNull();
-    document.removeEventListener('keydown', listener);
+    registration.dispose();
+  });
+
+  it('等待正文保存时草稿又有新内容，不能继续关闭全部标签', async () => {
+    const pending = deferred<boolean>();
+    const registration = registerActiveEditor({
+      save: () => pending.promise,
+      getSnapshot: () => ({ filePath: '/a', content: '正文', readOnly: false }),
+      openSearch: () => {},
+    });
+    const u = '__untitled__:1';
+    const { result } = renderHook(() =>
+      useHarness({
+        openTabs: ['/a', u],
+        activeTab: '/a',
+        untitled: { [u]: '' },
+      })
+    );
+    try {
+      const close = result.current.actions.handleCloseAllTabs();
+      act(() => result.current.setUntitledTabContents({ [u]: '新草稿' }));
+      await act(async () => {
+        pending.resolve(true);
+        await close;
+      });
+      expect(result.current.openTabs).toEqual(['/a', u]);
+      expect(result.current.untitledTabContents[u]).toBe('新草稿');
+    } finally {
+      registration.dispose();
+    }
+  });
+
+  it('关闭前保存失败时保留标签', async () => {
+    const registration = registerActiveEditor({
+      save: async () => false,
+      getSnapshot: () => ({ filePath: '/a', content: '未保存', readOnly: false }),
+      openSearch: () => {},
+    });
+    try {
+      const { result } = renderHook(() => useHarness({ openTabs: ['/a'], activeTab: '/a' }));
+      await act(async () => {
+        await result.current.actions.closeTab('/a');
+      });
+      expect(result.current.openTabs).toEqual(['/a']);
+    } finally {
+      registration.dispose();
+    }
   });
 });

@@ -146,18 +146,12 @@ export function useLibraryGeneration(ctx: UseLibraryGenerationContext) {
           );
 
           if (matched) {
-            const prevAttrs = parseCharacterAttributes(matched.attributes, nextRole);
             await ipc.invoke('db-character-update', matched.id, {
-              name: matched.name,
-              role: nextRole,
-              description: nextDescription,
-              attributes: stringifyCharacterAttributes(
-                {
-                  ...prevAttrs,
-                  aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
-                },
-                nextRole
-              ),
+              ...(character.role?.trim() ? { role: character.role.trim() } : {}),
+              ...(character.description?.trim()
+                ? { description: character.description.trim() }
+                : {}),
+              appendAliases: nextAliases,
             });
             updatedCount += 1;
             nameToId.set(normalized, matched.id);

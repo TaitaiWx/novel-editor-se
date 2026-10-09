@@ -10,11 +10,17 @@
  *   内容行用 novel_id 归属作品；首次打开示例时写入该项目的 SQLite）
  *
  * 修改故事章节后同步调整这里的事件，然后运行：
- *   pnpm exec tsx apps/pc/scripts/generate-sample-data.mts
+ *   pnpm exec tsx apps/pc/scripts/generate-sample-data.mts --write
  * 单测（apps/pc/test/main/sample-data.test.ts）会重新生成并与仓库中的文件逐字节比对。
- * 示例内容有任何变化后，再运行 `pnpm exec tsx apps/pc/scripts/sample-content-hash.mts --bump`
- * 递增 sampleVersion 并刷新 contentHash（否则老用户的本机副本不会升级，单测也会失败）。
+ * 默认只在临时目录预览；--write 完整成功后发布，同时刷新 contentHash，内容变化时递增 sampleVersion。
+ * 手动改动生成器之外的示例素材时，可用 sample-content-hash.mts --bump 单独更新元数据。
  */
+import { publishGeneratedSample } from './sample-generation.mts';
+import {
+  computeSampleContentHash,
+  readSampleMeta,
+  writeSampleMeta,
+} from './sample-content-hash.mts';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -304,14 +310,20 @@ function sampleMedia(entries: Array<[string, 'portrait' | 'turnaround' | 'concep
 function characterVisuals(name: string): Record<string, unknown> {
   const art = SAMPLE_CHARACTER_ART.find((item) => item.name === name);
   if (!art) return {};
-  const portrait = `资料/图集/人物/${name}/形象图.webp`;
+  // 林舟与苏晴已替换为新的写实形象图；保留作者的文件名和其他备选图片。
+  const replacementFiles: Record<string, [portrait: string, turnaround: string]> = {
+    林舟: ['20261009-022520-9785fe7b.jpg', '20261009-022432-860f91b3.jpg'],
+    苏晴: ['20261009-030510-29cfb38d.jpg', '20261009-030838-09f73c41.jpg'],
+  };
+  const [portraitFile, turnaroundFile] = replacementFiles[name] ?? ['形象图.webp', '三视图.webp'];
+  const portrait = `资料/图集/人物/${name}/${portraitFile}`;
   return {
     avatar: portrait,
     design: art.design,
     voice: art.voice,
     media: sampleMedia([
       [portrait, 'portrait'],
-      [`资料/图集/人物/${name}/三视图.webp`, 'turnaround'],
+      [`资料/图集/人物/${name}/${turnaroundFile}`, 'turnaround'],
     ]),
   };
 }
@@ -562,7 +574,7 @@ async function writeWorkMemory(workRoot: string, memory: MemoryBundle): Promise<
 }
 
 /** 把生成的数据写到 root（默认 apps/pc/sample-data），会先清空各作品的 资料/记忆/ */
-export async function writeSampleData(root: string = SAMPLE_DATA_DIR): Promise<void> {
+async function generateSampleTree(root: string): Promise<void> {
   await writeWorkMemory(path.join(root, ...STAR_WORK_DIR.split('/')), buildSampleMemory());
   await writeWorkMemory(path.join(root, ...POEM_WORK_DIR.split('/')), buildPoemMemory(at));
 
@@ -578,15 +590,43 @@ export async function writeSampleData(root: string = SAMPLE_DATA_DIR): Promise<v
   await writeFile(seedFile, `${JSON.stringify(buildSampleSeed(), null, 2)}\n`, 'utf-8');
 }
 
+/** Refresh seed, derived scene metadata and hash in the same isolated tree. */
+export async function refreshSampleTree(stage: string): Promise<void> {
+  const previous = await readSampleMeta(stage).catch(() => ({ sampleVersion: 0, contentHash: '' }));
+  await generateSampleTree(stage);
+  const contentHash = await computeSampleContentHash(stage);
+  await writeSampleMeta(
+    {
+      sampleVersion: previous.sampleVersion + (contentHash === previous.contentHash ? 0 : 1),
+      contentHash,
+    },
+    stage
+  );
+}
+
+/** 程序入口也走目标校验与隔离发布；测试可传入空目录。 */
+export async function writeSampleData(root: string = SAMPLE_DATA_DIR): Promise<void> {
+  await publishGeneratedSample(root, refreshSampleTree, true);
+}
+
 const invokedDirectly =
   typeof process.argv[1] === 'string' &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
-  writeSampleData(process.argv[2] ? path.resolve(process.argv[2]) : SAMPLE_DATA_DIR)
+  const args = process.argv.slice(2);
+  const targets = args.filter((arg) => !arg.startsWith('--'));
+  if (targets.length > 1 || args.some((arg) => arg.startsWith('--') && arg !== '--write')) {
+    throw new Error('用法：generate-sample-data.mts [示例目录] [--write]；默认仅预览');
+  }
+  const root = targets[0] ? path.resolve(targets[0]) : SAMPLE_DATA_DIR;
+  const apply = args.includes('--write');
+  publishGeneratedSample(root, refreshSampleTree, apply)
     .then(() =>
       console.log(
-        '示例数据已生成。如内容有变化，请运行 pnpm exec tsx apps/pc/scripts/sample-content-hash.mts --bump'
+        apply
+          ? '示例数据与版本指纹已一起发布'
+          : '预览检查通过，未修改目标；确认后添加 --write 执行生成'
       )
     )
     .catch((error: unknown) => {

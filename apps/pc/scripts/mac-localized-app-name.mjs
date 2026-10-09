@@ -26,6 +26,7 @@ export function buildInfoPlistStrings(name = MAC_LOCALIZED_APP_NAME) {
 }
 
 /** 向 .app/Contents/Resources 下所有 *.lproj 写入 InfoPlist.strings，返回写入的目录数 */
+/** @param {string} appBundlePath @param {string} [name] */
 export async function writeLocalizedAppName(appBundlePath, name = MAC_LOCALIZED_APP_NAME) {
   const resourcesDir = join(appBundlePath, 'Contents', 'Resources');
   const entries = await readdir(resourcesDir, { withFileTypes: true });
@@ -39,6 +40,7 @@ export async function writeLocalizedAppName(appBundlePath, name = MAC_LOCALIZED_
   return lprojDirs.length;
 }
 
+/** @param {import("electron-builder").AfterPackContext} context */
 export default async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin' && context.electronPlatformName !== 'mas') return;
   const productFilename = context.packager.appInfo.productFilename;

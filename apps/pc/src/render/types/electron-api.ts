@@ -1,7 +1,9 @@
+import type { CharacterDesign } from '@novel-editor/core/entity-media';
 /**
  * Electron API 类型定义
  */
 
+import type { RendererPreparationResult } from '../../shared/renderer-preparation';
 import type { FileInfo, FileInfoBatchEntry, OpenLocalResult, ShortcutInfo } from './File';
 import type { GrowthInvokeOverloads } from './growth-api';
 import type { AIInvokeOverloads } from './ai-api';
@@ -33,6 +35,11 @@ export interface UpdateStatus {
   /** 下载完成后正在预缓存当前版本安装包（用于回滚） */
   preCaching: boolean;
   lastError: string | null;
+  recovery?: {
+    mode: 'mac' | 'nsis' | 'appimage' | 'deb' | null;
+    authorization: 'none' | 'system-prompt';
+    reboot: 'next-user-login';
+  };
 }
 
 export interface WebAuthnSupportInfo {
@@ -144,6 +151,24 @@ export interface ElectronAPI {
   // 成长记录器通道的类型见 ./growth-api.ts
   ipcRenderer: GrowthInvokeOverloads &
     AIInvokeOverloads & {
+      invoke(
+        channel: 'db-character-update',
+        id: number,
+        fields: {
+          name?: string;
+          role?: string;
+          description?: string;
+          attributes?: string;
+          attributePatch?: Record<string, unknown>;
+          appendAliases?: string[];
+        }
+      ): Promise<unknown>;
+      invoke(
+        channel: 'db-character-patch-design',
+        id: number,
+        patch: Partial<CharacterDesign>,
+        expected: Partial<CharacterDesign>
+      ): Promise<Partial<CharacterDesign>>;
       invoke(channel: 'open-local-folder'): Promise<OpenLocalResult | null>;
       invoke(channel: 'read-file', filePath: string): Promise<string>;
       invoke(channel: 'read-file', filePath: string, encoding: string): Promise<string>;
@@ -153,6 +178,10 @@ export interface ElectronAPI {
         content: string
       ): Promise<{ success: boolean }>;
       /** 上报 GUI 会话（null 表示已关闭文件夹），主进程写入 <folder>/.novel-editor/session.json */
+      invoke(
+        channel: 'renderer-preparation-result',
+        result: RendererPreparationResult
+      ): Promise<void>;
       invoke(
         channel: 'gui-session-publish',
         snapshot: GuiSessionSnapshot | null

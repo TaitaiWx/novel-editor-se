@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 人物头像 IPC：character-avatar-save
  *
@@ -7,7 +8,6 @@
  * 不信任渲染进程：作品目录必须是存在的绝对路径，窗口已上报工作区时还必须位于其中；
  * 只接受按文件头识别出的 PNG / JPEG / GIF / WebP，大小不超过 5MB；文件名由主进程生成。
  */
-import { ipcMain } from 'electron';
 import { createHash } from 'crypto';
 import { mkdir, readdir, realpath, rename, stat, unlink, writeFile } from 'fs/promises';
 import path from 'path';
@@ -118,7 +118,7 @@ export async function saveCharacterAvatar(
 }
 
 export function registerCharacterAvatarHandlers(): void {
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'character-avatar-save',
     async (event, workPath: unknown, name: unknown, data: unknown): Promise<AvatarSaveResult> => {
       try {

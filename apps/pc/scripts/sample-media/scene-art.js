@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * 示例场景视频「第一场 清晨的青石镇」的画面（在 Electron 隐藏窗口里运行，依赖 art.js 的 window.SampleArt）：
  * - drawShotFrame：每个镜头的画面（首帧图用 t = 0；成片逐帧绘制 t ∈ [0, 1]）
@@ -8,11 +7,20 @@
 (function () {
   'use strict';
   const A = window.SampleArt;
+  /** @param {number} v */
   const ease = (v) => v * v * (3 - 2 * v);
   /** 画面尺寸无关：以 640 × 360 为基准的缩放（首帧、成片、样片不论多大构图都一致） */
+  /** @param {number} width */
   const unit = (width) => width / 640;
 
   /** 雨后清晨的天空与远山、晨雾 */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} height
+   * @param {number} horizon
+   * @param {number} t
+   */
   function morningSky(ctx, width, height, horizon, t) {
     const sky = ctx.createLinearGradient(0, 0, 0, horizon);
     sky.addColorStop(0, '#9fb4c4');
@@ -36,6 +44,12 @@
   }
 
   /** 湿润的石板路（透视），带反光 */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} height
+   * @param {number} horizon
+   */
   function stoneRoad(ctx, width, height, horizon) {
     ctx.fillStyle = '#6f6a60';
     ctx.fillRect(0, horizon, width, height - horizon);
@@ -66,6 +80,13 @@
   }
 
   /** 老槐树（湿漉漉地发亮） */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x
+   * @param {number} baseY
+   * @param {number} size
+   * @param {number} width
+   */
   function oldTree(ctx, x, baseY, size, width) {
     const scale = size * unit(width);
     ctx.fillStyle = '#4a3a2c';
@@ -82,10 +103,23 @@
       const r = (24 + random() * 22) * scale;
       A.ellipse(ctx, x + dx, baseY + dy, r, r * 0.8, i % 3 === 0 ? '#5f7d4e' : '#4d6a40');
     }
-    A.ellipse(ctx, x - 20 * scale, baseY - 150 * scale, 26 * scale, 14 * scale, 'rgba(230, 240, 210, 0.25)');
+    A.ellipse(
+      ctx,
+      x - 20 * scale,
+      baseY - 150 * scale,
+      26 * scale,
+      14 * scale,
+      'rgba(230, 240, 210, 0.25)'
+    );
   }
 
   /** 青石镇的屋檐与铁匠铺烟囱 */
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} baseY
+   * @param {number} size
+   */
   function townHouses(ctx, width, baseY, size) {
     const scale = size * unit(width);
     const houses = [
@@ -106,20 +140,38 @@
       ctx.closePath();
       ctx.fill();
       ctx.fillStyle = '#5b4a3a';
-      ctx.fillRect(x + w * scale * 0.4, baseY - h * 0.55 * scale, w * scale * 0.2, h * 0.55 * scale);
+      ctx.fillRect(
+        x + w * scale * 0.4,
+        baseY - h * 0.55 * scale,
+        w * scale * 0.2,
+        h * 0.55 * scale
+      );
     }
     // 铁匠铺的烟囱（还没冒烟）
     ctx.fillStyle = '#5a524a';
     ctx.fillRect(width * 0.75, baseY - 128 * scale, 14 * scale, 30 * scale);
   }
 
+  /**
+   * @param {SampleCharacter[]} specs
+   * @param {string} name
+   */
   function hero(specs, name) {
-    return specs.find((item) => item.name === name);
+    const found = specs.find((item) => item.name === name);
+    if (!found) throw new Error(`Missing sample character: ${name}`);
+    return found;
   }
 
   /** 镜头画面：n = 镜头号，t ∈ [0, 1] */
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {number} n
+   * @param {number} t
+   * @param {SampleCharacter[]} specs
+   */
   function drawShotFrame(canvas, n, t, specs) {
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context is unavailable');
     const { width, height } = canvas;
     const linzhou = hero(specs, '林舟');
     const stone = hero(specs, '小石头');
@@ -196,8 +248,13 @@
   }
 
   /** 3D 预演的灰模画面：地面网格 + 灰色人偶（走向镜头，到中段回头看） */
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {number} t
+   */
   function drawPrevizFrame(canvas, t) {
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context is unavailable');
     const { width, height } = canvas;
     const horizon = height * 0.42;
     ctx.fillStyle = '#2b2f36';
@@ -229,6 +286,7 @@
     const x = width * 0.5;
     const swing = Math.sin(t * Math.PI * 6) * 0.25;
     const look = t > 0.4 && t < 0.8 ? Math.sin(((t - 0.4) / 0.4) * Math.PI) : 0;
+    /** @param {number} x1 @param {number} y1 @param {number} x2 @param {number} y2 @param {number} w */
     const limb = (x1, y1, x2, y2, w) => {
       ctx.lineCap = 'round';
       ctx.lineWidth = w;

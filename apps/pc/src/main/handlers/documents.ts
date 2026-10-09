@@ -1,11 +1,13 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * Document IPC Handlers
  *
  * Handles: XLSX/PPTX/DOCX reading, document export, file import
  */
-import { ipcMain, dialog } from 'electron';
+import { dialog } from 'electron';
 import { readFile } from 'fs/promises';
 import path from 'path';
+import { assertPathAccess, grantPathAccess } from '../path-access';
 import { importFile, SUPPORTED_IMPORT_EXTENSIONS } from '../file-importer';
 import {
   exportToWord,
@@ -70,7 +72,8 @@ function docxXmlToHtml(xml: string): string {
 
 export function registerDocumentHandlers(): void {
   // Read Excel files
-  ipcMain.handle('read-xlsx-data', async (_event, filePath: string) => {
+  registerWorkspaceHandler('read-xlsx-data', async (event, filePath: string) => {
+    await assertPathAccess(event.sender.id, filePath);
     try {
       const ExcelJS = await import('exceljs');
       const ExcelMod = ExcelJS.default ?? ExcelJS;
@@ -158,7 +161,8 @@ export function registerDocumentHandlers(): void {
   });
 
   // Read PowerPoint files
-  ipcMain.handle('read-pptx-data', async (_event, filePath: string) => {
+  registerWorkspaceHandler('read-pptx-data', async (event, filePath: string) => {
+    await assertPathAccess(event.sender.id, filePath);
     try {
       const buffer = await readFile(filePath);
       const arrayBuffer = buffer.buffer.slice(
@@ -220,7 +224,8 @@ export function registerDocumentHandlers(): void {
   });
 
   // Read Word files
-  ipcMain.handle('read-docx-data', async (_event, filePath: string) => {
+  registerWorkspaceHandler('read-docx-data', async (event, filePath: string) => {
+    await assertPathAccess(event.sender.id, filePath);
     const fileName = path.basename(filePath);
     const ext = path.extname(filePath).toLowerCase();
 
@@ -256,7 +261,7 @@ export function registerDocumentHandlers(): void {
   });
 
   // File import (Word/Excel → Markdown)
-  ipcMain.handle('import-file', async () => {
+  registerWorkspaceHandler('import-file', async (event) => {
     const result = await dialog.showOpenDialog({
       title: '导入文件',
       filters: [
@@ -271,6 +276,7 @@ export function registerDocumentHandlers(): void {
 
     for (const srcPath of result.filePaths) {
       try {
+        await grantPathAccess(event.sender, srcPath, false, false);
         const { fileName, content } = await importFile(srcPath);
         previews.push({ fileName, content, sourcePath: srcPath });
       } catch (error) {
@@ -285,7 +291,7 @@ export function registerDocumentHandlers(): void {
   });
 
   // Structured file import (Word/Excel/Markdown/Text/JSON → preview)
-  ipcMain.handle('import-structured-file', async () => {
+  registerWorkspaceHandler('import-structured-file', async (event) => {
     const result = await dialog.showOpenDialog({
       title: '导入设定或大纲资料',
       filters: [
@@ -303,6 +309,7 @@ export function registerDocumentHandlers(): void {
 
     for (const srcPath of result.filePaths) {
       try {
+        await grantPathAccess(event.sender, srcPath, false, false);
         const { fileName, content } = await importFile(srcPath);
         previews.push({ fileName, content, sourcePath: srcPath });
       } catch (error) {
@@ -317,7 +324,7 @@ export function registerDocumentHandlers(): void {
   });
 
   // Document exports
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'export-to-word',
     async (_event, content: string, options?: { title?: string; author?: string }) => {
       try {
@@ -329,10 +336,11 @@ export function registerDocumentHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'export-project-to-word',
-    async (_event, folderPath: string, options?: { title?: string; author?: string }) => {
+    async (event, folderPath: string, options?: { title?: string; author?: string }) => {
       try {
+        await assertPathAccess(event.sender.id, folderPath);
         const filePath = await exportProjectToWord(folderPath, options);
         return { success: !!filePath, filePath };
       } catch (error) {
@@ -341,7 +349,7 @@ export function registerDocumentHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'export-to-pptx',
     async (_event, content: string, options?: { title?: string; author?: string }) => {
       try {
@@ -353,10 +361,11 @@ export function registerDocumentHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'beautify-pptx',
-    async (_event, sourcePath: string, options?: { title?: string; author?: string }) => {
+    async (event, sourcePath: string, options?: { title?: string; author?: string }) => {
       try {
+        await assertPathAccess(event.sender.id, sourcePath);
         const filePath = await beautifyPptx(sourcePath, options);
         return { success: !!filePath, filePath };
       } catch (error) {

@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * 正文结构规则的存储（仅主进程与 CLI 使用，GUI 渲染进程经 IPC 读写）
  *
@@ -146,15 +147,20 @@ export async function writeStructureConfig(
   folder: string,
   raw: unknown
 ): Promise<StructureConfigReadResult> {
-  const config = assertValidStructureConfig(raw);
-  const location = await resolveStructureConfigLocation(folder);
-  const existing = (await readJsonObject(location.file)) ?? {};
-  const next =
-    location.kind === 'project'
-      ? { ...existing, structure: config }
-      : { ...existing, schemaVersion: STRUCTURE_CONFIG_SCHEMA_VERSION, structure: config };
-  await writeJsonAtomic(location.file, next);
-  return { config, location, stored: true, warnings: [] };
+  return withWorkspaceLease(
+    async () => {
+      const config = assertValidStructureConfig(raw);
+      const location = await resolveStructureConfigLocation(folder);
+      const existing = (await readJsonObject(location.file)) ?? {};
+      const next =
+        location.kind === 'project'
+          ? { ...existing, structure: config }
+          : { ...existing, schemaVersion: STRUCTURE_CONFIG_SCHEMA_VERSION, structure: config };
+      await writeJsonAtomic(location.file, next);
+      return { config, location, stored: true, warnings: [] };
+    },
+    { resources: [folder] }
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
  * Markdown 实时预览（类 Typora）：光标所在行 / 块显示源码，其余位置就地渲染。
  *
- * 入口模块会被懒加载（包含 KaTeX），只在打开 .md 文件且开启「Markdown 实时渲染」时加载。
+ * 入口模块在打开 .md 文件时懒加载；KaTeX 仅在公式进入渲染范围时再加载。
  * 依赖 markdown 语言扩展提供语法树（GFM + 数学公式，见 editor-runtime.ts）。
  */
 import type { Extension } from '@codemirror/state';

@@ -39,6 +39,7 @@ vi.mock('electron', () => ({
     showOpenDialog: (...args: unknown[]) => showOpenDialog(...(args as [])),
   },
   BrowserWindow: { getAllWindows: () => electronState.windows },
+  safeStorage: { isEncryptionAvailable: () => false },
   app: {
     isPackaged: false,
     getPath: () => electronState.userData,
@@ -118,6 +119,41 @@ describe.skipIf(!sqliteAvailable)('database IPC handlers（node:sqlite shim）',
     ]) {
       expect(handlers.has(channel)).toBe(true);
     }
+  });
+
+  it('人物设计 IPC 校验字段并按字段检测并发冲突，保留其他属性', async () => {
+    const created = await call<RunResult>(
+      'db-character-create',
+      novelId,
+      '林舟',
+      '',
+      '',
+      JSON.stringify({ avatar: 'portrait.png', design: { appearance: '旧外貌' } })
+    );
+    const id = Number(created.lastInsertRowid);
+    for (const patch of [
+      { avatar: '覆盖' },
+      { appearance: 3 },
+      { appearance: '长'.repeat(801) },
+      {},
+      [],
+    ]) {
+      await expect(
+        call('db-character-patch-design', id, patch, { appearance: '旧外貌' })
+      ).rejects.toThrow();
+    }
+    await expect(
+      call('db-character-patch-design', id, { appearance: '黑发' }, { appearance: '旧外貌' })
+    ).resolves.toMatchObject({ appearance: '黑发' });
+    await expect(
+      call('db-character-patch-design', id, { appearance: '白发' }, { appearance: '旧外貌' })
+    ).rejects.toThrow('已被修改');
+    await call('db-character-patch-design', id, { outfit: '蓝衣' }, { outfit: '' });
+    const rows = await call<Array<{ attributes: string }>>('db-character-list', novelId);
+    expect(JSON.parse(rows[0].attributes)).toEqual({
+      avatar: 'portrait.png',
+      design: { appearance: '黑发', outfit: '蓝衣' },
+    });
   });
 
   describe('初始化 / 关闭', () => {

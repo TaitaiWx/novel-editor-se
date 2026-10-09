@@ -1,11 +1,7 @@
 {
   "root": true,
   "parser": "@typescript-eslint/parser",
-  "plugins": [
-    "@typescript-eslint",
-    "prettier",
-    "react-hooks"
-  ],
+  "plugins": ["@typescript-eslint", "prettier", "react-hooks"],
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
@@ -32,14 +28,8 @@
   },
   "overrides": [
     {
-      "files": [
-        "apps/*/src/**/*.{ts,tsx}",
-        "packages/*/src/**/*.{ts,tsx}"
-      ],
-      "excludedFiles": [
-        "**/*.test.ts",
-        "**/*.test.tsx"
-      ],
+      "files": ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      "excludedFiles": ["**/*.test.ts", "**/*.test.tsx"],
       "rules": {
         "no-restricted-syntax": [
           "error",
@@ -60,6 +50,23 @@
             "message": "正则里不得直接写汉字 / 全角等非 ASCII 字符（禁止按汉字做判断）；确需按字符分段时用 \\uXXXX 转义并在注释里说明"
           }
         ]
+      }
+    },
+    {
+      "files": ["**/*.cjs"],
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off"
+      }
+    },
+    {
+      "files": ["apps/pc/scripts/sample-media/*.js"],
+      "globals": {
+        "AudioEncoder": "readonly",
+        "AudioData": "readonly",
+        "Mp4Muxer": "readonly",
+        "VideoEncoder": "readonly",
+        "VideoFrame": "readonly",
+        "SampleAudio": "readonly"
       }
     }
   ]

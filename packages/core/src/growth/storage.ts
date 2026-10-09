@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from '../workspace-lock';
 /**
  * 记忆库文件读写（Node.js）：`<root>/资料/记忆/`
  *
@@ -118,15 +119,20 @@ export async function loadMemory(root: string): Promise<LoadedMemory> {
 
 /** 重新生成 README.md 与所有角色摘要 */
 export async function regenerateMemoryDocs(root: string, bundle?: MemoryBundle): Promise<void> {
-  const data = bundle ?? (await loadMemory(root));
-  const dir = getMemoryDir(root);
-  await writeAtomic(path.join(dir, MEMORY_README_FILE), renderMemoryReadme(data));
-  for (const sheet of data.sheets) {
-    await writeAtomic(
-      path.join(dir, MEMORY_SHEETS_DIR, `${toMemoryFileName(sheet.name)}.md`),
-      renderSheetMarkdown(data.ruleset, sheet, data)
-    );
-  }
+  return withWorkspaceLease(
+    async () => {
+      const data = bundle ?? (await loadMemory(root));
+      const dir = getMemoryDir(root);
+      await writeAtomic(path.join(dir, MEMORY_README_FILE), renderMemoryReadme(data));
+      for (const sheet of data.sheets) {
+        await writeAtomic(
+          path.join(dir, MEMORY_SHEETS_DIR, `${toMemoryFileName(sheet.name)}.md`),
+          renderSheetMarkdown(data.ruleset, sheet, data)
+        );
+      }
+    },
+    { resources: [root] }
+  );
 }
 
 export interface InitMemoryOptions {
@@ -145,66 +151,96 @@ export async function initMemory(
   root: string,
   options: InitMemoryOptions = {}
 ): Promise<InitMemoryResult> {
-  const dir = getMemoryDir(root);
-  const created: string[] = [];
-  const skipped: string[] = [];
-  await mkdir(path.join(dir, MEMORY_SHEETS_DIR), { recursive: true });
-  const files: Array<[string, unknown]> = [
-    [MEMORY_RULESET_FILE, createRulesetFromTemplate(options.template ?? 'dnd')],
-    [MEMORY_PARTY_FILE, { schemaVersion: GROWTH_SCHEMA_VERSION, parties: [], companions: [] }],
-    [MEMORY_ATLAS_FILE, { schemaVersion: GROWTH_SCHEMA_VERSION, locations: [] }],
-  ];
-  for (const [name, value] of files) {
-    const filePath = path.join(dir, name);
-    const exists = (await readJson(filePath)) !== undefined;
-    if (exists && !(options.force && name === MEMORY_RULESET_FILE)) {
-      skipped.push(filePath);
-      continue;
-    }
-    await writeAtomic(filePath, toJson(value));
-    created.push(filePath);
-  }
-  await regenerateMemoryDocs(root);
-  return { dir, created, skipped };
+  return withWorkspaceLease(
+    async () => {
+      const dir = getMemoryDir(root);
+      const created: string[] = [];
+      const skipped: string[] = [];
+      await mkdir(path.join(dir, MEMORY_SHEETS_DIR), { recursive: true });
+      const files: Array<[string, unknown]> = [
+        [MEMORY_RULESET_FILE, createRulesetFromTemplate(options.template ?? 'dnd')],
+        [MEMORY_PARTY_FILE, { schemaVersion: GROWTH_SCHEMA_VERSION, parties: [], companions: [] }],
+        [MEMORY_ATLAS_FILE, { schemaVersion: GROWTH_SCHEMA_VERSION, locations: [] }],
+      ];
+      for (const [name, value] of files) {
+        const filePath = path.join(dir, name);
+        const exists = (await readJson(filePath)) !== undefined;
+        if (exists && !(options.force && name === MEMORY_RULESET_FILE)) {
+          skipped.push(filePath);
+          continue;
+        }
+        await writeAtomic(filePath, toJson(value));
+        created.push(filePath);
+      }
+      await regenerateMemoryDocs(root);
+      return { dir, created, skipped };
+    },
+    { resources: [root] }
+  );
 }
 
 export async function saveRuleset(root: string, ruleset: GrowthRuleset): Promise<GrowthRuleset> {
-  const normalized = normalizeRuleset(ruleset);
-  await writeAtomic(path.join(getMemoryDir(root), MEMORY_RULESET_FILE), toJson(normalized));
-  await regenerateMemoryDocs(root);
-  return normalized;
+  return withWorkspaceLease(
+    async () => {
+      const normalized = normalizeRuleset(ruleset);
+      await writeAtomic(path.join(getMemoryDir(root), MEMORY_RULESET_FILE), toJson(normalized));
+      await regenerateMemoryDocs(root);
+      return normalized;
+    },
+    { resources: [root] }
+  );
 }
 
 export async function saveSheet(root: string, sheet: GrowthSheet): Promise<GrowthSheet> {
-  const normalized = normalizeSheet(sheet, sheet.name);
-  const dir = getMemoryDir(root);
-  await writeAtomic(
-    path.join(dir, MEMORY_SHEETS_DIR, `${toMemoryFileName(normalized.name)}.json`),
-    toJson(normalized)
+  return withWorkspaceLease(
+    async () => {
+      const normalized = normalizeSheet(sheet, sheet.name);
+      const dir = getMemoryDir(root);
+      await writeAtomic(
+        path.join(dir, MEMORY_SHEETS_DIR, `${toMemoryFileName(normalized.name)}.json`),
+        toJson(normalized)
+      );
+      await regenerateMemoryDocs(root);
+      return normalized;
+    },
+    { resources: [root] }
   );
-  await regenerateMemoryDocs(root);
-  return normalized;
 }
 
 export async function deleteSheet(root: string, name: string): Promise<void> {
-  const base = path.join(getMemoryDir(root), MEMORY_SHEETS_DIR, toMemoryFileName(name));
-  await rm(`${base}.json`, { force: true });
-  await rm(`${base}.md`, { force: true });
-  await regenerateMemoryDocs(root);
+  return withWorkspaceLease(
+    async () => {
+      const base = path.join(getMemoryDir(root), MEMORY_SHEETS_DIR, toMemoryFileName(name));
+      await rm(`${base}.json`, { force: true });
+      await rm(`${base}.md`, { force: true });
+      await regenerateMemoryDocs(root);
+    },
+    { resources: [root] }
+  );
 }
 
 export async function saveParty(root: string, party: PartyBook): Promise<PartyBook> {
-  const normalized = normalizePartyBook(party);
-  await writeAtomic(path.join(getMemoryDir(root), MEMORY_PARTY_FILE), toJson(normalized));
-  await regenerateMemoryDocs(root);
-  return normalized;
+  return withWorkspaceLease(
+    async () => {
+      const normalized = normalizePartyBook(party);
+      await writeAtomic(path.join(getMemoryDir(root), MEMORY_PARTY_FILE), toJson(normalized));
+      await regenerateMemoryDocs(root);
+      return normalized;
+    },
+    { resources: [root] }
+  );
 }
 
 export async function saveAtlas(root: string, atlas: Atlas): Promise<Atlas> {
-  const normalized = normalizeAtlas(atlas);
-  await writeAtomic(path.join(getMemoryDir(root), MEMORY_ATLAS_FILE), toJson(normalized));
-  await regenerateMemoryDocs(root);
-  return normalized;
+  return withWorkspaceLease(
+    async () => {
+      const normalized = normalizeAtlas(atlas);
+      await writeAtomic(path.join(getMemoryDir(root), MEMORY_ATLAS_FILE), toJson(normalized));
+      await regenerateMemoryDocs(root);
+      return normalized;
+    },
+    { resources: [root] }
+  );
 }
 
 /** 按名字/别名获取角色卡，不存在时按当前规则新建并保存 */
@@ -213,20 +249,25 @@ export async function ensureSheet(
   name: string,
   aliases: string[] = []
 ): Promise<{ sheet: GrowthSheet; created: boolean; memory: LoadedMemory }> {
-  const memory = await loadMemory(root);
-  const existing = findSheet(memory.sheets, name);
-  if (existing) {
-    const merged = Array.from(new Set([...existing.aliases, ...aliases])).filter(
-      (alias) => alias && alias !== existing.name
-    );
-    if (merged.length !== existing.aliases.length) {
-      const updated = await saveSheet(root, { ...existing, aliases: merged });
-      return { sheet: updated, created: false, memory };
-    }
-    return { sheet: existing, created: false, memory };
-  }
-  const sheet = await saveSheet(root, createSheet(memory.ruleset, name, { aliases }));
-  return { sheet, created: true, memory };
+  return withWorkspaceLease(
+    async () => {
+      const memory = await loadMemory(root);
+      const existing = findSheet(memory.sheets, name);
+      if (existing) {
+        const merged = Array.from(new Set([...existing.aliases, ...aliases])).filter(
+          (alias) => alias && alias !== existing.name
+        );
+        if (merged.length !== existing.aliases.length) {
+          const updated = await saveSheet(root, { ...existing, aliases: merged });
+          return { sheet: updated, created: false, memory };
+        }
+        return { sheet: existing, created: false, memory };
+      }
+      const sheet = await saveSheet(root, createSheet(memory.ruleset, name, { aliases }));
+      return { sheet, created: true, memory };
+    },
+    { resources: [root] }
+  );
 }
 
 export interface SnapshotSyncInput {
@@ -273,27 +314,32 @@ export async function syncMemorySnapshots(
   root: string,
   input: SnapshotSyncInput
 ): Promise<SnapshotSyncResult> {
-  const dir = getMemoryDir(root);
-  const characters = await syncSnapshotDir(
-    path.join(dir, MEMORY_CHARACTER_CARDS_DIR),
-    input.characters
-      .filter((item) => item.name.trim())
-      .map((item) => ({ name: item.name, content: renderCharacterSnapshot(item) }))
+  return withWorkspaceLease(
+    async () => {
+      const dir = getMemoryDir(root);
+      const characters = await syncSnapshotDir(
+        path.join(dir, MEMORY_CHARACTER_CARDS_DIR),
+        input.characters
+          .filter((item) => item.name.trim())
+          .map((item) => ({ name: item.name, content: renderCharacterSnapshot(item) }))
+      );
+      const settings = await syncSnapshotDir(
+        path.join(dir, MEMORY_SETTINGS_DIR),
+        input.settings
+          .filter((item) => item.title.trim())
+          .map((item) => ({
+            name: item.category ? `${item.category}-${item.title}` : item.title,
+            content: renderSettingSnapshot(item),
+          }))
+      );
+      await regenerateMemoryDocs(root);
+      return {
+        dir,
+        characterFiles: characters.written,
+        settingFiles: settings.written,
+        removed: [...characters.removed, ...settings.removed],
+      };
+    },
+    { resources: [root] }
   );
-  const settings = await syncSnapshotDir(
-    path.join(dir, MEMORY_SETTINGS_DIR),
-    input.settings
-      .filter((item) => item.title.trim())
-      .map((item) => ({
-        name: item.category ? `${item.category}-${item.title}` : item.title,
-        content: renderSettingSnapshot(item),
-      }))
-  );
-  await regenerateMemoryDocs(root);
-  return {
-    dir,
-    characterFiles: characters.written,
-    settingFiles: settings.written,
-    removed: [...characters.removed, ...settings.removed],
-  };
 }

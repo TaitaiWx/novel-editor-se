@@ -1,4 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
+import { getActiveEditor } from '@/render/components/TextEditor/active-editor';
+import type { UiState } from './state/useUiState';
 import { isUntitledTabPath } from '@/render/app/fileTreeUtils';
 import type { TabsState } from './state/useTabsState';
 import type { LayoutState } from './state/useLayoutState';
@@ -11,6 +13,7 @@ export type UseTabActionsContext = Pick<
   | 'setOpenTabs'
   | 'setUntitledTabContents'
   | 'untitledCounterRef'
+  | 'untitledTabContents'
 > &
   Pick<
     LayoutState,
@@ -20,7 +23,8 @@ export type UseTabActionsContext = Pick<
     | 'setRightPanelCollapsed'
     | 'setSidebarCollapsed'
     | 'sidebarCollapsedRef'
-  >;
+  > &
+  Pick<UiState, 'dialog' | 'toast'>;
 
 /**
  * 标签页操作：打开、关闭、新建未命名标签、专注模式切换等
@@ -41,6 +45,91 @@ export function useTabActions(ctx: UseTabActionsContext) {
     untitledCounterRef,
   } = ctx;
 
+  const latest = useRef(ctx);
+  latest.current = ctx;
+  const closingRef = useRef(false);
+
+  // 删除标签和草稿必须发生在用户确认、实际保存完成之后。
+  const commitClose = useCallback(
+    (paths: readonly string[], preferred?: string | null) => {
+      const targets = new Set(paths);
+      setOpenTabs((prev) => {
+        const next = prev.filter((item) => !targets.has(item));
+        if (preferred && next.includes(preferred)) setActiveTab(preferred);
+        else if (activeTabRef.current && targets.has(activeTabRef.current)) {
+          const index = prev.indexOf(activeTabRef.current);
+          setActiveTab(
+            preferred === null ? null : (next[Math.min(index, next.length - 1)] ?? null)
+          );
+        }
+        return next;
+      });
+      setUntitledTabContents((prev) => {
+        const entries = Object.entries(prev).filter(
+          ([key, value]) =>
+            !targets.has(key) && (value.length > 0 || openTabsRef.current.includes(key))
+        );
+        return entries.length === Object.keys(prev).length ? prev : Object.fromEntries(entries);
+      });
+    },
+    [activeTabRef, openTabsRef, setActiveTab, setOpenTabs, setUntitledTabContents]
+  );
+
+  const requestClose = useCallback(
+    (paths: readonly string[], preferred?: string | null, saveMounted = true) => {
+      if (closingRef.current) return;
+      const drafts = paths.filter(
+        (item) =>
+          isUntitledTabPath(item) && (latest.current.untitledTabContents[item]?.length ?? 0) > 0
+      );
+      const editor = getActiveEditor();
+      const snapshot = editor?.getSnapshot();
+      const needsSave =
+        saveMounted &&
+        snapshot?.filePath &&
+        paths.includes(snapshot.filePath) &&
+        !snapshot.readOnly &&
+        !isUntitledTabPath(snapshot.filePath);
+      if (!drafts.length && !needsSave) {
+        commitClose(paths, preferred);
+        return;
+      }
+      closingRef.current = true;
+      const untitledPaths = paths.filter(isUntitledTabPath);
+      const originalDrafts = untitledPaths.map((item) => latest.current.untitledTabContents[item]);
+      const draftsChanged = () =>
+        untitledPaths.some(
+          (item, index) => latest.current.untitledTabContents[item] !== originalDrafts[index]
+        );
+      return (async () => {
+        try {
+          if (drafts.length) {
+            const confirmed = await latest.current.dialog.confirm(
+              '关闭未保存的草稿',
+              `有 ${drafts.length} 篇草稿尚未保存。确定放弃这些内容并关闭？取消后可以先保存。`
+            );
+            if (!confirmed) return;
+            if (draftsChanged()) {
+              latest.current.toast.info('草稿内容已变化，请重新确认后关闭');
+              return;
+            }
+          }
+          if (needsSave && (await editor!.save()) !== true) return;
+          if (draftsChanged()) {
+            latest.current.toast.info('草稿内容已变化，请重新确认后关闭');
+            return;
+          }
+          commitClose(paths, preferred);
+        } catch {
+          latest.current.toast.error('保存失败，已保留标签和草稿');
+        } finally {
+          closingRef.current = false;
+        }
+      })();
+    },
+    [commitClose]
+  );
+
   // Tab helpers
   const openFileInTab = useCallback(
     (filePath: string) => {
@@ -53,28 +142,7 @@ export function useTabActions(ctx: UseTabActionsContext) {
     [setActiveTab, setOpenTabs]
   );
 
-  const closeTab = useCallback(
-    (filePath: string) => {
-      setOpenTabs((prev) => {
-        const newTabs = prev.filter((t) => t !== filePath);
-        // If we're closing the active tab, activate adjacent tab
-        if (activeTabRef.current === filePath) {
-          const closedIndex = prev.indexOf(filePath);
-          const nextTab = newTabs[Math.min(closedIndex, newTabs.length - 1)] || null;
-          setActiveTab(nextTab);
-        }
-        return newTabs;
-      });
-      if (isUntitledTabPath(filePath)) {
-        setUntitledTabContents((prev) => {
-          if (!(filePath in prev)) return prev;
-          const { [filePath]: _removed, ...rest } = prev;
-          return rest;
-        });
-      }
-    },
-    [activeTabRef, setActiveTab, setOpenTabs, setUntitledTabContents]
-  );
+  const closeTab = useCallback((filePath: string) => requestClose([filePath]), [requestClose]);
 
   // Create new untitled tab (Cmd+N, like VS Code)
   const handleNewTab = useCallback(() => {
@@ -125,40 +193,48 @@ export function useTabActions(ctx: UseTabActionsContext) {
 
   // ─── Tab 右键菜单操作 ─────────────────────────────────────────────
   const handleCloseOtherTabs = useCallback(
-    (filePath: string) => {
-      setOpenTabs([filePath]);
-      setActiveTab(filePath);
-    },
-    [setActiveTab, setOpenTabs]
+    (filePath: string) =>
+      requestClose(
+        openTabsRef.current.filter((item) => item !== filePath),
+        filePath
+      ),
+    [openTabsRef, requestClose]
   );
 
-  const handleCloseAllTabs = useCallback(() => {
-    setOpenTabs([]);
-    setUntitledTabContents({});
-    setActiveTab(null);
-  }, [setActiveTab, setOpenTabs, setUntitledTabContents]);
+  const handleCloseAllTabs = useCallback(
+    () => requestClose(openTabsRef.current),
+    [openTabsRef, requestClose]
+  );
 
+  // 文件删除等操作已由各自入口确认；这里也保护任何未保存稿。
   const closeTabsByPredicate = useCallback(
-    (predicate: (tab: string) => boolean) => {
-      setOpenTabs((prev) => prev.filter((tab) => !predicate(tab)));
-      if (activeTabRef.current && predicate(activeTabRef.current)) {
-        setActiveTab(null);
-      }
-    },
-    [activeTabRef, setActiveTab, setOpenTabs]
+    (predicate: (tab: string) => boolean) =>
+      requestClose(openTabsRef.current.filter(predicate), null, false),
+    [openTabsRef, requestClose]
   );
 
-  const handleCloseAllAndSave = useCallback(() => {
-    // 先触发保存当前文件
-    document.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true })
-    );
-    // 短延迟后关闭所有标签，确保保存完成
-    setTimeout(() => {
-      setOpenTabs([]);
-      setActiveTab(null);
-    }, 200);
-  }, [setActiveTab, setOpenTabs]);
+  const handleCloseAllAndSave = useCallback(async () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    try {
+      const editor = getActiveEditor();
+      const snapshot = editor?.getSnapshot();
+      if (snapshot?.filePath && !snapshot.readOnly && (await editor!.save()) !== true) return;
+      const drafts = openTabsRef.current.filter(
+        (item) =>
+          isUntitledTabPath(item) && (latest.current.untitledTabContents[item]?.length ?? 0) > 0
+      );
+      if (drafts.length) {
+        latest.current.toast.info('仍有未保存的草稿，请先逐篇保存，再关闭所有标签');
+        return;
+      }
+      commitClose(openTabsRef.current);
+    } catch {
+      latest.current.toast.error('保存失败，已保留标签和草稿');
+    } finally {
+      closingRef.current = false;
+    }
+  }, [commitClose, openTabsRef]);
 
   return {
     openFileInTab,

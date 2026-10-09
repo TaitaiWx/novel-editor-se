@@ -1,4 +1,5 @@
-import { ipcMain, dialog } from 'electron';
+import { registerWorkspaceHandler } from '../../workspace-ipc';
+import { dialog } from 'electron';
 import { readFile, writeFile } from 'fs/promises';
 import {
   novelOps,
@@ -19,13 +20,13 @@ import {
 export function registerImportExportHandlers(): void {
   // ─── Import / Export ──────────────────────────────────────────────────────
 
-  ipcMain.handle('db-export', () => exportAllData());
-  ipcMain.handle('db-import', (_event, data: ExportData) => {
+  registerWorkspaceHandler('db-export', () => exportAllData());
+  registerWorkspaceHandler('db-import', (_event, data: ExportData) => {
     importData(data);
     return { success: true };
   });
 
-  ipcMain.handle('db-export-to-file', async () => {
+  registerWorkspaceHandler('db-export-to-file', async () => {
     const result = await dialog.showSaveDialog({
       title: '导出数据',
       defaultPath: `novel-editor-export-${new Date().toISOString().slice(0, 10)}.json`,
@@ -37,7 +38,7 @@ export function registerImportExportHandlers(): void {
     return result.filePath;
   });
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-export-knowledge-text',
     async (_event, folderPath: string, options?: KnowledgeTextExportOptions) => {
       const novel = novelOps.getByFolder(folderPath) as { id: number; name: string } | undefined;
@@ -83,7 +84,7 @@ export function registerImportExportHandlers(): void {
     }
   );
 
-  ipcMain.handle('db-import-from-file', async () => {
+  registerWorkspaceHandler('db-import-from-file', async () => {
     const result = await dialog.showOpenDialog({
       title: '导入数据',
       filters: [{ name: 'JSON', extensions: ['json'] }],

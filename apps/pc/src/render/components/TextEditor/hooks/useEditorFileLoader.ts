@@ -26,6 +26,7 @@ interface UseEditorFileLoaderOptions {
   currentContentRef: React.MutableRefObject<string>;
   currentOriginalContentRef: React.MutableRefObject<string>;
   readOnlyRef: React.MutableRefObject<boolean>;
+  pendingSaveCountRef?: React.MutableRefObject<number>;
   readOnlyCompartment: React.MutableRefObject<Compartment>;
   wordWrapCompartment: React.MutableRefObject<Compartment>;
   setHasChanges: React.Dispatch<React.SetStateAction<boolean>>;
@@ -34,6 +35,7 @@ interface UseEditorFileLoaderOptions {
   restoreViewportSnapshot: (targetPath: string, contentLength: number) => void;
   saveViewportSnapshot: (targetPath?: string | null) => void;
   onContentChange?: (content: string) => void;
+  onLoadBlocked?: (previousPath: string) => void;
   onCursorChange?: (pos: CursorPosition) => void;
 }
 
@@ -57,6 +59,7 @@ export function useEditorFileLoader({
   currentContentRef,
   currentOriginalContentRef,
   readOnlyRef,
+  pendingSaveCountRef,
   readOnlyCompartment,
   wordWrapCompartment,
   setHasChanges,
@@ -65,8 +68,11 @@ export function useEditorFileLoader({
   restoreViewportSnapshot,
   saveViewportSnapshot,
   onContentChange,
+  onLoadBlocked,
   onCursorChange,
 }: UseEditorFileLoaderOptions) {
+  const [retryToken, setRetryToken] = useState(0);
+  const requestedPathRef = useRef(filePath);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isLargeFile, setIsLargeFile] = useState(false);
@@ -84,6 +90,7 @@ export function useEditorFileLoader({
     restoreViewportSnapshot,
     saveViewportSnapshot,
     onContentChange,
+    onLoadBlocked,
     onCursorChange,
   });
   loaderDepsRef.current = {
@@ -93,12 +100,16 @@ export function useEditorFileLoader({
     restoreViewportSnapshot,
     saveViewportSnapshot,
     onContentChange,
+    onLoadBlocked,
     onCursorChange,
   };
 
   // Load file content：仅在文件 / 编码 / 重载信号 / 虚拟内容变化时重新加载
   useEffect(() => {
     if (!editorReady) return;
+    let cancelled = false;
+    const previousRequestedPath = requestedPathRef.current;
+    requestedPathRef.current = filePath;
     const {
       readOnly,
       wordWrap,
@@ -112,21 +123,42 @@ export function useEditorFileLoader({
     const loadContent = async () => {
       const view = viewRef.current;
 
-      // Save previous file before switching
-      if (
+      // 切换尚未完成（或保存失败）时回到原文件，直接恢复仍在编辑器中的草稿。
+      if (previousRequestedPath !== filePath && currentFilePathRef.current === filePath) {
+        setLoading(false);
+        setError(null);
+        onContentChange?.(currentContentRef.current);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      let flushPendingSave = (pendingSaveCountRef?.current ?? 0) > 0;
+      // readOnlyRef 属于已加载的文档，不能使用新目标文件的只读属性。
+      while (
         isPersistablePath(currentFilePathRef.current) &&
         filePath !== currentFilePathRef.current &&
-        currentContentRef.current !== currentOriginalContentRef.current &&
+        (currentContentRef.current !== currentOriginalContentRef.current || flushPendingSave) &&
         !readOnlyRef.current
       ) {
+        flushPendingSave = false;
+        const previousPath = currentFilePathRef.current!;
+        const previousContent = currentContentRef.current;
+        if (pendingSaveCountRef) pendingSaveCountRef.current += 1;
         try {
-          await window.electron.ipcRenderer.invoke(
-            'write-file',
-            currentFilePathRef.current,
-            currentContentRef.current
-          );
+          await window.electron.ipcRenderer.invoke('write-file', previousPath, previousContent);
+          if (cancelled || currentFilePathRef.current !== previousPath) return;
+          currentOriginalContentRef.current = previousContent;
+          setHasChanges(currentContentRef.current !== previousContent);
         } catch (err) {
+          if (cancelled || currentFilePathRef.current !== previousPath) return;
           console.error('Failed to save previous file:', err);
+          setError('保存失败，未保存的内容已保留。请重试或返回原文件继续编辑。');
+          setLoading(false);
+          loaderDepsRef.current.onLoadBlocked?.(previousPath);
+          return;
+        } finally {
+          if (pendingSaveCountRef) pendingSaveCountRef.current -= 1;
         }
       }
 
@@ -135,6 +167,8 @@ export function useEditorFileLoader({
       }
 
       if (!filePath) {
+        readOnlyRef.current = readOnly;
+        setLoading(false);
         currentFilePathRef.current = null;
         currentContentRef.current = '';
         currentOriginalContentRef.current = '';
@@ -153,6 +187,7 @@ export function useEditorFileLoader({
 
       if (virtualContent !== undefined) {
         const nextContent = virtualContent ?? '';
+        readOnlyRef.current = readOnly || isChangelogPath(filePath);
         currentFilePathRef.current = filePath;
         currentContentRef.current = nextContent;
         currentOriginalContentRef.current = nextContent;
@@ -181,6 +216,7 @@ export function useEditorFileLoader({
       }
 
       if (isUntitledPath(filePath)) {
+        readOnlyRef.current = readOnly || isChangelogPath(filePath);
         currentFilePathRef.current = filePath;
         currentContentRef.current = '';
         currentOriginalContentRef.current = '';
@@ -204,6 +240,8 @@ export function useEditorFileLoader({
         setLoading(true);
         try {
           const content = await window.electron.ipcRenderer.invoke('get-changelog');
+          if (cancelled) return;
+          readOnlyRef.current = readOnly || isChangelogPath(filePath);
           currentFilePathRef.current = filePath;
           currentContentRef.current = content;
           currentOriginalContentRef.current = content;
@@ -222,9 +260,10 @@ export function useEditorFileLoader({
             emitCursorPosition(view);
           }
         } catch (err) {
+          if (cancelled) return;
           setError(err instanceof Error ? err.message : '加载更新日志失败');
         } finally {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         }
         return;
       }
@@ -238,7 +277,9 @@ export function useEditorFileLoader({
           filePath,
           encoding
         );
+        if (cancelled) return;
 
+        readOnlyRef.current = readOnly || isChangelogPath(filePath);
         currentFilePathRef.current = filePath;
         currentContentRef.current = fileContent;
         currentOriginalContentRef.current = fileContent;
@@ -266,20 +307,23 @@ export function useEditorFileLoader({
 
         onContentChange?.(fileContent);
       } catch (err) {
+        if (cancelled) return;
         console.error('Error reading file:', err);
         setError(`无法读取文件: ${filePath}`);
-        currentContentRef.current = '';
-        currentOriginalContentRef.current = '';
         setLoading(false);
       }
     };
 
-    loadContent();
+    void loadContent();
+    return () => {
+      cancelled = true;
+    };
   }, [
     editorReady,
     filePath,
     encoding,
     reloadToken,
+    retryToken,
     virtualContent,
     // 以下均为稳定引用（ref / Compartment ref / useState setter），不会引起额外加载
     viewRef,
@@ -287,6 +331,7 @@ export function useEditorFileLoader({
     currentContentRef,
     currentOriginalContentRef,
     readOnlyRef,
+    pendingSaveCountRef,
     readOnlyCompartment,
     wordWrapCompartment,
     setHasChanges,
@@ -299,43 +344,8 @@ export function useEditorFileLoader({
       window.location.reload();
       return;
     }
-    setError(null);
-    setLoading(false);
-    if (filePath) {
-      const retryLoad = async () => {
-        setLoading(true);
-        try {
-          const fileContent = await window.electron.ipcRenderer.invoke('read-file', filePath);
-          const view = viewRef.current;
-          if (view) {
-            view.dispatch({
-              changes: {
-                from: 0,
-                to: view.state.doc.length,
-                insert: fileContent,
-              },
-            });
-          }
-          currentContentRef.current = fileContent;
-          currentOriginalContentRef.current = fileContent;
-          setHasChanges(false);
-        } catch (err) {
-          console.error('Error reading file:', err);
-          setError(`无法读取文件: ${filePath}`);
-        } finally {
-          setLoading(false);
-        }
-      };
-      retryLoad();
-    }
-  }, [
-    currentContentRef,
-    currentOriginalContentRef,
-    editorInitError,
-    filePath,
-    setHasChanges,
-    viewRef,
-  ]);
+    setRetryToken((token) => token + 1);
+  }, [editorInitError]);
 
   return { loading, error, isLargeFile, handleRetry };
 }

@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * 示例作品集的程序化声音（在 Electron 隐藏窗口里运行，见 ../generate-sample-media.mjs）：
  * - 配乐：五声音阶的轻柔旋律 + 和声铺底 + 轻打击，首尾淡入淡出，可循环
@@ -13,6 +12,9 @@
   const SR = 44100;
 
   /** 固定种子的伪随机（mulberry32） */
+  /**
+   * @param {number} seed
+   */
   function seeded(seed) {
     let a = seed >>> 0;
     return function () {
@@ -24,11 +26,18 @@
     };
   }
 
+  /**
+   * @param {number} seconds
+   */
   function buffer(seconds) {
     return new Float32Array(Math.round(seconds * SR));
   }
 
   /** 一阶低通（就地） */
+  /**
+   * @param {Float32Array} data
+   * @param {number} cutoff
+   */
   function lowpass(data, cutoff) {
     const k = 1 - Math.exp((-2 * Math.PI * cutoff) / SR);
     let y = 0;
@@ -40,6 +49,11 @@
   }
 
   /** 二阶带通（共振峰），返回新数组 */
+  /**
+   * @param {Float32Array} data
+   * @param {number} freq
+   * @param {number} q
+   */
   function bandpass(data, freq, q) {
     const w = (2 * Math.PI * freq) / SR;
     const alpha = Math.sin(w) / (2 * q);
@@ -66,6 +80,11 @@
   }
 
   /** 首尾淡入淡出（秒） */
+  /**
+   * @param {Float32Array} data
+   * @param {number} fadeIn
+   * @param {number} fadeOut
+   */
   function fade(data, fadeIn, fadeOut) {
     const nIn = Math.round(fadeIn * SR);
     const nOut = Math.round(fadeOut * SR);
@@ -75,6 +94,10 @@
   }
 
   /** 归一化到峰值 peak */
+  /**
+   * @param {Float32Array} data
+   * @param {number} peak
+   */
   function normalize(data, peak) {
     let max = 0;
     for (let i = 0; i < data.length; i += 1) max = Math.max(max, Math.abs(data[i]));
@@ -83,6 +106,14 @@
   }
 
   /** 加一个音符：正弦 + 少量泛音，ADSR 包络 */
+  /**
+   * @param {Float32Array} data
+   * @param {number} start
+   * @param {number} length
+   * @param {number} freq
+   * @param {number} gain
+   * @param {{ attack?: number; release?: number; harmonics?: number[]; vibrato?: number }} [options]
+   */
   function addTone(data, start, length, freq, gain, options) {
     const opts = options || {};
     const attack = opts.attack ?? 0.02;
@@ -108,11 +139,14 @@
     }
   }
 
+  /** @param {number} semitones */
   const NOTE = (semitones) => 261.63 * Math.pow(2, semitones / 12);
   // C 大调五声音阶：C D E G A
   const PENTA = [0, 2, 4, 7, 9, 12, 14, 16];
 
   /** 配乐：约 10 秒，90 BPM，旋律 + 和声铺底 + 轻打击 */
+  /**
+   */
   function renderBgm() {
     const seconds = 10.67; // 4 小节 × 4 拍 × (60/90)
     const data = buffer(seconds);
@@ -154,7 +188,8 @@
       const kickGain = step % 4 === 0 ? 0.22 : 0.1;
       for (let n = 0; n < SR * 0.25 && from + n < data.length; n += 1) {
         const t = n / SR;
-        data[from + n] += Math.sin(2 * Math.PI * (55 + 50 * Math.exp(-t * 30)) * t) * Math.exp(-t * 14) * kickGain;
+        data[from + n] +=
+          Math.sin(2 * Math.PI * (55 + 50 * Math.exp(-t * 30)) * t) * Math.exp(-t * 14) * kickGain;
       }
       const off = Math.round((step + 0.5) * beat * SR);
       for (let n = 0; n < SR * 0.06 && off + n < data.length; n += 1) {
@@ -165,6 +200,14 @@
   }
 
   /** 鸟鸣 / 海鸥：一段带颤音的下滑音 */
+  /**
+   * @param {Float32Array} data
+   * @param {number} start
+   * @param {number} from
+   * @param {number} to
+   * @param {number} length
+   * @param {number} gain
+   */
   function addChirp(data, start, from, to, length, gain) {
     const begin = Math.round(start * SR);
     let phase = 0;
@@ -177,6 +220,10 @@
     }
   }
 
+  /**
+   * @param {number} seconds
+   * @param {number} seed
+   */
   function noiseBuffer(seconds, seed) {
     const data = buffer(seconds);
     const random = seeded(seed);
@@ -185,6 +232,8 @@
   }
 
   /** 海港：浪声（缓慢起伏的低频噪声）+ 几声海鸥 */
+  /**
+   */
   function renderHarbor() {
     const seconds = 7;
     const waves = lowpass(lowpass(noiseBuffer(seconds, 41), 500), 900);
@@ -206,6 +255,8 @@
   }
 
   /** 清晨小镇：微风 + 鸟鸣 + 屋檐滴水 */
+  /**
+   */
   function renderTown() {
     const seconds = 7;
     const wind = lowpass(lowpass(noiseBuffer(seconds, 53), 300), 600);
@@ -221,12 +272,18 @@
     }
     // 滴水：短促的「叮」
     for (const start of [0.9, 2.6, 3.3, 5.1, 6.2]) {
-      addTone(wind, start, 0.01, 1180 + start * 37, 0.08, { attack: 0.002, release: 0.12, harmonics: [1, 0.2] });
+      addTone(wind, start, 0.01, 1180 + start * 37, 0.08, {
+        attack: 0.002,
+        release: 0.12,
+        harmonics: [1, 0.2],
+      });
     }
     return fade(normalize(wind, 0.55), 0.6, 0.8);
   }
 
   /** 钟声：不协和泛音，缓慢衰减 */
+  /**
+   */
   function renderBell() {
     const data = buffer(1.8);
     const partials = [
@@ -239,13 +296,16 @@
     for (let i = 0; i < data.length; i += 1) {
       const t = i / SR;
       let v = 0;
-      for (const [ratio, gain, decay] of partials) v += gain * Math.sin(2 * Math.PI * 392 * ratio * t) * Math.exp(-t * decay);
+      for (const [ratio, gain, decay] of partials)
+        v += gain * Math.sin(2 * Math.PI * 392 * ratio * t) * Math.exp(-t * decay);
       data[i] = v * Math.min(1, t / 0.004);
     }
     return fade(normalize(data, 0.7), 0, 0.2);
   }
 
   /** 木板脚步：三步，每步一声闷响 + 木头敲击 */
+  /**
+   */
   function renderFootsteps() {
     const data = buffer(1.3);
     const random = seeded(73);
@@ -263,6 +323,8 @@
   }
 
   /** 风帆：被风吹得一鼓一鼓的噪声 */
+  /**
+   */
   function renderSail() {
     const seconds = 1.1;
     const data = lowpass(noiseBuffer(seconds, 89), 1600);
@@ -275,6 +337,10 @@
   }
 
   /** 配音占位音：声门脉冲（锯齿）+ 两个元音共振峰，音节起伏；明显不是真人语音 */
+  /**
+   * @param {number} pitch
+   * @param {number} seconds
+   */
   function renderVoice(pitch, seconds) {
     const data = buffer(seconds + 0.2);
     const syllables = Math.max(1, Math.round(seconds * 3.2));
@@ -296,6 +362,12 @@
   }
 
   /** 混音：把 source 叠加到 target 的 at 秒处（gain 倍） */
+  /**
+   * @param {Float32Array} target
+   * @param {Float32Array} source
+   * @param {number} at
+   * @param {number} gain
+   */
   function mixInto(target, source, at, gain) {
     const from = Math.round(at * SR);
     for (let i = 0; i < source.length && from + i < target.length; i += 1) {
@@ -311,6 +383,9 @@
    * 取 [from, from + length) 这一段，所以单个镜头的成片与整场样片里同一时刻的声音完全一致。
    * spec: { from, length, cues: [{ at, gain, sfx?: 'bell'|'footsteps'|'sail', voice?: { pitch, seconds } }],
    *         fadeIn, fadeOut }（淡入淡出只作用于配乐与环境音；整段首尾另有 10ms 防爆音）
+   */
+  /**
+   * @param {SampleSceneMix} spec
    */
   function renderSceneMix(spec) {
     const { from, length, cues } = spec;
@@ -338,17 +413,32 @@
     return fade(mix, 0.01, 0.01);
   }
 
+  /**
+   * @param {Uint8Array} bytes
+   */
   function toBase64(bytes) {
     let binary = '';
-    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     return btoa(binary);
   }
 
   /** 把单声道样本编码进 AudioEncoder（AAC），每块 1024 帧 */
+  /**
+   * @param {Float32Array} samples
+   * @param {EncodedAudioChunkOutputCallback} onChunk
+   * @param {number} [requested]
+   */
   async function feedAudio(samples, onChunk, requested) {
     const bitrate = Math.max(48000, requested || 0);
+    /** @type {DOMException | null} */
     let failure = null;
-    const encoder = new AudioEncoder({ output: onChunk, error: (error) => { failure = error; } });
+    const encoder = new AudioEncoder({
+      output: onChunk,
+      error: (error) => {
+        failure = error;
+      },
+    });
     encoder.configure({ codec: 'mp4a.40.2', sampleRate: SR, numberOfChannels: 1, bitrate });
     for (let offset = 0; offset < samples.length; offset += 1024) {
       const frame = samples.subarray(offset, Math.min(samples.length, offset + 1024));
@@ -372,9 +462,18 @@
   // macOS 的 AAC 编码器（AudioToolbox）在 44.1kHz 单声道低于 48kbps 时不报错也不输出（flush 永远不返回），这里统一夹到 48kbps
   const MIN_AAC_BITRATE = 48000;
 
+  /**
+   * @param {Float32Array} samples
+   * @param {number} [requested]
+   */
   async function encodeM4a(samples, requested) {
     const bitrate = Math.max(MIN_AAC_BITRATE, requested || 0);
-    const support = await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: SR, numberOfChannels: 1, bitrate });
+    const support = await AudioEncoder.isConfigSupported({
+      codec: 'mp4a.40.2',
+      sampleRate: SR,
+      numberOfChannels: 1,
+      bitrate,
+    });
     if (!support.supported) throw new Error('当前 Electron 不支持 AAC 编码');
     const target = new Mp4Muxer.ArrayBufferTarget();
     const muxer = new Mp4Muxer.Muxer({

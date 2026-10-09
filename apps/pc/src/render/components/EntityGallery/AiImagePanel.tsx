@@ -12,6 +12,33 @@ import styles from './styles.module.scss';
 
 export const CANDIDATE_COUNT = 4;
 
+/** 句号（。） */
+const FULL_STOP = '\u3002';
+
+/**
+ * 预览描述按句分段显示：每句一段；很短的句子（例如「人物：苏晴。」）与下一句合成一段
+ */
+export function splitPromptParagraphs(text: string): string[] {
+  const sentences = text
+    .split(FULL_STOP)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => `${item}${FULL_STOP}`);
+  const paragraphs: string[] = [];
+  let pending = '';
+  for (const sentence of sentences) {
+    const merged = pending + sentence;
+    if (Array.from(sentence).length <= 8 && !pending) {
+      pending = sentence;
+      continue;
+    }
+    paragraphs.push(merged);
+    pending = '';
+  }
+  if (pending) paragraphs.push(pending);
+  return paragraphs;
+}
+
 export interface AiImageRequest {
   kind: MediaKind;
   style: string;
@@ -128,16 +155,26 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
             onChange={setProviderId}
           />
         )}
-        <input
-          className={styles.input}
-          aria-label="补充一句（可不填）"
-          value={extra}
-          placeholder="补充一句（可不填），例如：雪夜，披着斗篷"
-          onChange={(event) => setExtra(event.target.value)}
-        />
+      </div>
+      {/* 补充描述：在画风 / 模型下面单独一行（多行），生成按钮在它右下方 */}
+      <textarea
+        className={styles.extraInput}
+        aria-label="补充描述（可不填）"
+        value={extra}
+        rows={2}
+        placeholder="补充描述（可不填），例如：雪夜，披着斗篷；偏写实，不要动画风。⌘ / Ctrl + Enter 生成"
+        onChange={(event) => setExtra(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && busy === null) {
+            event.preventDefault();
+            void run();
+          }
+        }}
+      />
+      <div className={styles.generateRow}>
         <button
           type="button"
-          className={styles.primary}
+          className={`${styles.primary} ${styles.generateButton}`}
           disabled={busy !== null}
           onClick={() => void run()}
         >
@@ -152,19 +189,32 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
           )}
         </button>
       </div>
-      <details className={styles.promptPreview}>
+      <details className={styles.promptPreview} open>
         <summary>
           将使用的描述
           {referenceCount > 0 ? ` · 带 ${referenceCount} 张参考图保持一致` : ''}
         </summary>
-        <p>{previewPrompt({ kind, style, extra })}</p>
+        {splitPromptParagraphs(previewPrompt({ kind, style, extra })).map((paragraph, index) => (
+          <p key={index}>{paragraph}</p>
+        ))}
       </details>
       {error && (
         <p className={styles.error} role="alert">
           {error}
         </p>
       )}
-      {candidates.length > 0 && (
+      {busy === 'generate' && (
+        // 生成中：候选区先放占位卡片（与将要出来的张数一致），不只是按钮上转圈
+        <div className={styles.candidates} role="status" aria-label="正在生成图片">
+          {Array.from({ length: CANDIDATE_COUNT }, (_, index) => (
+            <div key={index} className={styles.candidateLoading}>
+              <VscLoading className={styles.spin} aria-hidden="true" />
+              <span>生成中…</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {busy !== 'generate' && candidates.length > 0 && (
         <>
           <div
             className={styles.candidates}

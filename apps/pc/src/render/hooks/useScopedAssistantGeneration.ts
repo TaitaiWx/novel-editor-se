@@ -306,23 +306,10 @@ export function useScopedAssistantGeneration(ctx: UseScopedAssistantGenerationCo
             const normalizedName = normalizePersonName(character.name);
             const matched = existingByName.get(normalizedName);
             if (matched) {
-              const prevAttrs = parseCharacterAttributes(
-                matched.attributes,
-                character.role || matched.role || ''
-              );
               await ipc.invoke('db-character-update', matched.id, {
-                name: matched.name,
-                role: character.role || matched.role || '',
-                description: character.description || matched.description || '',
-                attributes: stringifyCharacterAttributes(
-                  {
-                    ...prevAttrs,
-                    aliases: Array.from(
-                      new Set([...(prevAttrs.aliases || []), ...(character.aliases || [])])
-                    ),
-                  },
-                  character.role || matched.role || ''
-                ),
+                ...(character.role ? { role: character.role } : {}),
+                ...(character.description ? { description: character.description } : {}),
+                appendAliases: character.aliases || [],
               });
               updatedCount += 1;
             } else {

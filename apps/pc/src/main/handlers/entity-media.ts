@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 人物 / 设定图集 IPC
  *
@@ -10,7 +11,6 @@
  * 不信任渲染进程：作品目录必须存在且位于窗口已上报的工作区内；图片按文件头识别格式、限制大小；
  * 文件名由主进程生成；所有路径经 resolveInsideWork 校验（拒绝 `..` 与符号链接逃逸）。
  */
-import { ipcMain } from 'electron';
 import { createHash } from 'crypto';
 import { mkdir, rename, unlink, writeFile } from 'fs/promises';
 import path from 'path';
@@ -226,7 +226,7 @@ export async function generateImages(
 }
 
 export function registerEntityMediaHandlers(): void {
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'entity-image-save',
     async (
       event,
@@ -241,7 +241,7 @@ export function registerEntityMediaHandlers(): void {
       }
     }
   );
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'entity-image-delete',
     async (event, workPath: unknown, relativePath: unknown): Promise<Result<null>> => {
       try {
@@ -253,7 +253,7 @@ export function registerEntityMediaHandlers(): void {
       }
     }
   );
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'ai-image-generate',
     async (
       event,

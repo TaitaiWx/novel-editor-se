@@ -13,6 +13,8 @@ import {
   hasCachedMath,
   hasCachedTable,
   hasRenderBudget,
+  loadMathRenderer,
+  subscribeMathRenderer,
   renderMath,
   renderTable,
   scheduleFrame,
@@ -40,7 +42,11 @@ function fillRendered(
   source: string,
   kind: string
 ): void {
-  container.classList.remove('cm-lp-pending');
+  container.classList.toggle('cm-lp-pending', Boolean(result.pending));
+  if (result.pending && !result.ok) {
+    container.textContent = source;
+    return;
+  }
   if (result.ok) {
     container.innerHTML = result.html;
     container.classList.remove('cm-lp-render-error');
@@ -54,6 +60,18 @@ function fillRendered(
   container.append(raw, createErrorMarker(kind, result.error));
 }
 
+// Cancel dependency/IME callbacks when CodeMirror retires a widget.
+const pendingRenderCleanup = new WeakMap<HTMLElement, () => void>();
+const retiredWidgets = new WeakSet<HTMLElement>();
+const mathLoadCleanup = new WeakMap<HTMLElement, () => void>();
+function retireWidget(container: HTMLElement): void {
+  retiredWidgets.add(container);
+  mathLoadCleanup.get(container)?.();
+  mathLoadCleanup.delete(container);
+  pendingRenderCleanup.get(container)?.();
+  pendingRenderCleanup.delete(container);
+}
+
 /** 带预算的重型渲染：有缓存或预算充足时同步渲染，否则下一帧再渲染 */
 function renderWithBudget(
   container: HTMLElement,
@@ -63,6 +81,31 @@ function renderWithBudget(
   source: string,
   kind: string
 ): void {
+  const current = () => !retiredWidgets.has(container) && (!view || container.isConnected);
+  const afterLoad = (renderCurrent: () => void) => {
+    if (!current()) return;
+    // Loading may finish mid-composition. Updating widget DOM/height must wait.
+    if (view?.composing) {
+      if (pendingRenderCleanup.has(container)) return;
+      const resume = () => {
+        view.dom.removeEventListener('compositionend', resume);
+        pendingRenderCleanup.delete(container);
+        setTimeout(() => afterLoad(renderCurrent), 0);
+      };
+      view.dom.addEventListener('compositionend', resume);
+      pendingRenderCleanup.set(container, () =>
+        view.dom.removeEventListener('compositionend', resume)
+      );
+      return;
+    }
+    if (!hasRenderBudget()) {
+      scheduleFrame(() => afterLoad(renderCurrent));
+      return;
+    }
+    renderCurrent();
+    view?.requestMeasure();
+  };
+  let unsubscribeMath: (() => void) | null = null;
   const run = () => {
     let result: RenderResult;
     try {
@@ -71,6 +114,31 @@ function renderWithBudget(
       result = { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
     fillRendered(container, result, source, kind);
+    if (result.pending || result.retryable) {
+      if (!unsubscribeMath) {
+        unsubscribeMath = subscribeMathRenderer(() => afterLoad(run));
+        mathLoadCleanup.set(container, unsubscribeMath);
+      }
+    } else {
+      unsubscribeMath?.();
+      unsubscribeMath = null;
+      mathLoadCleanup.delete(container);
+    }
+    if (result.retryable) {
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'cm-lp-retry';
+      retry.textContent = '重试';
+      retry.addEventListener('mousedown', (event) => event.preventDefault());
+      retry.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!current()) return;
+        retry.disabled = true;
+        void loadMathRenderer();
+      });
+      container.append(retry);
+    }
   };
   if (cached || hasRenderBudget()) {
     run();
@@ -79,7 +147,7 @@ function renderWithBudget(
   container.classList.add('cm-lp-pending');
   container.textContent = source;
   scheduleFrame(() => {
-    if (!container.isConnected && view) return;
+    if (!current()) return;
     run();
     view?.requestMeasure();
   });
@@ -114,6 +182,10 @@ export class MathWidget extends WidgetType {
       '公式错误'
     );
     return el;
+  }
+
+  destroy(dom: HTMLElement): void {
+    retireWidget(dom);
   }
 
   ignoreEvent(): boolean {
@@ -164,6 +236,10 @@ export class TableWidget extends WidgetType {
       '表格格式错误'
     );
     return el;
+  }
+
+  destroy(dom: HTMLElement): void {
+    retireWidget(dom);
   }
 
   ignoreEvent(): boolean {

@@ -77,7 +77,7 @@ describe('FilePanel', () => {
     expect(screen.getByText('正文')).toBeTruthy();
     expect(screen.getByText('第一卷')).toBeTruthy();
     expect(screen.getByText('主要角色')).toBeTruthy();
-    expect(screen.getByText('次要角色 · 未填写角色定位')).toBeTruthy();
+    expect(screen.getByText('次要角色')).toBeTruthy();
     expect(screen.getByText('灵气体系')).toBeTruthy();
     // 设定行：没有标签 / 摘要时显示分类
     expect(screen.getByText('世界观')).toBeTruthy();

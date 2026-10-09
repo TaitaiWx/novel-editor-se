@@ -14,6 +14,10 @@ interface ObjectItemRowProps {
   active: boolean;
   /** 标题后的小徽章，例如成长档案的等级「Lv.3」 */
   badge?: string;
+  /** 说明前的标签，例如人物的角色定位「主角」 */
+  tag?: string;
+  /** 标签颜色（#rrggbb）；未提供时为中性灰 */
+  tagColor?: string;
   onOpen: () => void;
   /** 行内重命名提交（双击名称 / F2）；未提供时不可重命名 */
   onRename?: (nextName: string) => void;
@@ -30,6 +34,8 @@ const ObjectItemRow: React.FC<ObjectItemRowProps> = ({
   icon,
   active,
   badge,
+  tag,
+  tagColor,
   onOpen,
   onRename,
   onDelete,
@@ -87,7 +93,23 @@ const ObjectItemRow: React.FC<ObjectItemRowProps> = ({
           )}
           {badge && <span className={styles.objectNodeBadge}>{badge}</span>}
         </span>
-        <span className={styles.objectNodeMetaInline}>{meta}</span>
+        {tag && (
+          <span
+            className={styles.objectNodeTag}
+            style={
+              tagColor
+                ? {
+                    color: tagColor,
+                    background: `${tagColor}1f`,
+                    borderColor: `${tagColor}47`,
+                  }
+                : undefined
+            }
+          >
+            {tag}
+          </span>
+        )}
+        {meta && <span className={styles.objectNodeMetaInline}>{meta}</span>}
       </div>
       {onDelete && (
         <Tooltip content={`删除${kindLabel}`} position="top">

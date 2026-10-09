@@ -20,9 +20,17 @@ export interface CharacterAttributesPayload {
   voice?: CharacterVoice;
   aliases?: string[];
   category?: CharacterCategory;
+  /** 作者自定义的分组名（文件面板「角色」按它分组；空 = 按主要 / 次要角色） */
+  group?: string;
   highlightColor?: string;
   highlightFirstMentionOnly?: boolean;
   currentState?: CharacterCurrentStateItem[];
+}
+
+/** 分组名：去掉首尾空白，最多 30 个字符；空字符串表示不自定义 */
+export function normalizeEntityGroup(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return Array.from(value.trim()).slice(0, 30).join('');
 }
 
 export const DEFAULT_CHARACTER_HIGHLIGHT_COLOR = '#9cdcfe';
@@ -113,6 +121,7 @@ export function parseCharacterAttributes(
   voice?: CharacterVoice;
   aliases: string[];
   category: CharacterCategory;
+  group: string;
   highlightColor: string;
   highlightFirstMentionOnly: boolean;
   currentState: CharacterCurrentStateItem[];
@@ -126,6 +135,7 @@ export function parseCharacterAttributes(
       voice: parseCharacterVoice(parsed?.voice),
       aliases: normalizeCharacterAliases(parsed?.aliases),
       category: normalizeCharacterCategory(parsed?.category, role),
+      group: normalizeEntityGroup(parsed?.group),
       highlightColor: normalizeCharacterHighlightColor(parsed?.highlightColor),
       highlightFirstMentionOnly:
         typeof parsed?.highlightFirstMentionOnly === 'boolean'
@@ -139,6 +149,7 @@ export function parseCharacterAttributes(
       media: [],
       aliases: [],
       category: inferCharacterCategoryFromRole(role),
+      group: '',
       highlightColor: DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
       highlightFirstMentionOnly: DEFAULT_CHARACTER_HIGHLIGHT_FIRST_MENTION_ONLY,
       currentState: [],
@@ -153,6 +164,7 @@ export function stringifyCharacterAttributes(
   const design = parseCharacterDesign(attributes.design);
   const media = parseMediaItems(attributes.media);
   const voice = parseCharacterVoice(attributes.voice);
+  const group = normalizeEntityGroup(attributes.group);
   return JSON.stringify({
     ...(attributes.avatar ? { avatar: attributes.avatar } : {}),
     ...(isDesignEmpty(design) ? {} : { design }),
@@ -160,6 +172,7 @@ export function stringifyCharacterAttributes(
     ...(voice ? { voice } : {}),
     aliases: normalizeCharacterAliases(attributes.aliases),
     category: normalizeCharacterCategory(attributes.category, role),
+    ...(group ? { group } : {}),
     highlightColor: normalizeCharacterHighlightColor(attributes.highlightColor),
     highlightFirstMentionOnly:
       typeof attributes.highlightFirstMentionOnly === 'boolean'
@@ -185,6 +198,7 @@ export function mapCharacterRows(
       name: row.name,
       role: row.role || '',
       category: attrs.category,
+      ...(attrs.group ? { group: attrs.group } : {}),
       description: row.description || '',
       currentState: attrs.currentState,
       avatar: attrs.avatar || undefined,

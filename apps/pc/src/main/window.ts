@@ -1,3 +1,4 @@
+import { guardWindowClose } from './graceful-shutdown';
 import {
   STARTUP_MAX_RETRIES,
   buildStartupErrorHtml,
@@ -170,6 +171,7 @@ export function createMainWindow(): BrowserWindow {
   const windowConfig = getWindowConfig();
   const mainWindow = new BrowserWindow(windowConfig);
   mainWindowRef = mainWindow;
+  guardWindowClose(mainWindow);
   mainWindowRevealed = false;
   mainFrameLoadRetryCount = 0;
   const iconPath = resolveBrandingIconPath();

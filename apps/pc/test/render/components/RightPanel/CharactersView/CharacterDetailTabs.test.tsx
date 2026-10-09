@@ -70,6 +70,19 @@ afterEach(() => {
 });
 
 describe('人物详情分页（人物设计 / 图集 / 成长档案 / 经历 / 关系）', () => {
+  it.each(['主要角色', '次要角色'])('同名自定义分组 %s 显示并选中默认标签', (group) => {
+    const character = { ...linZhou, group, media: [] };
+    const { update } = renderDetail({ focusedCharacter: character, characters: [character] });
+    fireEvent.click(screen.getByRole('tab', { name: '关系与高亮' }));
+    const select = screen.getByRole('combobox', { name: '人物分组' });
+    expect(select.textContent).toBe(group);
+    fireEvent.click(select);
+    const options = screen.getAllByRole('option', { name: group });
+    expect(options).toHaveLength(1);
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('分页齐全，计数显示在分页上；默认「人物设计」，失焦保存设计字段', async () => {
     const { update } = renderDetail();
     const tabs = screen.getAllByRole('tab');
@@ -88,13 +101,8 @@ describe('人物详情分页（人物设计 / 图集 / 成长档案 / 经历 / �
     fireEvent.blur(personality);
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(1, {
-        design: {
-          appearance: '黑发',
-          personality: '嘴硬心软',
-          background: '',
-          speech: '',
-          outfit: '',
-        },
+        designPatch: { personality: '嘴硬心软' },
+        designExpected: { personality: '' },
       })
     );
     // 未变化的字段失焦不保存

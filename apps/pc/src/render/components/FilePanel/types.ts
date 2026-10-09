@@ -81,6 +81,9 @@ export interface FilePanelProps {
   /** 行内重命名（双击名称 / F2）：传入新名称；右键菜单「重命名」仍走对话框 */
   onRenameCharacterNode: (characterId: number, nextName: string) => void;
   onRenameLoreNode: (entryId: number, nextName: string) => void;
+  /** 重命名人物 / 设定分组（这一组的条目都改成新的分组名） */
+  onRenameCharacterGroup?: (characterIds: readonly number[], nextGroup: string) => void;
+  onRenameLoreGroup?: (entryIds: readonly number[], nextGroup: string) => void;
   onRenameNode: (path: string, nextName: string) => void;
   onReorderStoryNode?: (sourcePath: string, targetPath: string, mode: StoryDropMode) => void;
   onCreateVolume: () => void;

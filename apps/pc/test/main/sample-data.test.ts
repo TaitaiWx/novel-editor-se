@@ -142,6 +142,33 @@ describe('示例作品集 sample-data', () => {
     ).toBe(actual);
   });
 
+  it('人物种子的头像和图集引用都指向实际存在的图片', async () => {
+    const seed = (await readJson(path.join(ROOT, '.novel-editor/seed.json'))) as ReturnType<
+      typeof buildSampleSeed
+    >;
+    for (const character of seed.characters) {
+      const attributes = JSON.parse(String(character.attributes)) as {
+        avatar?: string;
+        media?: Array<{ path: string }>;
+      };
+      const novel = seed.novels.find((row) => row.id === character.novel_id);
+      const references = [
+        attributes.avatar,
+        ...(attributes.media ?? []).map((item) => item.path),
+      ].filter((value): value is string => Boolean(value));
+      for (const reference of references) {
+        const file = path.join(ROOT, String(novel?.folder_path ?? ''), reference);
+        expect(
+          await stat(file).then(
+            (info) => info.isFile(),
+            () => false
+          ),
+          `${character.name}: ${reference}`
+        ).toBe(true);
+      }
+    }
+  });
+
   it('内容指纹：忽略 sample.json 与本机运行产物，任何内容改动都会改变指纹', async () => {
     const copy = await mkdtemp(path.join(os.tmpdir(), 'ne-sample-hash-'));
     try {
@@ -181,7 +208,10 @@ describe('示例作品集 sample-data', () => {
     const out = await mkdtemp(path.join(os.tmpdir(), 'ne-sample-regen-'));
     try {
       await writeSampleData(out);
-      const generated = (await listFiles(out)).filter((file) => !file.endsWith('.tmp'));
+      // Fingerprint covers this isolated subset; the committed tree also has author chapters/media.
+      const generated = (await listFiles(out)).filter(
+        (file) => !file.endsWith('.tmp') && file !== '.novel-editor/sample.json'
+      );
       const committed = files.filter(
         (file) =>
           file.startsWith(`${STAR_WORK_DIR}/资料/记忆/`) ||

@@ -75,6 +75,8 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
     onDeleteLoreNode,
     onRenameCharacterNode,
     onRenameLoreNode,
+    onRenameCharacterGroup,
+    onRenameLoreGroup,
     onRenameNode,
     onReorderStoryNode,
     onCreateVolume,
@@ -427,6 +429,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       onToggle={() => toggleSection('characters')}
                       onOpenCharacter={onOpenCharacterNode}
                       onRenameCharacter={onRenameCharacterNode}
+                      onRenameGroup={onRenameCharacterGroup}
                       onDeleteCharacter={onDeleteCharacterNode}
                       onCreateCharacter={onCreateCharacter}
                       onOpenGrowth={onOpenGrowth}
@@ -444,6 +447,7 @@ const FilePanel: React.FC<FilePanelProps> = React.memo(
                       onOpenAll={() => onOpenLore?.()}
                       onOpen={onOpenLoreNode}
                       onRename={onRenameLoreNode}
+                      onRenameGroup={onRenameLoreGroup}
                       onDelete={onDeleteLoreNode}
                       onCreate={onCreateLoreEntry}
                       onContextMenu={emitObjectContextMenu}

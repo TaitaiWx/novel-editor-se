@@ -48,7 +48,18 @@ import {
   computeDownloadRetryDelayMs,
   shouldRetryDownload,
 } from './policy';
-import { getRollbackCacheDir, preCacheCurrentVersion } from './rollback';
+import {
+  getRollbackCacheDir,
+  isCachedInstallerValid,
+  isRollbackInProgress,
+  preCacheCurrentVersion,
+} from './rollback';
+import { isBoundRollbackTarget } from './rollback-metadata';
+import { prepareAppForExit } from '../graceful-shutdown';
+import { armUpdateRecovery } from './recovery';
+import { recoveryPhase } from './recovery-supervisor';
+import { installDebianArtifact } from './debian-install';
+import { prepareNativeUpdate, handoffNativeUpdate } from './native-install';
 import { loadUpdaterState, persistUpdaterState, syncStatusFromUpdateInfo } from './state-store';
 import { broadcast, emitStatus, markConnectivity, updaterStatus } from './status';
 
@@ -60,16 +71,25 @@ let consecutiveCheckFailures = 0;
 let consecutiveDownloadFailures = 0;
 let checkInFlight = false;
 let downloadInFlight = false;
+let preCachePromise: Promise<void> | null = null;
+let downloadedDebian: { path: string; sha512: string } | null = null;
 
 // ─── electron-updater 事件处理 ─────────────────────────────────────────────
 
 function handleUpdateAvailable(info: UpdateInfo) {
+  if (isRollbackInProgress()) return;
   consecutiveDownloadFailures = 0;
   clearDownloadStallTimer();
   clearRecoveryProbeTimer();
   clearPendingRecoveryAction();
   markConnectivity('online', true);
-  void syncStatusFromUpdateInfo(info, updaterStatus.channel).then(() => {
+  void syncStatusFromUpdateInfo(info, updaterStatus.channel).then(async () => {
+    if ((await loadUpdaterState()).rejectedVersion === info.version) {
+      updaterStatus.availableVersion = null;
+      updaterStatus.checking = false;
+      emitStatus();
+      return;
+    }
     updaterStatus.availableVersion = info.version;
     updaterStatus.lastError = null;
     broadcast('update-available', info);
@@ -99,8 +119,15 @@ function handleDownloadProgress(progress: ProgressInfo) {
 }
 
 async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
+  if (isRollbackInProgress() || (await loadUpdaterState()).rejectedVersion === info.version) return;
   await syncStatusFromUpdateInfo(info, updaterStatus.channel);
   const state = await loadUpdaterState();
+  if (isRollbackInProgress()) return;
+  if (process.platform === 'linux' && !process.env.APPIMAGE) {
+    const file = info.files.find((entry) => /\.deb(?:$|[?#])/.test(entry.url));
+    downloadedDebian =
+      file && info.downloadedFile ? { path: info.downloadedFile, sha512: file.sha512 } : null;
+  }
 
   // 立即通知更新就绪，预缓存在后台异步执行，不阻塞用户操作
   applyDownloadedUpdate(state, info.version, app.getVersion());
@@ -112,7 +139,9 @@ async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
   updaterStatus.downloadPercent = 100;
   updaterStatus.downloadedVersion = info.version;
   updaterStatus.pendingVersion = info.version;
-  updaterStatus.rollbackAvailable = Boolean(state.rollbackTarget);
+  updaterStatus.rollbackAvailable = Boolean(
+    state.rollbackTarget && isBoundRollbackTarget(state.rollbackTarget)
+  );
   updaterStatus.rollbackVersion = state.rollbackTarget?.version ?? null;
   clearDownloadStallTimer();
   clearRecoveryProbeTimer();
@@ -123,7 +152,7 @@ async function handleUpdateDownloaded(info: UpdateDownloadedEvent) {
   emitStatus();
 
   // 后台异步预缓存当前版本安装包（用于回滚），不阻塞更新就绪通知
-  void preCacheCurrentVersionInBackground(state);
+  preCachePromise = preCacheCurrentVersionInBackground(state);
 }
 
 /**
@@ -146,7 +175,9 @@ async function preCacheCurrentVersionInBackground(state: PersistedUpdaterState) 
     } else {
       log.error('无法准备回滚信息，更新后将无法回滚');
     }
-    updaterStatus.rollbackAvailable = Boolean(state.rollbackTarget);
+    updaterStatus.rollbackAvailable = Boolean(
+      state.rollbackTarget && isBoundRollbackTarget(state.rollbackTarget)
+    );
     updaterStatus.rollbackVersion = state.rollbackTarget?.version ?? null;
   } catch (error) {
     log.error('后台预缓存回滚安装包失败:', error);
@@ -221,11 +252,16 @@ async function applyUpdateCheckResult(result: UpdateCheckResult | null, channel:
 
 export async function getUpdateStatus() {
   const state = await loadUpdaterState();
+  updaterStatus.recoveryPhase = await recoveryPhase(app.getPath('userData'));
+  if (updaterStatus.recoveryPhase === 'failed' && !updaterStatus.lastError)
+    updaterStatus.lastError = '独立恢复未能确认旧版本健康启动，请使用已验证的旧版本安装包恢复';
   updaterStatus.channel = state.channel;
   updaterStatus.channelFile = getChannelMetadataFile(state.channel);
   updaterStatus.currentVersion = app.getVersion();
   updaterStatus.rolloutBucket = state.rolloutBucket;
-  updaterStatus.rollbackAvailable = Boolean(state.rollbackTarget);
+  updaterStatus.rollbackAvailable = Boolean(
+    state.rollbackTarget && isBoundRollbackTarget(state.rollbackTarget)
+  );
   updaterStatus.rollbackVersion = state.rollbackTarget?.version ?? null;
   updaterStatus.pendingVersion = state.pendingVersion;
   if (getAutoUpdaterUnavailableReason() && !updaterStatus.lastError) {
@@ -235,7 +271,7 @@ export async function getUpdateStatus() {
 }
 
 export async function checkForUpdatesManually() {
-  if (checkInFlight) {
+  if (checkInFlight || isRollbackInProgress()) {
     return;
   }
 
@@ -248,6 +284,7 @@ export async function checkForUpdatesManually() {
   }
 
   const state = await loadUpdaterState();
+  if (state.rollbackPendingVersion || state.pendingVersion === app.getVersion()) return;
   const updater = await getAutoUpdater();
   if (!updater) {
     updaterStatus.checking = false;
@@ -273,6 +310,9 @@ export async function checkForUpdatesManually() {
   try {
     const result = await updater.checkForUpdates();
     await applyUpdateCheckResult(result, state.channel);
+    if (result?.isUpdateAvailable && result.updateInfo.version !== state.rejectedVersion) {
+      void downloadUpdate();
+    }
     consecutiveCheckFailures = 0;
   } catch (error) {
     if (await shouldRecoverFromNetwork(error)) {
@@ -327,6 +367,7 @@ export async function setupAutoUpdater() {
 
   configureAutoUpdater(updater, state.channel);
   await trackPendingLaunchState();
+  if (isRollbackInProgress()) return;
   await syncStatusFromUpdateInfo(null, state.channel);
   armHealthyStartupObservers();
   noteMainProcessReady();
@@ -352,7 +393,7 @@ export async function setupAutoUpdater() {
 }
 
 export async function downloadUpdate() {
-  if (downloadInFlight) {
+  if (downloadInFlight || isRollbackInProgress()) {
     return;
   }
 
@@ -370,6 +411,8 @@ export async function downloadUpdate() {
     return;
   }
 
+  const state = await loadUpdaterState();
+  if (state.rejectedVersion && updaterStatus.availableVersion === state.rejectedVersion) return;
   downloadInFlight = true;
   try {
     armDownloadStallWatch();
@@ -389,15 +432,76 @@ export async function downloadUpdate() {
   }
 }
 
-export async function installUpdate() {
+let installInFlight: Promise<void> | null = null;
+export function installUpdate() {
+  if (!installInFlight)
+    installInFlight = performInstallUpdate()
+      .catch((error) => {
+        updaterStatus.lastError = error instanceof Error ? error.message : String(error);
+        emitStatus();
+        throw error;
+      })
+      .finally(() => {
+        installInFlight = null;
+      });
+  return installInFlight;
+}
+
+async function performInstallUpdate() {
   const updater = await getAutoUpdater();
   if (!updater) {
     throw new Error(getUpdaterUnavailableMessage());
   }
 
-  // oneClick: true NSIS 直接覆盖安装，不运行卸载程序，
-  // 静默模式 (/S) 安全可靠，不会出现"应用被删除"问题。
-  updater.quitAndInstall(true, true);
+  if (isRollbackInProgress()) throw new Error('正在恢复旧版本，请稍后重试');
+  await preCachePromise;
+  const state = await loadUpdaterState();
+  if (!updaterStatus.updateReady || state.pendingVersion === state.rejectedVersion)
+    throw new Error('没有可安全安装的更新');
+  if (
+    !state.rollbackTarget ||
+    state.rollbackTarget.version !== app.getVersion() ||
+    !isBoundRollbackTarget(state.rollbackTarget) ||
+    !(await isCachedInstallerValid(
+      state.rollbackTarget.cachedInstallerPath,
+      state.rollbackTarget.sha256
+    ))
+  ) {
+    const target = await preCacheCurrentVersion();
+    if (
+      !target ||
+      !target.cachedInstallerPath ||
+      !isBoundRollbackTarget(target) ||
+      !(await isCachedInstallerValid(target.cachedInstallerPath, target.sha256))
+    ) {
+      throw new Error('旧版本恢复包尚未校验完成，暂不能安装更新，请联网后重试');
+    }
+    state.rollbackTarget = target;
+    await persistUpdaterState();
+  }
+  await prepareNativeUpdate();
+  if (!state.pendingVersion) throw new Error('更新版本信息缺失');
+  const guardian = await armUpdateRecovery(state.rollbackTarget!, state.pendingVersion);
+  try {
+    if (
+      !(await prepareAppForExit(async () => {
+        await guardian.commit();
+        if (process.platform === 'linux' && !process.env.APPIMAGE) {
+          if (!downloadedDebian) throw new Error('缺少已校验的 Debian 安装包，请重新下载');
+          await installDebianArtifact(downloadedDebian.path, {
+            algorithm: 'sha512',
+            value: downloadedDebian.sha512,
+          });
+          app.relaunch();
+          app.quit();
+        } else await handoffNativeUpdate(updater);
+      }))
+    )
+      throw new Error('内容未能安全保存，已取消安装更新');
+  } catch (error) {
+    await guardian.cancel();
+    throw error;
+  }
 }
 
 // 网络恢复后由 network 模块回调继续检查/下载

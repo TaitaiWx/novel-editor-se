@@ -23,3 +23,4 @@ export * from './internal-data';
 export * from './novel-format';
 export * from './structure-rules';
 export * from './structure-config';
+export * from './workspace-lock';

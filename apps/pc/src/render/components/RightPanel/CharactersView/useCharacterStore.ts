@@ -1,8 +1,8 @@
 import type { CharacterDesign, MediaItem } from '@novel-editor/core/entity-media';
 import type { CharacterVoice } from '@novel-editor/video';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Character, CharacterCategory, CharacterCurrentStateItem } from '../types';
-import { mapCharacterRows, stringifyCharacterAttributes } from '../utils';
+import { mapCharacterRows } from '../utils';
 
 /**
  * 人物根数据：按作品目录加载人物列表，提供删除与属性更新能力。
@@ -17,10 +17,18 @@ export function useCharacterStore({
   const [characters, setCharacters] = useState<Character[]>([]);
   const [novelId, setNovelId] = useState<number | null>(null);
   const [charactersLoaded, setCharactersLoaded] = useState(false);
+  const scopeRef = useRef<{
+    folderPath: string | null;
+    novelId: number | null;
+    loadSequence: number;
+    active: boolean;
+  } | null>(null);
 
   const loadCharactersFromDb = useCallback(async (targetNovelId: number): Promise<Character[]> => {
     const ipc = window.electron?.ipcRenderer;
-    if (!ipc) return [];
+    const scope = scopeRef.current;
+    if (!ipc || !scope?.active || scope.novelId !== targetNovelId) return [];
+    const sequence = ++scope.loadSequence;
     const rows = (await ipc.invoke('db-character-list', targetNovelId)) as Array<{
       id: number;
       name: string;
@@ -29,12 +37,18 @@ export function useCharacterStore({
       attributes: string;
     }>;
     const nextCharacters = mapCharacterRows(rows);
-    setCharacters(nextCharacters);
-    setCharactersLoaded(true);
+    if (scope.active && scopeRef.current === scope && scope.loadSequence === sequence) {
+      setCharacters(nextCharacters);
+      setCharactersLoaded(true);
+    }
     return nextCharacters;
   }, []);
 
   useEffect(() => {
+    const scope = { folderPath, novelId: null as number | null, loadSequence: 0, active: true };
+    scopeRef.current = scope;
+    setCharacters([]);
+    setNovelId(null);
     if (!folderPath || !window.electron?.ipcRenderer) {
       setCharacters([]);
       setNovelId(null);
@@ -57,12 +71,14 @@ export function useCharacterStore({
         return;
       }
       const nid = novel.id;
+      scope.novelId = nid;
       setNovelId(nid);
       if (cancelled) return;
       await loadCharactersFromDb(nid);
     })();
     return () => {
       cancelled = true;
+      scope.active = false;
     };
   }, [folderPath, loadCharactersFromDb]);
 
@@ -74,13 +90,14 @@ export function useCharacterStore({
   const handleDelete = useCallback(
     async (index: number) => {
       const char = characters[index];
-      if (!char) return;
+      const scope = scopeRef.current;
+      if (!char || !scope?.active || scope.folderPath !== folderPath) return;
       await window.electron?.ipcRenderer?.invoke('db-character-delete', char.id);
-      if (novelId !== null) {
+      if (novelId !== null && scopeRef.current === scope && scope.active) {
         await loadCharactersFromDb(novelId);
       }
     },
-    [characters, loadCharactersFromDb, novelId]
+    [characters, folderPath, loadCharactersFromDb, novelId]
   );
 
   const handleUpdateCharacterAttributes = useCallback(
@@ -88,46 +105,51 @@ export function useCharacterStore({
       characterId: number,
       patch: {
         category?: CharacterCategory;
+        /** 分组名（空字符串清除自定义分组） */
+        group?: string;
         highlightColor?: string;
         highlightFirstMentionOnly?: boolean;
         currentState?: CharacterCurrentStateItem[];
         /** 形象图（相对作品目录的路径或 data URL） */
         avatar?: string;
         design?: CharacterDesign;
+        designPatch?: Partial<CharacterDesign>;
+        designExpected?: Partial<CharacterDesign>;
         media?: MediaItem[];
         voice?: CharacterVoice;
       }
     ) => {
       const ipc = window.electron?.ipcRenderer;
+      const scope = scopeRef.current;
       const target = characters.find((item) => item.id === characterId);
-      if (!ipc || !target) return;
-      await ipc.invoke('db-character-update', characterId, {
-        name: target.name,
-        role: target.role,
-        description: target.description,
-        attributes: stringifyCharacterAttributes(
-          {
-            avatar: patch.avatar ?? target.avatar,
-            design: patch.design ?? target.design,
-            media: patch.media ?? target.media,
-            voice: patch.voice ?? target.voice,
-            aliases: target.aliases,
-            category: patch.category ?? target.category,
-            highlightColor: patch.highlightColor ?? target.highlightColor,
-            highlightFirstMentionOnly:
-              typeof patch.highlightFirstMentionOnly === 'boolean'
-                ? patch.highlightFirstMentionOnly
-                : target.highlightFirstMentionOnly,
-            currentState: patch.currentState ?? target.currentState,
-          },
-          target.role
-        ),
-      });
-      if (novelId !== null) {
+      if (!ipc || !target || !scope?.active || scope.folderPath !== folderPath)
+        throw new Error('人物已切换或当前无法保存，请重试');
+      if (patch.designPatch) {
+        try {
+          await ipc.invoke(
+            'db-character-patch-design',
+            characterId,
+            patch.designPatch,
+            patch.designExpected ?? {}
+          );
+        } catch (error) {
+          if (novelId !== null && scopeRef.current === scope && scope.active)
+            await loadCharactersFromDb(novelId);
+          throw error;
+        }
+      } else {
+        const {
+          designPatch: _designPatch,
+          designExpected: _designExpected,
+          ...attributePatch
+        } = patch;
+        await ipc.invoke('db-character-update', characterId, { attributePatch });
+      }
+      if (novelId !== null && scopeRef.current === scope && scope.active) {
         await loadCharactersFromDb(novelId);
       }
     },
-    [characters, loadCharactersFromDb, novelId]
+    [characters, folderPath, loadCharactersFromDb, novelId]
   );
 
   return {

@@ -4,6 +4,7 @@
  * Handles: window controls, shortcuts, app version, updates, recent folders, cache
  */
 import { ipcMain, BrowserWindow, app } from 'electron';
+import { registerWorkspaceHandler } from '../workspace-ipc';
 import { readFile, writeFile } from 'fs/promises';
 import path from 'path';
 import { getAllShortcuts } from '../shortcuts/getAllShortcuts';
@@ -32,6 +33,7 @@ import { getReleaseNotesCandidates, isJustUpdated } from '../changelog';
 import { detectSystemProfile } from '../system-profile';
 import { getWebAuthnSupportInfo } from '../webauthn';
 import { syncSampleData } from '../sample-data';
+import { assertDirectoryAccess, grantPathAccess } from '../path-access';
 
 const DOCUMENT_CACHE_PREFIXES = [
   'novel-editor:lore:',
@@ -44,26 +46,26 @@ const DOCUMENT_CACHE_PREFIXES = [
 export function registerWindowAppHandlers(): void {
   // ─── Window Controls ──────────────────────────────────────────────────────
 
-  ipcMain.handle('window-minimize', () => {
-    const window = BrowserWindow.getFocusedWindow();
+  ipcMain.handle('window-minimize', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
     if (window) window.minimize();
   });
 
-  ipcMain.handle('window-maximize', () => {
-    const window = BrowserWindow.getFocusedWindow();
+  ipcMain.handle('window-maximize', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
     if (window) {
       if (window.isMaximized()) window.unmaximize();
       else window.maximize();
     }
   });
 
-  ipcMain.handle('window-close', () => {
-    const window = BrowserWindow.getFocusedWindow();
+  ipcMain.handle('window-close', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
     if (window) window.close();
   });
 
-  ipcMain.handle('window-is-maximized', () => {
-    const window = BrowserWindow.getFocusedWindow();
+  ipcMain.handle('window-is-maximized', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
     return window ? window.isMaximized() : false;
   });
 
@@ -74,8 +76,8 @@ export function registerWindowAppHandlers(): void {
   // 生产版本忽略（devtools-policy.ts）
   ipcMain.handle('dev-tools-toggle', () => toggleDevTools());
 
-  ipcMain.handle('window-toggle-fullscreen', () => {
-    const window = BrowserWindow.getFocusedWindow();
+  ipcMain.handle('window-toggle-fullscreen', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
     if (window) window.setFullScreen(!window.isFullScreen());
   });
 
@@ -117,19 +119,27 @@ export function registerWindowAppHandlers(): void {
 
   // ─── Recent Folders ───────────────────────────────────────────────────────
 
-  ipcMain.handle('get-recent-folders', () => getRecentFolders());
-  // 上次目录可能就是示例作品集：等启动时的示例版本同步完成，避免读到正在被替换的旧副本
-  ipcMain.handle('get-last-folder', async () => {
-    await syncSampleData();
-    return getLastFolder();
+  ipcMain.handle('get-recent-folders', async (event) => {
+    const folders = getRecentFolders();
+    for (const folder of folders)
+      await grantPathAccess(event.sender, folder, true).catch(() => undefined);
+    return folders;
   });
-  ipcMain.handle('add-recent-folder', (_event, folderPath: string) => {
+  // 上次目录可能就是示例作品集：等启动时的示例版本同步完成，避免读到正在被替换的旧副本
+  ipcMain.handle('get-last-folder', async (event) => {
+    await syncSampleData();
+    const folder = getLastFolder();
+    if (folder) await grantPathAccess(event.sender, folder, true);
+    return folder;
+  });
+  ipcMain.handle('add-recent-folder', async (event, folderPath: string) => {
+    await assertDirectoryAccess(event.sender.id, folderPath);
     addRecentFolder(folderPath);
   });
 
   // ─── Cache ────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('app-cache-clear', (_event, scope: 'document-data') => {
+  registerWorkspaceHandler('app-cache-clear', (_event, scope: 'document-data') => {
     if (scope !== 'document-data') {
       throw new Error(`Unsupported cache clear scope: ${scope}`);
     }

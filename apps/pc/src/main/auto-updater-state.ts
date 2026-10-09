@@ -7,6 +7,13 @@ export interface RollbackTarget {
   tag: string;
   assetName: string;
   assetUrl: string;
+  /** 发布源提供的摘要与平台身份；旧版无此字段的缓存不可直接执行。 */
+  rollbackProtocol?: number;
+  /** Independent OS guardian nonce acknowledgement support. */
+  recoveryProtocol?: number;
+  sha256?: string;
+  platform?: string;
+  arch?: string;
   /** 本地已缓存的安装包路径（高可用核心：回滚不依赖网络） */
   cachedInstallerPath: string | null;
   /** 缓存安装包的 SHA256 摘要，用于完整性校验 */
@@ -21,6 +28,8 @@ export interface PersistedUpdaterState {
   pendingVersion: string | null;
   pendingFromVersion: string | null;
   pendingLaunchAttempts: number;
+  rollbackPendingVersion?: string | null;
+  rejectedVersion?: string | null;
 }
 
 export interface StartupHealthState {
@@ -65,6 +74,11 @@ export function normalizeRollbackTarget(value: unknown): RollbackTarget | null {
   }
 
   return {
+    ...(target.rollbackProtocol === 1 ? { rollbackProtocol: 1 } : {}),
+    ...(target.recoveryProtocol === 1 ? { recoveryProtocol: 1 } : {}),
+    ...(typeof target.sha256 === 'string' ? { sha256: target.sha256 } : {}),
+    ...(typeof target.platform === 'string' ? { platform: target.platform } : {}),
+    ...(typeof target.arch === 'string' ? { arch: target.arch } : {}),
     version: target.version,
     tag: target.tag,
     assetName: target.assetName,
@@ -81,6 +95,9 @@ export function normalizeUpdaterState(
   initialState: PersistedUpdaterState
 ): PersistedUpdaterState {
   return {
+    rollbackPendingVersion:
+      typeof parsed.rollbackPendingVersion === 'string' ? parsed.rollbackPendingVersion : null,
+    rejectedVersion: typeof parsed.rejectedVersion === 'string' ? parsed.rejectedVersion : null,
     channel: normalizeChannel(parsed.channel, initialState.channel),
     rolloutBucket:
       typeof parsed.rolloutBucket === 'number' && Number.isFinite(parsed.rolloutBucket)

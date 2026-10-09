@@ -375,7 +375,10 @@ describe('LoreView', () => {
 
     // 内容：改完点「保存」
     fireEvent.change(within(detail).getByLabelText('设定内容'), { target: { value: '天下九分' } });
-    fireEvent.click(within(detail).getByRole('button', { name: '保存' }));
+    // IPC mock 同步改 rows，但保存还会异步 reload；先提交 React 更新再编辑下一字段。
+    await act(async () => {
+      fireEvent.click(within(detail).getByRole('button', { name: '保存' }));
+    });
     await waitFor(() =>
       expect(mock.invoke).toHaveBeenCalledWith(
         'db-world-setting-update',
@@ -386,13 +389,17 @@ describe('LoreView', () => {
 
     // 标题：失焦保存
     fireEvent.change(title, { target: { value: '神州' } });
-    fireEvent.blur(title);
+    await act(async () => {
+      fireEvent.blur(title);
+    });
     await waitFor(() => expect(rows.find((row) => row.id === 3)?.title).toBe('神州'));
 
     // 目录（多级分类）：失焦时规范化并写入 attributes
     const folder = within(detail).getByLabelText('设定目录') as HTMLInputElement;
     fireEvent.change(folder, { target: { value: ' 地理 / 中原 /' } });
-    fireEvent.blur(folder);
+    await act(async () => {
+      fireEvent.blur(folder);
+    });
     await waitFor(() =>
       expect(JSON.parse(rows.find((row) => row.id === 3)?.attributes ?? '{}')).toEqual({
         folder: '地理/中原',
@@ -402,11 +409,16 @@ describe('LoreView', () => {
     // 标签：回车添加，× 移除
     const tagInput = within(detail).getByLabelText('添加标签');
     fireEvent.change(tagInput, { target: { value: '#古国，大陆' } });
-    fireEvent.keyDown(tagInput, { key: 'Enter' });
+    await act(async () => {
+      fireEvent.keyDown(tagInput, { key: 'Enter' });
+    });
     await waitFor(() =>
       expect(JSON.parse(rows.find((row) => row.id === 3)?.tags ?? '[]')).toEqual(['古国', '大陆'])
     );
-    fireEvent.click(await within(detail).findByLabelText('移除标签 古国'));
+    const removeTag = await within(detail).findByLabelText('移除标签 古国');
+    await act(async () => {
+      fireEvent.click(removeTag);
+    });
     await waitFor(() =>
       expect(JSON.parse(rows.find((row) => row.id === 3)?.tags ?? '[]')).toEqual(['大陆'])
     );
@@ -423,11 +435,16 @@ describe('LoreView', () => {
     );
 
     // 分类即时保存
-    chooseOption('设定分类', '势力', within(detail));
-    await waitFor(() => expect(rows.find((row) => row.id === 4)?.category).toBe('faction'));
+    chooseOption('设定分组', '势力', within(detail));
+    await waitFor(() => {
+      expect(rows.find((row) => row.id === 4)?.category).toBe('faction');
+      expect(within(detail).getByRole('combobox', { name: '设定分组' }).textContent).toBe('势力');
+    });
 
     fireEvent.click(within(detail).getByRole('tab', { name: '内容' }));
-    fireEvent.click(within(detail).getByRole('button', { name: '删除条目' }));
+    await act(async () => {
+      fireEvent.click(within(detail).getByRole('button', { name: '删除条目' }));
+    });
     await waitFor(() => expect(mock.invoke).toHaveBeenCalledWith('db-world-setting-delete', 4));
   });
 

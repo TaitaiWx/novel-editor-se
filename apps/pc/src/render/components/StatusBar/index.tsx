@@ -197,8 +197,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
   const handleRestartUpdate = useCallback(async () => {
     setRestarting(true);
-    // Brief delay so the modal renders before the process quits
-    await new Promise((r) => setTimeout(r, 300));
     try {
       await window.electron.ipcRenderer.invoke('update-install');
     } catch (error) {
@@ -366,7 +364,9 @@ const StatusBar: React.FC<StatusBarProps> = ({
         )}
         {updateReady && (
           <span className={`${styles.item} ${styles.updateReady}`} onClick={handleRestartUpdate}>
-            重启以更新
+            {updateStatus?.recovery?.authorization === 'system-prompt'
+              ? '重启以更新（需系统授权）'
+              : '重启以更新'}
           </span>
         )}
         {filePath &&

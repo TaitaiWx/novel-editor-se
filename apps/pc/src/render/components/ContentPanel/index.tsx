@@ -76,6 +76,7 @@ interface ContentPanelProps {
   onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onTabSelect: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
+  onLoadBlocked?: (previousPath: string) => void;
   onToggleThousandCharMarkers?: () => void;
   onFormatCurrentChapter?: () => void;
   onCloseOtherTabs?: (filePath: string) => void;
@@ -163,6 +164,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
   onViewportSnapshotChange,
   onTabSelect,
   onTabClose,
+  onLoadBlocked,
   onToggleThousandCharMarkers,
   onFormatCurrentChapter,
   onCloseOtherTabs,
@@ -235,6 +237,14 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
       isSpreadsheet,
     ]
   );
+  // 特殊面板仍保留正文编辑器实例，离开正文通过 loader 保存；失败可以恢复原稿。
+  const showTextEditor =
+    !specialContent &&
+    !isChangelog &&
+    !isSpreadsheet &&
+    !isPresentation &&
+    !isDocument &&
+    (!isPreviewableResource || (viewMode === 'content' && isTextBackedPreviewResource));
   const canWrapText =
     !isPreviewableResource || (viewMode === 'content' && isTextBackedPreviewResource);
 
@@ -353,11 +363,13 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
               <ResourceViewer filePath={activeTab} settingsComponent={settingsComponent} />
             ) : isPreviewableResource && !isTextBackedPreviewResource ? (
               <BinaryContentViewer filePath={activeTab} settingsComponent={settingsComponent} />
-            ) : (
+            ) : null}
+            <div className={styles.textEditorHost} hidden={!showTextEditor}>
               <TextEditor
-                filePath={activeTab}
+                onLoadBlocked={onLoadBlocked}
+                filePath={showTextEditor ? activeTab : null}
                 readOnly={readOnlyFile}
-                virtualContent={virtualContent}
+                virtualContent={showTextEditor ? virtualContent : undefined}
                 reloadToken={reloadToken}
                 focusMode={focusMode}
                 wordWrap={wordWrap}
@@ -366,10 +378,10 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
                 thousandCharMarkerStep={thousandCharMarkerStep}
                 encoding={encoding}
                 characterHighlights={characterHighlights}
-                scrollToLine={scrollToLine}
-                transientHighlightLine={transientHighlightLine}
-                replaceLineRequest={replaceLineRequest}
-                inlineDiff={inlineDiff}
+                scrollToLine={showTextEditor ? scrollToLine : undefined}
+                transientHighlightLine={showTextEditor ? transientHighlightLine : undefined}
+                replaceLineRequest={showTextEditor ? replaceLineRequest : undefined}
+                inlineDiff={showTextEditor ? inlineDiff : undefined}
                 editorViewRef={editorViewRef}
                 viewportSnapshots={viewportSnapshots}
                 onViewportSnapshotChange={onViewportSnapshotChange}
@@ -379,7 +391,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
                 onScrollProcessed={onScrollProcessed}
                 onTransientHighlightProcessed={onTransientHighlightProcessed}
                 emptyStateActions={emptyStateActions}
-                assist={editorAssist}
+                assist={showTextEditor ? editorAssist : undefined}
                 settingsComponent={
                   editorHeaderActions ? (
                     <>
@@ -391,7 +403,7 @@ const ContentPanel: React.FC<ContentPanelProps> = ({
                   )
                 }
               />
-            )}
+            </div>
           </div>
           {/* 参考窗格：在编辑器旁边看图片 / 视频；专注模式下隐藏 */}
           <ReferencePane hidden={focusMode} />

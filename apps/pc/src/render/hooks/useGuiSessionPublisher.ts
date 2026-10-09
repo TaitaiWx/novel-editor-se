@@ -1,3 +1,4 @@
+import { isRendererPreparing, registerPreparationParticipant } from '../utils/rendererPreparation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GuiSessionSnapshot } from '@novel-editor/core/gui-session';
 import { isPathInWorkspace, isUntitledTabPath } from '@/render/app/fileTreeUtils';
@@ -47,7 +48,8 @@ export function buildGuiSessionSnapshot(
 }
 
 function publish(snapshot: GuiSessionSnapshot | null): void {
-  window.electron?.ipcRenderer?.invoke('gui-session-publish', snapshot).catch(() => {});
+  if (!isRendererPreparing())
+    window.electron?.ipcRenderer?.invoke('gui-session-publish', snapshot).catch(() => {});
 }
 
 /**
@@ -82,6 +84,18 @@ export function useGuiSessionPublisher(ctx: UseGuiSessionPublisherContext): void
   );
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
+
+  useEffect(
+    () =>
+      registerPreparationParticipant(async () => {
+        const result = await window.electron?.ipcRenderer?.invoke(
+          'gui-session-publish',
+          snapshotRef.current
+        );
+        return result?.success !== false;
+      }),
+    []
+  );
 
   // 状态变化：防抖发布
   useEffect(() => {

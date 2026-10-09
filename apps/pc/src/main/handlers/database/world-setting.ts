@@ -1,17 +1,17 @@
-import { ipcMain } from 'electron';
+import { registerWorkspaceHandler } from '../../workspace-ipc';
 import { novelOps, worldSettingOps } from '@novel-editor/store';
 
 /** 设定资料 CRUD */
 export function registerWorldSettingHandlers(): void {
   // ─── World Settings CRUD ──────────────────────────────────────────────────
 
-  ipcMain.handle('db-world-setting-list-by-folder', (_event, folderPath: string) => {
+  registerWorkspaceHandler('db-world-setting-list-by-folder', (_event, folderPath: string) => {
     const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
     if (!novel) return [];
     return worldSettingOps.getByNovel(novel.id);
   });
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-world-setting-create-by-folder',
     (
       _event,
@@ -37,7 +37,7 @@ export function registerWorldSettingHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-world-setting-bulk-create-by-folder',
     (
       _event,
@@ -52,7 +52,7 @@ export function registerWorldSettingHandlers(): void {
     }
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'db-world-setting-update',
     (
       _event,
@@ -67,8 +67,10 @@ export function registerWorldSettingHandlers(): void {
     ) => worldSettingOps.update(id, fields)
   );
 
-  ipcMain.handle('db-world-setting-delete', (_event, id: number) => worldSettingOps.delete(id));
-  ipcMain.handle('db-world-setting-clear-by-folder', (_event, folderPath: string) => {
+  registerWorkspaceHandler('db-world-setting-delete', (_event, id: number) =>
+    worldSettingOps.delete(id)
+  );
+  registerWorkspaceHandler('db-world-setting-clear-by-folder', (_event, folderPath: string) => {
     const novel = novelOps.getByFolder(folderPath) as { id: number } | undefined;
     if (!novel) return { changes: 0 };
     return worldSettingOps.clearByNovel(novel.id);

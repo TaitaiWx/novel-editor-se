@@ -8,8 +8,11 @@ interface UseActiveEditorRegistrationOptions {
   viewRef: React.MutableRefObject<EditorView | null>;
   currentFilePathRef: React.MutableRefObject<string | null>;
   currentContentRef: React.MutableRefObject<string>;
+  currentOriginalContentRef: React.MutableRefObject<string>;
+  autoSaveTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
+  setHasChanges: React.Dispatch<React.SetStateAction<boolean>>;
   readOnlyRef: React.MutableRefObject<boolean>;
-  handleManualSaveRef: React.MutableRefObject<() => void>;
+  handleManualSaveRef: React.MutableRefObject<() => boolean | void | Promise<boolean | void>>;
 }
 
 /**
@@ -20,12 +23,26 @@ export function useActiveEditorRegistration({
   viewRef,
   currentFilePathRef,
   currentContentRef,
+  currentOriginalContentRef,
+  autoSaveTimeoutRef,
+  setHasChanges,
   readOnlyRef,
   handleManualSaveRef,
 }: UseActiveEditorRegistrationOptions) {
   useEffect(() => {
     const registration = registerActiveEditor({
       save: () => handleManualSaveRef.current(),
+      discard: () => {
+        if (autoSaveTimeoutRef.current) {
+          clearTimeout(autoSaveTimeoutRef.current);
+          autoSaveTimeoutRef.current = null;
+        }
+        // 保留 DOM 到下一次正常加载，但取消其路径身份，任何卸载/切换保存都不会重建文件。
+        currentFilePathRef.current = null;
+        currentContentRef.current = '';
+        currentOriginalContentRef.current = '';
+        setHasChanges(false);
+      },
       getSnapshot: () => ({
         filePath: currentFilePathRef.current,
         content: currentContentRef.current,
@@ -62,6 +79,9 @@ export function useActiveEditorRegistration({
     };
   }, [
     currentContentRef,
+    currentOriginalContentRef,
+    autoSaveTimeoutRef,
+    setHasChanges,
     currentFilePathRef,
     editorContainerRef,
     handleManualSaveRef,

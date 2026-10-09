@@ -724,20 +724,20 @@ describe('useCharacterStore', () => {
         highlightFirstMentionOnly: true,
       });
     });
-    const [id, payload] = calls('db-character-update')[0] as [
-      number,
-      { name: string; role: string; attributes: string },
-    ];
+    const [id, payload] = calls('db-character-update')[0];
     expect(id).toBe(1);
-    expect(payload.name).toBe('林冲');
-    const attrs = JSON.parse(payload.attributes) as Record<string, unknown>;
-    expect(attrs.highlightColor).toBe('#112233');
-    expect(attrs.highlightFirstMentionOnly).toBe(true);
-    expect(attrs.currentState).toEqual([{ id: 's', label: '伤势', value: '轻伤' }]);
+    expect(payload).toEqual({
+      attributePatch: {
+        currentState: [{ id: 's', label: '伤势', value: '轻伤' }],
+        highlightFirstMentionOnly: true,
+      },
+    });
 
     // 不存在的人物不更新
     await act(async () => {
-      await result.current.handleUpdateCharacterAttributes(99, { category: 'major' });
+      await expect(
+        result.current.handleUpdateCharacterAttributes(99, { category: 'major' })
+      ).rejects.toThrow('人物已切换');
     });
     expect(calls('db-character-update')).toHaveLength(1);
 
@@ -750,6 +750,31 @@ describe('useCharacterStore', () => {
       await result.current.handleDelete(5);
     });
     expect(calls('db-character-delete')).toHaveLength(1);
+  });
+
+  it('头像与分类更新只发送实际修改的属性，不携带旧人物设计和图集', async () => {
+    const { calls } = setup({
+      'db-novel-get-by-folder': () => ({ id: 9 }),
+      'db-character-list': () => [
+        row(1, '人物', {
+          design: { outfit: '旧衣服' },
+          avatar: 'old.png',
+          media: [{ id: 'old-media' }],
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useCharacterStore({ folderPath: '/novel' }));
+    await waitFor(() => expect(result.current.characters).toHaveLength(1));
+    await act(async () => {
+      await result.current.handleUpdateCharacterAttributes(1, { avatar: 'new.png' });
+    });
+    await act(async () => {
+      await result.current.handleUpdateCharacterAttributes(1, { category: 'major' });
+    });
+    expect(calls('db-character-update')).toEqual([
+      [1, { attributePatch: { avatar: 'new.png' } }],
+      [1, { attributePatch: { category: 'major' } }],
+    ]);
   });
 
   it('切换目录时忽略旧目录的加载结果', async () => {
@@ -768,6 +793,27 @@ describe('useCharacterStore', () => {
     });
     expect(result.current.novelId).toBe(2);
     expect(result.current.characters.map((c) => c.name)).toEqual(['作品2的人物']);
+  });
+
+  it('切换作品后忽略旧人物列表响应，包括复用相同数据库 id 的作品', async () => {
+    const slow = deferred<ReturnType<typeof row>[]>();
+    let listCalls = 0;
+    setup({
+      'db-novel-get-by-folder': () => ({ id: 1 }),
+      'db-character-list': () => (++listCalls === 1 ? slow.promise : [row(2, '新作品人物')]),
+    });
+    const { result, rerender } = renderHook(({ folderPath }) => useCharacterStore({ folderPath }), {
+      initialProps: { folderPath: '/old' },
+    });
+    await waitFor(() => expect(listCalls).toBe(1));
+    rerender({ folderPath: '/new' });
+    await waitFor(() =>
+      expect(result.current.characters.map((c) => c.name)).toEqual(['新作品人物'])
+    );
+    await act(async () => {
+      slow.resolve([row(1, '旧作品人物')]);
+    });
+    expect(result.current.characters.map((c) => c.name)).toEqual(['新作品人物']);
   });
 
   // BUG: useCharacterStore.ts 加载 effect 在 `!novel` 时直接 return，既不清空 characters 也不重置
@@ -909,9 +955,7 @@ describe('useCharacterListEditor', () => {
     });
     const updates = calls('db-character-update');
     expect(updates.map((u) => u[0])).toEqual([1, 3]);
-    expect(JSON.parse((updates[0][1] as { attributes: string }).attributes).category).toBe(
-      'secondary'
-    );
+    expect(updates[0][1]).toEqual({ attributePatch: { category: 'secondary' } });
     expect(loadCharactersFromDb).toHaveBeenCalledWith(9);
     expect(result.current.bulkUpdatingCategory).toBeNull();
 
@@ -1072,12 +1116,13 @@ describe('useCharacterGraphAI', () => {
     expect([createdNovel, createdName, createdRole]).toEqual([9, '林冲', '主角']);
     const [updatedId, updated] = calls('db-character-update')[0] as [
       number,
-      { role: string; description: string; attributes: string },
+      { role: string; description?: string; appendAliases: string[] },
     ];
     expect(updatedId).toBe(1);
-    expect(updated.role).toBe('僧人');
-    expect(updated.description).toBe('鲁智深描述');
-    expect(JSON.parse(updated.attributes).aliases).toEqual(['花和尚']);
+    expect(updated).not.toHaveProperty('role');
+    expect(updated).not.toHaveProperty('description');
+    expect(updated.appendAliases).toEqual([]);
+    expect(updated).not.toHaveProperty('attributes');
 
     expect(props.loadCharactersFromDb).toHaveBeenCalledWith(9);
     const relations = props.setRelations.mock.calls[0][0] as CharacterRelation[];

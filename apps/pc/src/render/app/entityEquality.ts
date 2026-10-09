@@ -18,6 +18,7 @@ export function areCharactersEqual(left: Character[], right: Character[]): boole
       item.name === next.name &&
       item.role === next.role &&
       item.category === next.category &&
+      (item.group ?? '') === (next.group ?? '') &&
       item.description === next.description &&
       item.avatar === next.avatar &&
       item.highlightColor === next.highlightColor &&
@@ -44,6 +45,7 @@ export function areLoreEntriesEqual(left: LoreEntry[], right: LoreEntry[]): bool
       item.tags.length === next.tags.length &&
       item.tags.every((tag, tagIndex) => tag === next.tags[tagIndex]) &&
       item.folder === next.folder &&
+      (item.group ?? '') === (next.group ?? '') &&
       item.cover === next.cover &&
       sameJson(item.media, next.media)
     );

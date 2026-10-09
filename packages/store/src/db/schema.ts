@@ -1,8 +1,15 @@
 /** 表结构定义与增量迁移 */
 import type Database from 'better-sqlite3';
 
-/** 创建表结构 */
+/** 建表和增量迁移作为整体提交，失败时保留迁移前的结构与数据。 */
 export function createTables(database: Database.Database): void {
+  database.transaction(() => {
+    createBaseTables(database);
+    migrateTables(database);
+  })();
+}
+
+function createBaseTables(database: Database.Database): void {
   database.exec(`
     -- 作品/项目
     CREATE TABLE IF NOT EXISTS novels (
@@ -68,8 +75,6 @@ export function createTables(database: Database.Database): void {
       FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
       FOREIGN KEY (parent_id) REFERENCES outlines(id) ON DELETE SET NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_outlines_novel_scope
-      ON outlines (novel_id, scope_kind, scope_path, sort_order, id);
 
     -- 大纲版本中心（独立资产快照，不影响当前大纲主表）
     CREATE TABLE IF NOT EXISTS outline_versions (
@@ -89,8 +94,6 @@ export function createTables(database: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_outline_versions_novel_id_created_at
       ON outline_versions (novel_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_outline_versions_novel_scope_created_at
-      ON outline_versions (novel_id, scope_kind, scope_path, created_at DESC, id DESC);
 
     -- 三签创作法：创意卡
     CREATE TABLE IF NOT EXISTS story_idea_cards (
@@ -221,8 +224,6 @@ export function createTables(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_ai_cache_type
       ON ai_cache (type);
   `);
-
-  migrateTables(database);
 }
 
 export function hasColumn(

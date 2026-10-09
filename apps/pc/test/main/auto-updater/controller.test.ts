@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'events';
+import { rollbackAssetNames } from '../../../src/main/auto-updater/rollback-metadata';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -68,6 +69,27 @@ vi.mock('electron', () => ({
   },
 }));
 
+vi.mock('../../../src/main/auto-updater/recovery', () => ({
+  armUpdateRecovery: vi.fn(async () => ({
+    commit: vi.fn(async () => undefined),
+    cancel: vi.fn(async () => undefined),
+  })),
+}));
+
+vi.mock('../../../src/main/auto-updater/native-install', () => ({
+  prepareNativeUpdate: vi.fn(async () => undefined),
+  handoffNativeUpdate: async (updater: FakeUpdater) => {
+    updater.quitAndInstall(true, true);
+  },
+}));
+
+vi.mock('../../../src/main/graceful-shutdown', () => ({
+  prepareAppForExit: vi.fn(async (exit: () => void | Promise<void>) => {
+    await exit();
+    return true;
+  }),
+}));
+
 vi.mock('electron-log/main', () => {
   const noop = () => undefined;
   return {
@@ -103,6 +125,8 @@ vi.mock('../../../src/main/auto-updater/health', () => ({
 }));
 
 vi.mock('../../../src/main/auto-updater/rollback', () => ({
+  isRollbackInProgress: () => false,
+  isCachedInstallerValid: vi.fn(async () => true),
   getRollbackCacheDir: () => join(env.userData, 'rollback-cache'),
   preCacheCurrentVersion: vi.fn(async () => {
     if (env.preCacheError) throw env.preCacheError;
@@ -128,7 +152,11 @@ vi.mock('../../../src/main/auto-updater/network', () => ({
 const rollbackTarget: RollbackTarget = {
   version: '1.0.0',
   tag: 'v1.0.0',
-  assetName: 'installer.dmg',
+  rollbackProtocol: 1,
+  sha256: 'a'.repeat(64),
+  platform: process.platform,
+  arch: process.arch,
+  assetName: rollbackAssetNames('1.0.0')[0],
   assetUrl: 'https://example.invalid/installer.dmg',
   cachedInstallerPath: '/tmp/installer.dmg',
   cachedInstallerHash: 'abc',
@@ -214,6 +242,7 @@ async function waitForPreCacheSettled() {
 
 describe('auto-updater controller', () => {
   beforeEach(async () => {
+    vi.stubEnv('APPIMAGE', '/test/Novel.AppImage');
     vi.resetModules();
     vi.clearAllMocks();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
@@ -271,7 +300,8 @@ describe('auto-updater controller', () => {
       const updater = fakeUpdater();
       expect(updater.channel).toBe('beta');
       expect(updater.allowPrerelease).toBe(true);
-      expect(updater.autoDownload).toBe(true);
+      expect(updater.autoDownload).toBe(false);
+      expect(updater.autoInstallOnAppQuit).toBe(false);
       expect(updater.setFeedURL).toHaveBeenCalledWith(
         expect.objectContaining({
           provider: 'generic',
@@ -588,6 +618,18 @@ describe('auto-updater controller', () => {
       expect(fakeUpdater().allowPrerelease).toBe(false);
     });
 
+    it('never downloads a version rejected by a completed rollback', async () => {
+      await writeState({ rejectedVersion: '1.3.0' });
+      const { controller } = await loadController();
+      fakeUpdater().checkForUpdates.mockResolvedValueOnce({
+        isUpdateAvailable: true,
+        updateInfo: { version: '1.3.0' },
+      });
+      await controller.checkForUpdatesManually();
+      await flush();
+      expect(fakeUpdater().downloadUpdate).not.toHaveBeenCalled();
+    });
+
     it('检查进行中时忽略并发调用', async () => {
       const { controller } = await loadController();
       let release: (v: null) => void = () => undefined;
@@ -669,7 +711,7 @@ describe('auto-updater controller', () => {
         () => new Promise<string[]>((resolve) => (release = resolve))
       );
       const first = controller.downloadUpdate();
-      await flush();
+      await waitUntil(() => fakeUpdater().downloadUpdate.mock.calls.length === 1);
       await controller.downloadUpdate();
       expect(fakeUpdater().downloadUpdate).toHaveBeenCalledTimes(1);
       release([]);
@@ -697,10 +739,65 @@ describe('auto-updater controller', () => {
   });
 
   describe('installUpdate', () => {
-    it('调用 quitAndInstall(silent, forceRunAfter)', async () => {
-      const { controller } = await loadController();
+    it('verified rollback cache and coordinated save precede installation', async () => {
+      const { rollbackAssetNames } = await import(
+        '../../../src/main/auto-updater/rollback-metadata'
+      );
+      env.preCacheResult = {
+        ...rollbackTarget,
+        version: env.version,
+        tag: `v${env.version}`,
+        assetName: rollbackAssetNames(env.version)[0],
+        platform: process.platform,
+        arch: process.arch,
+        rollbackProtocol: 1,
+        sha256: 'a'.repeat(64),
+      };
+      const { controller, updaterStatus } = await loadController();
+      updaterStatus.updateReady = true;
+      await writeState({ pendingVersion: '1.2.0' });
       await controller.installUpdate();
       expect(fakeUpdater().quitAndInstall).toHaveBeenCalledWith(true, true);
+    });
+
+    it('refuses installation when the external guardian cannot arm', async () => {
+      env.preCacheResult = {
+        ...rollbackTarget,
+        version: env.version,
+        tag: `v${env.version}`,
+        assetName: rollbackAssetNames(env.version)[0],
+      };
+      const { controller, updaterStatus } = await loadController();
+      const { armUpdateRecovery } = await import('../../../src/main/auto-updater/recovery');
+      vi.mocked(armUpdateRecovery).mockRejectedValueOnce(new Error('guardian unavailable'));
+      updaterStatus.updateReady = true;
+      await writeState({ pendingVersion: '1.2.0' });
+      await expect(controller.installUpdate()).rejects.toThrow('guardian unavailable');
+      expect(fakeUpdater().quitAndInstall).not.toHaveBeenCalled();
+    });
+
+    it('does not quit when a verified fallback cannot be prepared', async () => {
+      const { controller, updaterStatus } = await loadController();
+      updaterStatus.updateReady = true;
+      await writeState({ pendingVersion: '1.2.0' });
+      await expect(controller.installUpdate()).rejects.toThrow('恢复包尚未校验完成');
+      expect(fakeUpdater().quitAndInstall).not.toHaveBeenCalled();
+    });
+
+    it('does not quit when coordinated save rejects installation', async () => {
+      env.preCacheResult = {
+        ...rollbackTarget,
+        version: env.version,
+        tag: `v${env.version}`,
+        assetName: rollbackAssetNames(env.version)[0],
+      };
+      const { controller, updaterStatus } = await loadController();
+      const { prepareAppForExit } = await import('../../../src/main/graceful-shutdown');
+      vi.mocked(prepareAppForExit).mockResolvedValueOnce(false);
+      updaterStatus.updateReady = true;
+      await writeState({ pendingVersion: '1.2.0' });
+      await expect(controller.installUpdate()).rejects.toThrow('取消安装更新');
+      expect(fakeUpdater().quitAndInstall).not.toHaveBeenCalled();
     });
 
     it('updater 不可用时抛错', async () => {

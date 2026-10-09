@@ -178,7 +178,7 @@ describe('EntityGallery（人物 / 设定图集）', () => {
     const panel = await screen.findByRole('region', { name: 'AI 生成图片' });
     fireEvent.click(within(panel).getByRole('radio', { name: '三视图' }));
     chooseOption('画风', '水墨', within(panel));
-    fireEvent.change(within(panel).getByLabelText('补充一句（可不填）'), {
+    fireEvent.change(within(panel).getByLabelText('补充描述（可不填）'), {
       target: { value: '雪夜' },
     });
     expect(within(panel).getByText(/带 2 张参考图保持一致/)).toBeTruthy();

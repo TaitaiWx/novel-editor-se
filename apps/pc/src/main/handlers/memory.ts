@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 记忆资料同步 IPC Handler（建议 2：记忆资料单独放个文件夹）
  *
@@ -5,7 +6,6 @@
  * `<folder>/资料/记忆/角色卡/*.md`、`<folder>/资料/记忆/设定/*.md` 只读快照，
  * 让作者、CLI 与 AI agent 不打开数据库也能查阅全部记忆资料。
  */
-import { ipcMain } from 'electron';
 import {
   syncMemorySnapshots,
   type CharacterSnapshotInput,
@@ -93,7 +93,7 @@ export function toSettingSnapshot(row: WorldSettingRow): SettingSnapshotInput {
 }
 
 export function registerMemoryHandlers(): void {
-  ipcMain.handle('memory-sync-snapshots', (_event, folderPath: unknown) =>
+  registerWorkspaceHandler('memory-sync-snapshots', (_event, folderPath: unknown) =>
     guard(async () => {
       const root = await assertFolder(folderPath);
       const novel = (novelOps.getByFolder(folderPath as string) ?? novelOps.getByFolder(root)) as

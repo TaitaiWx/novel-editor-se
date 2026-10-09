@@ -140,8 +140,8 @@ describe('FilePanel utils', () => {
       makeCharacter({ id: 3, category: 'secondary' }),
     ]);
     expect(groups.map((g) => [g.key, g.label, g.items.length])).toEqual([
-      ['major', '主要角色', 1],
-      ['secondary', '次要角色', 2],
+      ['主要角色', '主要角色', 1],
+      ['次要角色', '次要角色', 2],
     ]);
   });
 

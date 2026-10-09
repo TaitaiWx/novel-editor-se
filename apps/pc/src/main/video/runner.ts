@@ -40,7 +40,14 @@ export interface VideoBudget {
   perTaskLimit?: number;
 }
 
+export type VideoMutationExecutor = <T>(task: () => Promise<T> | T) => Promise<T>;
+const executeMutation: VideoMutationExecutor = async (task) => task();
+
 export interface VideoRunnerDeps {
+  /** Awaited work may reuse an existing IPC admission without deadlocking a waiting snapshot. */
+  withMutation?: VideoMutationExecutor;
+  /** Detached work must own a lease for its complete lifetime, independent of its caller. */
+  withBackgroundMutation?: VideoMutationExecutor;
   repo: VideoTaskRepo;
   getProvider(providerId: string): VideoProvider;
   /** 把作品内相对路径解析为安全的绝对路径（校验不逃出作品目录） */
@@ -160,7 +167,9 @@ export class VideoTaskRunner {
     const ms = Math.min(MAX_WAKE_MS, Math.max(0, delayMs));
     const run = () => {
       this.timer = null;
-      void this.tick();
+      void (this.deps.withBackgroundMutation ?? executeMutation)(() => this.tick()).catch((error) =>
+        this.deps.log?.('[video] 后台调度失败', error)
+      );
     };
     if (this.deps.setTimer) {
       this.timer = this.deps.setTimer(run, ms);
@@ -181,7 +190,7 @@ export class VideoTaskRunner {
     try {
       do {
         this.tickAgain = false;
-        await this.runOnce();
+        await (this.deps.withMutation ?? executeMutation)(() => this.runOnce());
       } while (this.tickAgain);
     } finally {
       this.ticking = false;
@@ -277,10 +286,14 @@ export class VideoTaskRunner {
   private startDownload(task: VideoTask): void {
     const controller = new AbortController();
     this.downloads.set(task.id, controller);
-    void this.download(task, controller.signal).finally(() => {
-      this.downloads.delete(task.id);
-      if (this.started) this.schedule(0);
-    });
+    void (this.deps.withBackgroundMutation ?? executeMutation)(() =>
+      this.download(task, controller.signal)
+    )
+      .catch((error) => this.deps.log?.(`[video] 后台下载 ${task.id} 失败`, error))
+      .finally(() => {
+        this.downloads.delete(task.id);
+        if (this.started) this.schedule(0);
+      });
   }
 
   private async download(task: VideoTask, signal: AbortSignal): Promise<void> {

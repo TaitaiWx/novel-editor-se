@@ -1,21 +1,15 @@
 /**
  * 高可用回滚：解析回滚目标、预缓存当前版本安装包、清理缓存、执行回滚安装。
  */
-import { app, shell } from 'electron';
+import { app } from 'electron';
 import log from 'electron-log/main';
-import { access, chmod, readdir, stat, unlink } from 'fs/promises';
+import { access, mkdir, readdir, stat, unlink } from 'fs/promises';
 import { createHash } from 'crypto';
 import { join } from 'path';
-import { spawn } from 'child_process';
 import { createReadStream } from 'fs';
 import type { RollbackTarget } from '../auto-updater-state';
 import { download } from '../resilient-downloader';
-import {
-  getMirrorShortcutName,
-  isRollbackCacheCandidate,
-  selectCacheFilesToPrune,
-  selectReleaseAsset,
-} from './assets';
+import { isRollbackCacheCandidate, selectCacheFilesToPrune } from './assets';
 import type { ReleaseAssetLike } from './assets';
 import {
   MAX_ROLLBACK_CACHE_ENTRIES,
@@ -23,76 +17,83 @@ import {
   ROLLBACK_DOWNLOAD_TIMEOUT_MS,
   UPDATE_REPO,
 } from './constants';
-import { clearPendingState } from './policy';
+import {
+  assertRollbackVersion,
+  isBoundRollbackTarget,
+  rollbackAssetNames,
+  targetFromManifest,
+  supportsNativeRollback,
+} from './rollback-metadata';
+import { installRollbackArtifact } from './rollback-install';
 import { loadUpdaterState, persistUpdaterState } from './state-store';
 
 interface GithubRelease {
   tag_name: string;
-  assets: ReleaseAssetLike[];
+  assets: (ReleaseAssetLike & { digest?: string })[];
 }
 
-async function resolveRollbackTarget(version: string) {
-  // 优先尝试 GitHub API
+export async function resolveRollbackTarget(version: string): Promise<RollbackTarget> {
+  assertRollbackVersion(version);
+  if (!supportsNativeRollback())
+    throw new Error('当前安装形式不支持自动回退，请使用 AppImage 或系统安装包恢复旧版本');
   try {
     const response = await fetch(
       `https://api.github.com/repos/${UPDATE_REPO.owner}/${UPDATE_REPO.repo}/releases/tags/v${version}`,
       {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'User-Agent': 'Novel-Editor-Updater',
-        },
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Novel-Editor-Updater' },
         signal: AbortSignal.timeout(8000),
       }
     );
-
     if (response.ok) {
       const release = (await response.json()) as GithubRelease;
-      const selectedAsset = selectReleaseAsset(release.assets);
-
-      if (selectedAsset) {
-        return {
+      const asset =
+        release.tag_name === `v${version}` &&
+        release.assets?.find(
+          (a) =>
+            rollbackAssetNames(version).includes(a.name) &&
+            /^sha256:[a-f0-9]{64}$/.test(a.digest ?? '')
+        );
+      const protocolAsset = release.assets?.find((a) => a.name === 'rollback-protocol.json');
+      let protocolCompatible = false;
+      if (
+        asset &&
+        protocolAsset &&
+        new URL(protocolAsset.browser_download_url).protocol === 'https:'
+      ) {
+        const protocolResponse = await fetch(protocolAsset.browser_download_url, {
+          signal: AbortSignal.timeout(8000),
+        });
+        if (protocolResponse.ok) {
+          const protocol = (await protocolResponse.json()) as {
+            version?: string;
+            rollbackProtocol?: number;
+          };
+          protocolCompatible = protocol.version === version && protocol.rollbackProtocol === 1;
+        }
+      }
+      if (asset && protocolCompatible) {
+        const target: RollbackTarget = {
+          rollbackProtocol: 1,
           version,
           tag: release.tag_name,
-          assetName: selectedAsset.name,
-          assetUrl: selectedAsset.browser_download_url,
+          assetName: asset.name,
+          assetUrl: asset.browser_download_url,
+          sha256: asset.digest!.slice(7),
+          platform: process.platform,
+          arch: process.arch,
           cachedInstallerPath: null,
           cachedInstallerHash: null,
-        } satisfies RollbackTarget;
+        };
+        if (isBoundRollbackTarget(target)) return target;
       }
     }
   } catch (error) {
-    log.warn(`GitHub API 不可达，尝试国内镜像: ${error}`);
+    log.warn(`GitHub 回退信息不可用，尝试版本镜像: ${error}`);
   }
-
-  // 兜底：国内镜像
-  return resolveRollbackTargetFromMirror(version);
-}
-
-async function resolveRollbackTargetFromMirror(version: string) {
-  const assetName = getMirrorShortcutName();
-  if (!assetName) {
-    throw new Error(`未找到适用于当前平台的回退安装包: ${version}`);
-  }
-
-  const mirrorUrl = `${MIRROR_BASE_URL}/${assetName}`;
-  // 验证镜像资源是否存在
-  const headResp = await fetch(mirrorUrl, {
-    method: 'HEAD',
-    signal: AbortSignal.timeout(5000),
-  });
-
-  if (!headResp.ok) {
-    throw new Error(`镜像回退包不可用: ${mirrorUrl} (${headResp.status})`);
-  }
-
-  return {
-    version,
-    tag: `v${version}`,
-    assetName,
-    assetUrl: mirrorUrl,
-    cachedInstallerPath: null,
-    cachedInstallerHash: null,
-  } satisfies RollbackTarget;
+  const baseUrl = `${MIRROR_BASE_URL.replace(/\/latest\/?$/, '')}/releases/v${version}`;
+  const response = await fetch(`${baseUrl}/manifest.json`, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error(`版本镜像不可用: ${version} (${response.status})`);
+  return targetFromManifest(await response.json(), version, baseUrl);
 }
 
 export function getRollbackCacheDir() {
@@ -114,7 +115,7 @@ export async function isCachedInstallerValid(
   cachedPath: string | null,
   expectedHash?: string | null
 ): Promise<boolean> {
-  if (!cachedPath) return false;
+  if (!cachedPath || !/^[a-f0-9]{64}$/.test(expectedHash ?? '')) return false;
   try {
     const fileStat = await stat(cachedPath);
     // 文件必须 > 1MB 才算有效安装包（排除损坏的空文件）
@@ -137,7 +138,9 @@ export async function isCachedInstallerValid(
 async function downloadRollbackAsset(
   target: RollbackTarget
 ): Promise<{ path: string; hash: string }> {
-  const filePath = join(getRollbackCacheDir(), target.assetName);
+  if (!isBoundRollbackTarget(target)) throw new Error('回退包缺少可信的版本、架构或摘要');
+  const filePath = getRollbackCachePath(target);
+  await mkdir(getRollbackCacheDir(), { recursive: true });
   const result = await download({
     url: target.assetUrl,
     destPath: filePath,
@@ -145,22 +148,31 @@ async function downloadRollbackAsset(
     maxRetries: 5,
   });
 
+  if (!(await isCachedInstallerValid(result.path, target.sha256))) {
+    await unlink(result.path).catch(() => undefined);
+    throw new Error('回退包与发布摘要不匹配，已拒绝使用');
+  }
   log.info(`回退安装包已缓存: ${result.path} (sha256=${result.hash.slice(0, 16)}…)`);
-  return { path: result.path, hash: result.hash };
+  return { path: result.path, hash: target.sha256! };
 }
 
 /**
  * 在新版本下载完成后，预缓存当前版本的安装包到本地。
  * 这是高可用回滚的核心：确保回滚时不依赖网络。
  */
+export function getRollbackCachePath(target: RollbackTarget) {
+  if (!isBoundRollbackTarget(target)) throw new Error('回退包身份无效');
+  return join(getRollbackCacheDir(), `${target.platform}-${target.arch}-${target.assetName}`);
+}
+
 export async function preCacheCurrentVersion(): Promise<RollbackTarget | null> {
   const currentVersion = app.getVersion();
   try {
     const target = await resolveRollbackTarget(currentVersion);
 
     // 检查是否已有有效缓存
-    const existingPath = join(getRollbackCacheDir(), target.assetName);
-    if (await isCachedInstallerValid(existingPath)) {
+    const existingPath = getRollbackCachePath(target);
+    if (await isCachedInstallerValid(existingPath, target.sha256)) {
       const hash = await computeFileHash(existingPath);
       log.info(`当前版本 ${currentVersion} 安装包已在缓存中: ${existingPath}`);
       return { ...target, cachedInstallerPath: existingPath, cachedInstallerHash: hash };
@@ -217,57 +229,46 @@ export async function pruneRollbackCache(keepAssetName?: string) {
   }
 }
 
-async function openRollbackInstaller(filePath: string) {
-  if (process.platform === 'linux' && filePath.toLowerCase().endsWith('.appimage')) {
-    await chmod(filePath, 0o755);
-    const child = spawn(filePath, [], {
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
-    return;
-  }
-
-  const errorMessage = await shell.openPath(filePath);
-  if (errorMessage) {
-    throw new Error(errorMessage);
-  }
+let rollbackInFlight: Promise<{ version: string; installerPath: string }> | null = null;
+let rollbackActive = false;
+export function isRollbackInProgress() {
+  return rollbackActive;
 }
 
-export async function rollbackToPreviousVersion() {
+export function rollbackToPreviousVersion() {
+  if (rollbackInFlight) return rollbackInFlight;
+  rollbackActive = true;
+  rollbackInFlight = performRollback()
+    .catch((error) => {
+      rollbackActive = false;
+      throw error;
+    })
+    .finally(() => {
+      rollbackInFlight = null;
+    });
+  return rollbackInFlight;
+}
+
+async function performRollback() {
   const state = await loadUpdaterState();
-  if (!state.rollbackTarget) {
-    throw new Error('当前没有可用的回退版本');
-  }
-
-  let installerPath: string;
-
-  // 优先使用本地缓存（高可用：不依赖网络），校验 SHA256 完整性
-  const cachedPath = state.rollbackTarget.cachedInstallerPath;
+  if (!state.rollbackTarget) throw new Error('当前没有可用的回退版本');
+  let target = state.rollbackTarget;
+  // Legacy cache hashes only attested to the downloaded bytes, not the requested release.
+  if (!isBoundRollbackTarget(target)) target = await resolveRollbackTarget(target.version);
+  if (target.version === app.getVersion()) throw new Error('回退目标与当前版本相同');
+  const expectedPath = getRollbackCachePath(target);
   if (
-    cachedPath &&
-    (await isCachedInstallerValid(cachedPath, state.rollbackTarget.cachedInstallerHash))
+    target.cachedInstallerPath !== expectedPath ||
+    !(await isCachedInstallerValid(expectedPath, target.sha256))
   ) {
-    installerPath = cachedPath;
-    log.info(`使用本地缓存进行回滚: ${installerPath}`);
-  } else {
-    // 降级：从网络重新下载
-    log.warn('本地回滚缓存不可用或校验失败，尝试从网络下载');
-    const { path, hash } = await downloadRollbackAsset(state.rollbackTarget);
-    installerPath = path;
-    // 更新缓存路径和 hash
-    state.rollbackTarget.cachedInstallerPath = installerPath;
-    state.rollbackTarget.cachedInstallerHash = hash;
-    await persistUpdaterState();
+    const cached = await downloadRollbackAsset(target);
+    target = { ...target, cachedInstallerPath: cached.path, cachedInstallerHash: cached.hash };
   }
-
-  // 回滚后重置 pending 状态，避免老版本启动后被误判为异常
-  clearPendingState(state);
+  state.rollbackTarget = target;
+  state.rollbackPendingVersion = target.version;
+  state.rejectedVersion = state.pendingVersion ?? app.getVersion();
   await persistUpdaterState();
-
-  await openRollbackInstaller(installerPath);
-  return {
-    version: state.rollbackTarget.version,
-    installerPath,
-  };
+  // Keep pendingVersion and failure counts until this exact old version reports healthy.
+  await installRollbackArtifact(target, expectedPath);
+  return { version: target.version, installerPath: expectedPath };
 }

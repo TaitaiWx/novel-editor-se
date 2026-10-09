@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * 工作区文件操作（纯 Node，无 Electron 依赖）
  *
@@ -19,10 +20,10 @@ import {
   rmdir,
   stat,
   unlink,
-  writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
 import { CoreError, toCoreError } from './errors';
+import { atomicWriteTextFile } from './atomic-text-file';
 import { pathExists } from './fs-ops';
 import {
   GENERATED_MATERIAL_ROOT_NAME,
@@ -98,10 +99,10 @@ export async function readFileBinary(filePath: string): Promise<BinaryFileConten
   }
 }
 
-/** 直接覆盖写入 UTF-8 文本（不创建父目录、不做统计，供编辑器自动保存这类高频场景） */
+/** 原子替换 UTF-8 文本（不创建父目录、不做统计，供编辑器自动保存这类高频场景） */
 export async function saveTextFile(filePath: string, content: string): Promise<void> {
   try {
-    await writeFile(filePath, content, 'utf-8');
+    await atomicWriteTextFile(filePath, content);
   } catch (error) {
     throw toCoreError(error, filePath);
   }
@@ -152,22 +153,32 @@ export async function getFileInfoBatch(
 
 /** 删除单个文件（符号链接只删除链接本身）；目标是目录时报错 */
 export async function deleteFile(filePath: string): Promise<void> {
-  try {
-    const info = await lstat(filePath);
-    if (info.isDirectory()) throw new CoreError('NOT_A_FILE', `不是文件: ${filePath}`);
-    await unlink(filePath);
-  } catch (error) {
-    throw toCoreError(error, filePath);
-  }
+  return withWorkspaceLease(
+    async () => {
+      try {
+        const info = await lstat(filePath);
+        if (info.isDirectory()) throw new CoreError('NOT_A_FILE', `不是文件: ${filePath}`);
+        await unlink(filePath);
+      } catch (error) {
+        throw toCoreError(error, filePath);
+      }
+    },
+    { resources: [filePath] }
+  );
 }
 
 /** 递归删除目录 */
 export async function deleteDirectory(dirPath: string): Promise<void> {
-  try {
-    await rm(dirPath, { recursive: true });
-  } catch (error) {
-    throw toCoreError(error, dirPath);
-  }
+  return withWorkspaceLease(
+    async () => {
+      try {
+        await rm(dirPath, { recursive: true });
+      } catch (error) {
+        throw toCoreError(error, dirPath);
+      }
+    },
+    { resources: [dirPath] }
+  );
 }
 
 // ─── 复制 / 粘贴 ───────────────────────────────────────────────────────────
@@ -215,30 +226,35 @@ export async function pastePaths(
   sourcePaths: readonly string[],
   targetDir: string
 ): Promise<PasteResult[]> {
-  if (!existsSync(targetDir)) {
-    throw new CoreError('NOT_FOUND', `目标目录不存在: ${path.basename(targetDir)}`);
-  }
-  const results: PasteResult[] = [];
-  for (const sourcePath of sourcePaths) {
-    if (!existsSync(sourcePath)) {
-      throw new CoreError('NOT_FOUND', `源文件不存在: ${path.basename(sourcePath)}`);
-    }
-    const baseName = path.basename(sourcePath);
-    const isDirectory = (await stat(sourcePath)).isDirectory();
-    const destPath = await resolvePasteDestination(sourcePath, targetDir, isDirectory);
-    try {
-      if (isDirectory) {
-        await cp(sourcePath, destPath, { recursive: true });
-      } else {
-        await copyFile(sourcePath, destPath);
+  return withWorkspaceLease(
+    async () => {
+      if (!existsSync(targetDir)) {
+        throw new CoreError('NOT_FOUND', `目标目录不存在: ${path.basename(targetDir)}`);
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      throw new CoreError('IO_ERROR', `粘贴失败 (${baseName}): ${msg}`);
-    }
-    results.push({ source: sourcePath, dest: destPath });
-  }
-  return results;
+      const results: PasteResult[] = [];
+      for (const sourcePath of sourcePaths) {
+        if (!existsSync(sourcePath)) {
+          throw new CoreError('NOT_FOUND', `源文件不存在: ${path.basename(sourcePath)}`);
+        }
+        const baseName = path.basename(sourcePath);
+        const isDirectory = (await stat(sourcePath)).isDirectory();
+        const destPath = await resolvePasteDestination(sourcePath, targetDir, isDirectory);
+        try {
+          if (isDirectory) {
+            await cp(sourcePath, destPath, { recursive: true });
+          } else {
+            await copyFile(sourcePath, destPath);
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          throw new CoreError('IO_ERROR', `粘贴失败 (${baseName}): ${msg}`);
+        }
+        results.push({ source: sourcePath, dest: destPath });
+      }
+      return results;
+    },
+    { resources: [...sourcePaths, targetDir] }
+  );
 }
 
 /** 返回不冲突的路径：`base` 不存在时原样返回，否则依次尝试 `base (2)`、`base (3)` … */
@@ -249,17 +265,8 @@ export function nextAvailablePath(basePath: string): string {
   return `${basePath} (${counter})`;
 }
 
-/** 把整个项目目录复制到 destParent 下（同名时追加 ` (n)`），返回最终目标路径 */
-export async function copyProjectTo(folderPath: string, destParent: string): Promise<string> {
-  if (!existsSync(folderPath)) throw new CoreError('NOT_FOUND', '项目目录不存在');
-  const finalDest = nextAvailablePath(path.join(destParent, path.basename(folderPath)));
-  try {
-    await cp(folderPath, finalDest, { recursive: true });
-  } catch (error) {
-    throw toCoreError(error, finalDest);
-  }
-  return finalDest;
-}
+export { copyProjectTo } from './project-copy';
+export type { ProjectCopyOptions } from './project-copy';
 
 /** 目录是否没有任何可见内容（忽略 .novel-editor 等隐藏项） */
 async function hasNoVisibleEntries(dirPath: string): Promise<boolean> {
@@ -357,43 +364,53 @@ export async function syncSeededDirectory(
   sourceDir: string,
   now: Date = new Date()
 ): Promise<SeedSyncResult> {
-  if (!(await pathExists(sourceDir))) {
-    await mkdir(targetDir, { recursive: true });
-    return { path: targetDir, status: 'unchanged', version: 0 };
-  }
-  const sourceVersion = await readSeedVersion(sourceDir);
+  return withWorkspaceLease(
+    async () => {
+      if (!(await pathExists(sourceDir))) {
+        await mkdir(targetDir, { recursive: true });
+        return { path: targetDir, status: 'unchanged', version: 0 };
+      }
+      const sourceVersion = await readSeedVersion(sourceDir);
 
-  if (!(await pathExists(targetDir))) {
-    await copySeed(sourceDir, targetDir);
-    return { path: targetDir, status: 'created', version: sourceVersion };
-  }
-  if (await hasNoVisibleEntries(targetDir)) {
-    await copySeed(sourceDir, targetDir);
-    return { path: targetDir, status: 'filled', version: sourceVersion };
-  }
+      if (!(await pathExists(targetDir))) {
+        await copySeed(sourceDir, targetDir);
+        return { path: targetDir, status: 'created', version: sourceVersion };
+      }
+      if (await hasNoVisibleEntries(targetDir)) {
+        await copySeed(sourceDir, targetDir);
+        return { path: targetDir, status: 'filled', version: sourceVersion };
+      }
 
-  const targetVersion = await readSeedVersion(targetDir);
-  if (sourceVersion <= targetVersion) {
-    return { path: targetDir, status: 'unchanged', version: targetVersion };
-  }
+      const targetVersion = await readSeedVersion(targetDir);
+      if (sourceVersion <= targetVersion) {
+        return { path: targetDir, status: 'unchanged', version: targetVersion };
+      }
 
-  let backupPath = `${targetDir}-旧版-${formatBackupStamp(now)}`;
-  for (let index = 2; await pathExists(backupPath); index += 1) {
-    backupPath = `${targetDir}-旧版-${formatBackupStamp(now)}-${index}`;
-  }
-  await rename(targetDir, backupPath);
-  await copySeed(sourceDir, targetDir);
-  return { path: targetDir, status: 'upgraded', backupPath, version: sourceVersion };
+      let backupPath = `${targetDir}-旧版-${formatBackupStamp(now)}`;
+      for (let index = 2; await pathExists(backupPath); index += 1) {
+        backupPath = `${targetDir}-旧版-${formatBackupStamp(now)}-${index}`;
+      }
+      await rename(targetDir, backupPath);
+      await copySeed(sourceDir, targetDir);
+      return { path: targetDir, status: 'upgraded', backupPath, version: sourceVersion };
+    },
+    { resources: [path.dirname(targetDir), sourceDir] }
+  );
 }
 
 /** 兼容旧调用：同步示例目录并返回其路径 */
 export async function ensureSeededDirectory(targetDir: string, sourceDir: string): Promise<string> {
-  try {
-    return (await syncSeededDirectory(targetDir, sourceDir)).path;
-  } catch {
-    await mkdir(targetDir, { recursive: true });
-    return targetDir;
-  }
+  return withWorkspaceLease(
+    async () => {
+      try {
+        return (await syncSeededDirectory(targetDir, sourceDir)).path;
+      } catch {
+        await mkdir(targetDir, { recursive: true });
+        return targetDir;
+      }
+    },
+    { resources: [path.dirname(targetDir), sourceDir] }
+  );
 }
 
 // ─── 生成资料空目录清理 ────────────────────────────────────────────────────
@@ -425,34 +442,39 @@ async function isEmptyDirectory(dirPath: string): Promise<boolean> {
 export async function cleanupEmptyGeneratedMaterialDirectories(
   folderPath: string
 ): Promise<string[]> {
-  const removed: string[] = [];
-  const materialRootPath = path.join(folderPath, GENERATED_MATERIAL_ROOT_NAME);
-  try {
-    if (!(await stat(materialRootPath)).isDirectory()) return removed;
-  } catch {
-    return removed;
-  }
+  return withWorkspaceLease(
+    async () => {
+      const removed: string[] = [];
+      const materialRootPath = path.join(folderPath, GENERATED_MATERIAL_ROOT_NAME);
+      try {
+        if (!(await stat(materialRootPath)).isDirectory()) return removed;
+      } catch {
+        return removed;
+      }
 
-  for (const childName of await readdir(materialRootPath)) {
-    if (!GENERATED_MATERIAL_SCOPE_DIRS.has(childName)) continue;
-    const childPath = path.join(materialRootPath, childName);
-    try {
-      if (!(await stat(childPath)).isDirectory()) continue;
-      if (!(await isEmptyDirectory(childPath))) continue;
-      await rmdir(childPath);
-      removed.push(childPath);
-    } catch {
-      // 安全迁移只处理明确可删的空目录，失败时跳过
-    }
-  }
+      for (const childName of await readdir(materialRootPath)) {
+        if (!GENERATED_MATERIAL_SCOPE_DIRS.has(childName)) continue;
+        const childPath = path.join(materialRootPath, childName);
+        try {
+          if (!(await stat(childPath)).isDirectory()) continue;
+          if (!(await isEmptyDirectory(childPath))) continue;
+          await rmdir(childPath);
+          removed.push(childPath);
+        } catch {
+          // 安全迁移只处理明确可删的空目录，失败时跳过
+        }
+      }
 
-  if (await isEmptyDirectory(materialRootPath)) {
-    try {
-      await rmdir(materialRootPath);
-      removed.push(materialRootPath);
-    } catch {
-      // 根目录无法删除时保留现场，不影响其他功能
-    }
-  }
-  return removed;
+      if (await isEmptyDirectory(materialRootPath)) {
+        try {
+          await rmdir(materialRootPath);
+          removed.push(materialRootPath);
+        } catch {
+          // 根目录无法删除时保留现场，不影响其他功能
+        }
+      }
+      return removed;
+    },
+    { resources: [folderPath] }
+  );
 }

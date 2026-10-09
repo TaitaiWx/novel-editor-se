@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * 项目 / 作品 / 章节模型
  *
@@ -158,35 +159,40 @@ export async function initProject(
   dir: string,
   options: InitProjectOptions = {}
 ): Promise<InitProjectResult> {
-  const root = path.resolve(dir);
-  const configPath = getConfigPath(root);
-  if (await pathExists(configPath)) {
-    throw new CoreError('ALREADY_EXISTS', `项目已初始化: ${configPath}`);
-  }
-  const novelsDir = options.novelsDir ?? DEFAULT_NOVELS_DIR;
-  if (path.isAbsolute(novelsDir) || novelsDir.split(/[\\/]/).includes('..')) {
-    throw new CoreError('INVALID_ARGUMENT', `novelsDir 必须是项目内的相对路径: ${novelsDir}`);
-  }
-  const config: ProjectConfig = {
-    schemaVersion: PROJECT_SCHEMA_VERSION,
-    name: options.name || path.basename(root),
-    createdAt: new Date().toISOString(),
-    novelsDir,
-    chapterExtension: options.chapterExtension ?? '.md',
-  };
-  const created: string[] = [];
-  for (const target of [root, path.dirname(configPath), path.resolve(root, novelsDir)]) {
-    if (!(await pathExists(target))) {
-      await mkdir(target, { recursive: true });
-      created.push(target);
-    }
-  }
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
-  created.push(configPath);
-  return {
-    project: { root, configPath, config, novelsPath: path.resolve(root, novelsDir) },
-    created,
-  };
+  return withWorkspaceLease(
+    async () => {
+      const root = path.resolve(dir);
+      const configPath = getConfigPath(root);
+      if (await pathExists(configPath)) {
+        throw new CoreError('ALREADY_EXISTS', `项目已初始化: ${configPath}`);
+      }
+      const novelsDir = options.novelsDir ?? DEFAULT_NOVELS_DIR;
+      if (path.isAbsolute(novelsDir) || novelsDir.split(/[\\/]/).includes('..')) {
+        throw new CoreError('INVALID_ARGUMENT', `novelsDir 必须是项目内的相对路径: ${novelsDir}`);
+      }
+      const config: ProjectConfig = {
+        schemaVersion: PROJECT_SCHEMA_VERSION,
+        name: options.name || path.basename(root),
+        createdAt: new Date().toISOString(),
+        novelsDir,
+        chapterExtension: options.chapterExtension ?? '.md',
+      };
+      const created: string[] = [];
+      for (const target of [root, path.dirname(configPath), path.resolve(root, novelsDir)]) {
+        if (!(await pathExists(target))) {
+          await mkdir(target, { recursive: true });
+          created.push(target);
+        }
+      }
+      await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+      created.push(configPath);
+      return {
+        project: { root, configPath, config, novelsPath: path.resolve(root, novelsDir) },
+        created,
+      };
+    },
+    { resources: [dir] }
+  );
 }
 
 // ─── 作品 ────────────────────────────────────────────────────────────────────
@@ -304,11 +310,16 @@ export async function resolveNovelPath(project: Project, name: string): Promise<
 }
 
 export async function createNovel(project: Project, name: string): Promise<NovelSummary> {
-  assertNovelName(name);
-  const novelPath = path.join(project.novelsPath, name);
-  if (await pathExists(novelPath)) throw new CoreError('ALREADY_EXISTS', `作品已存在: ${name}`);
-  await mkdir(novelPath, { recursive: true });
-  return { name, path: novelPath, chapterCount: 0, chars: 0 };
+  return withWorkspaceLease(
+    async () => {
+      assertNovelName(name);
+      const novelPath = path.join(project.novelsPath, name);
+      if (await pathExists(novelPath)) throw new CoreError('ALREADY_EXISTS', `作品已存在: ${name}`);
+      await mkdir(novelPath, { recursive: true });
+      return { name, path: novelPath, chapterCount: 0, chars: 0 };
+    },
+    { resources: [project.root, project.novelsPath] }
+  );
 }
 
 export async function listNovels(project: Project): Promise<NovelSummary[]> {
@@ -432,27 +443,41 @@ export async function createChapter(
   title: string,
   options: CreateChapterOptions = {}
 ): Promise<{ chapter: ChapterInfo; write: WriteResult }> {
-  const novelPath = await resolveNovelPath(project, novel);
-  const dir = options.volume
-    ? path.join(novelPath, ...options.volume.split(/[\\/]/).map(sanitizeFileName))
-    : novelPath;
-  if (!path.resolve(dir).startsWith(path.resolve(novelPath))) {
-    throw new CoreError('INVALID_ARGUMENT', `卷路径无效: ${options.volume}`);
-  }
-  await mkdir(dir, { recursive: true });
-  const siblings = (await readdir(dir)).filter(isStoryFile);
-  const maxOrder = siblings.reduce((max, name) => {
-    const { order } = parseChapterFileName(name);
-    return order !== null && order > max ? order : max;
-  }, 0);
-  const fileName = formatChapterFileName(maxOrder + 1, title, project.config.chapterExtension);
-  const filePath = path.join(dir, fileName);
-  const content = options.content ?? `# ${title}\n\n`;
-  const write = await createFile(filePath, content);
-  const chapters = await listChapters(project, novel);
-  const chapter = chapters.find((item) => item.path === filePath);
-  if (!chapter) throw new CoreError('IO_ERROR', `章节创建后未找到: ${filePath}`);
-  return { chapter, write };
+  return withWorkspaceLease(
+    async () => {
+      const novelPath = await resolveNovelPath(project, novel);
+      const dir = options.volume
+        ? path.join(novelPath, ...options.volume.split(/[\\/]/).map(sanitizeFileName))
+        : novelPath;
+      if (!path.resolve(dir).startsWith(path.resolve(novelPath))) {
+        throw new CoreError('INVALID_ARGUMENT', `卷路径无效: ${options.volume}`);
+      }
+      await mkdir(dir, { recursive: true });
+      const siblings = (await readdir(dir)).filter(isStoryFile);
+      const maxOrder = siblings.reduce((max, name) => {
+        const { order } = parseChapterFileName(name);
+        return order !== null && order > max ? order : max;
+      }, 0);
+      const fileName = formatChapterFileName(maxOrder + 1, title, project.config.chapterExtension);
+      const filePath = path.join(dir, fileName);
+      const content = options.content ?? `# ${title}\n\n`;
+      const write = await createFile(filePath, content);
+      const chapters = await listChapters(project, novel);
+      const chapter = chapters.find((item) => item.path === filePath);
+      if (!chapter) throw new CoreError('IO_ERROR', `章节创建后未找到: ${filePath}`);
+      return { chapter, write };
+    },
+    {
+      resources: [
+        project.root,
+        project.novelsPath,
+        path.join(
+          await resolveNovelPath(project, novel),
+          ...(options.volume ? options.volume.split(/[\\/]/).map(sanitizeFileName) : [])
+        ),
+      ],
+    }
+  );
 }
 
 export interface ReorderOptions {
@@ -507,41 +532,46 @@ export async function reorderChapters(
   novel: string,
   options: ReorderOptions = {}
 ): Promise<ReorderResult> {
-  const novelPath = await resolveNovelPath(project, novel);
-  const chapters = await listChapters(project, novel);
-  const byVolume = new Map<string, ChapterInfo[]>();
-  for (const chapter of chapters) {
-    const list = byVolume.get(chapter.volume) ?? [];
-    list.push(chapter);
-    byVolume.set(chapter.volume, list);
-  }
+  return withWorkspaceLease(
+    async () => {
+      const novelPath = await resolveNovelPath(project, novel);
+      const chapters = await listChapters(project, novel);
+      const byVolume = new Map<string, ChapterInfo[]>();
+      for (const chapter of chapters) {
+        const list = byVolume.get(chapter.volume) ?? [];
+        list.push(chapter);
+        byVolume.set(chapter.volume, list);
+      }
 
-  const targetOrders = new Map<string, ChapterInfo[]>(byVolume);
-  if (options.order && options.order.length > 0) {
-    const picked = options.order.map((ref) => findChapter(chapters, ref));
-    const volume = picked[0].volume;
-    if (picked.some((chapter) => chapter.volume !== volume)) {
-      throw new CoreError('INVALID_ARGUMENT', '--order 中的章节必须属于同一卷');
-    }
-    if (new Set(picked.map((chapter) => chapter.path)).size !== picked.length) {
-      throw new CoreError('INVALID_ARGUMENT', '--order 中存在重复章节');
-    }
-    const rest = (byVolume.get(volume) ?? []).filter((chapter) => !picked.includes(chapter));
-    targetOrders.set(volume, [...picked, ...rest]);
-  } else if (options.move) {
-    const chapter = findChapter(chapters, options.move.ref);
-    const list = (byVolume.get(chapter.volume) ?? []).filter((item) => item !== chapter);
-    const position = Math.min(Math.max(1, Math.floor(options.move.to)), list.length + 1);
-    list.splice(position - 1, 0, chapter);
-    targetOrders.set(chapter.volume, list);
-  }
+      const targetOrders = new Map<string, ChapterInfo[]>(byVolume);
+      if (options.order && options.order.length > 0) {
+        const picked = options.order.map((ref) => findChapter(chapters, ref));
+        const volume = picked[0].volume;
+        if (picked.some((chapter) => chapter.volume !== volume)) {
+          throw new CoreError('INVALID_ARGUMENT', '--order 中的章节必须属于同一卷');
+        }
+        if (new Set(picked.map((chapter) => chapter.path)).size !== picked.length) {
+          throw new CoreError('INVALID_ARGUMENT', '--order 中存在重复章节');
+        }
+        const rest = (byVolume.get(volume) ?? []).filter((chapter) => !picked.includes(chapter));
+        targetOrders.set(volume, [...picked, ...rest]);
+      } else if (options.move) {
+        const chapter = findChapter(chapters, options.move.ref);
+        const list = (byVolume.get(chapter.volume) ?? []).filter((item) => item !== chapter);
+        const position = Math.min(Math.max(1, Math.floor(options.move.to)), list.length + 1);
+        list.splice(position - 1, 0, chapter);
+        targetOrders.set(chapter.volume, list);
+      }
 
-  const renamed: Array<{ from: string; to: string }> = [];
-  for (const [volume, list] of targetOrders) {
-    const dir = volume ? path.join(novelPath, ...volume.split('/')) : novelPath;
-    renamed.push(...(await renumberDirectory(dir, list, novelPath)));
-  }
-  return { renamed, chapters: await listChapters(project, novel) };
+      const renamed: Array<{ from: string; to: string }> = [];
+      for (const [volume, list] of targetOrders) {
+        const dir = volume ? path.join(novelPath, ...volume.split('/')) : novelPath;
+        renamed.push(...(await renumberDirectory(dir, list, novelPath)));
+      }
+      return { renamed, chapters: await listChapters(project, novel) };
+    },
+    { resources: [project.root, project.novelsPath, await resolveNovelPath(project, novel)] }
+  );
 }
 
 export interface MergeResult {
@@ -558,18 +588,27 @@ export async function mergeChapters(
   fromRef: string,
   toRef: string
 ): Promise<MergeResult> {
-  const chapters = await listChapters(project, novel);
-  const from = findChapter(chapters, fromRef);
-  const into = findChapter(chapters, toRef);
-  if (from.path === into.path) throw new CoreError('INVALID_ARGUMENT', '不能把章节合并到自身');
-  const fromContent = await readTextFile(from.path);
-  const intoContent = await readTextFile(into.path);
-  const separator = intoContent.endsWith('\n\n') ? '' : intoContent.endsWith('\n') ? '\n' : '\n\n';
-  const write = await writeTextFile(into.path, `${intoContent}${separator}${fromContent}`);
-  await deletePath(from.path);
-  const updated = await listChapters(project, novel);
-  const mergedInto = updated.find((chapter) => chapter.path === into.path) ?? into;
-  return { from, into: mergedInto, write, removed: from.path };
+  return withWorkspaceLease(
+    async () => {
+      const chapters = await listChapters(project, novel);
+      const from = findChapter(chapters, fromRef);
+      const into = findChapter(chapters, toRef);
+      if (from.path === into.path) throw new CoreError('INVALID_ARGUMENT', '不能把章节合并到自身');
+      const fromContent = await readTextFile(from.path);
+      const intoContent = await readTextFile(into.path);
+      const separator = intoContent.endsWith('\n\n')
+        ? ''
+        : intoContent.endsWith('\n')
+          ? '\n'
+          : '\n\n';
+      const write = await writeTextFile(into.path, `${intoContent}${separator}${fromContent}`);
+      await deletePath(from.path);
+      const updated = await listChapters(project, novel);
+      const mergedInto = updated.find((chapter) => chapter.path === into.path) ?? into;
+      return { from, into: mergedInto, write, removed: from.path };
+    },
+    { resources: [project.root, project.novelsPath, await resolveNovelPath(project, novel)] }
+  );
 }
 
 /** 判断路径是否位于目录内 */

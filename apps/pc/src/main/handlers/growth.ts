@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 成长记录器 IPC Handlers
  *
@@ -6,7 +7,6 @@
  *
  * 所有通道返回 `{ ok: true, data } | { ok: false, error }`，不向渲染进程抛异常。
  */
-import { ipcMain } from 'electron';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -179,11 +179,11 @@ function assertValidRuleset(raw: unknown): GrowthRuleset {
 }
 
 export function registerGrowthHandlers(): void {
-  ipcMain.handle('growth-load', (_event, folderPath: unknown) =>
+  registerWorkspaceHandler('growth-load', (_event, folderPath: unknown) =>
     guard(async () => snapshot(await assertFolder(folderPath)))
   );
 
-  ipcMain.handle('growth-init', (_event, folderPath: unknown, template: unknown) =>
+  registerWorkspaceHandler('growth-init', (_event, folderPath: unknown, template: unknown) =>
     guard(async () => {
       const root = await assertFolder(folderPath);
       const chosen = GROWTH_TEMPLATES.includes(template as GrowthTemplate)
@@ -194,7 +194,7 @@ export function registerGrowthHandlers(): void {
     })
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'growth-ensure-sheet',
     (_event, folderPath: unknown, name: unknown, aliases: unknown) =>
       guard(async () => {
@@ -204,7 +204,7 @@ export function registerGrowthHandlers(): void {
       })
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'growth-apply-event',
     (_event, folderPath: unknown, name: unknown, rawEvent: unknown, options: unknown) =>
       guard(async (): Promise<GrowthEventOutcome> => {
@@ -226,7 +226,7 @@ export function registerGrowthHandlers(): void {
       })
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'growth-update-notes',
     (_event, folderPath: unknown, name: unknown, notes: unknown) =>
       guard(async () => {
@@ -237,7 +237,7 @@ export function registerGrowthHandlers(): void {
       })
   );
 
-  ipcMain.handle('growth-save-ruleset', (_event, folderPath: unknown, ruleset: unknown) =>
+  registerWorkspaceHandler('growth-save-ruleset', (_event, folderPath: unknown, ruleset: unknown) =>
     guard(async () => {
       const root = await assertFolder(folderPath);
       await saveRuleset(root, assertValidRuleset(ruleset));
@@ -245,7 +245,7 @@ export function registerGrowthHandlers(): void {
     })
   );
 
-  ipcMain.handle('growth-save-party', (_event, folderPath: unknown, party: unknown) =>
+  registerWorkspaceHandler('growth-save-party', (_event, folderPath: unknown, party: unknown) =>
     guard(async () => {
       const root = await assertFolder(folderPath);
       await saveParty(root, party as PartyBook);
@@ -253,7 +253,7 @@ export function registerGrowthHandlers(): void {
     })
   );
 
-  ipcMain.handle('growth-save-atlas', (_event, folderPath: unknown, atlas: unknown) =>
+  registerWorkspaceHandler('growth-save-atlas', (_event, folderPath: unknown, atlas: unknown) =>
     guard(async () => {
       const root = await assertFolder(folderPath);
       await saveAtlas(root, atlas as Atlas);
@@ -261,13 +261,13 @@ export function registerGrowthHandlers(): void {
     })
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'growth-simulate',
     (_event, folderPath: unknown, name: unknown, request: GrowthSimulationRequest) =>
       guard(() => growthSimulate(folderPath, name, request))
   );
 
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'growth-apply-branch',
     (_event, folderPath: unknown, name: unknown, branch: unknown) =>
       guard(async (): Promise<GrowthEventOutcome> => {

@@ -1,3 +1,4 @@
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * 场景视频 · 声音 IPC：ai-speech-synthesize / scene-audio-import / scene-audio-read
  *
@@ -11,7 +12,7 @@
  * 对白 id 只允许 [A-Za-z0-9_-]；文字、语言、情绪、音色按白名单与长度校验；渲染进程不能指定任何源文件路径。
  * E2E 测试（NOVEL_EDITOR_E2E=1）可用 NOVEL_EDITOR_E2E_OPEN_PATH 跳过「打开」对话框。
  */
-import { BrowserWindow, dialog, ipcMain } from 'electron';
+import { BrowserWindow, dialog } from 'electron';
 import { readFile, realpath, rm, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import { AIError, toAIError, type SpeechProvider, type SpeechRequest } from '@novel-editor/ai';
@@ -216,7 +217,7 @@ export function registerSceneAudioHandlers(deps: SceneAudioHandlerDeps): void {
     ((providerId?: string) => getAIService().getSpeechProvider(providerId));
   const pick = deps.pickAudioFile ?? defaultPickAudioFile;
 
-  ipcMain.handle('ai-speech-synthesize', (event, raw: unknown) =>
+  registerWorkspaceHandler('ai-speech-synthesize', (event, raw: unknown) =>
     guard(async (): Promise<SpeechSynthesizeResult> => {
       const scene = await resolveScene(raw, deps, event?.sender?.id);
       const { shotIndex, lineId, providerId, request } = sanitizeSpeechPayload(raw);
@@ -256,7 +257,7 @@ export function registerSceneAudioHandlers(deps: SceneAudioHandlerDeps): void {
     })
   );
 
-  ipcMain.handle('scene-audio-import', (event, raw: unknown) =>
+  registerWorkspaceHandler('scene-audio-import', (event, raw: unknown) =>
     guard(async (): Promise<SceneAudioImportResult> => {
       if (typeof raw !== 'object' || raw === null) throw badRequest('无效的请求');
       const payload = raw as { workPath?: unknown; kind?: unknown };
@@ -271,7 +272,7 @@ export function registerSceneAudioHandlers(deps: SceneAudioHandlerDeps): void {
     })
   );
 
-  ipcMain.handle('scene-audio-read', (event, raw: unknown) =>
+  registerWorkspaceHandler('scene-audio-read', (event, raw: unknown) =>
     guard(async (): Promise<Uint8Array> => {
       if (typeof raw !== 'object' || raw === null) throw badRequest('无效的请求');
       const payload = raw as { workPath?: unknown; relativePath?: unknown };

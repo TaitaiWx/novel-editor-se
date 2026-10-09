@@ -1,22 +1,14 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * 文件系统基础操作（纯 Node，无 Electron 依赖）
  *
  * GUI（apps/pc/src/main/handlers/file-system.ts）与 CLI 共用这里的实现。
  * 文件树排除规则按「条目名称」精确匹配，避免误伤 outline/builder 之类的正常文件名。
  */
-import {
-  access,
-  lstat,
-  mkdir,
-  readFile,
-  readdir,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { CoreError, toCoreError } from './errors';
+import { atomicWriteTextFile } from './atomic-text-file';
 import { createGlobMatcher } from './glob';
 import { analyzeContentStats } from './text-stats';
 
@@ -338,41 +330,56 @@ export async function writeTextFile(
   content: string,
   options: WriteOptions = {}
 ): Promise<WriteResult> {
-  const abs = path.resolve(filePath);
-  let previous: string | null = null;
-  if (await pathExists(abs)) {
-    await assertFile(abs);
-    previous = await readFile(abs, 'utf-8');
-  }
-  const finalContent = options.append && previous !== null ? previous + content : content;
-  try {
-    if (options.parents !== false) await mkdir(path.dirname(abs), { recursive: true });
-    await writeFile(abs, finalContent, 'utf-8');
-  } catch (error) {
-    throw toCoreError(error, abs);
-  }
-  return {
-    path: abs,
-    created: previous === null,
-    previousChars: previous === null ? 0 : analyzeContentStats(previous).charCount,
-    chars: analyzeContentStats(finalContent).charCount,
-    bytes: Buffer.byteLength(finalContent, 'utf-8'),
-  };
+  return withWorkspaceLease(
+    async () => {
+      const abs = path.resolve(filePath);
+      let previous: string | null = null;
+      if (await pathExists(abs)) {
+        await assertFile(abs);
+        previous = await readFile(abs, 'utf-8');
+      }
+      const finalContent = options.append && previous !== null ? previous + content : content;
+      try {
+        if (options.parents !== false) await mkdir(path.dirname(abs), { recursive: true });
+        await atomicWriteTextFile(abs, finalContent);
+      } catch (error) {
+        throw toCoreError(error, abs);
+      }
+      return {
+        path: abs,
+        created: previous === null,
+        previousChars: previous === null ? 0 : analyzeContentStats(previous).charCount,
+        chars: analyzeContentStats(finalContent).charCount,
+        bytes: Buffer.byteLength(finalContent, 'utf-8'),
+      };
+    },
+    { resources: [filePath] }
+  );
 }
 
 /** 新建文件，已存在时报错 */
 export async function createFile(filePath: string, content = ''): Promise<WriteResult> {
-  const abs = path.resolve(filePath);
-  if (await pathExists(abs)) throw new CoreError('ALREADY_EXISTS', `文件已存在: ${abs}`);
-  return writeTextFile(abs, content, { parents: true });
+  return withWorkspaceLease(
+    async () => {
+      const abs = path.resolve(filePath);
+      if (await pathExists(abs)) throw new CoreError('ALREADY_EXISTS', `文件已存在: ${abs}`);
+      return writeTextFile(abs, content, { parents: true });
+    },
+    { resources: [filePath] }
+  );
 }
 
 /** 新建目录，已存在时报错 */
 export async function createDirectory(dirPath: string): Promise<string> {
-  const abs = path.resolve(dirPath);
-  if (await pathExists(abs)) throw new CoreError('ALREADY_EXISTS', `目录已存在: ${abs}`);
-  await mkdir(abs, { recursive: true });
-  return abs;
+  return withWorkspaceLease(
+    async () => {
+      const abs = path.resolve(dirPath);
+      if (await pathExists(abs)) throw new CoreError('ALREADY_EXISTS', `目录已存在: ${abs}`);
+      await mkdir(abs, { recursive: true });
+      return abs;
+    },
+    { resources: [dirPath] }
+  );
 }
 
 export interface DeleteResult {
@@ -385,23 +392,28 @@ export async function deletePath(
   target: string,
   options: { recursive?: boolean } = {}
 ): Promise<DeleteResult> {
-  const abs = path.resolve(target);
-  let info;
-  try {
-    info = await stat(abs);
-  } catch (error) {
-    throw toCoreError(error, abs);
-  }
-  if (info.isDirectory()) {
-    const entries = await readdir(abs);
-    if (entries.length > 0 && !options.recursive) {
-      throw new CoreError('INVALID_ARGUMENT', `目录非空，需要 --recursive 才能删除: ${abs}`);
-    }
-    await rm(abs, { recursive: true, force: false });
-    return { path: abs, type: 'directory' };
-  }
-  await rm(abs, { force: false });
-  return { path: abs, type: 'file' };
+  return withWorkspaceLease(
+    async () => {
+      const abs = path.resolve(target);
+      let info;
+      try {
+        info = await stat(abs);
+      } catch (error) {
+        throw toCoreError(error, abs);
+      }
+      if (info.isDirectory()) {
+        const entries = await readdir(abs);
+        if (entries.length > 0 && !options.recursive) {
+          throw new CoreError('INVALID_ARGUMENT', `目录非空，需要 --recursive 才能删除: ${abs}`);
+        }
+        await rm(abs, { recursive: true, force: false });
+        return { path: abs, type: 'directory' };
+      }
+      await rm(abs, { force: false });
+      return { path: abs, type: 'file' };
+    },
+    { resources: [target] }
+  );
 }
 
 /** 两个路径是否指向同一个文件系统条目（不跟随符号链接） */
@@ -420,20 +432,25 @@ export async function renamePath(
   newPath: string,
   options: { overwrite?: boolean } = {}
 ): Promise<{ from: string; to: string }> {
-  const from = path.resolve(oldPath);
-  const to = path.resolve(newPath);
-  if (!(await pathExists(from))) throw new CoreError('NOT_FOUND', `路径不存在: ${from}`);
-  if (from !== to && (await pathExists(to)) && !options.overwrite) {
-    // 大小写不敏感的文件系统上仅改大小写（a.md → A.md）时，目标与源是同一文件，允许重命名
-    if (!(await isSameEntry(from, to))) {
-      throw new CoreError('ALREADY_EXISTS', `目标已存在: ${to}`);
-    }
-  }
-  try {
-    await mkdir(path.dirname(to), { recursive: true });
-    await rename(from, to);
-  } catch (error) {
-    throw toCoreError(error, from);
-  }
-  return { from, to };
+  return withWorkspaceLease(
+    async () => {
+      const from = path.resolve(oldPath);
+      const to = path.resolve(newPath);
+      if (!(await pathExists(from))) throw new CoreError('NOT_FOUND', `路径不存在: ${from}`);
+      if (from !== to && (await pathExists(to)) && !options.overwrite) {
+        // 大小写不敏感的文件系统上仅改大小写（a.md → A.md）时，目标与源是同一文件，允许重命名
+        if (!(await isSameEntry(from, to))) {
+          throw new CoreError('ALREADY_EXISTS', `目标已存在: ${to}`);
+        }
+      }
+      try {
+        await mkdir(path.dirname(to), { recursive: true });
+        await rename(from, to);
+      } catch (error) {
+        throw toCoreError(error, from);
+      }
+      return { from, to };
+    },
+    { resources: [oldPath, newPath] }
+  );
 }

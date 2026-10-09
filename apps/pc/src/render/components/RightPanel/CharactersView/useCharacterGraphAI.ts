@@ -118,19 +118,10 @@ export function useCharacterGraphAI({
         );
 
         if (matched) {
-          const prevAttrs = parseCharacterAttributes(matched.attributes, nextRole);
-          const nextAttributes = stringifyCharacterAttributes(
-            {
-              ...prevAttrs,
-              aliases: Array.from(new Set([...(prevAttrs.aliases || []), ...nextAliases])),
-            },
-            nextRole
-          );
           await ipc.invoke('db-character-update', matched.id, {
-            name: matched.name,
-            role: nextRole,
-            description: nextDescription,
-            attributes: nextAttributes,
+            ...(character.role?.trim() ? { role: character.role.trim() } : {}),
+            ...(character.description?.trim() ? { description: character.description.trim() } : {}),
+            appendAliases: nextAliases,
           });
           nameToId.set(normalized, matched.id);
           nextAliases.forEach((alias) => nameToId.set(normalizePersonName(alias), matched.id));

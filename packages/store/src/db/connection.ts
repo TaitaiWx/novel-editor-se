@@ -1,8 +1,9 @@
 /** SQLite 连接管理：初始化、获取、关闭 */
 import Database from 'better-sqlite3';
-import { mkdirSync, unlinkSync } from 'fs';
+import { mkdirSync } from 'fs';
 import path from 'path';
 import { createTables } from './schema';
+import { relocateBackupDatabase, type BackupRoots } from './relocate-backup';
 
 let db: Database.Database | null = null;
 let currentDbPath: string | null = null;
@@ -23,45 +24,25 @@ export function initDatabase(
 
   if (db && currentDbPath === dbPath) return db;
 
-  if (db && currentDbPath !== dbPath) {
-    db.close();
-    db = null;
-  }
+  closeDatabase();
 
-  db = new Database(dbPath, nativeBinding ? { nativeBinding } : undefined);
-  currentDbPath = dbPath;
-
-  // 启用 WAL 模式以获得更好的并发性能
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
+  const candidate = new Database(dbPath, nativeBinding ? { nativeBinding } : undefined);
   try {
-    createTables(db);
+    // 初始化全部成功后才发布连接，避免失败连接被后续调用复用。
+    candidate.pragma('journal_mode = WAL');
+    candidate.pragma('foreign_keys = ON');
+    createTables(candidate);
   } catch (err) {
-    // 数据库文件可能损坏——关闭、删除后重建
-    console.warn('createTables failed, recreating database:', err);
-    db.close();
+    // SQL / 迁移错误不代表数据库损坏；保留原库供重试或恢复，绝不删库重建。
     try {
-      unlinkSync(dbPath);
+      candidate.close();
     } catch {
-      /* 忽略 */
+      // 关闭失败也应向调用方报告最初的初始化错误。
     }
-    try {
-      unlinkSync(dbPath + '-wal');
-    } catch {
-      /* 忽略 */
-    }
-    try {
-      unlinkSync(dbPath + '-shm');
-    } catch {
-      /* 忽略 */
-    }
-    db = new Database(dbPath, nativeBinding ? { nativeBinding } : undefined);
-    currentDbPath = dbPath;
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    createTables(db);
+    throw err;
   }
+  db = candidate;
+  currentDbPath = dbPath;
   return db;
 }
 
@@ -82,5 +63,38 @@ export function closeDatabase(): void {
     db.close();
     db = null;
     currentDbPath = null;
+  }
+}
+
+/** SQLite online backup includes committed WAL pages and never copies live sidecar files. */
+export async function backupDatabaseFile(
+  sourcePath: string,
+  destinationPath: string,
+  nativeBinding?: string,
+  roots?: BackupRoots
+): Promise<void> {
+  const current =
+    db && currentDbPath && path.resolve(currentDbPath) === path.resolve(sourcePath) ? db : null;
+  // Do not initialize/migrate an inactive project merely to export it.
+  const connection =
+    current ??
+    new Database(sourcePath, {
+      readonly: true,
+      fileMustExist: true,
+      ...(nativeBinding ? { nativeBinding } : {}),
+    });
+  try {
+    await connection.backup(destinationPath);
+    if (roots) {
+      const snapshot = new Database(destinationPath, nativeBinding ? { nativeBinding } : undefined);
+      try {
+        relocateBackupDatabase(snapshot, roots);
+        snapshot.pragma('journal_mode = DELETE');
+      } finally {
+        snapshot.close();
+      }
+    }
+  } finally {
+    if (!current) connection.close();
   }
 }

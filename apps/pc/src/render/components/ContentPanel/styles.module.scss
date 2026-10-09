@@ -20,6 +20,18 @@
     min-width: 0;
   }
 
+  .textEditorHost {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
   .specialContentHost {
     flex: 1;
     min-height: 0;

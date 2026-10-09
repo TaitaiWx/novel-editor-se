@@ -638,3 +638,95 @@ describe('downloadToFile', () => {
     runner.stop();
   });
 });
+
+describe('VideoTaskRunner snapshot barrier', () => {
+  function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+
+  it('snapshot waits for a detached download, its prompt file and final DB task state after tick returns', async () => {
+    const { withWorkspaceMutation, withBackgroundWorkspaceMutation, withWorkspaceSnapshot } =
+      await import('../../../src/main/workspace-mutation-gate');
+    const downloaded = deferred();
+    const promptStarted = deferred();
+    const promptWritten = deferred();
+    const downloadStarted = deferred();
+    const { provider, polls } = fakeProvider();
+    const { runner, repo } = createRunner({
+      provider,
+      deps: {
+        withMutation: withWorkspaceMutation,
+        withBackgroundMutation: withBackgroundWorkspaceMutation,
+        downloadFile: async () => {
+          downloadStarted.resolve();
+          await downloaded.promise;
+        },
+        writeJson: async () => {
+          promptStarted.resolve();
+          await promptWritten.promise;
+        },
+      },
+    });
+    await runner.submit(input);
+    await runner.tick();
+    now += 60_000;
+    polls.push({ state: 'succeeded' });
+    // Simulates an already admitted IPC caller; the download must own a separate lease.
+    await withWorkspaceMutation(() => runner.tick());
+    await downloadStarted.promise;
+    let snapshotRan = false;
+    let snapshotOutput: string | undefined;
+    const snapshot = withWorkspaceSnapshot(async () => {
+      snapshotRan = true;
+      snapshotOutput = repo.get('t1')?.outputPath;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(snapshotRan).toBe(false);
+      downloaded.resolve();
+      await promptStarted.promise;
+      expect(snapshotRan).toBe(false);
+    } finally {
+      downloaded.resolve();
+      promptWritten.resolve();
+      await snapshot;
+      expect(snapshotOutput).toBe('资料/视频/第一章/雪夜/镜头1-v1.mp4');
+      await vi.waitFor(() => expect(repo.get('t1')?.outputPath).toBeTruthy());
+      runner.stop();
+    }
+  });
+
+  it('a tick started during the snapshot cannot submit or persist until the snapshot releases', async () => {
+    const { withWorkspaceMutation, withBackgroundWorkspaceMutation, withWorkspaceSnapshot } =
+      await import('../../../src/main/workspace-mutation-gate');
+    const release = deferred();
+    const entered = deferred();
+    const { runner, repo, provider } = createRunner({
+      deps: {
+        withMutation: withWorkspaceMutation,
+        withBackgroundMutation: withBackgroundWorkspaceMutation,
+      },
+    });
+    await runner.submit(input);
+    const snapshot = withWorkspaceSnapshot(async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    await entered.promise;
+    const tick = runner.tick();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(provider.submitTask).not.toHaveBeenCalled();
+      expect(repo.get('t1')?.status).toBe('queued');
+    } finally {
+      release.resolve();
+      await Promise.all([snapshot, tick]);
+      runner.stop();
+    }
+    expect(repo.get('t1')?.status).toBe('submitted');
+  });
+});

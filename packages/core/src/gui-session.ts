@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from './workspace-lock';
 /**
  * GUI 会话文件（`ne status` 读取 GUI 状态的数据来源）
  *
@@ -117,7 +118,12 @@ async function saveJsonAtomic(target: string, value: unknown): Promise<void> {
 }
 
 export async function writeGuiSession(session: GuiSession): Promise<void> {
-  await saveJsonAtomic(getGuiSessionPath(session.workspaceRoot), session);
+  return withWorkspaceLease(
+    async () => {
+      await saveJsonAtomic(getGuiSessionPath(session.workspaceRoot), session);
+    },
+    { resources: [session.workspaceRoot] }
+  );
 }
 
 async function readRawGuiSession(projectRoot: string): Promise<GuiSession | null> {
@@ -139,14 +145,19 @@ export async function markGuiSessionClosed(
   pid: number,
   now = new Date()
 ): Promise<boolean> {
-  const session = await readRawGuiSession(projectRoot);
-  if (!session || session.pid !== pid || session.state === 'closed') return false;
-  await saveJsonAtomic(getGuiSessionPath(projectRoot), {
-    ...session,
-    state: 'closed',
-    updatedAt: now.toISOString(),
-  });
-  return true;
+  return withWorkspaceLease(
+    async () => {
+      const session = await readRawGuiSession(projectRoot);
+      if (!session || session.pid !== pid || session.state === 'closed') return false;
+      await saveJsonAtomic(getGuiSessionPath(projectRoot), {
+        ...session,
+        state: 'closed',
+        updatedAt: now.toISOString(),
+      });
+      return true;
+    },
+    { resources: [projectRoot] }
+  );
 }
 
 /** 进程是否存活（EPERM 表示进程存在但无权发信号，同样视为存活） */

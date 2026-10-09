@@ -1,3 +1,4 @@
+import { useUnsavedChangesGuard } from '@/render/hooks/useUnsavedChangesGuard';
 import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import styles from './styles.module.scss';
 import type { LoreEntry, LoreCategory } from './types';
@@ -27,6 +28,13 @@ export const LoreView: React.FC<{
     const [importResult, setImportResult] = useState('');
     const { entries, loading, createEntry, updateEntry, deleteEntry, importEntries } =
       useLoreEntries(folderPath);
+
+    const editing = entries.find((entry) => entry.id === editingEntryId);
+    useUnsavedChangesGuard(
+      editing
+        ? title !== editing.title || summary !== editing.summary || category !== editing.category
+        : Boolean(title || summary)
+    );
 
     const clearComposer = useCallback(() => {
       setEditingEntryId(null);

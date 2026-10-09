@@ -1,3 +1,4 @@
+import { installGracefulShutdown } from './graceful-shutdown';
 import { app, BrowserWindow } from 'electron';
 import { createMainWindow, setupWindowEvents } from './window';
 import { createSplashWindow } from './static/splash/splash-window';
@@ -16,6 +17,7 @@ import { syncSampleData } from './sample-data';
 import { setupCrashLogUpload } from './log-upload';
 
 applySmokeTestPaths();
+installGracefulShutdown();
 // E2E：静音；NOVEL_EDITOR_E2E_BACKGROUND=1 时在后台运行（透明、不抢焦点、不占 Dock）
 installE2EBackgroundMode();
 // 尽早安装崩溃钩子：崩溃 / 未捕获异常时打包日志（E2E / 烟雾测试模式下跳过）
@@ -104,7 +106,7 @@ app.on('window-all-closed', () => {
 });
 
 // 应用即将退出时的清理工作
-app.on('before-quit', () => {
+app.on('will-quit', () => {
   // 注销所有快捷键
   unregisterAllShortcuts();
 });

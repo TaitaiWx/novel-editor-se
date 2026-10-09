@@ -6,7 +6,10 @@
  */
 export type KeyedSerialQueue = <T>(key: string, task: () => Promise<T>) => Promise<T>;
 
-export function createKeyedSerialQueue(): KeyedSerialQueue & { readonly size: () => number } {
+export function createKeyedSerialQueue(): KeyedSerialQueue & {
+  readonly size: () => number;
+  readonly drain: (matches: (key: string) => boolean) => Promise<void>;
+} {
   const tails = new Map<string, Promise<void>>();
   const run = <T>(key: string, task: () => Promise<T>): Promise<T> => {
     const previous = tails.get(key) ?? Promise.resolve();
@@ -22,5 +25,10 @@ export function createKeyedSerialQueue(): KeyedSerialQueue & { readonly size: ()
     });
     return result;
   };
-  return Object.assign(run, { size: () => tails.size });
+  return Object.assign(run, {
+    size: () => tails.size,
+    drain: async (matches: (key: string) => boolean) => {
+      await Promise.all([...tails].filter(([key]) => matches(key)).map(([, tail]) => tail));
+    },
+  });
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   CHARACTER_MEDIA_KINDS,
   buildCharacterImagePrompt,
@@ -34,6 +34,9 @@ import CharacterAvatar from '../../../CharacterAvatar';
 import type { CharacterCurrentStateController } from '../useCharacterCurrentState';
 import type { CharacterTimelineController } from '../useCharacterTimeline';
 
+/** 分组下拉里自定义分组的值前缀（与 major / secondary 区分开） */
+const CUSTOM_GROUP_PREFIX = 'group:';
+
 interface CharacterDetailWorkspaceProps {
   focusedCharacter: Character | null;
   focusedCamp: CharacterCamp | null;
@@ -51,11 +54,14 @@ interface CharacterDetailWorkspaceProps {
     characterId: number,
     patch: {
       category?: CharacterCategory;
+      group?: string;
       highlightColor?: string;
       highlightFirstMentionOnly?: boolean;
       currentState?: CharacterCurrentStateItem[];
       avatar?: string;
       design?: CharacterDesign;
+      designPatch?: Partial<CharacterDesign>;
+      designExpected?: Partial<CharacterDesign>;
       media?: MediaItem[];
       voice?: CharacterVoice;
     }
@@ -103,6 +109,16 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
   workPath = null,
   renderGrowth,
 }) => {
+  // 作者自定义过的人物分组（与默认分组同名的不重复列出）
+  const customGroups = useMemo(() => {
+    const defaults = new Set(CATEGORY_OPTIONS.map((option) => option.label));
+    const names = new Set<string>();
+    for (const item of characters) {
+      const name = item.group?.trim();
+      if (name && !defaults.has(name)) names.add(name);
+    }
+    return Array.from(names);
+  }, [characters]);
   const [tab, setTab] = useState<CharacterDetailTab>('design');
   return (
     <div className={styles.objectWorkspace}>
@@ -183,9 +199,13 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
           {tab === 'design' && (
             <div className={tabStyles.panel} role="tabpanel" aria-label="人物设计">
               <CharacterDesignForm
+                key={`${workPath}:${focusedCharacter.id}`}
                 design={focusedCharacter.design}
-                onSave={(design) =>
-                  handleUpdateCharacterAttributes(focusedCharacter.id, { design })
+                onSave={(designPatch, designExpected) =>
+                  handleUpdateCharacterAttributes(focusedCharacter.id, {
+                    designPatch,
+                    designExpected,
+                  })
                 }
               />
               <CharacterVoiceForm
@@ -274,15 +294,41 @@ export const CharacterDetailWorkspace: React.FC<CharacterDetailWorkspaceProps> =
                 </div>
                 <div className={styles.highlightConfigPanel}>
                   <label className={styles.categoryField}>
-                    <span className={styles.highlightFieldLabel}>人物分类</span>
-                    <Select<CharacterCategory>
+                    <span className={styles.highlightFieldLabel}>分组</span>
+                    {/* 主要 / 次要角色 + 作者自定义的分组，也可以在列表底部新建；文件面板「角色」按它分组 */}
+                    <Select<string>
                       block
                       size="lg"
-                      aria-label="人物分类"
-                      value={focusedCharacter.category}
-                      options={CATEGORY_OPTIONS}
-                      onChange={(category) =>
-                        void handleUpdateCharacterAttributes(focusedCharacter.id, { category })
+                      aria-label="人物分组"
+                      value={
+                        focusedCharacter.group
+                          ? (CATEGORY_OPTIONS.find(
+                              (option) => option.label === focusedCharacter.group?.trim()
+                            )?.value ?? `${CUSTOM_GROUP_PREFIX}${focusedCharacter.group.trim()}`)
+                          : focusedCharacter.category
+                      }
+                      options={[
+                        ...CATEGORY_OPTIONS,
+                        ...customGroups.map((group) => ({
+                          value: `${CUSTOM_GROUP_PREFIX}${group}`,
+                          label: group,
+                        })),
+                      ]}
+                      custom={{
+                        label: '新建分组',
+                        placeholder: '分组名，例如：反派',
+                        normalize: (text) => {
+                          const name = text.trim().slice(0, 30);
+                          return name ? `${CUSTOM_GROUP_PREFIX}${name}` : null;
+                        },
+                      }}
+                      onChange={(value) =>
+                        void handleUpdateCharacterAttributes(
+                          focusedCharacter.id,
+                          value.startsWith(CUSTOM_GROUP_PREFIX)
+                            ? { group: value.slice(CUSTOM_GROUP_PREFIX.length) }
+                            : { category: value as CharacterCategory, group: '' }
+                        )
                       }
                     />
                   </label>

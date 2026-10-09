@@ -1,3 +1,5 @@
+import { withBackgroundWorkspaceMutation } from '../workspace-mutation-gate';
+import { registerWorkspaceHandler } from '../workspace-ipc';
 /**
  * GUI 会话 IPC Handlers
  *
@@ -10,11 +12,13 @@
  * 同时记录每个窗口当前打开的文件夹：write-file 记录写作日志时，
  * 若文件不在 `ne init` 项目内，日志回退写入该文件夹的 .novel-editor/。
  */
-import { app, ipcMain } from 'electron';
+import { app } from 'electron';
 import path from 'path';
+import { assertDirectoryAccess, assertPathAccess, assertNoPathMutation } from '../path-access';
 import {
   buildGuiSession,
   markGuiSessionClosed,
+  readGuiSession,
   writeGuiSession,
   type GuiSessionSnapshot,
 } from '@novel-editor/core';
@@ -64,14 +68,36 @@ export function getWorkspaceRootForSender(senderId: number | undefined): string 
   return senderSessions.get(senderId)?.root ?? null;
 }
 
-async function closeSenderSession(senderId: number): Promise<void> {
+export async function closeGuiSessionForSender(senderId: number): Promise<void> {
   const current = senderSessions.get(senderId);
   if (!current) return;
-  senderSessions.delete(senderId);
   // 另一个窗口仍在使用同一文件夹时不标记关闭
-  const stillUsed = Array.from(senderSessions.values()).some((item) => item.root === current.root);
-  if (stillUsed) return;
-  await enqueue(current.root, () => markGuiSessionClosed(current.root, process.pid));
+  const stillUsed = Array.from(senderSessions.entries()).some(
+    ([id, item]) => id !== senderId && item.root === current.root
+  );
+  if (!stillUsed)
+    await enqueue(current.root, () => markGuiSessionClosed(current.root, process.pid));
+  senderSessions.delete(senderId);
+}
+
+/** Window destruction is detached from any IPC/lease context that emitted the event. */
+async function closeDestroyedGuiSession(senderId: number): Promise<void> {
+  for (;;) {
+    const current = senderSessions.get(senderId);
+    if (!current) return;
+    const root = current.root;
+    const closed = await withBackgroundWorkspaceMutation(
+      async () => {
+        // A queued workspace rename can move this session before admission. Release the old
+        // declaration before retrying the new root, rather than recreating its previous path.
+        if (senderSessions.get(senderId) !== current || current.root !== root) return false;
+        await closeGuiSessionForSender(senderId);
+        return true;
+      },
+      { resources: [root] }
+    );
+    if (closed) return;
+  }
 }
 
 /** 处理一次会话上报；snapshot 为 null 表示该窗口已关闭文件夹 */
@@ -79,20 +105,30 @@ export async function publishGuiSession(
   sender: SenderLike,
   snapshot: GuiSessionSnapshot | null
 ): Promise<void> {
+  if (snapshot) {
+    assertNoPathMutation(snapshot.workspaceRoot);
+    await assertDirectoryAccess(sender.id, snapshot.workspaceRoot);
+    await assertPathAccess(
+      sender.id,
+      path.join(snapshot.workspaceRoot, '.novel-editor', 'session.json'),
+      true
+    );
+  }
   const previous = senderSessions.get(sender.id);
   const nextRoot = snapshot?.workspaceRoot ? path.resolve(snapshot.workspaceRoot) : null;
 
   if (previous && previous.root !== nextRoot) {
-    await closeSenderSession(sender.id);
+    await closeGuiSessionForSender(sender.id);
   }
   if (!snapshot || !nextRoot) return;
+  assertNoPathMutation(nextRoot);
 
   if (!watchedSenders.has(sender.id)) {
     // 首次上报时监听窗口销毁（含应用退出），把会话标记为 closed
     watchedSenders.add(sender.id);
     sender.once?.('destroyed', () => {
       watchedSenders.delete(sender.id);
-      void closeSenderSession(sender.id).catch(() => undefined);
+      void closeDestroyedGuiSession(sender.id).catch(() => undefined);
     });
   }
   if (!senderSessions.has(sender.id)) {
@@ -106,9 +142,54 @@ export async function publishGuiSession(
   await enqueue(nextRoot, () => writeGuiSession(session));
 }
 
+/** Wait for already submitted session metadata before moving a workspace. */
+export async function drainGuiSessionRoot(root: string): Promise<void> {
+  await rootQueues.get(root)?.catch(() => undefined);
+}
+
+/** Workspace rename already succeeded on disk; keep subsequent publication and save logs scoped to its new path. */
+export function moveGuiSessionRoot(source: string, destination: string): void {
+  for (const session of senderSessions.values()) {
+    if (session.root === source) session.root = destination;
+  }
+}
+
+/** Capture the flushed state before closing; failed native handoff restores it under the writer barrier. */
+export async function captureGuiSessionRestore(): Promise<
+  (isAlive: (senderId: number) => boolean) => Promise<void>
+> {
+  await Promise.all(rootQueues.values());
+  const senders = new Map([...senderSessions].map(([id, session]) => [id, { ...session }]));
+  const roots = [...new Set([...senders.values()].map((session) => session.root))];
+  const snapshots = await Promise.all(
+    roots.map(async (root) => (await readGuiSession(root)).session)
+  );
+  return async (isAlive) => {
+    const liveRoots = new Set<string>();
+    for (const [id, session] of senders) {
+      if (!isAlive(id)) continue;
+      senderSessions.set(id, session);
+      liveRoots.add(session.root);
+    }
+    await Promise.all(
+      snapshots.map((session) => {
+        if (!session || !liveRoots.has(session.workspaceRoot)) return;
+        return enqueue(session.workspaceRoot, () =>
+          writeGuiSession({
+            ...session,
+            state: 'open',
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      })
+    );
+  };
+}
+
 /** 应用退出前把所有会话标记为关闭 */
 export async function closeAllGuiSessions(): Promise<void> {
-  await Promise.all(Array.from(senderSessions.keys()).map((id) => closeSenderSession(id)));
+  for (const id of Array.from(senderSessions.keys())) await closeGuiSessionForSender(id);
+  await Promise.all(rootQueues.values());
 }
 
 /** 仅供测试：清空内存状态 */
@@ -119,7 +200,7 @@ export function resetGuiSessionsForTest(): void {
 }
 
 export function registerSessionHandlers(): void {
-  ipcMain.handle(
+  registerWorkspaceHandler(
     'gui-session-publish',
     async (event: { sender: SenderLike }, snapshot: GuiSessionSnapshot | null) => {
       try {

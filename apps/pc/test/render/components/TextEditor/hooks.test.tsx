@@ -127,7 +127,6 @@ describe('useEditorSave', () => {
       currentContentRef: makeRef(overrides.content ?? 'new'),
       currentOriginalContentRef: makeRef(overrides.original ?? 'old'),
       readOnlyRef: makeRef(overrides.readOnly ?? false),
-      filePathRef: makeRef<string | null>(overrides.path ?? '/a.md'),
       onSaveUntitledRef: makeRef<typeof onSaveUntitled | undefined>(onSaveUntitled),
       autoSaveTimeoutRef: makeRef<NodeJS.Timeout | null>(null),
     };
@@ -151,6 +150,106 @@ describe('useEditorSave', () => {
     expect(refs.currentOriginalContentRef.current).toBe('new');
     expect(result.current.hasChanges).toBe(false);
     expect(result.current.lastSaved).toBeInstanceOf(Date);
+  });
+
+  it.each(['manual', 'auto'] as const)(
+    '%s 保存等待时的新输入仍保持未保存并能再次写入',
+    async (mode) => {
+      vi.useFakeTimers();
+      let resolveWrite!: () => void;
+      invoke.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWrite = resolve;
+          })
+      );
+      const { result, refs } = setup();
+      act(() => result.current.setHasChanges(true));
+      let saving: Promise<boolean> | undefined;
+      await act(async () => {
+        if (mode === 'manual') saving = result.current.handleManualSave();
+        else {
+          result.current.scheduleAutoSave();
+          await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY);
+        }
+      });
+      refs.currentContentRef.current = 'newer';
+      await act(async () => {
+        resolveWrite();
+        await saving;
+      });
+      expect(refs.currentOriginalContentRef.current).toBe('new');
+      expect(result.current.hasChanges).toBe(true);
+      invoke.mockResolvedValueOnce(undefined);
+      await act(async () => {
+        await result.current.handleManualSave();
+      });
+      expect(invoke).toHaveBeenLastCalledWith('write-file', '/a.md', 'newer');
+      expect(result.current.hasChanges).toBe(false);
+    }
+  );
+
+  it('先前写入未完成时撤销回旧基线，手动保存仍排队写入撤销后的内容', async () => {
+    let finishFirst!: () => void;
+    let finishSecond!: () => void;
+    invoke.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishFirst = resolve;
+        })
+    );
+    invoke.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSecond = resolve;
+        })
+    );
+    const { result, refs } = setup();
+    let first!: Promise<boolean>;
+    act(() => {
+      first = result.current.handleManualSave();
+    });
+    refs.currentContentRef.current = 'old';
+    let second!: Promise<boolean>;
+    act(() => {
+      second = result.current.handleManualSave();
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'write-file', '/a.md', 'old');
+    await act(async () => {
+      finishFirst();
+      await first;
+      finishSecond();
+      await second;
+    });
+    expect(refs.currentOriginalContentRef.current).toBe('old');
+    expect(result.current.hasChanges).toBe(false);
+  });
+
+  it('旧写入完成后对期间新增内容重新安排自动保存', async () => {
+    vi.useFakeTimers();
+    let finishFirst!: () => void;
+    invoke.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishFirst = resolve;
+        })
+    );
+    const { result, refs } = setup();
+    let first!: Promise<boolean>;
+    act(() => {
+      first = result.current.handleManualSave();
+    });
+    refs.currentContentRef.current = 'latest';
+    invoke.mockResolvedValue(undefined);
+    await act(async () => {
+      finishFirst();
+      await first;
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY);
+    });
+    expect(invoke).toHaveBeenLastCalledWith('write-file', '/a.md', 'latest');
+    expect(result.current.hasChanges).toBe(false);
   });
 
   it('只读时不安排自动保存', async () => {
@@ -204,6 +303,24 @@ describe('useEditorSave', () => {
       await changelog.result.current.handleManualSave();
     });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('手动保存返回可等待的结果，失败或保存期间继续编辑时不能用于关闭', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = setup();
+    invoke.mockRejectedValueOnce(new Error('disk full'));
+    await act(async () => expect(await result.current.handleManualSave()).toBe(false));
+    invoke.mockResolvedValueOnce(undefined);
+    await act(async () => expect(await result.current.handleManualSave()).toBe(true));
+    errorSpy.mockRestore();
+  });
+
+  it('未命名保存等待回调确认，取消不报告成功', async () => {
+    const { result, onSaveUntitled } = setup({ path: '__untitled__:a.md' });
+    onSaveUntitled.mockResolvedValueOnce(false);
+    await act(async () => expect(await result.current.handleManualSave()).toBe(false));
+    onSaveUntitled.mockResolvedValueOnce(true);
+    await act(async () => expect(await result.current.handleManualSave()).toBe(true));
   });
 
   it('handleManualSaveRef 指向最新的保存函数', () => {

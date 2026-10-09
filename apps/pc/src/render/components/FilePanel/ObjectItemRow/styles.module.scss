@@ -7,9 +7,19 @@
   transition: background-color 0.15s;
 }
 
-.objectNodeShellActive {
-  background: rgba(0, 122, 204, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(0, 122, 204, 0.14);
+.objectNodeShell:hover {
+  background: var(--ui-interaction-hover-bg);
+}
+
+.objectNodeShellActive,
+.objectNodeShellActive:hover {
+  background: rgba(0, 122, 204, 0.12);
+}
+
+// 删除按钮只在悬停 / 键盘聚焦这一行时出现，平时不打扰
+.objectNodeShell:hover .objectNodeAction,
+.objectNodeShell:focus-within .objectNodeAction {
+  opacity: 1;
 }
 
 .objectNode {
@@ -29,10 +39,6 @@
   flex: 1;
   min-width: 0;
   text-align: left;
-
-  &:hover {
-    background: var(--ui-interaction-hover-bg);
-  }
 }
 
 .objectNodeTitle {
@@ -66,6 +72,21 @@
   color: #d9c18d;
   background: rgba(215, 186, 125, 0.12);
   border: 1px solid rgba(215, 186, 125, 0.22);
+}
+
+.objectNodeTag {
+  flex-shrink: 0;
+  max-width: 40%;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--ui-fg-secondary, #b8b8b8);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .objectNodeMetaInline {
@@ -108,7 +129,9 @@
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+  opacity: 0;
   transition:
+    opacity 0.15s,
     background-color 0.15s,
     color 0.15s;
 

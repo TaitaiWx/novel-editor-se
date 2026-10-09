@@ -56,7 +56,12 @@ export interface TextEditorProps {
   onViewportSnapshotChange?: (filePath: string, snapshot: EditorViewportSnapshot) => void;
   onContentChange?: (content: string) => void;
   onCursorChange?: (pos: CursorPosition) => void;
-  onSaveUntitled?: (untitledPath: string, content: string) => void;
+  onSaveUntitled?: (
+    untitledPath: string,
+    content: string
+  ) => boolean | void | Promise<boolean | void>;
+  /** 切换前保存失败时恢复原文件选中状态，保留编辑中的草稿。 */
+  onLoadBlocked?: (previousPath: string) => void;
   onScrollProcessed?: () => void;
   onTransientHighlightProcessed?: () => void;
   settingsComponent?: React.ReactNode;

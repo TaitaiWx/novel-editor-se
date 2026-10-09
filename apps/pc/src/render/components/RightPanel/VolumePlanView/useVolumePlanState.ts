@@ -1,3 +1,4 @@
+import { registerPreparationParticipant } from '@/render/utils/rendererPreparation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VolumeOutline } from '@novel-editor/basic-algorithm';
 import { createPlotStorageKey } from '../utils';
@@ -32,17 +33,32 @@ export function useVolumePlanState({
   const pendingRef = useRef<{ key: string; value: VolumePlanState } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const lastWriteRef = useRef<Promise<unknown>>(Promise.resolve());
   const flush = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     const pending = pendingRef.current;
-    pendingRef.current = null;
     const ipc = window.electron?.ipcRenderer;
-    if (!pending || !ipc) return;
-    void ipc.invoke('db-settings-set', pending.key, JSON.stringify(pending.value));
+    if (!pending || !ipc) return lastWriteRef.current;
+    const write = lastWriteRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        await ipc.invoke('db-settings-set', pending.key, JSON.stringify(pending.value));
+        if (pendingRef.current === pending) pendingRef.current = null;
+      });
+    lastWriteRef.current = write;
+    return write;
   }, []);
+
+  useEffect(
+    () =>
+      registerPreparationParticipant(async () => {
+        await flush();
+      }),
+    [flush]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +90,7 @@ export function useVolumePlanState({
     })();
     return () => {
       cancelled = true;
-      flush();
+      void flush().catch(() => undefined);
     };
   }, [flush, storageKey, workPath]);
 
@@ -85,7 +101,9 @@ export function useVolumePlanState({
         if (next !== prev && storageKey) {
           pendingRef.current = { key: storageKey, value: next };
           if (timerRef.current) clearTimeout(timerRef.current);
-          timerRef.current = setTimeout(flush, PERSIST_DELAY_MS);
+          timerRef.current = setTimeout(() => {
+            void flush().catch(() => undefined);
+          }, PERSIST_DELAY_MS);
         }
         return next;
       });
