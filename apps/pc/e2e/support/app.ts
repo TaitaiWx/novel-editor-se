@@ -215,7 +215,7 @@ export async function launchApp(options: LaunchOptions): Promise<ElectronApp> {
     const target = await Promise.race([findMainWindowTarget(port, 30_000), exited]);
     cdp = await CdpClient.connect(target.webSocketDebuggerUrl as string);
     const page = new Page(cdp, ARTIFACTS_DIR);
-    await page.init();
+    await page.init(target.url);
     exited.catch(() => {});
     return { page, process: child, userDataDir, logs, close };
   } catch (error) {

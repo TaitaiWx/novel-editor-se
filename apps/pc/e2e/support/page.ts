@@ -191,10 +191,49 @@ export class Page {
     });
   }
 
-  async init(): Promise<void> {
+  async init(expectedUrl?: string): Promise<void> {
+    // /json/list advertises a pending URL before its document commits. Runtime.enable
+    // then creates a context in Electron's initial empty document, before preload
+    // startupData exists (electron/electron#54149). Page lifecycle observation does
+    // not create a JS context. Chromium replays existing lifecycle timestamps when
+    // enabled, so this also works when DOMContentLoaded happened before attachment.
+    const loaded = new Set<string>();
+    const stop = this.cdp.on('Page.lifecycleEvent', (event) => {
+      if (event.name === 'DOMContentLoaded') loaded.add(`${event.frameId}:${event.loaderId}`);
+    });
+    try {
+      await this.cdp.send('Page.enable');
+      await this.cdp.send('Log.enable');
+      await this.cdp.send('Page.setLifecycleEventsEnabled', { enabled: true });
+      const expected = expectedUrl?.split('#')[0];
+      const deadline = Date.now() + 30_000;
+      let lastFrame: { id: string; loaderId: string; url: string } | undefined;
+      let ready = false;
+      while (Date.now() < deadline) {
+        const result = await this.cdp.send<{
+          frameTree: { frame: { id: string; loaderId: string; url: string } };
+        }>('Page.getFrameTree');
+        lastFrame = result.frameTree.frame;
+        const documentMatches = expected
+          ? lastFrame.url === expected
+          : /^(file|https?|data):/.test(lastFrame.url);
+        if (documentMatches && loaded.has(`${lastFrame.id}:${lastFrame.loaderId}`)) {
+          ready = true;
+          break;
+        }
+        await sleep(25);
+      }
+      if (!ready) {
+        throw new Error(
+          `主文档初始化超时: expected=${expected ?? 'committed document'} frame=${JSON.stringify(lastFrame)}`
+        );
+      }
+    } finally {
+      stop();
+    }
+    // Runtime replays earlier console messages/exceptions; startup failures remain
+    // visible to takeIssues(), including failures that preceded DOMContentLoaded.
     await this.cdp.send('Runtime.enable');
-    await this.cdp.send('Page.enable');
-    await this.cdp.send('Log.enable');
     // 窗口在后台运行时没有系统焦点：模拟页面始终有焦点（document.hasFocus、:focus、focus 事件与前台一致）
     await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
   }
