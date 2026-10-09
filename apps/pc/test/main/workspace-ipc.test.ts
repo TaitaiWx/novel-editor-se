@@ -124,15 +124,19 @@ it('releases the GUI completion initialization lease before waiting on the netwo
       release = resolve;
     });
   });
-  const completion = listeners.get('ai-complete')!({ sender: { id: 1 } });
-  await started;
-  let admitted = false;
-  const other = withWorkspaceLease(() => {
-    admitted = true;
+  let completionSettled = false;
+  const completion = listeners.get('ai-complete')!({ sender: { id: 1 } }).then(() => {
+    completionSettled = true;
   });
-  await new Promise((resolve) => setTimeout(resolve, 100));
-  const before = admitted;
-  release();
-  await Promise.all([completion, other]);
-  expect(before).toBe(true);
+  await started;
+  const other = withWorkspaceLease(() => !completionSettled);
+  try {
+    // Observe actual admission, not a wall-clock guess about filesystem/scheduler latency.
+    // The network promise stays unresolved until this independent lease has completed.
+    await expect(other).resolves.toBe(true);
+    expect(completionSettled).toBe(false);
+  } finally {
+    release();
+    await Promise.all([completion, other]);
+  }
 });

@@ -94,6 +94,54 @@ describe('CDP pointer driver', () => {
     ).toBe(true);
   });
 
+  it('clicks a CSS-selected switch track through its semantic label', async () => {
+    await suite.page.evaluate(() => {
+      const label = document.createElement('label');
+      label.style.cssText =
+        'position:absolute;left:20px;top:100px;display:inline-flex;width:40px;height:24px';
+      label.innerHTML =
+        '<input id="pointer-fixture-switch" type="checkbox" role="switch" style="position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0"><span style="display:block;width:40px;height:24px;background:gray;pointer-events:none"></span>';
+      document.getElementById('pointer-fixture')!.append(label);
+    });
+    await suite.page.click('#pointer-fixture-switch + span');
+    expect(
+      await suite.page.evaluate(
+        () => (document.getElementById('pointer-fixture-switch') as HTMLInputElement).checked
+      )
+    ).toBe(true);
+  });
+
+  it.each(['input', 'select', 'textarea'] as const)(
+    'clicks the native %s box inside a larger label',
+    async (tag) => {
+      await suite.page.evaluate((controlTag: string) => {
+        const label = document.createElement('label');
+        label.style.cssText =
+          'position:absolute;left:20px;top:100px;width:400px;height:180px;background:lightgray';
+        const control = document.createElement(controlTag);
+        control.id = 'pointer-fixture-native';
+        control.style.cssText = 'position:absolute;left:10px;top:10px;width:120px;height:40px';
+        if (control instanceof HTMLSelectElement) {
+          control.size = 2;
+          control.innerHTML = '<option>First</option><option>Second</option>';
+        }
+        label.append(control, document.createTextNode('An explanation outside the input box'));
+        label.addEventListener('mousedown', (event) => {
+          label.dataset.pointerTarget =
+            (event.target as HTMLElement).closest('input, select, textarea')?.id ?? '';
+        });
+        label.id = 'pointer-fixture-native-label';
+        document.getElementById('pointer-fixture')!.append(label);
+      }, tag);
+      await suite.page.click('#pointer-fixture-native');
+      expect(
+        await suite.page.evaluate(
+          () => document.getElementById('pointer-fixture-native-label')!.dataset.pointerTarget
+        )
+      ).toBe('pointer-fixture-native');
+    }
+  );
+
   it('does not fall back to clicking through a covering element', async () => {
     await suite.page.evaluate(() => {
       const cover = document.createElement('div');

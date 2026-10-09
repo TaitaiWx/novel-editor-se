@@ -217,16 +217,13 @@ async function waitUntil(predicate: () => boolean) {
 
 /** 等待后台预缓存流程结束（出现 preCaching=true 之后又广播了 preCaching=false） */
 async function waitForPreCacheSettled() {
-  for (let i = 0; i < 500; i++) {
+  await waitUntil(() => {
     const snapshots = sentOn('update-state-changed').map((m) => m.payload as StatusSnapshot);
     const startIdx = snapshots.findIndex((p) => p.preCaching);
-    if (startIdx >= 0 && snapshots.slice(startIdx + 1).some((p) => !p.preCaching)) {
-      await flush(5);
-      return;
-    }
-    await new Promise<void>((resolve) => setImmediate(resolve));
-  }
-  throw new Error('预缓存流程未结束');
+    // The controller emits this final transition only after persistence settles.
+    // Event-loop turns are not an I/O deadline, especially on a busy CI worker.
+    return startIdx >= 0 && snapshots.slice(startIdx + 1).some((p) => !p.preCaching);
+  });
 }
 
 // ─── 测试 ──────────────────────────────────────────────────────────────────
@@ -466,6 +463,45 @@ describe('auto-updater controller', () => {
         sentOn('update-state-changed').some((m) => (m.payload as StatusSnapshot).preCaching)
       ).toBe(true);
       expect(sentOn('update-rollback-available').length).toBeGreaterThan(0);
+    });
+
+    it('预缓存被I/O门控超过500轮事件循环时仍等待最终状态再读取持久化结果', async () => {
+      const { rollback } = await setup();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      vi.mocked(rollback.preCacheCurrentVersion).mockImplementationOnce(async () => {
+        await gate;
+        return rollbackTarget;
+      });
+      fakeUpdater().emit('update-downloaded', { version: '1.2.0' });
+      await waitUntil(() =>
+        sentOn('update-state-changed').some(
+          (message) => (message.payload as StatusSnapshot).preCaching
+        )
+      );
+      let outcome = 'pending';
+      const waiter = waitForPreCacheSettled().then(
+        () => {
+          outcome = 'resolved';
+        },
+        () => {
+          outcome = 'rejected';
+        }
+      );
+      try {
+        // Exercise the former iteration ceiling while actual completion is gated.
+        await flush(600);
+        expect(outcome).toBe('pending');
+      } finally {
+        release();
+        // Drain the real persistence operation even if the regression assertion fails.
+        await waitUntil(() => !lastStatus().preCaching);
+        await waiter;
+      }
+      expect(outcome).toBe('resolved');
+      expect((await readState()).rollbackTarget?.version).toBe(rollbackTarget.version);
     });
 
     it('预缓存结果无本地安装包时仍记录回滚目标', async () => {

@@ -119,10 +119,11 @@ const LOCATE_SOURCE = `(target) => {
       (c) => !pool.some((other) => other !== c && c.node.contains(other.node))
     );
     el = innermost[0]?.node ?? null;
-    // 文本命中的可能是按钮内的 span，交给最近的可交互祖先接收点击
-    const interactive = el?.closest?.('button, a, [role="button"], [role="tab"], [role="menuitem"], [role="treeitem"], label');
-    if (interactive && isVisible(interactive)) el = interactive;
   }
+  // Text and CSS selectors can both match a decorative child (for example a
+  // pointer-events:none switch track). Its semantic control receives the click.
+  const interactive = el?.closest?.('button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"], [role="treeitem"], label');
+  if (interactive && isVisible(interactive)) el = interactive;
   if (!el) return null;
   el.scrollIntoView({ block: 'center', inline: 'center' });
   // 记下定位到的元素，供点击前的遮挡检查使用
@@ -147,7 +148,8 @@ const STABLE_LOCATE_SOURCE = `async (target, requireEnabled) => {
   if (moved) return null;
   const el = window.__e2eLocated;
   if (!el || el !== firstElement || !el.isConnected) return null;
-  if (requireEnabled && el.closest(':disabled, [aria-disabled="true"], [inert]')) return null;
+  if (requireEnabled && (el.closest(':disabled, [aria-disabled="true"], [inert]') ||
+    (el instanceof HTMLLabelElement && el.control?.matches(':disabled')))) return null;
   const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
   // Only the target or its descendants can receive this pointer event.
   if (!hit || (hit !== el && !el.contains(hit))) return null;
