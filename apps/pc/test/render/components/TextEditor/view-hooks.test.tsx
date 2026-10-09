@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { isolateHistory, undo } from '@codemirror/commands';
 import { useCodeMirrorView } from '@/render/components/TextEditor/hooks/useCodeMirrorView';
 import { useEditorFileLoader } from '@/render/components/TextEditor/hooks/useEditorFileLoader';
 import {
@@ -68,6 +69,36 @@ describe('useCodeMirrorView', () => {
     const hook = renderHook((props) => useCodeMirrorView(props), { initialProps: baseProps });
     return { ...hook, deps, baseProps, host };
   }
+
+  it.each(['\n', '\r\n', '\r'])('保留已有 %j 换行：加载、编辑保存、撤销回写', (eol) => {
+    const { deps } = setup();
+    const view = deps.viewRef.current!;
+    const original = `第一行${eol}第二行${eol}`;
+    deps.currentOriginalContentRef.current = original;
+    act(() =>
+      view.dispatch({
+        changes: { from: 0, insert: original },
+        annotations: isolateHistory.of('full'),
+      })
+    );
+    expect(deps.currentContentRef.current).toBe(original);
+    expect(deps.setHasChanges).toHaveBeenLastCalledWith(false);
+    act(() =>
+      view.dispatch({
+        changes: { from: view.state.doc.length, insert: '新增\n末行' },
+        annotations: isolateHistory.of('full'),
+      })
+    );
+    const saved = `${original}新增${eol}末行`;
+    expect(deps.currentContentRef.current).toBe(saved);
+    expect(deps.onContentChangeRef.current).toHaveBeenLastCalledWith(saved.replace(/\r\n?/g, '\n'));
+    // Saving updates this baseline; subsequent undo must retain its EOL format.
+    deps.currentOriginalContentRef.current = saved;
+    act(() => {
+      expect(undo(view)).toBe(true);
+    });
+    expect(deps.currentContentRef.current).toBe(original);
+  });
 
   it('运行时未就绪时不创建编辑器', () => {
     const host = document.createElement('div');
@@ -290,30 +321,34 @@ describe('useEditorFileLoader', () => {
     expect(props.readOnlyRef.current).toBe(true);
   });
 
-  it('切换保存尚未完成时返回原文件，保留草稿而不读取尚未更新的磁盘', async () => {
-    invoke.mockResolvedValueOnce('A');
-    const { props, view, result, rerender } = setup();
-    await waitFor(() => expect(view.state.doc.toString()).toBe('A'));
-    act(() => view.dispatch({ changes: { from: 0, to: 1, insert: 'A draft' } }));
-    props.currentContentRef.current = 'A draft';
-    let resolveWrite!: () => void;
-    invoke.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveWrite = resolve;
-        })
-    );
-    rerender({ ...props, filePath: '/b.md' });
-    invoke.mockResolvedValueOnce('A');
-    rerender(props);
-    await act(async () => {});
-    expect(view.state.doc.toString()).toBe('A draft');
-    expect(props.currentContentRef.current).toBe('A draft');
-    expect(result.current.loading).toBe(false);
-    expect(invoke).toHaveBeenCalledTimes(2);
-    await act(async () => resolveWrite());
-    expect(view.state.doc.toString()).toBe('A draft');
-  });
+  it.each(['\n', '\r\n'])(
+    '切换保存尚未完成时返回原文件，保留%j草稿而不读取尚未更新的磁盘',
+    async (eol) => {
+      invoke.mockResolvedValueOnce('A');
+      const { props, view, result, rerender } = setup();
+      await waitFor(() => expect(view.state.doc.toString()).toBe('A'));
+      act(() => view.dispatch({ changes: { from: 0, to: 1, insert: `A${eol}draft` } }));
+      props.currentContentRef.current = `A${eol}draft`;
+      let resolveWrite!: () => void;
+      invoke.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWrite = resolve;
+          })
+      );
+      rerender({ ...props, filePath: '/b.md' });
+      invoke.mockResolvedValueOnce('A');
+      rerender(props);
+      await act(async () => {});
+      expect(view.state.doc.toString()).toBe('A\ndraft');
+      expect(props.currentContentRef.current).toBe(`A${eol}draft`);
+      expect(props.onContentChange).toHaveBeenLastCalledWith('A\ndraft');
+      expect(result.current.loading).toBe(false);
+      expect(invoke).toHaveBeenCalledTimes(2);
+      await act(async () => resolveWrite());
+      expect(view.state.doc.toString()).toBe('A\ndraft');
+    }
+  );
 
   it('离开正在等待保存的目标后不再读取该目标', async () => {
     let resolveWrite!: () => void;

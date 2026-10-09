@@ -14,6 +14,7 @@ import path from 'node:path';
 import JSZip from 'jszip';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { getTodayStats, readGuiSession } from '@novel-editor/core';
+import { analyzeContentStats } from '@novel-editor/core/text-stats';
 import {
   buildAppEnv,
   spawnElectron,
@@ -475,8 +476,18 @@ describe('小说编辑器 GUI', () => {
   it('5. 状态栏字数统计随输入变化', async () => {
     await openChapter('002-迷雾森林', '森林里的雾气');
     const original = await readProjectFile(FIXTURE_CHAPTERS.second.file);
-    const before = await statusBarStats(page);
-    expect(Number.isFinite(before.words)).toBe(true);
+    const expected = analyzeContentStats(original);
+    // CodeMirror's DOM changes before React publishes the new chapter's status.
+    // Establish the correct document baseline before measuring the +7 delta.
+    const before = await page.waitUntil(
+      async () => {
+        const stats = await statusBarStats(page);
+        return stats.words === expected.charCount && stats.lines === expected.lineCount
+          ? stats
+          : null;
+      },
+      { message: '状态栏已反映当前章节的原始字数和行数' }
+    );
 
     await focusEditorEnd(page);
     await page.type('雾中传来脚步声');

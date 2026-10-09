@@ -1,3 +1,4 @@
+import { normalizeEditorContent } from '../editor-content';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Compartment } from '@codemirror/state';
@@ -127,7 +128,7 @@ export function useEditorFileLoader({
       if (previousRequestedPath !== filePath && currentFilePathRef.current === filePath) {
         setLoading(false);
         setError(null);
-        onContentChange?.(currentContentRef.current);
+        onContentChange?.(normalizeEditorContent(currentContentRef.current));
         return;
       }
 
@@ -211,7 +212,7 @@ export function useEditorFileLoader({
           restoreViewportSnapshot(filePath, nextContent.length);
           emitCursorPosition(view);
         }
-        onContentChange?.(nextContent);
+        onContentChange?.(normalizeEditorContent(nextContent));
         return;
       }
 
@@ -305,7 +306,7 @@ export function useEditorFileLoader({
         setHasChanges(false);
         setLoading(false);
 
-        onContentChange?.(fileContent);
+        onContentChange?.(normalizeEditorContent(fileContent));
       } catch (err) {
         if (cancelled) return;
         console.error('Error reading file:', err);

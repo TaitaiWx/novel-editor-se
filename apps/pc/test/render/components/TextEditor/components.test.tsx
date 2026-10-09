@@ -103,6 +103,35 @@ describe('TextEditor', () => {
     expect(invoke).toHaveBeenCalledWith('read-file', '/novel/第一章.md', 'UTF-8');
   });
 
+  it('CRLF文件向编辑上下文提供LF坐标，按该坐标插入后仍保存CRLF', async () => {
+    const original = '第一行\r\n第二行\r\n';
+    invoke.mockImplementation(async (channel: string) =>
+      channel === 'read-file' ? original : undefined
+    );
+    const onContentChange = vi.fn();
+    const { container } = render(
+      <ToastProvider>
+        <TextEditor filePath="/novel/windows.txt" onContentChange={onContentChange} />
+      </ToastProvider>
+    );
+    await waitFor(() => expect(onContentChange).toHaveBeenLastCalledWith('第一行\n第二行\n'));
+    const view = EditorView.findFromDOM(container.querySelector('.cm-content')!);
+    expect(view).toBeTruthy();
+    const context: string = onContentChange.mock.lastCall![0];
+    const offset = context.indexOf('第二行');
+    expect(offset).toBe(view!.state.doc.line(2).from);
+    view!.dispatch({ changes: { from: offset, insert: '插入' } });
+    expect(view!.state.doc.line(2).text).toBe('插入第二行');
+    fireEvent.click(screen.getByLabelText('保存'));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        'write-file',
+        '/novel/windows.txt',
+        '第一行\r\n插入第二行\r\n'
+      )
+    );
+  });
+
   it('读取失败显示错误态', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     invoke.mockRejectedValue(new Error('boom'));

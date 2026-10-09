@@ -19,6 +19,7 @@ import {
   transientLineHighlightField,
 } from '../editor-extensions';
 import type { CursorPosition } from '../types';
+import { serializeEditorContent } from '../editor-content';
 
 interface UseCodeMirrorViewOptions {
   editorContainerRef: React.RefObject<HTMLDivElement>;
@@ -160,11 +161,12 @@ export function useCodeMirrorView({
           focusModeCompartment.current.of(focusLineDecorations(focusMode)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
-              const doc = update.state.doc.toString();
+              const normalizedDoc = update.state.doc.toString();
+              const doc = serializeEditorContent(normalizedDoc, currentOriginalContentRef.current);
               currentContentRef.current = doc;
               const changed = doc !== currentOriginalContentRef.current;
               setHasChanges(changed);
-              onContentChangeRef.current?.(doc);
+              onContentChangeRef.current?.(normalizedDoc);
               scheduleAutoSave();
             }
             if (update.selectionSet || update.docChanged) {
