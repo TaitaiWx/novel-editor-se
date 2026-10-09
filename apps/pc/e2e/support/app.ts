@@ -87,7 +87,9 @@ export function spawnElectron(args: string[], env: NodeJS.ProcessEnv): ChildProc
     process.platform === 'linux' && (process.env.CI || process.env.NOVEL_EDITOR_E2E_NO_SANDBOX)
       ? ['--no-sandbox']
       : [];
-  return spawn(ELECTRON_BINARY, [PC_ROOT, ...sandboxFlags, ...args], {
+  // All E2E profiles are disposable; never prompt for the host's login keychain.
+  const keychainFlags = process.platform === 'darwin' ? ['--use-mock-keychain'] : [];
+  return spawn(ELECTRON_BINARY, [PC_ROOT, ...sandboxFlags, ...keychainFlags, ...args], {
     cwd: PC_ROOT,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

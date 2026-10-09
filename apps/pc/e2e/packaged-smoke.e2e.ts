@@ -38,7 +38,13 @@ async function runSmoke(executable: string, userDataDir: string): Promise<SmokeO
       const child = spawn(
         executable,
         // Linux CI 的 chrome-sandbox 没有 SUID 权限，需要禁用沙箱
-        ['--smoke-test', ...(process.env.CI ? ['--no-sandbox', '--disable-gpu-sandbox'] : [])],
+        [
+          '--smoke-test',
+          // Disposable test profiles must not prompt for the host's keychain.
+          // Electron's process tests use this too (electron/electron#53790).
+          ...(process.platform === 'darwin' ? ['--use-mock-keychain'] : []),
+          ...(process.env.CI ? ['--no-sandbox', '--disable-gpu-sandbox'] : []),
+        ],
         {
           cwd: APP_ROOT,
           env: {
