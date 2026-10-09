@@ -38,7 +38,7 @@ import {
 } from '@/render/components/TextEditor/live-preview/widgets';
 import { resolveImageSource } from '@/render/components/TextEditor/live-preview/image-loader';
 import { LruCache } from '@/render/components/TextEditor/live-preview/lru';
-import { syntaxTree } from '@codemirror/language';
+import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
 
 // These tests exercise synchronous rendering after the formula dependency is available.
 beforeAll(() => loadMathRenderer());
@@ -47,11 +47,15 @@ const markdownLang = markdown({ base: markdownLanguage, extensions: [mathMarkdow
 const OPTIONS = { filePath: '/书/资料/示例.md' };
 
 function makeState(doc: string, cursor = doc.length, extra: Extension = []) {
-  return EditorState.create({
+  const state = EditorState.create({
     doc,
     selection: { anchor: cursor },
     extensions: [markdownLang, extra],
   });
+  // A state without an EditorView has no background parse worker. Finish parsing
+  // before asserting decorations; the initial 20ms parse can yield under load.
+  expect(ensureSyntaxTree(state, state.doc.length, 1_000)).not.toBeNull();
+  return state.update({}).state;
 }
 
 interface DecoInfo {
