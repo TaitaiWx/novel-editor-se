@@ -135,22 +135,22 @@ const LOCATE_SOURCE = `(target) => {
  * 点击前的定位：在 LOCATE_SOURCE 基础上等两帧确认位置稳定，并确认中心点落在元素自身上。
  * 异步数据刚到、列表重排时坐标会变，被浮层盖住时点不到；返回 null 让调用方下一轮重试。
  */
-/** 等待位置稳定的最长时间，超过后按普通定位点击 */
-const STABLE_LOCATE_MS = 1_500;
-
-const STABLE_LOCATE_SOURCE = `async (target) => {
+const STABLE_LOCATE_SOURCE = `async (target, requireEnabled) => {
   const locate = ${LOCATE_SOURCE};
   const first = locate(target);
   if (!first) return null;
+  const firstElement = window.__e2eLocated;
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const rect = locate(target);
   if (!rect) return null;
   const moved = ['x', 'y', 'width', 'height'].some((key) => Math.abs(rect[key] - first[key]) > 1);
   if (moved) return null;
   const el = window.__e2eLocated;
+  if (!el || el !== firstElement || !el.isConnected) return null;
+  if (requireEnabled && el.closest(':disabled, [aria-disabled="true"], [inert]')) return null;
   const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-  // 中心点落在目标自身、它的子元素或承载它的容器上才算可点；被其他元素盖住时下一轮再试
-  if (el && hit && hit !== el && !el.contains(hit) && !hit.contains(el)) return null;
+  // Only the target or its descendants can receive this pointer event.
+  if (!hit || (hit !== el && !el.contains(hit))) return null;
   return rect;
 }`;
 
@@ -185,9 +185,14 @@ export class Page {
       this.issues.push({ kind: 'exception', text });
     });
     cdp.on('Log.entryAdded', (params) => {
-      const entry = params.entry as { level?: string; text?: string; source?: string } | undefined;
+      const entry = params.entry as
+        | { level?: string; text?: string; source?: string; url?: string }
+        | undefined;
       if (entry?.level !== 'error') return;
-      this.issues.push({ kind: 'log', text: `[${entry.source ?? 'log'}] ${entry.text ?? ''}` });
+      this.issues.push({
+        kind: 'log',
+        text: `[${entry.source ?? 'log'}] ${entry.text ?? ''}${entry.url ? ` (${entry.url})` : ''}`,
+      });
     });
   }
 
@@ -345,34 +350,37 @@ export class Page {
   }
 
   /** 定位元素中心点（会先滚动到可见区域），找不到时在超时内重试 */
-  async locate(target: Target, timeout = 10_000): Promise<{ x: number; y: number }> {
-    const message = `定位元素: ${describeTarget(target)}`;
-    let rect: Rect;
-    try {
-      // 先等位置稳定、没有被遮住（最多 STABLE_LOCATE_MS）；一直在动的元素（滚动容器、动画）退回普通定位
-      rect = await this.waitFor<Rect>(`(target) => (${STABLE_LOCATE_SOURCE})(target)`, {
-        timeout: Math.min(timeout, STABLE_LOCATE_MS),
-        args: [target],
-        message,
-      });
-    } catch {
-      rect = await this.waitFor<Rect>(`(target) => (${LOCATE_SOURCE})(target)`, {
-        timeout,
-        args: [target],
-        message,
-      });
-    }
+  async locate(
+    target: Target,
+    timeout = 10_000,
+    requireEnabled = false
+  ): Promise<{ x: number; y: number }> {
+    const rect = await this.waitFor<Rect>(
+      `(target, requireEnabled) => (${STABLE_LOCATE_SOURCE})(target, requireEnabled)`,
+      { timeout, args: [target, requireEnabled], message: `定位元素: ${describeTarget(target)}` }
+    );
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
   }
 
   async mouseClick(
     x: number,
     y: number,
-    options: { button?: MouseButton; clickCount?: number; modifiers?: Modifier[] } = {}
+    options: {
+      button?: MouseButton;
+      clickCount?: number;
+      modifiers?: Modifier[];
+      movePointer?: boolean;
+    } = {}
   ): Promise<void> {
-    const { button = 'left', clickCount = 1, modifiers = [] } = options;
+    const { button = 'left', clickCount = 1, modifiers = [], movePointer = true } = options;
     const bits = modifiers.reduce((acc, key) => acc | MODIFIER_BITS[key], 0);
-    await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, modifiers: bits });
+    if (movePointer)
+      await this.cdp.send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x,
+        y,
+        modifiers: bits,
+      });
     for (let count = 1; count <= clickCount; count += 1) {
       const base: CdpParams = { x, y, button, clickCount: count, modifiers: bits };
       await this.cdp.send('Input.dispatchMouseEvent', { ...base, type: 'mousePressed' });
@@ -393,8 +401,18 @@ export class Page {
 
   /** 以真实鼠标事件点击元素中心 */
   async click(target: Target, options: { button?: MouseButton; clickCount?: number } = {}) {
-    const point = await this.locate(target);
-    await this.mouseClick(point.x, point.y, options);
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const point = await this.locate(target, Math.max(1, deadline - Date.now()), true);
+      await this.mouseMove(point.x, point.y);
+      // Hover handlers and arriving data can rearrange a toolbar or popover. Re-check
+      // the target before pressing, and move again if its stable center changed.
+      const hovered = await this.locate(target, Math.max(1, deadline - Date.now()), true);
+      if (Math.abs(point.x - hovered.x) > 1 || Math.abs(point.y - hovered.y) > 1) continue;
+      await this.mouseClick(hovered.x, hovered.y, { ...options, movePointer: false });
+      return;
+    }
+    throw new Error(`点击前元素持续移动: ${describeTarget(target)}`);
   }
 
   async rightClick(target: Target): Promise<void> {

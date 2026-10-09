@@ -103,7 +103,7 @@ jobs:
         run: xvfb-run -a --server-args="-screen 0 1440x900x24" pnpm test:e2e --reporter=verbose --reporter=junit --outputFile.junit=coverage/e2e.xml
       - name: Native Electron files, close and packaged startup (macOS/Windows)
         if: runner.os != 'Linux'
-        run: pnpm test:e2e apps/pc/e2e/app.e2e.ts apps/pc/e2e/lazy-loading.e2e.ts apps/pc/e2e/graceful-close.e2e.ts apps/pc/e2e/packaged-smoke.e2e.ts apps/pc/e2e/page-startup.e2e.ts --testNamePattern="native window close|a hidden untitled draft|打包产物|1[.] 启动|3[.] 编辑章节|4[.] 文件操作|6[.]1 灵感|7[.] GUI 与 CLI 共享|10[.] Markdown|10[.]1 复杂公式|按需加载窗口与公式|CDP document startup" --reporter=verbose --reporter=junit --outputFile.junit=coverage/e2e.xml
+        run: pnpm test:e2e apps/pc/e2e/app.e2e.ts apps/pc/e2e/lazy-loading.e2e.ts apps/pc/e2e/graceful-close.e2e.ts apps/pc/e2e/packaged-smoke.e2e.ts apps/pc/e2e/page-startup.e2e.ts apps/pc/e2e/pointer-driver.e2e.ts --testNamePattern="native window close|a hidden untitled draft|打包产物|1[.] 启动|3[.] 编辑章节|4[.] 文件操作|6[.]1 灵感|7[.] GUI 与 CLI 共享|10[.] Markdown|10[.]1 复杂公式|按需加载窗口与公式|CDP document startup|CDP pointer driver" --reporter=verbose --reporter=junit --outputFile.junit=coverage/e2e.xml
       - name: Save native verification evidence
         if: always()
         uses: actions/upload-artifact@v4

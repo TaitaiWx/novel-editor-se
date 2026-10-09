@@ -215,14 +215,7 @@ describe('编辑器 AI 辅助', () => {
     expect(await editorText(page)).toContain(suggestion);
     expect(await documentText()).toBe(before);
 
-    await page.click({ text: '查看本次上下文', exact: true });
-    await page.waitForTarget({ text: '收起本次上下文', exact: true });
-    const panel = await page.evaluate<string>(
-      () => document.querySelector('[class*="contextBody"]')?.textContent ?? ''
-    );
-    expect(panel).toContain('xAI Grok');
-    expect(panel).toContain('前文');
-    // 流结束（[DONE]）后面板才从「正在续写…」切回可再次生成，截图取完成态
+    // 流结束（[DONE]）后面板才从「正在续写…」切回可再次生成，等完成态稳定后再操作下方上下文按钮
     await page.waitFor(
       () =>
         !document
@@ -230,6 +223,14 @@ describe('编辑器 AI 辅助', () => {
           ?.parentElement?.textContent?.includes('正在续写'),
       { message: '续写流结束' }
     );
+
+    await page.click({ text: '查看本次上下文', exact: true });
+    await page.waitForTarget({ text: '收起本次上下文', exact: true });
+    const panel = await page.evaluate<string>(
+      () => document.querySelector('[class*="contextBody"]')?.textContent ?? ''
+    );
+    expect(panel).toContain('xAI Grok');
+    expect(panel).toContain('前文');
     await captureForReview(page, 'editor-ai-continuation-panel');
 
     await page.click({ text: '放弃', within: '[role="status"]', exact: true });
