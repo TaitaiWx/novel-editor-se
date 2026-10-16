@@ -39,7 +39,7 @@ export default defineConfig({
         'apps/pc/src/**/*.{ts,tsx}',
       ],
       exclude: ['**/*.d.ts'],
-      reporter: ['text-summary', 'html'],
+      reporter: ['text-summary', 'json-summary', 'html'],
     },
   },
 });

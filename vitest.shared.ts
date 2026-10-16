@@ -13,12 +13,14 @@ import path from 'node:path';
 export const REPO_ROOT = __dirname;
 
 /** 测试临时目录根：<系统临时目录>/novel-editor-tests/<套件> */
-export function getTestTmpRoot(suite: 'ut' | 'e2e'): string {
+type TestSuite = 'ut' | 'e2e' | 'ui-e2e';
+
+export function getTestTmpRoot(suite: TestSuite): string {
   return path.join(os.tmpdir(), 'novel-editor-tests', suite);
 }
 
 /** 让子进程与 os.tmpdir() 都指向测试临时目录 */
-export function buildTmpEnv(suite: 'ut' | 'e2e'): Record<string, string> {
+export function buildTmpEnv(suite: TestSuite): Record<string, string> {
   const root = getTestTmpRoot(suite);
   return { TMPDIR: root, TEMP: root, TMP: root };
 }
@@ -30,9 +32,10 @@ export function buildTmpEnv(suite: 'ut' | 'e2e'): Record<string, string> {
  */
 export const UT_ARTIFACT_DIRS: string[] = [];
 export const E2E_ARTIFACT_DIRS = [path.join(REPO_ROOT, 'apps/pc/e2e/.artifacts')];
+export const UI_E2E_ARTIFACT_DIRS = [path.join(REPO_ROOT, 'packages/ui/e2e/.artifacts')];
 
 /** 删除上一次运行留下的临时目录与产物，并重建临时目录根 */
-export function cleanTestArtifacts(suite: 'ut' | 'e2e', artifactDirs: string[]): void {
+export function cleanTestArtifacts(suite: TestSuite, artifactDirs: string[]): void {
   const tmpRoot = getTestTmpRoot(suite);
   for (const dir of [tmpRoot, ...artifactDirs]) {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3 });

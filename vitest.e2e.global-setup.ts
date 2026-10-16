@@ -11,7 +11,13 @@ import { createRequire } from 'node:module';
 import { createConnection } from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { E2E_ARTIFACT_DIRS, REPO_ROOT, cleanTestArtifacts } from './vitest.shared';
+import type { TestProject } from 'vitest/node';
+import {
+  E2E_ARTIFACT_DIRS,
+  UI_E2E_ARTIFACT_DIRS,
+  REPO_ROOT,
+  cleanTestArtifacts,
+} from './vitest.shared';
 
 const PC_ROOT = path.join(REPO_ROOT, 'apps/pc');
 const DIST_DIR = path.join(PC_ROOT, 'dist');
@@ -123,7 +129,12 @@ function isPortInUse(port: number): Promise<boolean> {
   });
 }
 
-export default async function setup(): Promise<void> {
+export default async function setup(project: TestProject): Promise<void> {
+  if (project.name === 'ui') {
+    // UI 测试在自己的 beforeAll 中构建临时页面，不加载或重建完整应用。
+    cleanTestArtifacts('ui-e2e', UI_E2E_ARTIFACT_DIRS);
+    return;
+  }
   cleanTestArtifacts('e2e', E2E_ARTIFACT_DIRS);
 
   if (await isPortInUse(DEV_SERVER_PORT)) {

@@ -65,8 +65,8 @@ pnpm test:ui
 pnpm test:ui:e2e
 ```
 
-- UT：Vitest + happy-dom + Testing Library。覆盖所有组件目录，测试键盘导航、输入法保护、焦点恢复、受控输入、异步失败和差异编辑。`coverage/ui/index.html` 为报告，`coverage/ui/coverage-summary.json` 可供 CI 读取。统计包含整个 `src`，只排除类型声明；最低要求：行 95%、语句 90%、函数 90%、分支 85%。根目录 `pnpm test:ut` 也会执行这些用例。
-- E2E：Vitest + 仓库已有的轻量 CDP 客户端（Node 24 原生 WebSocket），不使用 Playwright。测试真实 Electron Chromium 中的点击、键盘、弹层层级、模态焦点、撤销和窄窗口布局。
+- UT 复用根目录 `vitest.config.ts`，`test:ui` 只筛选 UI 用例并限定覆盖率范围与门槛，没有单独的 UI 配置。Vitest + happy-dom + Testing Library。覆盖所有组件目录，测试键盘导航、输入法保护、焦点恢复、受控输入、异步失败和差异编辑。`coverage/ui/index.html` 为报告，`coverage/ui/coverage-summary.json` 可供 CI 读取。统计包含整个 `src`，只排除类型声明；最低要求：行 95%、语句 90%、函数 90%、分支 85%。根目录 `pnpm test:ut` 也会执行这些用例。
+- E2E 统一由 `vitest.e2e.config.ts` 管理：`pc` 为完整应用，`ui` 为组件测试窗口。`pnpm test:e2e` 运行两组，`pnpm test:ui:e2e` 等价于 `pnpm test:e2e --project ui`，只运行 UI。使用 Vitest + 仓库已有的轻量 CDP 客户端（Node 24 原生 WebSocket），不使用 Playwright。测试真实 Electron Chromium 中的点击、键盘、弹层层级、模态焦点、撤销和窄窗口布局。
 - E2E 将组件测试页面构建到系统临时目录，启动独立 Electron 进程，使用临时用户目录，不加载应用、数据库或工作区，也不覆盖 `apps/pc/dist`。测试结束自动清理，失败截图与日志在 `packages/ui/e2e/.artifacts/`。需先安装项目依赖和 Electron；Linux CI 使用 `xvfb-run -a pnpm test:ui:e2e`。
 - 测试页面提供应用同口径的主题变量；生产方仍负责注入主题。原生 Modal 通过共享浮层容器让子下拉保持在模态范围内。
 

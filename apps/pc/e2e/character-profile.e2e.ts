@@ -7,6 +7,12 @@ import { GROWTH_SECTION, setupAppSuite } from './support/suite';
 import { selectWork } from './support/workbench';
 
 type Target = { type: 'design' | 'voice' | 'entry'; key: string };
+type StoredProfile = {
+  design: Record<string, string>;
+  voice: Record<string, string>;
+  development?: Record<string, string>;
+  media?: unknown;
+};
 const suite = setupAppSuite({ fixture: { prefix: 'novel-editor-e2e-profile-' } });
 const TABS = '[role="tablist"][aria-label="人物详情"]';
 const APPEARANCE = '[role="textbox"][aria-label="人物外貌"]';
@@ -113,7 +119,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
   await selectWork(suite.page, FIXTURE_WORK);
-  const seeded = await suite.page.evaluate(
+  const seeded = await suite.page.evaluate<{ id: number; attributes: Record<string, unknown> }>(
     async (root: string, url: string, key: string) => {
       const rows = await window.electron.ipcRenderer.invoke('db-character-list-by-folder', root);
       const person = rows.find((row) => row.name === '林舟')!;
@@ -154,15 +160,10 @@ afterAll(async () => {
 });
 
 async function stored() {
-  return suite.page.evaluate(
+  return suite.page.evaluate<StoredProfile>(
     async (root: string, id: number) => {
       const rows = await window.electron.ipcRenderer.invoke('db-character-list-by-folder', root);
-      return JSON.parse(rows.find((row) => row.id === id)!.attributes) as {
-        design: Record<string, string>;
-        voice: Record<string, string>;
-        development?: Record<string, string>;
-        media?: unknown;
-      };
+      return JSON.parse(rows.find((row) => row.id === id)!.attributes) as StoredProfile;
     },
     workPath(),
     characterId
@@ -233,17 +234,20 @@ describe('人物资料：生成、差异、保存与切换保护', () => {
     );
     expect(keys).not.toContain('media');
     expect(await cleanText(APPEARANCE)).toBe(NEW_APPEARANCE);
-    const diff = await suite.page.evaluate((selector: string) => {
-      const field = document.querySelector(selector)!;
-      return {
-        added: Array.from(field.querySelectorAll('.diff-text-added'))
-          .map((el) => el.textContent)
-          .join(''),
-        deleted: Array.from(field.querySelectorAll('.diff-text-deleted'))
-          .map((el) => el.textContent)
-          .join(''),
-      };
-    }, APPEARANCE);
+    const diff = await suite.page.evaluate<{ added: string; deleted: string }>(
+      (selector: string) => {
+        const field = document.querySelector(selector)!;
+        return {
+          added: Array.from(field.querySelectorAll('.diff-text-added'))
+            .map((el) => el.textContent)
+            .join(''),
+          deleted: Array.from(field.querySelectorAll('.diff-text-deleted'))
+            .map((el) => el.textContent)
+            .join(''),
+        };
+      },
+      APPEARANCE
+    );
     expect(diff.added).toContain('蓝色长袍');
     expect(diff.deleted).toBe('旧布衣');
     expect((await stored()).design.appearance).toBe('黑发，旧布衣。');
