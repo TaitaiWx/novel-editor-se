@@ -224,7 +224,7 @@ describe('设定分类目录与标签', () => {
 });
 
 describe('扩展人物档案字段', () => {
-  it('选填外在、心理、家庭和关系字段读写时保留，旧人物补为空字符串', () => {
+  it('选填外在、心理和家庭字段读写时保留，旧人物补为空字符串', () => {
     const fields = {
       species: '人类',
       health: '左膝旧伤',
@@ -242,8 +242,6 @@ describe('扩展人物档案字段', () => {
       education: '师父教识字',
       influences: '师父',
       socialPosition: '学徒',
-      socialStyle: '慢热',
-      intimacyStyle: '争执后解释',
     };
     const parsed = parseCharacterDesign(
       Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, ` ${value} `]))
@@ -256,12 +254,23 @@ describe('扩展人物档案字段', () => {
       selfImage: '',
       beliefs: '',
       family: '',
-      intimacyStyle: '',
     });
-    expect(isDesignEmpty(parseCharacterDesign({ intimacyStyle: '争执后解释' }))).toBe(false);
+    expect(isDesignEmpty(parseCharacterDesign({ family: '匠户出身' }))).toBe(false);
   });
 
-  it('续写人物上下文包含新增心理和关系字段，不退回简介丢失细节', () => {
+  it('旧关系字段不再存入人物设计，也不算作设计内容', () => {
+    const parsed = parseCharacterDesign({
+      relationships: '师徒',
+      socialStyle: '慢热',
+      intimacyStyle: '争执后解释',
+    });
+    expect(parsed).not.toHaveProperty('relationships');
+    expect(parsed).not.toHaveProperty('socialStyle');
+    expect(parsed).not.toHaveProperty('intimacyStyle');
+    expect(isDesignEmpty(parsed)).toBe(true);
+  });
+
+  it('续写人物上下文包含心理和家庭字段，不混入旧关系字段', () => {
     expect(
       describeCharacter(
         '林舟',
@@ -273,9 +282,7 @@ describe('扩展人物档案字段', () => {
         }),
         '旧简介'
       )
-    ).toBe(
-      '林舟（身体状况：左膝旧伤；信念原则：重承诺；家庭与阶层：匠户出身；亲密与冲突：争执后解释）'
-    );
+    ).toBe('林舟（身体状况：左膝旧伤；信念原则：重承诺；家庭与阶层：匠户出身）');
   });
 
   it('扩展字段以 Unicode 码点截断，不留下半个代理项', () => {

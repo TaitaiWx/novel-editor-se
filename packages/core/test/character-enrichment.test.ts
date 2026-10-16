@@ -45,12 +45,10 @@ describe('enrichment batches', () => {
         'design:education',
         'design:influences',
         'design:socialPosition',
-        'design:relationships',
-        'design:socialStyle',
-        'design:intimacyStyle',
         'entry:identity',
       ],
     ],
+    ['social', ['relation:note']],
     [
       'power',
       [
@@ -175,57 +173,81 @@ describe('scoped enrichment drafts', () => {
     expect(result.voice).toEqual({ age: '长'.repeat(20), timbre: '低'.repeat(60) });
   });
 
-  it('new entries remain creative plans despite model claims that they already happened', () => {
-    const result = parseEnrichment(
-      {
-        entries: [
-          {
-            kind: 'skill',
-            name: '  听风  ',
-            description: ' 听出脚步方向 ',
-            status: 'active',
-            stage: '第二卷',
-          },
-          { kind: 'skill', name: '听风', description: '重复建议' },
-          { kind: 'goal', name: '出海', description: '其他页内容' },
-          { id: 'unknown', kind: 'equipment', name: '旧剑', description: '伪造旧条目' },
-        ],
-      },
-      'power',
-      person,
-      ids(),
-      at
-    );
-    expect(developmentEntries(result.development)).toEqual([
-      {
-        id: 'draft:1',
-        kind: 'skill',
-        name: '听风',
-        description: '听出脚步方向',
-        status: 'planned',
-        stage: '第二卷',
-        chapter: '',
-        quote: '',
-        relatedIds: [],
-        growthEventId: '',
-        events: [
-          {
-            id: 'draft:1',
-            at,
-            stage: '第二卷',
-            status: 'planned',
-            note: '听出脚步方向',
-            chapter: '',
-            quote: '',
-            source: 'ai',
-            growthEventId: '',
-          },
-        ],
-      },
-    ]);
-  });
+  it.each(['planned', 'active', 'resolved', 'retired'] as const)(
+    'new drafts retain explicit status %s and deduplicate accepted entries',
+    (status) => {
+      const result = parseEnrichment(
+        {
+          entries: [
+            {
+              kind: 'skill',
+              name: '  听风  ',
+              description: ' 听出脚步方向 ',
+              status,
+              stage: '第二卷',
+            },
+            { kind: 'skill', name: '听风', description: '重复建议', status: 'active' },
+            { kind: 'goal', name: '出海', description: '其他页内容' },
+            {
+              id: 'unknown',
+              kind: 'equipment',
+              name: '旧剑',
+              description: '伪造旧条目',
+              status: 'active',
+            },
+          ],
+        },
+        'power',
+        person,
+        ids(),
+        at
+      );
+      expect(developmentEntries(result.development)).toEqual([
+        {
+          id: 'draft:1',
+          kind: 'skill',
+          name: '听风',
+          description: '听出脚步方向',
+          status,
+          stage: '第二卷',
+          chapter: '',
+          quote: '',
+          relatedIds: [],
+          growthEventId: '',
+          events: [
+            {
+              id: 'draft:1',
+              at,
+              stage: '第二卷',
+              status,
+              note: '听出脚步方向',
+              chapter: '',
+              quote: '',
+              source: 'ai',
+              growthEventId: '',
+            },
+          ],
+        },
+      ]);
+    }
+  );
 
-  it('updates the original entry id and preserves its full text, status, links and prior history', () => {
+  it.each([undefined, '', 'unknown'])(
+    'rejects a missing or invalid story status %s instead of defaulting to a plan',
+    (status) => {
+      expect(() =>
+        parseEnrichment(
+          { entries: [{ kind: 'skill', name: '听风', description: '听出脚步方向', status }] },
+          'power',
+          person,
+          ids(),
+          at
+        )
+      ).toThrowError(expect.objectContaining({ kind: 'constraint' }));
+    }
+  );
+
+  it('updates the original entry status and retains its id, full text, links and prior history', () => {
     const previous: DevelopmentEntry = {
       id: 'sword',
       kind: 'equipment',
@@ -261,7 +283,13 @@ describe('scoped enrichment drafts', () => {
             description: '师父赠送，剑柄有裂纹，可藏纸条。',
             status: 'retired',
           },
-          { id: 'sword', kind: 'equipment', name: '重复', description: '不可覆盖前一条' },
+          {
+            id: 'sword',
+            kind: 'equipment',
+            name: '重复',
+            description: '不可覆盖前一条',
+            status: 'active',
+          },
         ],
       },
       'power',
@@ -273,16 +301,16 @@ describe('scoped enrichment drafts', () => {
     expect(entry).toMatchObject({
       id: 'sword',
       name: '旧剑',
-      status: 'active',
+      status: 'retired',
       stage: '离乡',
       relatedIds: ['mentor'],
       growthEventId: 'growth:1',
       description: '师父赠送，剑柄有裂纹，可藏纸条。',
     });
-    expect(entry.events.map((event) => [event.note, event.source])).toEqual([
-      ['师父赠送，剑柄有裂纹。', 'manual'],
-      ['获得旧剑', 'manual'],
-      ['师父赠送，剑柄有裂纹，可藏纸条。', 'ai'],
+    expect(entry.events.map((event) => [event.note, event.source, event.status])).toEqual([
+      ['师父赠送，剑柄有裂纹。', 'manual', 'active'],
+      ['获得旧剑', 'manual', 'active'],
+      ['师父赠送，剑柄有裂纹，可藏纸条。', 'ai', 'retired'],
     ]);
     expect(previous.events).toHaveLength(1);
   });
@@ -291,7 +319,15 @@ describe('scoped enrichment drafts', () => {
     expect(
       parseEnrichment(
         {
-          entries: [{ id: 'legacy:identity', kind: 'identity', name: '铁匠', description: '学徒' }],
+          entries: [
+            {
+              id: 'legacy:identity',
+              kind: 'identity',
+              name: '铁匠',
+              description: '学徒',
+              status: 'active',
+            },
+          ],
         },
         'environment',
         { ...person, development: { 'legacy:identity': '' } },

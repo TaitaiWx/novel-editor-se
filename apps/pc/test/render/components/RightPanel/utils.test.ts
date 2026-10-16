@@ -1,4 +1,5 @@
 import type { OutlineNode } from '@novel-editor/basic-algorithm';
+import { parseCharacterDesign } from '@novel-editor/core/entity-media';
 import {
   CHARACTER_CATEGORY_LABELS,
   DEFAULT_CHARACTER_HIGHLIGHT_COLOR,
@@ -453,8 +454,10 @@ describe('character category & attributes', () => {
     const attrs = parseCharacterAttributes('', '主角');
     expect(attrs).toEqual({
       avatar: undefined,
-      design: { appearance: '', personality: '', background: '', speech: '', outfit: '' },
+      design: parseCharacterDesign(null),
+      development: {},
       media: [],
+      voice: undefined,
       aliases: [],
       category: 'major',
       group: '',
@@ -470,7 +473,8 @@ describe('character category & attributes', () => {
 
   it('returns safe defaults for malformed JSON', () => {
     expect(parseCharacterAttributes('{oops', '女主')).toEqual({
-      design: { appearance: '', personality: '', background: '', speech: '', outfit: '' },
+      design: parseCharacterDesign(null),
+      development: {},
       media: [],
       aliases: [],
       category: 'major',
@@ -501,7 +505,7 @@ describe('character category & attributes', () => {
     };
     const json = stringifyCharacterAttributes({ avatar: media[0].path, design, media }, '主角');
     const parsed = parseCharacterAttributes(json, '主角');
-    expect(parsed.design).toEqual(design);
+    expect(parsed.design).toEqual(parseCharacterDesign(design));
     expect(parsed.media).toEqual(media);
     expect(parsed.avatar).toBe(media[0].path);
     // 例如 AI 补全人物别名：展开旧属性再写回，设计与图集仍在
@@ -509,7 +513,7 @@ describe('character category & attributes', () => {
       stringifyCharacterAttributes({ ...parsed, aliases: ['阿舟'] }, '主角'),
       '主角'
     );
-    expect(rewritten.design).toEqual(design);
+    expect(rewritten.design).toEqual(parseCharacterDesign(design));
     expect(rewritten.media).toHaveLength(1);
     expect(JSON.parse(stringifyCharacterAttributes({}, ''))).not.toHaveProperty('design');
     expect(JSON.parse(stringifyCharacterAttributes({}, ''))).not.toHaveProperty('media');

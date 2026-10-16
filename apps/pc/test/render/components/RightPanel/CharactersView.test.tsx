@@ -2,7 +2,8 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { Character, CharacterCamp } from '@/render/components/RightPanel/types';
+import type { CharacterGraphPanel } from '@/render/components/RightPanel/CharacterGraphPanel';
+import type { CharacterDetailWorkspace } from '@/render/components/RightPanel/CharactersView/CharacterDetailWorkspace';
 import {
   installElectronMock,
   uninstallElectronMock,
@@ -11,47 +12,32 @@ import {
 
 // 图谱与详情工作区较重，替换为暴露关键 props 的轻量桩，聚焦 CharactersView 自身的编排逻辑
 vi.mock('@/render/components/RightPanel/CharacterGraphPanel', () => ({
-  CharacterGraphPanel: (props: {
-    characters: Character[];
-    links: unknown[];
-    selectedCharacter: Character | null;
-    selectedRelations: unknown[];
-    clusteredCharacters: Record<CharacterCamp, Array<Character & { heat: number }>>;
-    relationStageStats: Array<{ stage: string; count: number }>;
-    onSelectCharacter: (id: number | null) => void;
-  }) => (
+  CharacterGraphPanel: (props: React.ComponentProps<typeof CharacterGraphPanel>) => (
     <div data-testid="graph">
-      <span data-testid="graph-selected">{props.selectedCharacter?.name ?? '无'}</span>
-      <span data-testid="graph-relations">{props.selectedRelations.length}</span>
-      <span data-testid="graph-stages">
-        {props.relationStageStats.map((s) => `${s.stage}:${s.count}`).join(',')}
+      <span data-testid="graph-selected">
+        {props.characters.find((character) => character.id === props.selectedCharacterId)?.name ??
+          '无'}
       </span>
-      <span data-testid="graph-heat">
-        {(Object.keys(props.clusteredCharacters) as CharacterCamp[])
-          .map((camp) =>
-            props.clusteredCharacters[camp].map((c) => `${camp}:${c.name}:${c.heat}`).join(';')
-          )
-          .filter(Boolean)
-          .join('|')}
+      <span data-testid="graph-relations">{props.links.length}</span>
+      <span data-testid="graph-characters">
+        {props.characters.map((character) => character.name).join(',')}
       </span>
-      {props.characters.map((c) => (
-        <button key={c.id} onClick={() => props.onSelectCharacter(c.id)}>
-          选择{c.name}
-        </button>
+      {props.characters.map((character) => (
+        <React.Fragment key={character.id}>
+          <button onClick={() => props.onSelectCharacter(character.id)}>
+            选择{character.name}
+          </button>
+          <button onClick={() => props.onOpenCharacter?.(character.id)}>
+            编辑{character.name}属性
+          </button>
+        </React.Fragment>
       ))}
     </div>
   ),
 }));
 
 vi.mock('@/render/components/RightPanel/CharactersView/CharacterDetailWorkspace', () => ({
-  CharacterDetailWorkspace: (props: {
-    focusedCharacter: Character | null;
-    focusedCamp: CharacterCamp | null;
-    focusedHeat: number;
-    selectedRelations: unknown[];
-    novelCorpusFileCount: number;
-    graphView: React.ReactNode;
-  }) => (
+  CharacterDetailWorkspace: (props: React.ComponentProps<typeof CharacterDetailWorkspace>) => (
     <div data-testid="detail">
       <span data-testid="detail-name">{props.focusedCharacter?.name ?? '未找到'}</span>
       <span data-testid="detail-camp">{props.focusedCamp ?? '-'}</span>
@@ -188,7 +174,7 @@ describe('CharactersView', () => {
     expect(screen.getByTestId('growth-overview-embed')).toBeTruthy();
   });
 
-  it('加载人物、通知 onCharactersChange、统计阵营与热度', async () => {
+  it('加载人物、通知 onCharactersChange、传入图谱人物', async () => {
     installDb({ rows: seedRows });
     const onCharactersChange = vi.fn();
     render(
@@ -205,10 +191,10 @@ describe('CharactersView', () => {
       )
     );
     openRelations();
-    expect(screen.getByTestId('graph-heat').textContent).toContain('林舟');
+    expect(screen.getByTestId('graph-characters').textContent).toContain('林舟');
   });
 
-  it('选择人物后关系过滤到该人物', async () => {
+  it('图谱选中人物时保留完整关系网络，编辑属性时打开人物', async () => {
     installDb({
       rows: [...seedRows, { id: 3, name: '墨渊', role: '反派', description: '', attributes: '{}' }],
       relations: [
@@ -216,16 +202,38 @@ describe('CharactersView', () => {
         { id: 'r2', sourceId: 2, targetId: 3, tone: 'rival', label: '宿敌', note: '决裂' },
       ],
     });
-    render(<CharactersView folderPath="/novel" content="" />);
+    const onOpenCharacter = vi.fn();
+    render(<CharactersView folderPath="/novel" content="" onOpenCharacter={onOpenCharacter} />);
     expect((await screen.findAllByText('人物 3')).length).toBeGreaterThan(0);
     openRelations();
-    await waitFor(() => expect(screen.getByTestId('graph-relations').textContent).not.toBe('0'));
-    const total = Number(screen.getByTestId('graph-relations').textContent);
-    expect(screen.getByTestId('graph-stages').textContent).not.toBe('');
+    await waitFor(() => expect(screen.getByTestId('graph-relations').textContent).toBe('2'));
 
     fireEvent.click(screen.getByRole('button', { name: '选择林舟' }));
     expect(screen.getByTestId('graph-selected').textContent).toBe('林舟');
-    expect(Number(screen.getByTestId('graph-relations').textContent)).toBeLessThan(total);
+    expect(screen.getByTestId('graph-relations').textContent).toBe('2');
+    expect(onOpenCharacter).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '编辑林舟属性' }));
+    expect(onOpenCharacter).toHaveBeenCalledWith(1);
+  });
+
+  it('详情只列当前人物的关系，图谱选择其他人物不改变详情所属人物', async () => {
+    installDb({
+      rows: [...seedRows, { id: 3, name: '墨渊', role: '反派', description: '', attributes: '{}' }],
+      relations: [
+        { id: 'r1', sourceId: 1, targetId: 2, tone: 'ally', label: '盟友', note: '初识' },
+        { id: 'r2', sourceId: 2, targetId: 3, tone: 'rival', label: '对立', note: '决裂' },
+      ],
+    });
+    render(<CharactersView folderPath="/novel" content="" initialSelectedCharacterId={1} />);
+    await waitFor(() => expect(screen.getByTestId('detail-name').textContent).toBe('林舟'));
+    expect(screen.getByTestId('detail-relations').textContent).toBe('1');
+    expect(screen.getByTestId('graph-relations').textContent).toBe('2');
+
+    fireEvent.click(screen.getByRole('button', { name: '选择白芷' }));
+    expect(screen.getByTestId('graph-selected').textContent).toBe('白芷');
+    expect(screen.getByTestId('detail-name').textContent).toBe('林舟');
+    expect(screen.getByTestId('detail-relations').textContent).toBe('1');
+    expect(screen.getByTestId('graph-relations').textContent).toBe('2');
   });
 
   it('新增人物', async () => {

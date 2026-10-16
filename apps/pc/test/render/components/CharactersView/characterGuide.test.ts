@@ -16,10 +16,10 @@ describe('角色使用说明', () => {
   });
 
   it('人物详情的每个分页都有对应说明（不能只讲成长档案）', () => {
-    const titles = CHARACTER_GUIDE.sections.map((section) => section.title).join('|');
     for (const tab of CHARACTER_DETAIL_TABS) {
-      const key = tab.label.split('与')[0];
-      expect(titles, tab.label).toContain(key);
+      const section = CHARACTER_GUIDE.sections.find((item) => item.id === tab.id);
+      expect(section, tab.label).toBeDefined();
+      expect(section?.title, tab.label).toContain(tab.label);
     }
     // 成长档案只是其中一节
     const growthSections = CHARACTER_GUIDE.sections.filter((section) =>

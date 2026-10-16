@@ -1,7 +1,7 @@
 /**
  * 表单控件（独立的 Electron 实例）
  *
- * - 人物详情「关系与高亮」里的「仅在每章第一次出现时高亮」是自绘开关（components/Switch），不是浏览器原生 checkbox
+ * - 人物详情「设置」里的「仅在每章第一次出现时高亮」是自绘开关（components/Switch），不是浏览器原生 checkbox
  * - 点击开关本体 / 点击标签文字都能切换，aria-checked 同步，修改写入数据库（人物 attributes）
  */
 import { describe, expect, it } from 'vitest';
@@ -17,7 +17,7 @@ import { FIXTURE_WORK, FIXTURE_WORK_DIR } from './support/fixture';
 const suite = setupAppSuite({ fixture: { prefix: 'novel-editor-e2e-controls-' } });
 
 const DETAIL_TABS = '[role="tablist"][aria-label="人物详情"]';
-const PANEL = '[role="tabpanel"][aria-label="关系与高亮"]';
+const PANEL = '[role="tabpanel"][aria-label="设置"]';
 // 真实 checkbox 完全透明（定位器只认可见元素），交互目标是自绘轨道与整个 label
 const SWITCH = `${PANEL} input[role="switch"]`;
 const TRACK = `${SWITCH} + span`;
@@ -42,7 +42,7 @@ describe('自绘复选框 / 开关', () => {
       },
       { message: '打开林舟的人物详情' }
     );
-    await page.click({ text: '关系与高亮', within: DETAIL_TABS, exact: true });
+    await page.click({ text: '设置', within: DETAIL_TABS, exact: true });
     await page.waitForTarget(TRACK);
 
     // 原生 checkbox 只作语义载体（完全透明），看到的是自绘轨道

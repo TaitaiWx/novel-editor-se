@@ -6,7 +6,7 @@ import { FIXTURE_WORK, FIXTURE_WORK_DIR } from './support/fixture';
 import { GROWTH_SECTION, setupAppSuite } from './support/suite';
 import { selectWork } from './support/workbench';
 
-type Target = { type: 'design' | 'voice' | 'entry'; key: string };
+type Target = { type: 'design' | 'voice' | 'entry' | 'relation'; key: string };
 type StoredProfile = {
   design: Record<string, string>;
   voice: Record<string, string>;
@@ -18,6 +18,15 @@ const TABS = '[role="tablist"][aria-label="人物详情"]';
 const APPEARANCE = '[role="textbox"][aria-label="人物外貌"]';
 const API_KEY = 'profile-e2e-local-key';
 const NEW_APPEARANCE = '黑发，蓝色长袍。\n左眉有疤。';
+const ENVIRONMENT_KEYS = [
+  'environment',
+  'background',
+  'family',
+  'education',
+  'influences',
+  'socialPosition',
+  'identity',
+];
 const requests: Target[][] = [];
 let server: Server;
 let baseUrl = '';
@@ -30,26 +39,13 @@ let initial: Record<string, unknown>;
 const workPath = () => suite.fixture.resolve(FIXTURE_WORK_DIR);
 
 function answer(res: ServerResponse, targets: Target[]) {
-  const environment = targets.some((target) =>
-    [
-      'environment',
-      'background',
-      'family',
-      'education',
-      'influences',
-      'socialPosition',
-      'relationships',
-      'socialStyle',
-      'intimacyStyle',
-      'identity',
-    ].includes(target.key)
-  );
+  const environment = targets.some((target) => ENVIRONMENT_KEYS.includes(target.key));
   const invalid = failEnvironment && environment;
   const truncated = truncateFirst;
   truncateFirst = false;
   const design: Record<string, string> = {};
   const voice: Record<string, string> = {};
-  const entries: Array<Record<string, string>> = [];
+  const entries: Array<Record<string, unknown>> = [];
   for (const target of targets) {
     if (target.type === 'design') {
       const values: Record<string, string> = {
@@ -68,6 +64,9 @@ function answer(res: ServerResponse, targets: Target[]) {
         name: { identity: '海港学徒', equipment: '回声罗盘', goal: '寻找旧航线' }[target.key]!,
         description: '跟随航线探索，记住同行者留下的线索。',
         stage: '离乡后',
+        status: target.key === 'goal' ? 'planned' : 'active',
+        relatedIds: [],
+        chapterPaths: [],
       });
   }
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -80,7 +79,7 @@ function answer(res: ServerResponse, targets: Target[]) {
             content:
               invalid || truncated
                 ? '{"design":{"background":"未结束'
-                : JSON.stringify({ design, voice, entries }),
+                : JSON.stringify({ design, voice, entries, relationNotes: {}, newRelations: [] }),
           },
         },
       ],
@@ -194,7 +193,7 @@ async function cleanText(selector: string): Promise<string> {
 }
 
 describe('人物资料：生成、差异、保存与切换保护', () => {
-  it('生成关闭浮层并锁定输入；截断自动拆分，覆盖四页选填项但不改图集/成长', async () => {
+  it('生成关闭浮层并锁定输入；截断自动拆分，覆盖五页但不改图集/成长', async () => {
     await generate();
     await suite.page.waitUntil(() => Boolean(held), { message: '首个 AI 请求到达本地服务' });
     expect(await suite.page.exists({ text: '生成并填入', exact: true })).toBe(false);
@@ -208,11 +207,13 @@ describe('人物资料：生成、差异、保存与切换保护', () => {
       await suite.page.evaluate(
         (selector: string) =>
           Array.from(document.querySelectorAll(`${selector} [role="tab"]`))
-            .slice(4)
-            .every((el) => !el.querySelector('[aria-label="生成中"]')),
+            .filter((el) =>
+              ['成长档案', '人物图集', '设置'].some((label) => el.textContent?.startsWith(label))
+            )
+            .map((el) => Boolean(el.querySelector('[aria-label="生成中"]'))),
         TABS
       )
-    ).toBe(true);
+    ).toEqual([false, false, false]);
     const release = held!;
     held = undefined;
     release();
@@ -233,6 +234,10 @@ describe('人物资料：生成、差异、保存与切换保护', () => {
       ])
     );
     expect(keys).not.toContain('media');
+    expect(requests.flat()).toContainEqual({ type: 'relation', key: 'note' });
+    for (const obsolete of ['relationships', 'socialStyle', 'intimacyStyle'])
+      expect(keys).not.toContain(obsolete);
+    expect(await suite.page.exists(`${TABS} [data-failed="true"]`)).toBe(false);
     expect(await cleanText(APPEARANCE)).toBe(NEW_APPEARANCE);
     const diff = await suite.page.evaluate<{ added: string; deleted: string }>(
       (selector: string) => {
@@ -252,12 +257,20 @@ describe('人物资料：生成、差异、保存与切换保护', () => {
     expect(diff.deleted).toBe('旧布衣');
     expect((await stored()).design.appearance).toBe('黑发，旧布衣。');
     expect((await stored()).media).toEqual(initial.media);
+    expect((await stored()).development).toEqual(initial.development);
   });
 
   it('未保存时切换角色会定位提示；直接修改后只保存人物页，其他页可分别取消或保存', async () => {
     const { page } = suite;
     await page.click({ text: '苏晴', within: GROWTH_SECTION, exact: true });
-    await page.waitForTarget({ text: '尚未保存', within: '[role="alert"]' });
+    await page.waitForTarget('[role="alert"]');
+    await page.waitFor(
+      () =>
+        Array.from(document.querySelectorAll('[role="alert"]')).some((notice) =>
+          notice.textContent?.includes('尚未保存')
+        ),
+      { message: '切换人物时显示未保存草稿提示' }
+    );
     expect(await cleanText(APPEARANCE)).toBe(NEW_APPEARANCE);
     await page.click(APPEARANCE);
     await page.press('a', [process.platform === 'darwin' ? 'Meta' : 'Control']);
@@ -279,8 +292,8 @@ describe('人物资料：生成、差异、保存与切换保护', () => {
     expect((await stored()).design.background).toBe(
       (initial.design as Record<string, string>).background
     );
-    await tab('身世与关系');
-    await page.click('[aria-label="取消身世与关系修改"]');
+    await tab('背景');
+    await page.click('[aria-label="取消背景修改"]');
     expect((await stored()).design.background).toBe(
       (initial.design as Record<string, string>).background
     );
@@ -294,6 +307,12 @@ describe('人物资料：生成、差异、保存与切换保护', () => {
         ),
       { message: '装备条目已保存' }
     );
+    expect(
+      Object.values((await stored()).development ?? {})
+        .filter(Boolean)
+        .map((value) => JSON.parse(value))
+        .find((entry) => entry.name === '回声罗盘')
+    ).toMatchObject({ kind: 'equipment', status: 'active', stage: '离乡后' });
     await tab('剧情发展');
     await page.click('[aria-label="取消剧情发展修改"]');
     expect(JSON.stringify((await stored()).development)).not.toContain('寻找旧航线');
@@ -316,9 +335,16 @@ describe('人物资料：生成、差异、保存与切换保护', () => {
 
   it('格式失败显示中文原因和红色状态；只重试失败页并保留其他页草稿', async () => {
     failEnvironment = true;
+    const failedRunStart = requests.length;
     await generate();
     await complete();
-    await tab('身世与关系');
+    expect(
+      requests
+        .slice(failedRunStart)
+        .filter((targets) => targets.some((target) => ENVIRONMENT_KEYS.includes(target.key)))
+        .map((targets) => targets.length)
+    ).toEqual([4, 2, 1]);
+    await tab('背景');
     await suite.page.waitForTarget({ text: '模型返回的资料格式', within: '[role="alert"]' });
     expect(
       await suite.page.evaluate(
@@ -337,14 +363,9 @@ describe('人物资料：生成、差异、保存与切换保护', () => {
         .slice(start)
         .flat()
         .map((target) => target.key)
-    ).toContain('family');
-    expect(
-      requests
-        .slice(start)
-        .flat()
-        .map((target) => target.key)
-    ).not.toContain('appearance');
-    await suite.page.click('[aria-label="保存身世与关系修改"]');
+    ).toEqual(ENVIRONMENT_KEYS);
+    expect(await suite.page.exists(`${TABS} [data-failed="true"]`)).toBe(false);
+    await suite.page.click('[aria-label="保存背景修改"]');
     await suite.page.waitUntil(
       async () => (await stored()).design.background === '在海边铁匠铺长大。',
       { message: '失败页重试后可以独立保存' }

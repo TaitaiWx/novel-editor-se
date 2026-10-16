@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import {
   captureForReview,
   ensureSidebarOpen,
-  openCharacterGrowth,
+  GROWTH_SECTION,
   setupAppSuite,
 } from './support/suite';
 import { SEL, openProjectDocs, selectWork, waitForEditorText } from './support/workbench';
@@ -185,9 +185,16 @@ describe('示例作品集展示', () => {
             ?.textContent?.trim() ?? ''
       )
     ).toContain('小石头');
-    await page.waitForTarget(
-      '[data-testid="shot-dialogue"] [data-testid="dialogue-audio"]',
-      15_000
+    const dialoguePlayer =
+      '[data-testid="shot-dialogue"] [role="group"][aria-label="音频 试听镜头 2 第 1 句"]';
+    await page.waitForTarget(`${dialoguePlayer} button[aria-label="播放"]`, 15_000);
+    // 共用播放器的音频界面隐藏 video 引擎；检查可见控件及已加载的配音媒体。
+    await page.waitFor(
+      (selector: string) => {
+        const media = document.querySelector<HTMLVideoElement>(`${selector} video`);
+        return !!media && media.readyState >= 1 && media.duration > 0;
+      },
+      { args: [dialoguePlayer], timeout: 15_000, message: '镜头 2 配音读到有效时长' }
     );
     await page.waitForTarget('[data-testid="shot-sfx"] [data-testid="sfx-cue"]');
 
@@ -285,7 +292,7 @@ describe('示例作品集展示', () => {
     const { page } = suite;
     await ensureSidebarOpen(page);
     await selectWork(page, FIXTURE_WORK);
-    // 与成长档案同一个入口打开林舟的人物详情，再切到「人物设计」
+    // 从角色分区打开林舟的人物详情，查看「人物」分页的基础设定。
     // 前面的用例展开了很长的资料树：先把「角色」分区滚到可见处并等滚动停稳，避免点到错位的行
     await page.evaluate(() =>
       document
@@ -293,29 +300,22 @@ describe('示例作品集展示', () => {
         ?.scrollIntoView({ block: 'start', behavior: 'instant' })
     );
     await new Promise((resolve) => setTimeout(resolve, 400));
-    await openCharacterGrowth(page, '林舟');
-    // 第一次打开成长卡会弹出引导，跳过以免遮挡后续操作
-    const tour = '[role="dialog"][aria-label^="引导"]';
-    await page.waitForTarget(tour).catch(() => undefined);
-    if (await page.exists(tour)) {
-      await page.click({ text: '跳过', within: tour, exact: true });
-      await page.waitForGone(tour);
-    }
+    await page.click({ text: '林舟', within: GROWTH_SECTION, exact: true });
     const tabs = '[role="tablist"][aria-label="人物详情"]';
-    await page.click({ text: '人物设计', within: tabs });
+    await page.waitForTarget(tabs);
+    await page.click({ text: '人物', within: tabs, exact: true });
     await page.waitForTarget('[data-testid="character-voice"]');
     const voice = await page.evaluate<{ gender: string; age: string; timbre: string }>(() => {
       const form = document.querySelector('[data-testid="character-voice"]');
       const input = (label: string) =>
-        (form?.querySelector(`input[aria-label="人物声音 ${label}"]`) as HTMLInputElement | null)
-          ?.value ?? '';
+        form?.querySelector(`[role="textbox"][aria-label="人物声音 ${label}"]`)?.textContent ?? '';
       return {
         gender: form?.querySelector('[aria-label="人物声音 性别"]')?.textContent?.trim() ?? '',
         age: input('年龄'),
         timbre: input('音色'),
       };
     });
-    expect(voice.gender).toContain('男声');
+    expect(voice.gender).toBe('男');
     expect(voice.age).toBe('少年');
     expect(voice.timbre).toBe('清亮、略带沙哑，说话短促');
     await captureForReview(page, 'showcase-character-voice');

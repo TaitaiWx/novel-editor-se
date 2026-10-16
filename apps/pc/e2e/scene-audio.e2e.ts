@@ -223,7 +223,16 @@ describe('场景视频 · 声音', () => {
     const copiedBgm = fixture.resolve(...MUSIC_DIR, bgmName);
     await page.waitUntil(() => existsSync(copiedBgm), { message: '背景音乐已复制到 资料/音乐/' });
     expect((await readFile(copiedBgm)).equals(await readFile(BGM_SOURCE))).toBe(true);
-    await page.waitForTarget('[data-testid="scene-audio-bgm-preview"]');
+    const bgmPlayer =
+      '[data-testid="scene-audio-section"] [role="group"][aria-label="音频 试听背景音乐"]';
+    await page.waitForTarget(`${bgmPlayer} button[aria-label="播放"]`);
+    await page.waitFor(
+      (selector: string) => {
+        const media = document.querySelector<HTMLVideoElement>(`${selector} video`);
+        return !!media && media.readyState >= 1 && media.duration > 0;
+      },
+      { args: [bgmPlayer], message: '背景音乐读到有效时长' }
+    );
     await page.waitFor(
       (selector: string) => (document.querySelector(selector)?.textContent ?? '').includes('配乐'),
       { args: [shot1Badges], message: '镜头节点显示「配乐」' }
@@ -258,9 +267,15 @@ describe('场景视频 · 声音', () => {
     expect(speech?.body).toMatchObject({ model: 'gpt-4o-mini-tts', input: '舟哥！' });
     expect(String(speech?.body.instructions)).toContain('en-US');
     // 检查器可以试听
-    await page.waitForTarget(
-      '[data-testid="shot-dialogue"] [data-testid="dialogue-audio"]',
-      15_000
+    const dialoguePlayer =
+      '[data-testid="shot-dialogue"] [role="group"][aria-label="音频 试听镜头 1 第 1 句"]';
+    await page.waitForTarget(`${dialoguePlayer} button[aria-label="播放"]`, 15_000);
+    await page.waitFor(
+      (selector: string) => {
+        const media = document.querySelector<HTMLVideoElement>(`${selector} video`);
+        return !!media && media.readyState >= 1 && media.duration > 0;
+      },
+      { args: [dialoguePlayer], timeout: 15_000, message: '生成的配音读到有效时长' }
     );
 
     // 分镜.json 记录：配音文件、语言、背景音乐

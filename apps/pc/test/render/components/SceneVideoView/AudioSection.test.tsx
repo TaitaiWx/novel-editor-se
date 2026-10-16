@@ -97,7 +97,9 @@ describe('镜头检查器 · 对白', () => {
     expect(screen.getByRole('button', { name: '为镜头 1 第 1 句生成配音' }).textContent).toBe(
       '重新配音'
     );
-    await waitFor(() => expect(screen.getByLabelText('试听镜头 1 第 1 句')).toBeTruthy());
+    const player = await screen.findByRole('group', { name: '音频 试听镜头 1 第 1 句' });
+    expect(within(player).getByRole('button', { name: '播放' })).toBeTruthy();
+    expect(within(player).getByTestId('dialogue-audio').getAttribute('src')).toMatch(/^blob:/);
     expect(readSceneFile).toHaveBeenCalledWith('镜头1-台词-l1.wav');
   });
 
@@ -206,7 +208,11 @@ describe('场景检查器 · 声音', () => {
       fadeInSec: 1,
       fadeOutSec: 2,
     });
-    await waitFor(() => expect(screen.getByLabelText('试听背景音乐')).toBeTruthy());
+    const player = await screen.findByRole('group', { name: '音频 试听背景音乐' });
+    expect(within(player).getByRole('button', { name: '播放' })).toBeTruthy();
+    expect(within(player).getByTestId('scene-audio-bgm-preview').getAttribute('src')).toMatch(
+      /^blob:/
+    );
     fireEvent.change(screen.getByLabelText('背景音乐音量'), { target: { value: '30' } });
     fireEvent.blur(screen.getByLabelText('背景音乐音量'));
     await waitFor(() => expect(onAudio.mock.calls.at(-1)?.[0].bgm?.volume).toBe(0.3));

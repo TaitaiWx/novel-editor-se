@@ -320,12 +320,16 @@ describe('CharacterSection（角色与成长档案合一）', () => {
     fireEvent.click(screen.getByLabelText('角色使用说明'));
     const dialog = screen.getByRole('dialog', { name: '角色使用说明' });
     for (const title of [
-      '人物设计与声音',
-      '图集与形象图',
+      '人物与声音',
+      '人物图集与形象图',
       '成长档案',
-      '经历与状态',
-      '关系与高亮',
+      '剧情发展与经历',
+      '社会关系',
+      '背景与身份',
+      '能力与资源',
+      '设置与正文高亮',
       '正文里的人物',
+      '常见问题',
     ]) {
       expect(dialog.textContent).toContain(title);
     }

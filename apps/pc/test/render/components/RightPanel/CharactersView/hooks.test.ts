@@ -532,17 +532,14 @@ describe('useCharacterRelations', () => {
   const KEY = `novel-editor:character-relations:${FOLDER}`;
   const CHARS = [character({ id: 1, name: '林冲' }), character({ id: 2, name: '鲁智深' })];
 
-  it('无保存关系时由人物生成默认连线；加载保存的关系', async () => {
+  it('没有保存的关系时不生成连线；加载保存的关系', async () => {
     const { settings } = setup();
     const empty = renderHook(() =>
       useCharacterRelations({ folderPath: FOLDER, characters: CHARS })
     );
     await flush();
     expect(empty.result.current.relations).toEqual([]);
-    for (const link of empty.result.current.links) {
-      expect(link.id.startsWith('generated-')).toBe(true);
-      expect(link.tone).toBe('other');
-    }
+    expect(empty.result.current.links).toEqual([]);
     const saved: CharacterRelation[] = [
       { id: 'r1', sourceId: 1, targetId: 2, label: '结义', tone: 'ally', note: '' },
     ];
@@ -567,7 +564,7 @@ describe('useCharacterRelations', () => {
     await flush();
     expect(none.result.current.relations).toEqual([]);
     await act(async () => {
-      await none.result.current.persistRelations([]);
+      await expect(none.result.current.persistRelations([])).rejects.toThrow('请先打开作品');
     });
   });
 
@@ -610,13 +607,16 @@ describe('useCharacterRelations', () => {
     expect(result.current.editingRelationId).toBe('42');
     expect(result.current.relationTone).toBe('rival');
     act(() => {
-      result.current.setRelationLabel(' 兄弟 ');
       result.current.setRelationTone('ally');
     });
     await act(async () => {
       await result.current.handleUpdateRelation();
     });
-    expect(result.current.relations[0]).toMatchObject({ label: '兄弟', tone: 'ally' });
+    expect(result.current.relations[0]).toMatchObject({ label: '盟友', tone: 'ally' });
+    expect(JSON.parse(settings.get(KEY) as string)[0]).toMatchObject({
+      label: '盟友',
+      tone: 'ally',
+    });
     expect(result.current.editingRelationId).toBeNull();
     // 未在编辑中时 update 无操作
     await act(async () => {
@@ -1221,9 +1221,9 @@ describe('useCharacterGraphLayout', () => {
     await flush();
     const [p1, p2] = def.result.current.characterPositions;
     expect(p1.x).toBeCloseTo(180);
-    expect(p1.y).toBeCloseTo(40);
+    expect(p1.y).toBeCloseTo(42);
     expect(p2.x).toBeCloseTo(180);
-    expect(p2.y).toBeCloseTo(196);
+    expect(p2.y).toBeCloseTo(198);
 
     settings.set(KEY, JSON.stringify({ 2: { x: 50, y: 60 } }));
     const { result } = renderHook(() =>
@@ -1240,7 +1240,7 @@ describe('useCharacterGraphLayout', () => {
       useCharacterGraphLayout({ folderPath: FOLDER, characters: CHARS })
     );
     await flush();
-    expect(result.current.characterPositions[0].y).toBeCloseTo(40);
+    expect(result.current.characterPositions[0].y).toBeCloseTo(42);
     const none = renderHook(() => useCharacterGraphLayout({ folderPath: null, characters: [] }));
     await flush();
     expect(none.result.current.characterPositions).toEqual([]);
@@ -1255,6 +1255,7 @@ describe('useCharacterGraphLayout', () => {
     const parent = document.createElement('div');
     const button = document.createElement('button');
     parent.appendChild(button);
+    Object.defineProperties(button, { offsetWidth: { value: 48 }, offsetHeight: { value: 48 } });
     vi.spyOn(parent, 'getBoundingClientRect').mockReturnValue({
       left: 0,
       top: 0,
@@ -1264,9 +1265,10 @@ describe('useCharacterGraphLayout', () => {
     act(() =>
       result.current.handleGraphNodeMouseDown(
         {
+          button: 0,
           currentTarget: button,
           clientX: 180,
-          clientY: 40,
+          clientY: 42,
         } as unknown as React.MouseEvent<HTMLButtonElement>,
         1
       )
@@ -1278,17 +1280,17 @@ describe('useCharacterGraphLayout', () => {
     act(() => {
       window.dispatchEvent(new MouseEvent('mousemove', { clientX: 9999, clientY: -50 }));
     });
-    expect(result.current.characterPositions[0]).toMatchObject({ x: 332, y: 24 });
+    expect(result.current.characterPositions[0]).toMatchObject({ x: 312, y: 64 });
     await act(async () => {
       window.dispatchEvent(new MouseEvent('mouseup'));
       await Promise.resolve();
     });
-    expect(JSON.parse(settings.get(KEY) as string)).toEqual({ 1: { x: 332, y: 24 } });
+    expect(JSON.parse(settings.get(KEY) as string)).toEqual({ 1: { x: 312, y: 64 } });
     // 松开后不再响应移动
     act(() => {
       window.dispatchEvent(new MouseEvent('mousemove', { clientX: 10, clientY: 10 }));
     });
-    expect(result.current.characterPositions[0]).toMatchObject({ x: 332, y: 24 });
+    expect(result.current.characterPositions[0]).toMatchObject({ x: 312, y: 64 });
   });
 
   it('无父元素或未知人物时忽略按下', async () => {
@@ -1302,6 +1304,7 @@ describe('useCharacterGraphLayout', () => {
     act(() =>
       result.current.handleGraphNodeMouseDown(
         {
+          button: 0,
           currentTarget: orphan,
           clientX: 0,
           clientY: 0,
@@ -1315,6 +1318,7 @@ describe('useCharacterGraphLayout', () => {
     act(() =>
       result.current.handleGraphNodeMouseDown(
         {
+          button: 0,
           currentTarget: button,
           clientX: 0,
           clientY: 0,

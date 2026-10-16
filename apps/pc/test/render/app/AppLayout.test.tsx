@@ -116,6 +116,7 @@ function buildController() {
       knowledgeExportOptions: {},
     }),
     derived: stub({
+      storyFileNodes: [],
       activeWorkspaceTab: null,
       activeUntitledVirtualContent: null,
       activeDocumentTab: null,

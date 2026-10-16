@@ -211,7 +211,7 @@ describe('PreviewPanel', () => {
 
 describe('VideoPreviewCard', () => {
   it('有数据时渲染播放器与元信息', () => {
-    const { container } = render(
+    render(
       <VideoPreviewCard
         title="版本快照"
         dataUrl="data:video/mp4;base64,AAA"
@@ -220,8 +220,8 @@ describe('VideoPreviewCard', () => {
         emptyText="无法加载"
       />
     );
-    expect(screen.getByText('版本快照')).toBeTruthy();
-    expect(container.querySelector('video')?.getAttribute('src')).toBe('data:video/mp4;base64,AAA');
+    const player = screen.getByRole('group', { name: '视频 版本快照' });
+    expect(player.querySelector('video')?.getAttribute('src')).toBe('data:video/mp4;base64,AAA');
     expect(screen.getByText('video/mp4')).toBeTruthy();
     expect(screen.getByText('2.00 MB')).toBeTruthy();
   });
@@ -242,6 +242,7 @@ describe('AudioPreviewCard', () => {
     );
     expect(screen.getByText('当前文件')).toBeTruthy();
     expect(screen.getByText('当前文件暂时无法读取')).toBeTruthy();
-    expect(container.querySelector('audio')).toBeNull();
+    expect(screen.queryByRole('group', { name: '音频 当前文件' })).toBeNull();
+    expect(container.querySelector('video')).toBeNull();
   });
 });

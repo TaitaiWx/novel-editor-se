@@ -129,11 +129,13 @@ describe('ResourceViewer', () => {
 
   it('音频：显示元数据并在 loadedmetadata 后显示时长', async () => {
     mockBinary({ base64Content: 'AA', byteSize: 3 * 1024 * 1024, mimeType: 'audio/mpeg' });
-    const { container } = render(<ResourceViewer filePath="/p/a.mp3" />);
-    expect(await screen.findByText('音频预览')).toBeTruthy();
+    render(<ResourceViewer filePath="/p/a.mp3" />);
+    const player = await screen.findByRole('group', { name: '音频 音频预览' });
     expect(screen.getByText('读取中')).toBeTruthy();
     expect(screen.getAllByText('3.00 MB').length).toBeGreaterThan(0);
-    const audio = container.querySelector('audio') as HTMLAudioElement;
+    // 音频界面与视频共用播放器的媒体引擎。
+    const audio = player.querySelector('video') as HTMLVideoElement;
+    expect(audio.getAttribute('src')).toBe('data:audio/mpeg;base64,AA');
     Object.defineProperty(audio, 'duration', { configurable: true, value: 125.4 });
     fireEvent.loadedMetadata(audio);
     expect(screen.getByText('2:05')).toBeTruthy();
@@ -144,11 +146,9 @@ describe('ResourceViewer', () => {
 
   it('视频：渲染 video 与大小', async () => {
     mockBinary({ base64Content: 'AA', byteSize: 500, mimeType: 'video/mp4' });
-    const { container } = render(<ResourceViewer filePath="/p/v.mp4" />);
-    expect(await screen.findByText('视频预览')).toBeTruthy();
-    expect(container.querySelector('video source')?.getAttribute('src')).toBe(
-      'data:video/mp4;base64,AA'
-    );
+    render(<ResourceViewer filePath="/p/v.mp4" />);
+    const player = await screen.findByRole('group', { name: '视频 视频预览' });
+    expect(player.querySelector('video')?.getAttribute('src')).toBe('data:video/mp4;base64,AA');
     expect(screen.getAllByText('500 B').length).toBeGreaterThan(0);
   });
 

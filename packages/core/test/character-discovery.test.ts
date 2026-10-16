@@ -160,7 +160,7 @@ describe('character discovery evidence', () => {
     ]);
   });
 
-  it('preserves source-supported optional fields across physical, social and background dimensions', () => {
+  it('preserves physical and background fields while excluding obsolete relationship fields', () => {
     const detail = '林舟身体健康，站姿挺直，出身匠户，师父教他识字，与人争执后总会主动解释。';
     expect(
       parseProfileCandidates(
@@ -173,6 +173,8 @@ describe('character discovery evidence', () => {
               { key: 'posture', value: '站姿挺直', quote: '站姿挺直' },
               { key: 'family', value: '出身匠户', quote: '出身匠户' },
               { key: 'education', value: '师父教他识字', quote: '师父教他识字' },
+              { key: 'relationships', value: '师徒', quote: '师父教他识字' },
+              { key: 'socialStyle', value: '主动解释', quote: '与人争执后总会主动解释' },
               { key: 'intimacyStyle', value: '争执后主动解释', quote: '与人争执后总会主动解释' },
             ],
           },
@@ -185,7 +187,6 @@ describe('character discovery evidence', () => {
       { key: 'posture', value: '站姿挺直', quote: '站姿挺直' },
       { key: 'family', value: '出身匠户', quote: '出身匠户' },
       { key: 'education', value: '师父教他识字', quote: '师父教他识字' },
-      { key: 'intimacyStyle', value: '争执后主动解释', quote: '与人争执后总会主动解释' },
     ]);
   });
 

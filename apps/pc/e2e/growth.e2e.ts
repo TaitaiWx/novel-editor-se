@@ -25,7 +25,7 @@ import {
   waitForSheet,
 } from './support/suite';
 import { SEL, contextMenuAction, ensureRightPanelOpen, selectWork } from './support/workbench';
-import { FIXTURE_MEMORY_DIR, FIXTURE_WORK } from './support/fixture';
+import { FIXTURE_MEMORY_DIR, FIXTURE_WORK, FIXTURE_WORK_DIR } from './support/fixture';
 
 const suite = setupAppSuite({
   fixture: { prefix: 'novel-editor-e2e-growth-', exclude: [FIXTURE_MEMORY_DIR] },
@@ -199,7 +199,7 @@ describe('成长档案：首次使用', () => {
     await page.press('Escape');
     await page.waitForGone(GROWTH_HELP);
 
-    // 文件面板「角色」的「?」：角色使用说明（人物设计 / 图集 / 成长 / 经历 / 关系 / 正文），底部切到成长档案说明
+    // 文件面板「角色」的「?」：角色使用说明（覆盖人物详情全部分页与正文人物卡片），底部切到成长档案说明
     const CHARACTER_HELP = '[role="dialog"][aria-label="角色使用说明"]';
     await page.click('section[aria-label="角色"] [aria-label="角色使用说明"]');
     await page.waitForTarget(CHARACTER_HELP);
@@ -207,10 +207,21 @@ describe('成长档案：首次使用', () => {
       (sel: string) => document.querySelector(sel)?.textContent ?? '',
       CHARACTER_HELP
     );
-    for (const title of ['人物设计与声音', '图集与形象图', '经历与状态', '关系与高亮', '正文里的人物']) {
+    for (const title of [
+      '人物与声音',
+      '人物图集与形象图',
+      '成长档案',
+      '剧情发展与经历',
+      '社会关系',
+      '背景与身份',
+      '能力与资源',
+      '设置与正文高亮',
+      '正文里的人物',
+      '常见问题',
+    ]) {
       expect(characterHelpText).toContain(title);
     }
-    await page.click({ text: '图集与形象图', within: CHARACTER_HELP, exact: true });
+    await page.click({ text: '人物图集与形象图', within: CHARACTER_HELP, exact: true });
     await page.waitForTarget({ text: '主要形象图', within: CHARACTER_HELP });
     await captureForReview(page, 'character-help');
     await page.click({ text: '成长档案说明', within: CHARACTER_HELP, exact: true });
@@ -331,7 +342,7 @@ describe('成长档案：首次使用', () => {
     await answerChainedPrompt(page, '人物定位', '法师');
     await answerChainedPrompt(page, '人物分类', '次要角色');
     await page.waitForGone(SEL.dialog);
-    // 新建人物后自动打开人物详情：人物设计 / 图集 / 成长档案 / 经历与状态 / 关系与高亮
+    // 新建人物后自动打开人物详情：人物 / 背景 / 社会关系 / 能力与资源 / 剧情发展 / 成长档案 / 人物图集 / 设置
     const TABS = '[role="tablist"][aria-label="人物详情"]';
     await page.waitForTarget(TABS, 15_000);
     // 人物资料展示竖版大图（形象图），不是小圆头像；没有图时显示「添加形象图」占位
@@ -360,14 +371,31 @@ describe('成长档案：首次使用', () => {
     expect(portrait!.text).toContain('添加形象图');
     await captureForReview(page, 'growth-entry-character-detail');
 
-    // 人物设计：失焦即保存，AI 出图 / 续写 / 场景视频都会读取
-    await page.click('textarea[aria-label="人物外貌"]');
+    // 未生成 AI 草稿时，手动编辑人物资料仍在失焦时保存；编辑框使用 CodeMirror。
+    const APPEARANCE = '[role="textbox"][aria-label="人物外貌"]';
+    await page.click(APPEARANCE);
     await page.type('银发，戴单片眼镜');
-    await page.click('textarea[aria-label="人物性格"]');
+    await page.click('[role="textbox"][aria-label="人物性格"]');
     await page.waitForTarget({ text: '已保存', within: '[data-testid="character-design"]' });
+    await page.waitUntil(
+      () =>
+        page.evaluate(async (workPath: string) => {
+          const rows = await window.electron.ipcRenderer.invoke(
+            'db-character-list-by-folder',
+            workPath
+          );
+          const attributes = JSON.parse(
+            rows.find((row) => row.name === '莉娜')?.attributes || '{}'
+          ) as {
+            design?: { appearance?: string };
+          };
+          return attributes.design?.appearance === '银发，戴单片眼镜';
+        }, suite.fixture.resolve(FIXTURE_WORK_DIR)),
+      { message: '手动填写的人物外貌失焦后写入数据库' }
+    );
 
     // 图集：本地上传 / AI 生成（没有配置图片服务时 AI 按钮打开设置）
-    await page.click({ text: '图集', within: TABS });
+    await page.click({ text: '人物图集', within: TABS, exact: true });
     await page.waitForTarget('[data-testid="entity-gallery"]');
     await page.waitForTarget({ text: '本地上传', within: '[data-testid="entity-gallery"]' });
     await page.waitForTarget({
@@ -397,13 +425,14 @@ describe('成长档案：首次使用', () => {
         ),
       { args: [GROWTH_SECTION], message: '角色分区里莉娜带 Lv.1 徽章' }
     );
-    // 设计内容已保存：切回「人物设计」仍在
-    await page.click({ text: '人物设计', within: TABS });
+    // 设计内容已保存：切回「人物」仍在
+    await page.click({ text: '人物', within: TABS, exact: true });
     await page.waitFor(
-      () =>
-        (document.querySelector('textarea[aria-label="人物外貌"]') as HTMLTextAreaElement | null)
-          ?.value === '银发，戴单片眼镜',
-      { message: '人物外貌已保存' }
+      (selector: string) =>
+        Array.from(document.querySelectorAll(`${selector} .cm-line`))
+          .map((line) => line.textContent ?? '')
+          .join('\n') === '银发，戴单片眼镜',
+      { args: [APPEARANCE], message: '切回人物页后显示已保存的外貌' }
     );
     await captureForReview(page, 'growth-entry-filepanel');
   });
