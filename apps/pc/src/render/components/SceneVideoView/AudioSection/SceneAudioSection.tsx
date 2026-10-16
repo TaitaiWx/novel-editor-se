@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 场景检查器「声音」分区：配音语言、配音服务、背景音乐（本地文件 / 无）、环境音、对白时自动压低配乐。
  * 配乐 / 环境音文件由主进程弹出「打开」对话框并复制进 资料/音乐/，这里只保存相对作品目录的路径。
@@ -12,10 +14,10 @@ import {
   type SceneAudio,
 } from '@novel-editor/video';
 import type { AIProviderInfo } from '@/render/types/ai-api';
-import NumberInput from '../../NumberInput';
-import Select from '../../Select';
-import Switch from '../../Switch';
-import Tooltip from '../../Tooltip';
+import NumberInput from '@novel-editor/ui/NumberInput';
+import Select from '@novel-editor/ui/Select';
+import Switch from '@novel-editor/ui/Switch';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import AudioPreview from './AudioPreview';
 import styles from './styles.module.scss';
 
@@ -134,9 +136,14 @@ const SceneAudioSection: React.FC<SceneAudioSectionProps> = ({
               {bgm.path ? fileNameOf(bgm.path) : '还没有选择文件'}
             </span>
             <Tooltip content="选择本地音乐，复制到 资料/音乐/（MP3 / WAV / OGG / FLAC / M4A，≤ 50MB）">
-              <button type="button" className={styles.linkButton} onClick={() => void chooseBgm()}>
+              <UiButton
+                unstyled
+                type="button"
+                className={styles.linkButton}
+                onClick={() => void chooseBgm()}
+              >
                 {bgm.path ? '更换' : '选择文件'}
-              </button>
+              </UiButton>
             </Tooltip>
           </div>
         )}
@@ -197,7 +204,8 @@ const SceneAudioSection: React.FC<SceneAudioSectionProps> = ({
 
       <div className={styles.field}>
         <span className={styles.label}>环境音</span>
-        <input
+        <UiInput
+          unstyled
           className={styles.input}
           aria-label="环境音描述"
           value={audio.ambience?.prompt ?? ''}
@@ -219,17 +227,19 @@ const SceneAudioSection: React.FC<SceneAudioSectionProps> = ({
             {audio.ambience?.path ? fileNameOf(audio.ambience.path) : '没有环境音文件'}
           </span>
           <Tooltip content="选择本地环境音（循环铺满整条样片），复制到 资料/音乐/">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.linkButton}
               onClick={() => void chooseAmbience()}
             >
               {audio.ambience?.path ? '更换' : '选择文件'}
-            </button>
+            </UiButton>
           </Tooltip>
           {audio.ambience?.path && (
             <Tooltip content="不用环境音文件">
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.iconButton}
                 aria-label="移除环境音文件"
@@ -241,7 +251,7 @@ const SceneAudioSection: React.FC<SceneAudioSectionProps> = ({
                 }
               >
                 <VscClose />
-              </button>
+              </UiButton>
             </Tooltip>
           )}
         </div>

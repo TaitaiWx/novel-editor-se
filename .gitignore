@@ -72,3 +72,6 @@ apps/pc/sample-data/.novel-editor/*
 !apps/pc/sample-data/.novel-editor/config.json
 !apps/pc/sample-data/.novel-editor/seed.json
 !apps/pc/sample-data/.novel-editor/sample.json
+
+# Shared UI browser test artifacts
+packages/ui/e2e/.artifacts/

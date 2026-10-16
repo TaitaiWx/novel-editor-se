@@ -1,3 +1,4 @@
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 模型行展开后的编辑区：显示名称、接口地址、模型、API Key（只写）+ 按能力的参数
  * （文本：生成参数；视频：每秒单价；语音：默认声音）。失焦 / 选择即保存，只发送改动的字段。
@@ -7,9 +8,9 @@
 import React, { useEffect, useState } from 'react';
 import type { AIIpcResult, AIProviderInfo, AIProviderUpdate } from '../../../types/ai-api';
 import { defaultModelLabel, findPreset } from '@/shared/ai-models';
-import Checkbox from '../../Checkbox';
-import NumberInput from '../../NumberInput';
-import Select from '../../Select';
+import Checkbox from '@novel-editor/ui/Checkbox';
+import NumberInput from '@novel-editor/ui/NumberInput';
+import Select from '@novel-editor/ui/Select';
 import sharedStyles from '../styles.module.scss';
 import ApiKeyField from './ApiKeyField';
 import FieldRow from './FieldRow';
@@ -98,7 +99,8 @@ const ModelEditForm: React.FC<ModelEditFormProps> = ({ info, onUpdate, onKeyChan
   return (
     <div className={styles.form}>
       <FieldRow label="显示名称" description="在续写、分镜、场景视频等功能的模型列表里显示。">
-        <input
+        <UiInput
+          unstyled
           className={sharedStyles.input}
           aria-label="显示名称"
           value={label}
@@ -108,7 +110,8 @@ const ModelEditForm: React.FC<ModelEditFormProps> = ({ info, onUpdate, onKeyChan
         />
       </FieldRow>
       <FieldRow label="接口地址" description="只支持 http(s)，不要包含账号密码。">
-        <input
+        <UiInput
+          unstyled
           className={sharedStyles.input}
           aria-label="接口地址"
           value={baseUrl}

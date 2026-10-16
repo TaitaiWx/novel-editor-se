@@ -32,7 +32,9 @@
     "release:minor": "npm version preminor --preid=beta && git push origin main --follow-tags",
     "release:stable": "npm version minor && git push origin main --follow-tags",
     "lint:scripts": "eslint 'apps/pc/scripts/**/*.{mts,mjs,cjs,js}' 'apps/pc/signing/**/*.mjs' 'scripts/**/*.{mjs,cjs,js}'",
-    "typecheck:scripts": "tsc -p apps/pc/tsconfig.scripts.json && node apps/pc/scripts/check-script-syntax.mjs"
+    "typecheck:scripts": "tsc -p apps/pc/tsconfig.scripts.json && node apps/pc/scripts/check-script-syntax.mjs",
+    "test:ui": "vitest run -c vitest.ui.config.ts",
+    "test:ui:e2e": "vitest run -c vitest.ui.e2e.config.ts"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",

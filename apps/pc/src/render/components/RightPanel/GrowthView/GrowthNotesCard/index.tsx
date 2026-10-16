@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useState } from 'react';
 import type { GrowthSheet } from '@novel-editor/core/growth';
 import { HelpTip } from '../HelpTip';
@@ -24,7 +26,8 @@ export const GrowthNotesCard: React.FC<GrowthNotesCardProps> = ({ sheet, busy, o
       {sheet.notes.map((note, index) => (
         <div key={`${note}-${index}`} className={styles.note}>
           <span>{note}</span>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.remove}
             disabled={busy}
@@ -32,7 +35,7 @@ export const GrowthNotesCard: React.FC<GrowthNotesCardProps> = ({ sheet, busy, o
             onClick={() => void onUpdateNotes(sheet.notes.filter((_, i) => i !== index))}
           >
             ×
-          </button>
+          </UiButton>
         </div>
       ))}
       <form
@@ -46,16 +49,17 @@ export const GrowthNotesCard: React.FC<GrowthNotesCardProps> = ({ sheet, busy, o
           });
         }}
       >
-        <input
+        <UiInput
+          unstyled
           className={styles.input}
           value={draft}
           aria-label="新的状态备注"
           placeholder="如：左臂旧伤未愈，不能使用双手武器"
           onChange={(event) => setDraft(event.target.value)}
         />
-        <button type="submit" className={styles.button} disabled={busy || !draft.trim()}>
+        <UiButton unstyled type="submit" className={styles.button} disabled={busy || !draft.trim()}>
           添加
-        </button>
+        </UiButton>
       </form>
     </section>
   );

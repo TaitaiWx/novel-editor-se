@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 文件面板顶部「新建」右侧的「⋯ 更多」菜单（项目级操作）
  *
@@ -17,8 +18,8 @@ import {
   AiOutlineReload,
   AiOutlineRight,
 } from 'react-icons/ai';
-import Popover from '../../Popover';
-import Tooltip from '../../Tooltip';
+import Popover from '@novel-editor/ui/Popover';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { formatShortcutLabel } from '../../../utils/appSettings';
 import styles from './styles.module.scss';
 
@@ -247,7 +248,8 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
   return (
     <>
       <Tooltip content={PROJECT_MORE_LABEL} position="bottom">
-        <button
+        <UiButton
+          unstyled
           ref={triggerRef}
           type="button"
           className={`${styles.trigger} ${open ? styles.triggerActive : ''}`}
@@ -262,7 +264,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
           onKeyDown={handleTriggerKeyDown}
         >
           <AiOutlineEllipsis aria-hidden="true" />
-        </button>
+        </UiButton>
       </Tooltip>
       <Popover
         open={open}
@@ -283,7 +285,8 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
           aria-label="项目菜单"
           onKeyDown={handleMenuKeyDown}
         >
-          <button
+          <UiButton
+            unstyled
             type="button"
             role="menuitem"
             tabIndex={-1}
@@ -292,8 +295,9 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
           >
             <AiOutlineFolder className={styles.itemIcon} />
             <span className={styles.itemLabel}>{revealLabel}</span>
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            unstyled
             type="button"
             role="menuitem"
             tabIndex={-1}
@@ -307,11 +311,12 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
             <kbd className={styles.itemShortcut} aria-hidden="true">
               F2
             </kbd>
-          </button>
+          </UiButton>
 
           <div className={styles.separator} role="separator" />
 
-          <button
+          <UiButton
+            unstyled
             type="button"
             role="menuitem"
             tabIndex={-1}
@@ -324,10 +329,11 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
             <kbd className={styles.itemShortcut} aria-hidden="true">
               {formatShortcutLabel('Mod+O')}
             </kbd>
-          </button>
+          </UiButton>
           {onOpenRecentFolder && (
             <>
-              <button
+              <UiButton
+                unstyled
                 ref={recentToggleRef}
                 type="button"
                 role="menuitem"
@@ -343,11 +349,12 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
                   className={`${styles.itemChevron} ${recentExpanded ? styles.itemChevronOpen : ''}`}
                   aria-hidden="true"
                 />
-              </button>
+              </UiButton>
               {recentExpanded && (
                 <div role="group" aria-label="最近使用" className={styles.recentList}>
                   {recent.length === 0 ? (
-                    <button
+                    <UiButton
+                      unstyled
                       type="button"
                       role="menuitem"
                       tabIndex={-1}
@@ -358,10 +365,11 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
                       <span className={styles.itemLabel}>
                         {recentFolders === null ? '正在读取…' : '无最近使用的文件夹'}
                       </span>
-                    </button>
+                    </UiButton>
                   ) : (
                     recent.map((folder) => (
-                      <button
+                      <UiButton
+                        unstyled
                         key={folder}
                         type="button"
                         role="menuitem"
@@ -373,14 +381,15 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
                       >
                         <span className={styles.itemLabel}>{folderBaseName(folder)}</span>
                         <span className={styles.itemPath}>{folder}</span>
-                      </button>
+                      </UiButton>
                     ))
                   )}
                 </div>
               )}
             </>
           )}
-          <button
+          <UiButton
+            unstyled
             type="button"
             role="menuitem"
             tabIndex={-1}
@@ -389,7 +398,7 @@ const ProjectMenu: React.FC<ProjectMenuProps> = ({
           >
             <AiOutlineReload className={styles.itemIcon} />
             <span className={styles.itemLabel}>刷新</span>
-          </button>
+          </UiButton>
         </div>
       </Popover>
     </>

@@ -1,5 +1,5 @@
 import React from 'react';
-import Tooltip from '../../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 interface HelpTipProps {

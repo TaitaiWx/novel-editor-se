@@ -1,7 +1,11 @@
+import UiButton from '@novel-editor/ui/Button';
+import DiffTextInput from '@novel-editor/ui/DiffTextInput';
+import GenerationStatus, { type GenerationPhase } from '@novel-editor/ui/GenerationStatus';
 import { useUnsavedChangesGuard } from '@/render/hooks/useUnsavedChangesGuard';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   CHARACTER_DESIGN_FIELDS,
+  CHARACTER_DESIGN_GROUPS,
   parseCharacterDesign,
   type CharacterDesign,
 } from '@novel-editor/core/entity-media';
@@ -9,6 +13,13 @@ import styles from './styles.module.scss';
 
 interface CharacterDesignFormProps {
   design: CharacterDesign | undefined;
+  basicFields?: React.ReactNode;
+  draftOverride?: Partial<CharacterDesign>;
+  draftBaseline?: Partial<CharacterDesign>;
+  onDraftChange?: (key: keyof CharacterDesign, value: string, expected: string) => void;
+  disabled?: boolean;
+  generationPhase?: GenerationPhase;
+  fieldKeys?: readonly (keyof CharacterDesign)[];
   onSave: (
     patch: Partial<CharacterDesign>,
     expected: Partial<CharacterDesign>
@@ -16,17 +27,28 @@ interface CharacterDesignFormProps {
 }
 
 /**
- * 人物设计：外貌、服装、性格、背景、说话方式。每个字段失焦即保存。
+ * 人物设定：基础、外形、行为、动机与成长。每个字段失焦即保存。
  * AI 出图（三视图 / 形象图）只读外貌与服装；续写、场景视频读取全部字段，保证人物前后一致。
  */
-export const CharacterDesignForm: React.FC<CharacterDesignFormProps> = ({ design, onSave }) => {
-  const [draft, setDraft] = useState<CharacterDesign>(() => parseCharacterDesign(design));
+export const CharacterDesignForm: React.FC<CharacterDesignFormProps> = ({
+  design,
+  basicFields,
+  draftOverride,
+  draftBaseline,
+  onDraftChange,
+  disabled,
+  generationPhase,
+  fieldKeys,
+  onSave,
+}) => {
+  const [draft, setDraft] = useState<Required<CharacterDesign>>(() => parseCharacterDesign(design));
   const draftRef = useRef(draft);
   const baseline = useRef(parseCharacterDesign(design));
   const queue = useRef(Promise.resolve());
   const [pending, setPending] = useState(0);
   const [errors, setErrors] = useState<Partial<Record<keyof CharacterDesign, string>>>({});
   const incomingRef = useRef(baseline.current);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
@@ -89,12 +111,45 @@ export const CharacterDesignForm: React.FC<CharacterDesignFormProps> = ({ design
       });
   };
 
+  const visibleFields = CHARACTER_DESIGN_FIELDS.filter(
+    (field) => !fieldKeys || fieldKeys.includes(field.key)
+  );
+  const renderField = (field: (typeof CHARACTER_DESIGN_FIELDS)[number]) => (
+    <label key={field.key} className={styles.field}>
+      <span className={styles.label}>{field.label}</span>
+      <div className={styles.inputShell} aria-busy={generationPhase === 'generating'}>
+        {generationPhase && generationPhase !== 'done' && (
+          <span className={styles.fieldStatus}>
+            <GenerationStatus phase={generationPhase} compact />
+          </span>
+        )}
+        <DiffTextInput
+          baseline={
+            draftOverride ? (draftBaseline?.[field.key] ?? baseline.current[field.key]) : undefined
+          }
+          rows={field.group === 'power' || field.key === 'background' ? 4 : 3}
+          maxLength={800}
+          aria-label={`人物${field.label}`}
+          disabled={disabled}
+          value={draftOverride?.[field.key] ?? draft[field.key]}
+          placeholder={field.placeholder}
+          onChange={(value) => {
+            if (draftOverride) {
+              onDraftChange?.(field.key, value, baseline.current[field.key]);
+              return;
+            }
+            draftRef.current = { ...draftRef.current, [field.key]: value };
+            setDraft(draftRef.current);
+          }}
+          onBlur={() => {
+            if (!draftOverride) void commit(field.key);
+          }}
+        />
+      </div>
+    </label>
+  );
   return (
     <div className={styles.form} data-testid="character-design">
-      <p className={styles.hint}>
-        写几句就够：AI 出图、续写和场景视频都会读取这里，人物不容易「崩」。
-        {savedAt && <span className={styles.saved}>已保存 {savedAt}</span>}
-      </p>
       {Object.keys(errors).length > 0 && (
         <div role="alert">
           {CHARACTER_DESIGN_FIELDS.filter(({ key }) => errors[key]).map(({ key, label }) => (
@@ -102,7 +157,8 @@ export const CharacterDesignForm: React.FC<CharacterDesignFormProps> = ({ design
               {label}：{errors[key]}；当前已保存内容：{incomingRef.current[key] || '空'}
             </p>
           ))}
-          <button
+          <UiButton
+            unstyled
             type="button"
             onClick={() => {
               for (const { key } of CHARACTER_DESIGN_FIELDS)
@@ -113,27 +169,55 @@ export const CharacterDesignForm: React.FC<CharacterDesignFormProps> = ({ design
             }}
           >
             重试保存
-          </button>
+          </UiButton>
         </div>
       )}
-      {CHARACTER_DESIGN_FIELDS.map((field) => (
-        <label key={field.key} className={styles.field}>
-          <span className={styles.label}>{field.label}</span>
-          <textarea
-            className={styles.textarea}
-            rows={field.key === 'background' ? 3 : 2}
-            aria-label={`人物${field.label}`}
-            value={draft[field.key]}
-            placeholder={field.placeholder}
-            onChange={(event) => {
-              const value = event.target.value;
-              draftRef.current = { ...draftRef.current, [field.key]: value };
-              setDraft(draftRef.current);
-            }}
-            onBlur={() => void commit(field.key)}
-          />
-        </label>
+      {CHARACTER_DESIGN_GROUPS.filter((group) =>
+        visibleFields.some((field) => field.group === group.id)
+      ).map((group) => (
+        <fieldset key={group.id} className={styles.group}>
+          {visibleFields.length > 1 && <legend className={styles.groupTitle}>{group.label}</legend>}
+          <div className={styles.groupFields}>
+            {group.id === 'basics' && basicFields}
+            {visibleFields
+              .filter((field) => field.group === group.id && !field.optional)
+              .map(renderField)}
+            {visibleFields.some((field) => field.group === group.id && field.optional) && (
+              <details
+                className={styles.optionalFields}
+                onToggle={(event) => {
+                  const open = event.currentTarget.open;
+                  setExpanded((current) => ({ ...current, [group.id]: open }));
+                }}
+                open={
+                  generationPhase
+                    ? true
+                    : (expanded[group.id] ??
+                      (visibleFields.some(
+                        (field) =>
+                          field.group === group.id &&
+                          field.optional &&
+                          (draftOverride?.[field.key] ?? draft[field.key]).trim()
+                      ) ||
+                        false))
+                }
+              >
+                <summary>补充细节（选填）</summary>
+                <div className={styles.groupFields}>
+                  {visibleFields
+                    .filter((field) => field.group === group.id && field.optional)
+                    .map(renderField)}
+                </div>
+              </details>
+            )}
+          </div>
+        </fieldset>
       ))}
+      {savedAt && !draftOverride && (
+        <p className={styles.saved} role="status">
+          已保存 {savedAt}
+        </p>
+      )}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { AiOutlineFolderOpen } from 'react-icons/ai';
-import LoadingSpinner from '../LoadingSpinner';
-import EmptyState from '../EmptyState';
+import LoadingSpinner from '@novel-editor/ui/LoadingSpinner';
+import EmptyState from '@novel-editor/ui/EmptyState';
 import FileTree, { findTreePath } from '../FileTree';
 import { notifyWorkspaceFilesChanged } from '../../utils/workspaceFiles';
 import { isImeComposing } from '../../utils/ime';

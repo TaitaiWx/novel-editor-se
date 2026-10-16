@@ -1,12 +1,13 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 主画面下方的信息行：类型 · 文件名 · 尺寸 / 时长，以及操作
  * （插入到正文、导出、用系统应用打开、在资料中定位、从列表移除）。
  */
 import React, { useState } from 'react';
 import { VscClose, VscCloudDownload, VscInsert, VscLinkExternal, VscTarget } from 'react-icons/vsc';
-import Tooltip from '../Tooltip';
-import ContextMenu from '../ContextMenu';
-import { useOptionalToast } from '../Toast';
+import Tooltip from '@novel-editor/ui/Tooltip';
+import ContextMenu from '@novel-editor/ui/ContextMenu';
+import { useOptionalToast } from '@novel-editor/ui/Toast';
 import { formatTime } from '@novel-editor/media-player';
 import { REFERENCE_KIND_LABELS, type ReferenceItem } from '../../utils/referencePane';
 import { requestRevealInFilePanel } from '../../utils/workspaceFiles';
@@ -65,7 +66,8 @@ const ReferenceInfo: React.FC<{
       </div>
       <div className={styles.infoActions}>
         <Tooltip content={`插入到正文（::${item.kind}）`}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label="插入到正文"
@@ -73,7 +75,7 @@ const ReferenceInfo: React.FC<{
             onClick={insert}
           >
             <VscInsert />
-          </button>
+          </UiButton>
         </Tooltip>
         {choices.length > 0 && (
           <Tooltip
@@ -81,7 +83,8 @@ const ReferenceInfo: React.FC<{
               item.kind === 'image' ? '导出为 PNG / JPEG / WebP…' : `导出 ${choices[0].label}…`
             }
           >
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.iconButton}
               aria-label="导出"
@@ -96,38 +99,41 @@ const ReferenceInfo: React.FC<{
               }}
             >
               <VscCloudDownload />
-            </button>
+            </UiButton>
           </Tooltip>
         )}
         <Tooltip content="用系统应用打开">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label="用系统应用打开"
             onClick={() => openInSystemApp(item.path)}
           >
             <VscLinkExternal />
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content="在资料中定位">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label="在资料中定位"
             onClick={() => requestRevealInFilePanel(item.path)}
           >
             <VscTarget />
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content="从参考列表移除">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label="从参考列表移除"
             onClick={onRemove}
           >
             <VscClose />
-          </button>
+          </UiButton>
         </Tooltip>
       </div>
       {menu && (

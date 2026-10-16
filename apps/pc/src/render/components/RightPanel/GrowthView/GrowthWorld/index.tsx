@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import type { GrowthSnapshot } from '../../../../types/growth-api';
 import type { GrowthMemoryApi } from '../useGrowthMemory';
@@ -37,7 +38,8 @@ export const GrowthWorld: React.FC<GrowthWorldProps> = ({
     <div className={styles.nav}>
       <div className={styles.tabs} role="tablist" aria-label="世界">
         {WORLD_TABS.map(([key, label]) => (
-          <button
+          <UiButton
+            unstyled
             key={key}
             type="button"
             role="tab"
@@ -49,7 +51,7 @@ export const GrowthWorld: React.FC<GrowthWorldProps> = ({
             {key === 'party' && snapshot.check.forgotten.length > 0 && (
               <span className={styles.badge}>{snapshot.check.forgotten.length}</span>
             )}
-          </button>
+          </UiButton>
         ))}
       </div>
       <span className={styles.desc}>{GROWTH_TIPS[tab]}</span>

@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { AiOutlineDoubleLeft, AiOutlineDoubleRight } from 'react-icons/ai';
 import { VscMultipleWindows } from 'react-icons/vsc';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 import type { RightPanelProps } from './types';
 import { StorylineView } from './StorylineView';
@@ -29,7 +30,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
     return (
       <div className={styles.collapsedPanel}>
         <Tooltip content="展开面板" position="bottom">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.expandButton}
             onClick={onToggle}
@@ -37,7 +39,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
             aria-label="展开面板"
           >
             <AiOutlineDoubleLeft />
-          </button>
+          </UiButton>
         </Tooltip>
       </div>
     );
@@ -50,7 +52,8 @@ const RightPanel: React.FC<RightPanelProps> = ({
         <div className={styles.headerActions}>
           {onPopOut && (
             <Tooltip content="在新窗口中打开" position="bottom">
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.popOutButton}
                 onClick={onPopOut}
@@ -58,13 +61,14 @@ const RightPanel: React.FC<RightPanelProps> = ({
                 aria-label="在新窗口中打开"
               >
                 <VscMultipleWindows />
-              </button>
+              </UiButton>
             </Tooltip>
           )}
           {/* 与左侧「折叠侧边栏」（双左箭头）同一图标族：右侧面板向右收起用双右箭头 */}
           <span className={styles.headerActionDivider} aria-hidden="true" />
           <Tooltip content="折叠面板" position="bottom">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.collapseButton}
               onClick={onToggle}
@@ -73,7 +77,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
               data-testid="right-panel-collapse"
             >
               <AiOutlineDoubleRight />
-            </button>
+            </UiButton>
           </Tooltip>
         </div>
       </div>

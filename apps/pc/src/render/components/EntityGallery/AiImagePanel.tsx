@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import React, { useState } from 'react';
 import { VscCheck, VscLoading } from 'react-icons/vsc';
 import {
@@ -6,8 +8,8 @@ import {
   type MediaKindOption,
 } from '@novel-editor/core/entity-media';
 import type { AIProviderInfo } from '@/render/types/ai-api';
-import Select from '../Select';
-import Tooltip from '../Tooltip';
+import Select from '@novel-editor/ui/Select';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 export const CANDIDATE_COUNT = 4;
@@ -125,7 +127,8 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
         <div className={styles.kindRow} role="radiogroup" aria-label="图片类型">
           {kinds.map((item) => (
             <Tooltip key={item.kind} content={item.hint}>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 role="radio"
                 aria-checked={kind === item.kind}
@@ -133,7 +136,7 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
                 onClick={() => setKind(item.kind)}
               >
                 {item.label}
-              </button>
+              </UiButton>
             </Tooltip>
           ))}
         </div>
@@ -157,7 +160,8 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
         )}
       </div>
       {/* 补充描述：在画风 / 模型下面单独一行（多行），生成按钮在它右下方 */}
-      <textarea
+      <UiTextArea
+        unstyled
         className={styles.extraInput}
         aria-label="补充描述（可不填）"
         value={extra}
@@ -172,7 +176,8 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
         }}
       />
       <div className={styles.generateRow}>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={`${styles.primary} ${styles.generateButton}`}
           disabled={busy !== null}
@@ -187,7 +192,7 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
           ) : (
             `生成 ${CANDIDATE_COUNT} 张${option ? option.label : ''}`
           )}
-        </button>
+        </UiButton>
       </div>
       <details className={styles.promptPreview} open>
         <summary>
@@ -225,7 +230,8 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
             {candidates.map((candidate, index) => {
               const selected = picked.has(index);
               return (
-                <button
+                <UiButton
+                  unstyled
                   key={index}
                   type="button"
                   role="option"
@@ -247,20 +253,21 @@ const AiImagePanel: React.FC<AiImagePanelProps> = ({
                       <VscCheck />
                     </span>
                   )}
-                </button>
+                </UiButton>
               );
             })}
           </div>
           <div className={styles.aiFooter}>
             <span className={styles.muted}>点选喜欢的图（可多选），保存进图集</span>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.primary}
               disabled={picked.size === 0 || busy !== null}
               onClick={() => void savePicked()}
             >
               {busy === 'save' ? '保存中…' : `保存 ${picked.size} 张`}
-            </button>
+            </UiButton>
           </div>
         </>
       )}

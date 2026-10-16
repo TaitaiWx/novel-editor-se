@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState } from 'react';
 import { VscCheck, VscLoading } from 'react-icons/vsc';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { MediaImage } from '../../EntityGallery/MediaTile';
 import MediaPlayer, { type ReadSceneFile } from '../media/MediaPlayer';
 import styles from './styles.module.scss';
@@ -121,9 +122,9 @@ const KeyframeSection: React.FC<KeyframeSectionProps> = ({
       )}
       <div className={styles.inlineActions}>
         <Tooltip content="描述动作与走位，AI 生成一段木偶预演动画；第一帧作为首帧的构图参考（可跳过）">
-          <button type="button" className={styles.button} onClick={onOpenPreviz}>
+          <UiButton unstyled type="button" className={styles.button} onClick={onOpenPreviz}>
             {previz ? '重新预演' : '3D 预演'}
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip
           content={
@@ -132,7 +133,8 @@ const KeyframeSection: React.FC<KeyframeSectionProps> = ({
               : '先在设置中心「AI → 图片」里添加图片模型'
           }
         >
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.button}
             disabled={!imageReady || busy !== null}
@@ -147,12 +149,12 @@ const KeyframeSection: React.FC<KeyframeSectionProps> = ({
             ) : (
               '生成首帧（4 选 1）'
             )}
-          </button>
+          </UiButton>
         </Tooltip>
         {keyframe && (
-          <button type="button" className={styles.linkButton} onClick={onClear}>
+          <UiButton unstyled type="button" className={styles.linkButton} onClick={onClear}>
             不用首帧
-          </button>
+          </UiButton>
         )}
       </div>
       {error && (
@@ -163,7 +165,8 @@ const KeyframeSection: React.FC<KeyframeSectionProps> = ({
       {candidates.length > 0 && (
         <div className={styles.candidates} role="listbox" aria-label="首帧候选">
           {candidates.map((dataUrl, index) => (
-            <button
+            <UiButton
+              unstyled
               key={index}
               type="button"
               role="option"
@@ -177,7 +180,7 @@ const KeyframeSection: React.FC<KeyframeSectionProps> = ({
               <span className={styles.candidateHint}>
                 <VscCheck aria-hidden="true" /> 采用
               </span>
-            </button>
+            </UiButton>
           ))}
         </div>
       )}

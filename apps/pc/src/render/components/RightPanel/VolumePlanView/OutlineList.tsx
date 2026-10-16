@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback, useRef, useState } from 'react';
 import { VscDeviceCameraVideo, VscGripper, VscInsert } from 'react-icons/vsc';
 import type {
@@ -6,8 +7,8 @@ import type {
   VolumeChapterPlan,
   VolumeOutline,
 } from '@novel-editor/basic-algorithm';
-import InlineRenameInput from '../../InlineRenameInput';
-import Tooltip from '../../Tooltip';
+import InlineRenameInput from '@novel-editor/ui/InlineRenameInput';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { formatWordCount } from './VolumeOverview';
 import styles from './styles.module.scss';
 
@@ -69,7 +70,8 @@ const EditableText: React.FC<EditableTextProps> = ({
     );
   }
   return (
-    <button
+    <UiButton
+      unstyled
       ref={buttonRef}
       type="button"
       className={`${styles.editableText} ${value ? '' : styles.placeholder} ${className ?? ''}`}
@@ -78,7 +80,7 @@ const EditableText: React.FC<EditableTextProps> = ({
       onClick={() => setEditing(true)}
     >
       {value || placeholder}
-    </button>
+    </UiButton>
   );
 };
 
@@ -132,14 +134,15 @@ const BeatRow: React.FC<{
       )}
       <div className={styles.beatBody}>
         {beat.title && (
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.beatTitle}
             title="跳到正文"
             onClick={() => handlers.onOpenChapter(chapter.path, beat.line, beat.title)}
           >
             {beat.title}
-          </button>
+          </UiButton>
         )}
         <EditableText
           value={beat.text}
@@ -154,26 +157,28 @@ const BeatRow: React.FC<{
       )}
       {handlers.onInsertBeat && beat.source !== 'outline' && (
         <Tooltip content={BEAT_ACTION_TIPS.insert}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.beatAction}
             aria-label={`插入到章纲 ${beat.title || beat.text}`}
             onClick={() => handlers.onInsertBeat?.(chapter, beat)}
           >
             <VscInsert />
-          </button>
+          </UiButton>
         </Tooltip>
       )}
       {handlers.onSceneVideo && beat.source === 'scene' && (
         <Tooltip content={BEAT_ACTION_TIPS.video}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.beatAction}
             aria-label={`生成场景视频 ${beat.title || beat.text}`}
             onClick={() => handlers.onSceneVideo?.(chapter, beat)}
           >
             <VscDeviceCameraVideo />
-          </button>
+          </UiButton>
         </Tooltip>
       )}
     </li>
@@ -193,7 +198,8 @@ const ChapterBlock: React.FC<{
     <div className={styles.chapter} data-chapter-path={chapter.path}>
       <div className={styles.chapterHeader}>
         <span className={styles.chapterIndex}>{chapter.index + 1}</span>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.chapterTitle}
           title="打开本章"
@@ -201,7 +207,7 @@ const ChapterBlock: React.FC<{
         >
           {chapter.title}
           {chapter.continued && <span className={styles.continued}>（续）</span>}
-        </button>
+        </UiButton>
         {characters.length > 0 && (
           <span className={styles.chapterPeople} title={`出场：${characters.join('、')}`}>
             {characters.slice(0, 3).join(' · ')}
@@ -247,14 +253,15 @@ const ActBlock: React.FC<{
     <div className={styles.actHeader}>
       <span className={styles.actDot} data-tone={index % 4} />
       {act.line && act.chapters[0] ? (
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.actTitle}
           title="跳到正文"
           onClick={() => handlers.onOpenChapter(act.chapters[0].path, act.line, act.title)}
         >
           {act.title}
-        </button>
+        </UiButton>
       ) : (
         <span className={styles.actTitle}>{act.title}</span>
       )}

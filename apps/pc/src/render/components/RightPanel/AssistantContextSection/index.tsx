@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo, useState } from 'react';
 import type {
   AssistantScopeTarget,
@@ -10,7 +11,7 @@ import {
   formatAssistantGenerationProgress,
   type AssistantArtifactGenerationStatus,
 } from '@/render/utils/assistantGeneration';
-import Select from '../../Select';
+import Select from '@novel-editor/ui/Select';
 import styles from './styles.module.scss';
 
 export type AssistantContextKind = 'characters' | 'lore' | 'materials';
@@ -103,21 +104,23 @@ export const AssistantContextSection: React.FC<AssistantContextSectionProps> = (
       <span className={styles.blockTitle}>{title}</span>
       <span className={styles.blockCount}>{count} 项</span>
       {onGenerate && (
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.linkButton}
           disabled={kind === 'characters' && characterGenerationStatus?.state === 'running'}
           onClick={() => onGenerate(kind)}
         >
           AI 生成
-        </button>
+        </UiButton>
       )}
     </div>
   );
 
   return (
     <section className={styles.section} aria-label="上下文">
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={styles.toggle}
         aria-expanded={expanded}
@@ -131,7 +134,7 @@ export const AssistantContextSection: React.FC<AssistantContextSectionProps> = (
           {SCOPE_PREFIX[scope.kind]}：{scope.label}
         </span>
         <span className={styles.toggleSummary}>{summary}</span>
-      </button>
+      </UiButton>
 
       {expanded && (
         <div className={styles.body}>
@@ -179,22 +182,24 @@ export const AssistantContextSection: React.FC<AssistantContextSectionProps> = (
                     path;
                   return (
                     <li key={path} className={styles.materialItem}>
-                      <button
+                      <UiButton
+                        unstyled
                         type="button"
                         className={styles.materialLink}
                         onClick={() => onOpenMaterial?.(path)}
                       >
                         {label}
-                      </button>
+                      </UiButton>
                       {onRemoveMaterial && (
-                        <button
+                        <UiButton
+                          unstyled
                           type="button"
                           className={styles.linkButton}
                           aria-label={`从当前章移除 ${label}`}
                           onClick={() => onRemoveMaterial(path)}
                         >
                           移除
-                        </button>
+                        </UiButton>
                       )}
                     </li>
                   );
@@ -214,7 +219,8 @@ export const AssistantContextSection: React.FC<AssistantContextSectionProps> = (
                   }))}
                   onChange={setPendingMaterialPath}
                 />
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.primaryButton}
                   disabled={!pendingMaterialPath}
@@ -224,7 +230,7 @@ export const AssistantContextSection: React.FC<AssistantContextSectionProps> = (
                   }}
                 >
                   关联
-                </button>
+                </UiButton>
               </div>
             )}
             {materials.length > 0 && (

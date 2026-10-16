@@ -1,3 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import { useUnsavedChangesGuard } from '@/render/hooks/useUnsavedChangesGuard';
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { VscClose } from 'react-icons/vsc';
@@ -13,7 +16,7 @@ import { MediaImage } from '../../EntityGallery/MediaTile';
 import { LORE_CATEGORY_LABELS } from '../constants';
 import type { LoreDraft } from '../lore-data';
 import type { LoreCategory, LoreEntry } from '../types';
-import Select from '../../Select';
+import Select from '@novel-editor/ui/Select';
 import styles from './styles.module.scss';
 
 export type LoreDetailTab = 'content' | 'gallery' | 'related';
@@ -116,7 +119,8 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
   return (
     <div className={styles.detail} data-testid="lore-detail">
       <section className={styles.hero}>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.cover}
           aria-label={cover ? `更换 ${entry.title} 的封面` : `为 ${entry.title} 添加图片`}
@@ -131,10 +135,11 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
               添加图片
             </span>
           )}
-        </button>
+        </UiButton>
         <div className={styles.heroMain}>
           <div className={styles.eyebrow}>设定资料</div>
-          <input
+          <UiInput
+            unstyled
             className={styles.titleInput}
             aria-label="设定标题"
             value={title}
@@ -188,7 +193,8 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
             </label>
             <label className={styles.metaField}>
               <span>目录</span>
-              <input
+              <UiInput
+                unstyled
                 className={styles.input}
                 aria-label="设定目录"
                 list={`${idPrefix}-folders`}
@@ -212,17 +218,19 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
             {entry.tags.map((tag) => (
               <span key={tag} className={styles.tag}>
                 #{tag}
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.tagRemove}
                   aria-label={`移除标签 ${tag}`}
                   onClick={() => void save({ tags: entry.tags.filter((item) => item !== tag) })}
                 >
                   <VscClose />
-                </button>
+                </UiButton>
               </span>
             ))}
-            <input
+            <UiInput
+              unstyled
               className={styles.tagInput}
               aria-label="添加标签"
               value={tagInput}
@@ -249,7 +257,8 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
             ['related', '相关设定'],
           ] as Array<[LoreDetailTab, string]>
         ).map(([id, label]) => (
-          <button
+          <UiButton
+            unstyled
             key={id}
             type="button"
             role="tab"
@@ -261,13 +270,14 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
             {id === 'gallery' && (entry.media?.length ?? 0) > 0 && (
               <span className={styles.tabCount}>{entry.media?.length}</span>
             )}
-          </button>
+          </UiButton>
         ))}
       </div>
 
       {tab === 'content' && (
         <div className={styles.panel} role="tabpanel" aria-label="内容">
-          <textarea
+          <UiTextArea
+            unstyled
             className={styles.textarea}
             aria-label="设定内容"
             value={summary}
@@ -276,17 +286,18 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
             onChange={(event) => setSummary(event.target.value)}
           />
           <div className={styles.actions}>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.primary}
               disabled={!dirty || !title.trim()}
               onClick={() => void save({ title: title.trim(), summary: summary.trim() })}
             >
               保存
-            </button>
-            <button type="button" className={styles.danger} onClick={onDelete}>
+            </UiButton>
+            <UiButton unstyled type="button" className={styles.danger} onClick={onDelete}>
               删除条目
-            </button>
+            </UiButton>
           </div>
         </div>
       )}
@@ -325,14 +336,14 @@ export const LoreEntryDetail: React.FC<LoreEntryDetailProps> = ({
             <ul className={styles.related}>
               {related.map((item) => (
                 <li key={item.id}>
-                  <button type="button" onClick={() => onOpenEntry(item)}>
+                  <UiButton unstyled type="button" onClick={() => onOpenEntry(item)}>
                     <strong>{item.title}</strong>
                     <span>
                       {[item.folder, ...item.tags.map((tag) => `#${tag}`)]
                         .filter(Boolean)
                         .join(' · ') || LORE_CATEGORY_LABELS[item.category]}
                     </span>
-                  </button>
+                  </UiButton>
                 </li>
               ))}
             </ul>

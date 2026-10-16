@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import type { PersistedOutlineScopeInput } from '@/render/types/electron-api';
 import styles from '../styles.module.scss';
@@ -15,7 +16,7 @@ import {
 } from '../outline-import';
 import { useAiConfig } from '../useAiConfig';
 import { useOutlineEntries } from '../useOutlineEntries';
-import { useDialog } from '../../Dialog';
+import { useDialog } from '@novel-editor/ui/Dialog';
 import { getOutlineScopeLabel, OUTLINE_VERSION_SOURCE_LABELS } from './helpers';
 import { useOutlineVersionCenter } from './useOutlineVersionCenter';
 import { OutlineVersionsPanel } from './OutlineVersionsPanel';
@@ -444,9 +445,13 @@ export const OutlineView: React.FC<{
         </div>
         {!isOutlineMode && failedAiEntries.length > 0 && (
           <div className={styles.outlineToolbar}>
-            <button className={styles.outlineRetryAllButton} onClick={retryFailedEntries}>
+            <UiButton
+              unstyled
+              className={styles.outlineRetryAllButton}
+              onClick={retryFailedEntries}
+            >
               重试失败项 ({failedAiEntries.length})
-            </button>
+            </UiButton>
           </div>
         )}
         {isOutlineMode && (

@@ -1,3 +1,5 @@
+import UiTextArea from '@novel-editor/ui/TextArea';
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 预演侧栏：描述这个镜头的动作 / 走位 → 选模型 →「生成预演」；下面是可折叠的「微调」。
  * 主要靠描述 + AI 生成，手动只保留最少的微调（拖人物、环绕机位、重置、时段）。
@@ -5,8 +7,8 @@
 import React, { useId, useState } from 'react';
 import { VscChevronDown, VscChevronRight, VscLoading } from 'react-icons/vsc';
 import { PREVIZ_MOODS, type PrevizMood } from '@novel-editor/video';
-import Select from '../../Select';
-import Tooltip from '../../Tooltip';
+import Select from '@novel-editor/ui/Select';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { Choice } from './controls';
 import { MOODS } from './presets';
 import type { PrevizModelOption } from './usePrevizModels';
@@ -57,7 +59,8 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
         <label className={styles.groupTitle} htmlFor={`${id}-action`}>
           镜头动作与走位
         </label>
-        <textarea
+        <UiTextArea
+          unstyled
           id={`${id}-action`}
           className={styles.actionInput}
           value={action}
@@ -83,7 +86,8 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
           }))}
           onChange={onModelChange}
         />
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.primary}
           disabled={disabled || generating}
@@ -96,7 +100,7 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
           ) : (
             '生成预演'
           )}
-        </button>
+        </UiButton>
         {summary && <p className={styles.summary}>{summary}</p>}
         {notes.length > 0 && (
           <ul className={styles.notes} role="status">
@@ -107,7 +111,8 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
         )}
       </section>
       <section className={styles.group}>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.disclosure}
           aria-expanded={tuneOpen}
@@ -119,7 +124,7 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
             <VscChevronRight aria-hidden="true" />
           )}
           微调
-        </button>
+        </UiButton>
         {tuneOpen && (
           <div className={styles.tune} data-testid="previz-tune">
             <span className={styles.fieldHint}>
@@ -133,14 +138,14 @@ const DirectorPanel: React.FC<DirectorPanelProps> = ({
             />
             <div className={styles.tuneActions}>
               <Tooltip content="机位回到生成时的样子">
-                <button type="button" className={styles.tool} onClick={onResetCamera}>
+                <UiButton unstyled type="button" className={styles.tool} onClick={onResetCamera}>
                   重置机位
-                </button>
+                </UiButton>
               </Tooltip>
               <Tooltip content="人物走位回到生成时的样子">
-                <button type="button" className={styles.tool} onClick={onResetBlocking}>
+                <UiButton unstyled type="button" className={styles.tool} onClick={onResetBlocking}>
                   还原走位
-                </button>
+                </UiButton>
               </Tooltip>
             </div>
           </div>

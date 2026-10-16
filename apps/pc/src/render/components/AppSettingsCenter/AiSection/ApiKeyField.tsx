@@ -1,3 +1,5 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState } from 'react';
 import type { AIIpcResult, AIProviderInfo } from '../../../types/ai-api';
 import sharedStyles from '../styles.module.scss';
@@ -75,7 +77,8 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
   return (
     <div className={styles.keyField}>
       <div className={styles.keyInputRow}>
-        <input
+        <UiInput
+          unstyled
           className={sharedStyles.input}
           type="password"
           autoComplete="off"
@@ -87,14 +90,15 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
           }}
           placeholder={configured ? '已安全保存，输入新 Key 可替换' : placeholder}
         />
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={sharedStyles.secondaryButton}
           disabled={busy || !draft.trim()}
           onClick={() => void save()}
         >
           保存 Key
-        </button>
+        </UiButton>
       </div>
       <div className={styles.keyActions}>
         <span className={configured ? styles.badgeOk : styles.badgeMuted}>
@@ -102,14 +106,15 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
         </span>
         {configured && (
           <>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.linkButton}
               disabled={busy}
               onClick={() => void clear()}
             >
               清除
-            </button>
+            </UiButton>
           </>
         )}
         {status && (

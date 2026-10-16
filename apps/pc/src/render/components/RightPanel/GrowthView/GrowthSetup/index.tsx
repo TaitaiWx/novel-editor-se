@@ -1,3 +1,5 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState } from 'react';
 import type { GrowthTemplate } from '@novel-editor/core/growth';
 import { GROWTH_GUIDE_SUMMARY } from '../growthGuide';
@@ -51,7 +53,8 @@ export const GrowthSetup: React.FC<GrowthSetupProps> = ({
             key={key}
             className={`${styles.template} ${template === key ? styles.templateActive : ''}`}
           >
-            <input
+            <UiInput
+              unstyled
               type="radio"
               name="growth-template"
               checked={template === key}
@@ -64,17 +67,18 @@ export const GrowthSetup: React.FC<GrowthSetupProps> = ({
       </div>
       {pendingName && <p className={styles.note}>开始后会自动为「{pendingName}」建立成长卡。</p>}
       <div className={styles.actions}>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.primary}
           disabled={busy}
           onClick={() => onCreate(template)}
         >
           开始使用
-        </button>
-        <button type="button" className={styles.secondary} onClick={onOpenHelp}>
+        </UiButton>
+        <UiButton unstyled type="button" className={styles.secondary} onClick={onOpenHelp}>
           使用说明
-        </button>
+        </UiButton>
       </div>
       <p className={styles.footnote}>
         数据保存在当前作品的 资料/记忆/ 文件夹（每部作品各一份），可用 Git 管理，与命令行 ne growth

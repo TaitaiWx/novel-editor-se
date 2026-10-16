@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Character, CharacterRelation, RelationTone } from '../types';
 import { RELATION_TONE_LABELS } from '../constants';
-import { buildCharacterLinks, createRelationStorageKey } from '../utils';
+import { createRelationStorageKey } from '../utils';
+import { useRelationNoteDrafts } from './useRelationNoteDrafts';
+import { relationPairKey } from '@novel-editor/core/character-enrichment';
 
 /**
  * 人物关系：加载/持久化关系列表，维护关系编辑表单状态。
@@ -16,34 +18,38 @@ export function useCharacterRelations({
   const [relations, setRelations] = useState<CharacterRelation[]>([]);
   const [relationSourceId, setRelationSourceId] = useState<number | ''>('');
   const [relationTargetId, setRelationTargetId] = useState<number | ''>('');
-  const [relationLabel, setRelationLabel] = useState('');
   const [relationTone, setRelationTone] = useState<RelationTone>('ally');
   const [relationNote, setRelationNote] = useState('');
   const [editingRelationId, setEditingRelationId] = useState<string | null>(null);
 
-  const links = useMemo(
-    () =>
-      relations.length > 0
-        ? relations
-        : buildCharacterLinks(characters).map((item, index) => ({
-            id: `generated-${index}`,
-            sourceId: item.sourceId,
-            targetId: item.targetId,
-            label: item.label,
-            tone: 'other' as RelationTone,
-            note: '',
-          })),
-    [relations, characters]
-  );
   const persistRelations = useCallback(
     async (nextRelations: CharacterRelation[]) => {
       const key = createRelationStorageKey(folderPath);
       const ipc = window.electron?.ipcRenderer;
-      if (!key || !ipc) return;
+      if (!key || !ipc) throw new Error('无法保存关系，请先打开作品');
       await ipc.invoke('db-settings-set', key, JSON.stringify(nextRelations));
     },
     [folderPath]
   );
+
+  const noteDrafts = useRelationNoteDrafts(
+    folderPath,
+    relations,
+    persistRelations,
+    setRelations,
+    editingRelationId,
+    characters
+  );
+  const links = useMemo(() => {
+    const ids = new Set(characters.map((character) => character.id));
+    return [...relations, ...Object.values(noteDrafts.additions)]
+      .filter((relation) => ids.has(relation.sourceId) && ids.has(relation.targetId))
+      .map((relation) =>
+        noteDrafts.notes[relation.id]
+          ? { ...relation, note: noteDrafts.notes[relation.id].value }
+          : relation
+      );
+  }, [relations, characters, noteDrafts.notes, noteDrafts.additions]);
 
   useEffect(() => {
     // 切换项目时取消旧请求，避免较晚返回的旧项目关系覆盖新项目
@@ -73,30 +79,37 @@ export function useCharacterRelations({
   const handleAddRelation = useCallback(async () => {
     if (relationSourceId === '' || relationTargetId === '' || relationSourceId === relationTargetId)
       return;
+    if (
+      links.some(
+        (relation) =>
+          relationPairKey(relation.sourceId, relation.targetId) ===
+          relationPairKey(relationSourceId, relationTargetId)
+      )
+    )
+      throw new Error('这两个人物已有关系，请点击图谱中的连线编辑。');
     const nextRelations = [
       ...relations,
       {
         id: `${Date.now()}`,
         sourceId: relationSourceId,
         targetId: relationTargetId,
-        label: relationLabel.trim() || RELATION_TONE_LABELS[relationTone],
+        label: RELATION_TONE_LABELS[relationTone],
         tone: relationTone,
         note: relationNote.trim(),
       },
     ];
-    setRelations(nextRelations);
-    setRelationLabel('');
-    setRelationNote('');
     await persistRelations(nextRelations);
+    setRelations(nextRelations);
+    setRelationNote('');
     setEditingRelationId(null);
   }, [
     relationSourceId,
     relationTargetId,
-    relationLabel,
     relationTone,
     relationNote,
     relations,
     persistRelations,
+    links,
   ]);
 
   const startEditRelation = useCallback((relation: CharacterRelation) => {
@@ -104,50 +117,80 @@ export function useCharacterRelations({
     setRelationSourceId(relation.sourceId);
     setRelationTargetId(relation.targetId);
     setRelationTone(relation.tone);
-    setRelationLabel(relation.label);
     setRelationNote(relation.note);
+  }, []);
+
+  const cancelEditRelation = useCallback(() => {
+    setEditingRelationId(null);
+    setRelationSourceId('');
+    setRelationTargetId('');
+    setRelationNote('');
+    setRelationTone('ally');
   }, []);
 
   const handleUpdateRelation = useCallback(async () => {
     if (!editingRelationId) return;
     if (relationSourceId === '' || relationTargetId === '' || relationSourceId === relationTargetId)
       return;
-    const nextRelations = relations.map((item) =>
+    if (
+      links.some(
+        (relation) =>
+          relation.id !== editingRelationId &&
+          relationPairKey(relation.sourceId, relation.targetId) ===
+            relationPairKey(relationSourceId, relationTargetId)
+      )
+    )
+      throw new Error('这两个人物已有另一条关系，请选择其他人物。');
+    const draft = noteDrafts.additions[editingRelationId];
+    const nextRelations = [...relations, ...(draft ? [draft] : [])].map((item) =>
       item.id === editingRelationId
         ? {
             ...item,
             sourceId: relationSourceId,
             targetId: relationTargetId,
             tone: relationTone,
-            label: relationLabel.trim() || RELATION_TONE_LABELS[relationTone],
+            label: RELATION_TONE_LABELS[relationTone],
             note: relationNote.trim(),
           }
         : item
     );
-    setRelations(nextRelations);
     await persistRelations(nextRelations);
+    setRelations(nextRelations);
+    noteDrafts.clear([editingRelationId]);
     setEditingRelationId(null);
   }, [
     editingRelationId,
     relationSourceId,
     relationTargetId,
     relationTone,
-    relationLabel,
     relationNote,
     relations,
     persistRelations,
+    noteDrafts,
+    links,
   ]);
 
   const handleDeleteRelation = useCallback(
     async (relationId: string) => {
+      if (noteDrafts.additions[relationId]) {
+        noteDrafts.clear([relationId]);
+        return;
+      }
       const nextRelations = relations.filter((item) => item.id !== relationId);
-      setRelations(nextRelations);
       await persistRelations(nextRelations);
+      setRelations(nextRelations);
+      noteDrafts.clear([relationId]);
     },
-    [relations, persistRelations]
+    [relations, persistRelations, noteDrafts]
   );
 
   return {
+    noteDrafts,
+    relationBaseline: editingRelationId
+      ? (noteDrafts.notes[editingRelationId]?.baseline ??
+        relations.find((relation) => relation.id === editingRelationId)?.note ??
+        '')
+      : '',
     relations,
     setRelations,
     persistRelations,
@@ -156,8 +199,6 @@ export function useCharacterRelations({
     setRelationSourceId,
     relationTargetId,
     setRelationTargetId,
-    relationLabel,
-    setRelationLabel,
     relationTone,
     setRelationTone,
     relationNote,
@@ -165,6 +206,7 @@ export function useCharacterRelations({
     editingRelationId,
     handleAddRelation,
     startEditRelation,
+    cancelEditRelation,
     handleUpdateRelation,
     handleDeleteRelation,
   };

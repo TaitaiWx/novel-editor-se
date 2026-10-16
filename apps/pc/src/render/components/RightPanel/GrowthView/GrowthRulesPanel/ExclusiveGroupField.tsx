@@ -1,5 +1,7 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState } from 'react';
-import Select from '../../../Select';
+import Select from '@novel-editor/ui/Select';
 import styles from './styles.module.scss';
 
 const NONE = '__none__';
@@ -42,7 +44,8 @@ export const ExclusiveGroupField: React.FC<ExclusiveGroupFieldProps> = ({
             commit();
           }}
         >
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             aria-label={`${label} 新互斥组名称`}
             placeholder="例如 元素法术"
@@ -56,9 +59,9 @@ export const ExclusiveGroupField: React.FC<ExclusiveGroupFieldProps> = ({
               }
             }}
           />
-          <button type="submit" className={styles.button} disabled={!draft.trim()}>
+          <UiButton unstyled type="submit" className={styles.button} disabled={!draft.trim()}>
             确定
-          </button>
+          </UiButton>
         </form>
       ) : (
         <Select

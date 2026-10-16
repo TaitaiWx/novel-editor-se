@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import type { ChapterTension, CharacterLane, ForeshadowItem } from '@novel-editor/basic-algorithm';
 import styles from './styles.module.scss';
@@ -44,7 +45,8 @@ export const TensionView: React.FC<{
       <ul className={styles.tensionList}>
         {tension.map((item, index) => (
           <li key={item.path}>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.tensionRow}
               title={item.signals.join(' · ') || '没有明显的冲突信号'}
@@ -56,7 +58,7 @@ export const TensionView: React.FC<{
                 <span style={{ width: `${item.level * 20}%` }} data-level={item.level} />
               </span>
               <span className={styles.tensionLabel}>{TENSION_LABELS[item.level]}</span>
-            </button>
+            </UiButton>
           </li>
         ))}
       </ul>
@@ -94,14 +96,15 @@ export const CharacterLanesView: React.FC<{
           <span role="columnheader" aria-label="人物" />
           {chapters.map((chapter, index) => (
             <span key={chapter.path} role="columnheader" className={styles.laneHeaderCell}>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.laneHeader}
                 title={chapter.title}
                 onClick={() => onOpenChapter(chapter.path)}
               >
                 {index + 1}
-              </button>
+              </UiButton>
             </span>
           ))}
         </div>
@@ -165,7 +168,8 @@ export const ForeshadowView: React.FC<{
       <ul className={styles.foreshadowList}>
         {items.map((item) => (
           <li key={item.key}>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.foreshadowRow}
               onClick={() => onOpenChapter(item.chapterPath, item.line || undefined)}
@@ -176,7 +180,7 @@ export const ForeshadowView: React.FC<{
                 {item.chapterTitle}
                 {item.echoed ? ` → ${item.echoedIn}` : ' · 未回收'}
               </span>
-            </button>
+            </UiButton>
           </li>
         ))}
       </ul>

@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { CHARACTER_DESIGN_FIELDS, type MediaItem } from '@novel-editor/core/entity-media';
+import { type MediaItem } from '@novel-editor/core/entity-media';
 import CharacterOverview, {
   summarizeCharacter,
 } from '@/render/components/RightPanel/CharactersView/CharacterOverview';
@@ -35,11 +35,11 @@ describe('summarizeCharacter', () => {
       name: '林舟',
       cover: undefined,
       designFilled: 0,
-      designTotal: CHARACTER_DESIGN_FIELDS.length,
+      designTotal: 12,
       imageCount: 0,
       hasTurnaround: false,
       level: null,
-      hints: ['缺人物设计', '缺三视图', '没有成长档案'],
+      hints: ['缺人物资料', '缺三视图', '没有成长档案'],
     });
   });
 
@@ -72,7 +72,7 @@ describe('summarizeCharacter', () => {
       0
     );
     expect(withMedia.cover).toBe('a/p.png');
-    expect(withMedia.hints).toEqual(['缺人物设计']);
+    expect(withMedia.hints).toEqual(['缺人物资料']);
 
     const legacy = summarizeCharacter(character({ avatar: '资料/人物头像/林舟.png' }), null);
     expect(legacy.cover).toBe('资料/人物头像/林舟.png');

@@ -1,3 +1,5 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { AiOutlineSearch } from 'react-icons/ai';
 import { isImeComposing } from '../../../utils/ime';
@@ -27,7 +29,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
 }) => (
   <div className={styles.searchBar}>
     <AiOutlineSearch className={styles.searchIcon} />
-    <input
+    <UiInput
+      unstyled
       ref={inputRef}
       className={styles.searchInput}
       value={value}
@@ -61,7 +64,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
       placeholder="搜索作品内容..."
     />
     {value && (
-      <button
+      <UiButton
+        unstyled
         className={styles.searchClear}
         aria-label="清空搜索"
         onClick={() => {
@@ -70,7 +74,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
         }}
       >
         ×
-      </button>
+      </UiButton>
     )}
   </div>
 );

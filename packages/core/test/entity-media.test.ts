@@ -222,3 +222,65 @@ describe('设定分类目录与标签', () => {
     expect(geo.folders[0].items.map((entry) => entry.title)).toEqual(['禁地', '雪原']);
   });
 });
+
+describe('扩展人物档案字段', () => {
+  it('选填外在、心理、家庭和关系字段读写时保留，旧人物补为空字符串', () => {
+    const fields = {
+      species: '人类',
+      health: '左膝旧伤',
+      posture: '重心偏右',
+      virtues: '守信',
+      lifestyle: '节俭',
+      selfImage: '只靠自己',
+      publicImage: '冷漠可靠',
+      needs: '归属',
+      beliefs: '重承诺',
+      contradiction: '想被理解却不解释',
+      emotionalTriggers: '被怀疑失信',
+      coping: '沉默做事',
+      family: '匠户出身',
+      education: '师父教识字',
+      influences: '师父',
+      socialPosition: '学徒',
+      socialStyle: '慢热',
+      intimacyStyle: '争执后解释',
+    };
+    const parsed = parseCharacterDesign(
+      Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, ` ${value} `]))
+    );
+    expect(parsed).toMatchObject(fields);
+    expect(parseCharacterDesign(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
+    const legacy = parseCharacterDesign({ appearance: '黑发' });
+    expect(legacy).toMatchObject({
+      health: '',
+      selfImage: '',
+      beliefs: '',
+      family: '',
+      intimacyStyle: '',
+    });
+    expect(isDesignEmpty(parseCharacterDesign({ intimacyStyle: '争执后解释' }))).toBe(false);
+  });
+
+  it('续写人物上下文包含新增心理和关系字段，不退回简介丢失细节', () => {
+    expect(
+      describeCharacter(
+        '林舟',
+        parseCharacterDesign({
+          health: '左膝旧伤',
+          beliefs: '重承诺',
+          family: '匠户出身',
+          intimacyStyle: '争执后解释',
+        }),
+        '旧简介'
+      )
+    ).toBe(
+      '林舟（身体状况：左膝旧伤；信念原则：重承诺；家庭与阶层：匠户出身；亲密与冲突：争执后解释）'
+    );
+  });
+
+  it('扩展字段以 Unicode 码点截断，不留下半个代理项', () => {
+    const parsed = parseCharacterDesign({ health: `${'伤'.repeat(799)}😀尾`, family: null });
+    expect(parsed.health).toBe(`${'伤'.repeat(799)}😀`);
+    expect(parsed.family).toBe('');
+  });
+});

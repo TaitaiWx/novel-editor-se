@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { GrowthEventInput } from '@novel-editor/core/growth';
-import Popover from '../Popover';
-import { useOptionalToast } from '../Toast';
+import Popover from '@novel-editor/ui/Popover';
+import { useOptionalToast } from '@novel-editor/ui/Toast';
 import { GrowthRecordForm } from '../RightPanel/GrowthView/GrowthRecordForm';
 import { describeRecordResult } from '../RightPanel/GrowthView/growthText';
 import { emitGrowthMemoryChanged } from '../../utils/growthIndex';

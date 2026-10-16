@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { VscSave } from 'react-icons/vsc';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 interface EditorFileHeaderProps {
@@ -61,14 +62,15 @@ const EditorFileHeader: React.FC<EditorFileHeaderProps> = ({
     <div className={styles.fileActions}>
       {!readOnly && !isChangelog && (
         <Tooltip content="保存 (Cmd/Ctrl+S)" position="bottom">
-          <button
+          <UiButton
+            unstyled
             className={styles.saveButton}
             onClick={onSave}
             disabled={autoSaving}
             aria-label="保存"
           >
             <VscSave />
-          </button>
+          </UiButton>
         </Tooltip>
       )}
       {settingsComponent}

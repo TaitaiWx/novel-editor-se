@@ -2,6 +2,7 @@
  * 音频 / 视频预览
  */
 import React, { useState } from 'react';
+import VideoPlayer, { AudioPlayer } from '../../VideoPlayer';
 import styles from './styles.module.scss';
 import { formatByteSize, formatDuration } from '../utils';
 
@@ -12,22 +13,22 @@ interface MediaPreviewProps {
 }
 
 export const AudioPreview: React.FC<MediaPreviewProps> = ({ dataUrl, mimeType, byteSize }) => {
-  const [duration, setDuration] = useState<number | null>(null);
+  const [metadata, setMetadata] = useState<{ source: string; duration: number | null } | null>(
+    null
+  );
+  const duration = metadata?.source === dataUrl ? metadata.duration : null;
 
   return (
     <div className={styles.mediaPanel}>
-      <audio
+      <AudioPlayer
+        key={dataUrl}
         className={styles.audioPlayer}
-        controls
-        preload="metadata"
-        onLoadedMetadata={(event) => {
-          setDuration(
-            Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : null
-          );
-        }}
-      >
-        <source src={dataUrl} type={mimeType} />
-      </audio>
+        src={{ src: dataUrl, mimeType }}
+        title="音频预览"
+        onMetadata={({ duration }) =>
+          setMetadata({ source: dataUrl, duration: Number.isFinite(duration) ? duration : null })
+        }
+      />
       <div className={styles.metaGrid}>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>类型</span>
@@ -48,9 +49,13 @@ export const AudioPreview: React.FC<MediaPreviewProps> = ({ dataUrl, mimeType, b
 
 export const VideoPreview: React.FC<MediaPreviewProps> = ({ dataUrl, mimeType, byteSize }) => (
   <div className={styles.mediaPanel}>
-    <video className={styles.previewVideo} controls preload="metadata">
-      <source src={dataUrl} type={mimeType} />
-    </video>
+    <VideoPlayer
+      src={{ src: dataUrl, mimeType }}
+      title="视频预览"
+      kind="video"
+      className={styles.previewVideo}
+      maxHeight="min(72vh, 760px)"
+    />
     <div className={styles.metaGrid}>
       <div className={styles.metaItem}>
         <span className={styles.metaLabel}>类型</span>

@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * PreviewPanel — 版本预览面板（图片/PDF/音频/视频/二进制的快照与当前文件对比）
  */
@@ -39,13 +40,13 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
         </div>
         <div className={styles.previewActions}>
           {canRestore && (
-            <button className={styles.previewActionButton} onClick={onRestore}>
+            <UiButton unstyled className={styles.previewActionButton} onClick={onRestore}>
               恢复当前文件
-            </button>
+            </UiButton>
           )}
-          <button className={styles.previewCloseButton} onClick={onClose}>
+          <UiButton unstyled className={styles.previewCloseButton} onClick={onClose}>
             关闭预览
-          </button>
+          </UiButton>
         </div>
       </div>
       <div className={styles.previewBody}>

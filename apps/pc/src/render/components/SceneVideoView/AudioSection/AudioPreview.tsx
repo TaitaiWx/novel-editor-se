@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { AUDIO_MIME_TYPES, detectAudioFormat } from '@novel-editor/video';
+import { AudioPlayer } from '../../VideoPlayer';
 import styles from './styles.module.scss';
 
 /**
- * 试听：按需读取音频字节（配音 / 配乐 / 音效，均经主进程校验路径）并生成 blob 地址，用原生 audio 播放；
+ * 试听：按需读取音频字节（配音 / 配乐 / 音效，均经主进程校验路径）并生成 blob 地址，由公共播放器试听；
  * 文件变化或卸载时释放。没有 source 时不渲染。
  */
 const AudioPreview: React.FC<{
@@ -45,13 +46,12 @@ const AudioPreview: React.FC<{
   if (error) return <span className={styles.status}>无法读取音频：{error}</span>;
   if (!entry || entry.source !== source) return <span className={styles.status}>读取中…</span>;
   return (
-    <audio
+    <AudioPlayer
       className={styles.audio}
       src={entry.url}
-      controls
-      preload="metadata"
-      aria-label={label}
-      data-testid={testId}
+      title={label}
+      videoTestId={testId}
+      controls={{ skip: false, abRepeat: false, loop: false }}
     />
   );
 };

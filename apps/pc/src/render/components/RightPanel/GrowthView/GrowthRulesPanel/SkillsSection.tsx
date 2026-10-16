@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useMemo, useState } from 'react';
 import { VscAdd, VscTrash } from 'react-icons/vsc';
 import { createSkillDraft, expandSkillCosts, type SkillDef } from '@novel-editor/core/growth';
@@ -55,9 +57,15 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
       errorCount={countErrorsUnder(issues, 'skills')}
       testId="growth-rules-skills"
       actions={
-        <button type="button" className={styles.button} disabled={disabled} onClick={add}>
+        <UiButton
+          unstyled
+          type="button"
+          className={styles.button}
+          disabled={disabled}
+          onClick={add}
+        >
           <VscAdd aria-hidden /> 添加技能
-        </button>
+        </UiButton>
       }
     >
       {draft.skills.length === 0 && <div className={styles.empty}>还没有技能</div>}
@@ -118,7 +126,8 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
                 </IconButton>
               </div>
             </div>
-            <input
+            <UiInput
+              unstyled
               className={`${styles.input} ${styles.description}`}
               aria-label={`${label} 说明`}
               placeholder="一句话说明（可选）"

@@ -1,5 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useState } from 'react';
-import Popover from '../../../Popover';
+import Popover from '@novel-editor/ui/Popover';
 import styles from './styles.module.scss';
 
 export interface GrowthMoreMenuProps {
@@ -37,7 +38,8 @@ export const GrowthMoreMenu: React.FC<GrowthMoreMenuProps> = ({
 
   return (
     <>
-      <button
+      <UiButton
+        unstyled
         ref={anchorRef}
         type="button"
         className={styles.trigger}
@@ -48,7 +50,7 @@ export const GrowthMoreMenu: React.FC<GrowthMoreMenuProps> = ({
         onClick={() => (open ? close() : setOpen(true))}
       >
         ⋯
-      </button>
+      </UiButton>
       <Popover
         open={open}
         anchorRef={anchorRef}
@@ -60,7 +62,8 @@ export const GrowthMoreMenu: React.FC<GrowthMoreMenuProps> = ({
         closeOnEscape
         zIndex={2000}
       >
-        <button
+        <UiButton
+          unstyled
           type="button"
           role="menuitem"
           className={styles.item}
@@ -68,19 +71,38 @@ export const GrowthMoreMenu: React.FC<GrowthMoreMenuProps> = ({
           onClick={run(onSync)}
         >
           同步人物卡 / 设定到记忆文件夹
-        </button>
-        <button type="button" role="menuitem" className={styles.item} onClick={run(onEditRules)}>
+        </UiButton>
+        <UiButton
+          unstyled
+          type="button"
+          role="menuitem"
+          className={styles.item}
+          onClick={run(onEditRules)}
+        >
           编辑规则
-        </button>
-        <button type="button" role="menuitem" className={styles.item} onClick={run(onOpenFolder)}>
+        </UiButton>
+        <UiButton
+          unstyled
+          type="button"
+          role="menuitem"
+          className={styles.item}
+          onClick={run(onOpenFolder)}
+        >
           打开数据文件夹
-        </button>
-        <button type="button" role="menuitem" className={styles.item} onClick={run(onOpenHelp)}>
+        </UiButton>
+        <UiButton
+          unstyled
+          type="button"
+          role="menuitem"
+          className={styles.item}
+          onClick={run(onOpenHelp)}
+        >
           使用说明
-        </button>
+        </UiButton>
         <div className={styles.separator} role="separator" />
         {confirmDelete ? (
-          <button
+          <UiButton
+            unstyled
             type="button"
             role="menuitem"
             className={`${styles.item} ${styles.danger} ${styles.confirm}`}
@@ -89,9 +111,10 @@ export const GrowthMoreMenu: React.FC<GrowthMoreMenuProps> = ({
           >
             确认删除「{characterName}」的成长卡？
             <span className={styles.sub}>会删除 资料/记忆/角色/ 下的文件，无法撤销</span>
-          </button>
+          </UiButton>
         ) : (
-          <button
+          <UiButton
+            unstyled
             type="button"
             role="menuitem"
             className={`${styles.item} ${styles.danger}`}
@@ -99,7 +122,7 @@ export const GrowthMoreMenu: React.FC<GrowthMoreMenuProps> = ({
             onClick={() => setConfirmDelete(true)}
           >
             删除成长卡…
-          </button>
+          </UiButton>
         )}
       </Popover>
     </>

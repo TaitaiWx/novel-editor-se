@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { loadAvatarSource } from '../../utils/characterAvatar';
-import styles from './styles.module.scss';
+import Avatar from '@novel-editor/ui/Avatar';
 
 interface CharacterAvatarProps {
   name: string;
@@ -39,25 +39,7 @@ const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
     };
   }, [avatar, givenSrc, workPath]);
   const src = givenSrc !== undefined ? givenSrc : loaded;
-  const style = {
-    '--avatar-accent': color,
-    width: `${size}px`,
-    height: `${size}px`,
-    fontSize: `${Math.round(size * 0.45)}px`,
-  } as React.CSSProperties;
-  return src ? (
-    <img
-      className={`${styles.avatar} ${className ?? ''}`}
-      style={style}
-      src={src}
-      alt=""
-      draggable={false}
-    />
-  ) : (
-    <span className={`${styles.initial} ${className ?? ''}`} style={style} aria-hidden="true">
-      {Array.from(name.trim())[0] ?? '?'}
-    </span>
-  );
+  return <Avatar name={name} src={src} color={color} size={size} className={className} />;
 };
 
 export default CharacterAvatar;

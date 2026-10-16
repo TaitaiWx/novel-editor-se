@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback, useEffect, useState } from 'react';
 import { VscLinkExternal } from 'react-icons/vsc';
-import LoadingSpinner from '../LoadingSpinner';
-import ErrorState from '../ErrorState';
+import LoadingSpinner from '@novel-editor/ui/LoadingSpinner';
+import ErrorState from '@novel-editor/ui/ErrorState';
 import styles from './styles.module.scss';
 
 interface DocumentData {
@@ -127,10 +128,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ filePath, settingsCompo
         <div className={styles.contentArea}>
           <div className={styles.tooLargeHint}>
             <p>该文件较大（{sizeMB} MB），不支持内置预览</p>
-            <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+            <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
               <VscLinkExternal />
               用默认应用打开
-            </button>
+            </UiButton>
           </div>
         </div>
       </div>
@@ -146,10 +147,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ filePath, settingsCompo
             <span className={styles.badge}>{ext}</span>
           </div>
           <div className={styles.headerRight}>
-            <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+            <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
               <VscLinkExternal />
               用默认应用打开
-            </button>
+            </UiButton>
             {settingsComponent}
           </div>
         </div>
@@ -181,10 +182,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ filePath, settingsCompo
         <div className={styles.contentArea}>
           <div className={styles.tooLargeHint}>
             <p>该文件格式不支持内置预览，请使用系统默认应用打开</p>
-            <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+            <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
               <VscLinkExternal />
               用默认应用打开
-            </button>
+            </UiButton>
           </div>
         </div>
       </div>
@@ -199,10 +200,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ filePath, settingsCompo
           <span className={styles.badge}>{ext}</span>
         </div>
         <div className={styles.headerRight}>
-          <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+          <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
             <VscLinkExternal />
             用默认应用打开编辑
-          </button>
+          </UiButton>
           {settingsComponent}
         </div>
       </div>

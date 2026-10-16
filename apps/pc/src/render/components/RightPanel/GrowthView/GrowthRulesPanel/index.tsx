@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useMemo, useState } from 'react';
 import {
   createDndRuleset,
@@ -84,17 +86,24 @@ export const GrowthRulesPanel: React.FC<GrowthRulesPanelProps> = ({
               <span className={styles.unsavedErrors}> · {draft.errorCount} 处需要修改</span>
             )}
           </span>
-          <button type="button" className={styles.button} disabled={busy} onClick={draft.reset}>
+          <UiButton
+            unstyled
+            type="button"
+            className={styles.button}
+            disabled={busy}
+            onClick={draft.reset}
+          >
             撤销更改
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            unstyled
             type="button"
             className={styles.primary}
             disabled={busy || draft.errorCount > 0}
             onClick={() => void draft.save()}
           >
             保存
-          </button>
+          </UiButton>
         </div>
       )}
 
@@ -104,10 +113,16 @@ export const GrowthRulesPanel: React.FC<GrowthRulesPanelProps> = ({
             删除{pending.label}？{pending.message}
           </div>
           <div className={styles.actions}>
-            <button type="button" className={styles.button} onClick={() => setPending(null)}>
+            <UiButton
+              unstyled
+              type="button"
+              className={styles.button}
+              onClick={() => setPending(null)}
+            >
               取消
-            </button>
-            <button
+            </UiButton>
+            <UiButton
+              unstyled
               type="button"
               className={styles.danger}
               onClick={() => {
@@ -116,7 +131,7 @@ export const GrowthRulesPanel: React.FC<GrowthRulesPanelProps> = ({
               }}
             >
               仍然删除
-            </button>
+            </UiButton>
           </div>
         </div>
       )}
@@ -134,17 +149,23 @@ export const GrowthRulesPanel: React.FC<GrowthRulesPanelProps> = ({
             属性、技能、二选一 / 三选一和不可违背的核心规则都写在这里，记一笔与 AI 推演会按它校验。
           </div>
           <div className={styles.actions}>
-            <button type="button" className={styles.button} onClick={() => setStartBlank(true)}>
+            <UiButton
+              unstyled
+              type="button"
+              className={styles.button}
+              onClick={() => setStartBlank(true)}
+            >
               从空白开始
-            </button>
-            <button
+            </UiButton>
+            <UiButton
+              unstyled
               type="button"
               className={styles.primary}
               disabled={busy}
               onClick={() => draft.replace({ ...createDndRuleset(), limits: current.limits })}
             >
               从 DND 模板开始
-            </button>
+            </UiButton>
           </div>
         </div>
       ) : (
@@ -161,7 +182,8 @@ export const GrowthRulesPanel: React.FC<GrowthRulesPanelProps> = ({
                 onChange={(name) => update((value) => ({ ...value, name }))}
               />
             </div>
-            <input
+            <UiInput
+              unstyled
               className={`${styles.input} ${styles.description}`}
               aria-label="规则之书说明"
               placeholder="这套成长体系的一句话说明（可选）"

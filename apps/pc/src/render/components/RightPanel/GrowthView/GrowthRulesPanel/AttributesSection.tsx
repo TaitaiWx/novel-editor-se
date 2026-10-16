@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useState } from 'react';
 import { VscAdd, VscArrowDown, VscArrowUp, VscTrash } from 'react-icons/vsc';
 import { createAttributeDraft, moveItem, type AttributeDef } from '@novel-editor/core/growth';
@@ -54,9 +56,15 @@ export const AttributesSection: React.FC<AttributesSectionProps> = ({
       errorCount={countErrorsUnder(issues, 'attributes')}
       testId="growth-rules-attributes"
       actions={
-        <button type="button" className={styles.button} disabled={disabled} onClick={add}>
+        <UiButton
+          unstyled
+          type="button"
+          className={styles.button}
+          disabled={disabled}
+          onClick={add}
+        >
           <VscAdd aria-hidden /> 添加属性
-        </button>
+        </UiButton>
       }
     >
       {attributes.length === 0 && (
@@ -169,7 +177,8 @@ export const AttributesSection: React.FC<AttributesSectionProps> = ({
                 onChange={(perLevelCap) => patch(index, { perLevelCap })}
               />
             </div>
-            <input
+            <UiInput
+              unstyled
               className={`${styles.input} ${styles.description}`}
               aria-label={`${label} 说明`}
               placeholder="一句话说明（可选）"

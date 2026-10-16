@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import type { VideoTask } from '@/render/types/ai-api';
 import { describeTaskStatus } from '../sceneVideoState';
@@ -78,24 +79,26 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, positionByNumber, onCancel, 
             )}
             <div className={styles.taskActions}>
               {isActive(task) && (
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.smallButton}
                   aria-label={`取消 ${label} v${task.version}`}
                   onClick={() => onCancel(task.id)}
                 >
                   取消
-                </button>
+                </UiButton>
               )}
               {(task.status === 'failed' || task.status === 'cancelled') && (
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.smallButton}
                   aria-label={`重试 ${label} v${task.version}`}
                   onClick={() => onRetry(task.id)}
                 >
                   重试
-                </button>
+                </UiButton>
               )}
             </div>
           </li>

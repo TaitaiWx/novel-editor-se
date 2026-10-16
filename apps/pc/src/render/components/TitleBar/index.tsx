@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState, useEffect, useRef } from 'react';
 import { VscSettingsGear, VscSettings, VscFolderOpened, VscExport } from 'react-icons/vsc';
 import { AiOutlineClose, AiOutlineEye, AiOutlineKey, AiOutlineRobot } from 'react-icons/ai';
@@ -70,7 +71,8 @@ const TitleBar: React.FC<TitleBarProps> = ({
         {/* 居中：专注模式按钮 */}
         {onToggleFocusMode && (
           <div className={styles.centerTools}>
-            <button
+            <UiButton
+              unstyled
               className={`${styles.toolButton} ${focusMode ? styles.focusModeActive : ''}`}
               onClick={onToggleFocusMode}
               title={focusMode ? '退出专注模式 (F11)' : '进入专注模式 (F11)'}
@@ -79,42 +81,46 @@ const TitleBar: React.FC<TitleBarProps> = ({
                 {focusMode ? <AiOutlineClose /> : <AiOutlineEye />}
               </span>
               <span>{focusMode ? '退出专注' : '专注写作'}</span>
-            </button>
+            </UiButton>
           </div>
         )}
 
         {/* 右侧工具区：设置 + 窗口控制 */}
         <div className={styles.toolSection}>
-          <button
+          <UiButton
+            unstyled
             className={styles.userButton}
             onClick={onAvatarClick}
             title="打开设置中心"
             aria-label="打开设置中心"
           >
             <span className={styles.userAvatar}>{userInitials.slice(0, 2).toUpperCase()}</span>
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            unstyled
             className={styles.toolIconButton}
             onClick={onOpenAIAssistant}
             title="AI 助手"
             aria-label="打开 AI 助手"
           >
             <AiOutlineRobot />
-          </button>
+          </UiButton>
           <div className={styles.settingsWrap} ref={settingsRef}>
-            <button
+            <UiButton
+              unstyled
               className={styles.toolIconButton}
               onClick={() => setSettingsOpen((prev) => !prev)}
               title="设置"
               aria-label="打开设置"
             >
               <VscSettingsGear />
-            </button>
+            </UiButton>
             {settingsOpen && (
               <div className={styles.settingsMenu}>
                 <div className={styles.settingsTitle}>软件设置</div>
                 {onOpenSettings && (
-                  <button
+                  <UiButton
+                    unstyled
                     className={styles.settingsItem}
                     onClick={() => {
                       setSettingsOpen(false);
@@ -123,9 +129,10 @@ const TitleBar: React.FC<TitleBarProps> = ({
                   >
                     <VscSettings />
                     <span>设置中心</span>
-                  </button>
+                  </UiButton>
                 )}
-                <button
+                <UiButton
+                  unstyled
                   className={styles.settingsItem}
                   onClick={() => {
                     setSettingsOpen(false);
@@ -134,9 +141,10 @@ const TitleBar: React.FC<TitleBarProps> = ({
                 >
                   <AiOutlineKey />
                   <span>键盘快捷键</span>
-                </button>
+                </UiButton>
                 {onOpenSampleData && (
-                  <button
+                  <UiButton
+                    unstyled
                     className={styles.settingsItem}
                     onClick={() => {
                       setSettingsOpen(false);
@@ -145,12 +153,13 @@ const TitleBar: React.FC<TitleBarProps> = ({
                   >
                     <VscFolderOpened />
                     <span>打开示例项目</span>
-                  </button>
+                  </UiButton>
                 )}
                 {onExportProject && (
                   <>
                     <div className={styles.settingsTitle}>项目</div>
-                    <button
+                    <UiButton
+                      unstyled
                       className={styles.settingsItem}
                       onClick={() => {
                         setSettingsOpen(false);
@@ -159,7 +168,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
                     >
                       <VscExport />
                       <span>导出项目</span>
-                    </button>
+                    </UiButton>
                   </>
                 )}
               </div>

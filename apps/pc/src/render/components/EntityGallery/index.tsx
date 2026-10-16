@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 人物 / 设定的图集（多视图、多背景、服装…）：本地上传或 AI 生成，从中选一张作为封面（形象图）。
  *
@@ -25,11 +27,11 @@ import {
   type MediaKind,
   type MediaKindOption,
 } from '@novel-editor/core/entity-media';
-import Tooltip from '../Tooltip';
-import ContextMenu from '../ContextMenu';
+import Tooltip from '@novel-editor/ui/Tooltip';
+import ContextMenu from '@novel-editor/ui/ContextMenu';
 import { joinWorkPath, requestOpenReference } from '../../utils/referencePane';
 import { IMAGE_EXPORT_FORMATS, exportMediaWithToast } from '../../utils/mediaExport';
-import { useOptionalToast } from '../Toast';
+import { useOptionalToast } from '@novel-editor/ui/Toast';
 import AiImagePanel, { CANDIDATE_COUNT, type AiImageRequest } from './AiImagePanel';
 import { MediaImage } from './MediaTile';
 import { dataUrlToBytes, deleteImage, saveImage } from './mediaActions';
@@ -209,7 +211,8 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
         <span className={styles.count}>{items.length} 张</span>
         <span className={styles.spacer} />
         <Tooltip content="从本地选择图片（可多选，也可以直接拖进来），上传后右键可以设为三视图 / 主要形象图">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.button}
             disabled={!workPath || busy}
@@ -217,10 +220,11 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
           >
             <VscCloudUpload aria-hidden="true" />
             {busy ? '上传中…' : '本地上传'}
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content={aiTip}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.primary}
             aria-expanded={aiOpen}
@@ -235,9 +239,10 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
           >
             <VscSparkle aria-hidden="true" />
             AI 生成
-          </button>
+          </UiButton>
         </Tooltip>
-        <input
+        <UiInput
+          unstyled
           ref={inputRef}
           type="file"
           accept="image/png,image/jpeg,image/gif,image/webp"
@@ -272,7 +277,8 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
       )}
 
       {items.length === 0 ? (
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={`${styles.empty} ${dragging ? styles.emptyDragging : ''}`}
           disabled={!workPath || busy}
@@ -285,7 +291,7 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
               ? '上传后右键可以设为「三视图」或「主要形象图」。建议准备一张三视图：生成视频时人物不容易崩。'
               : '上传后右键可以设为封面，写作和做场景视频时都能直接参考。'}
           </span>
-        </button>
+        </UiButton>
       ) : (
         groups.map((group) => (
           <div key={group.option.kind} className={styles.group}>
@@ -306,14 +312,15 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
                       setMenu({ x: event.clientX, y: event.clientY, item });
                     }}
                   >
-                    <button
+                    <UiButton
+                      unstyled
                       type="button"
                       className={styles.tileImage}
                       aria-label={`查看 ${group.option.label}`}
                       onClick={() => setViewing(item)}
                     >
                       <MediaImage path={item.path} workPath={workPath} alt={group.option.label} />
-                    </button>
+                    </UiButton>
                     {isCover && <span className={styles.coverBadge}>{COVER_LABEL[entity]}</span>}
                     {item.source === 'ai' && <span className={styles.aiBadge}>AI</span>}
                     <span className={styles.tileActions}>
@@ -324,7 +331,8 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
                             : `设为${COVER_LABEL[entity]}（右键还有更多）`
                         }
                       >
-                        <button
+                        <UiButton
+                          unstyled
                           type="button"
                           className={styles.iconButton}
                           aria-label={
@@ -334,17 +342,18 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
                           onClick={() => void commit([...items], item.path)}
                         >
                           {isCover ? <VscStarFull /> : <VscStarEmpty />}
-                        </button>
+                        </UiButton>
                       </Tooltip>
                       <Tooltip content="删除这张图（同时删除文件）">
-                        <button
+                        <UiButton
+                          unstyled
                           type="button"
                           className={styles.iconButton}
                           aria-label="删除图片"
                           onClick={() => void remove(item)}
                         >
                           <VscTrash />
-                        </button>
+                        </UiButton>
                       </Tooltip>
                     </span>
                   </li>
@@ -433,14 +442,15 @@ const EntityGallery: React.FC<EntityGalleryProps> = ({
           />
           {viewing.prompt && <p className={styles.lightboxPrompt}>{viewing.prompt}</p>}
           <Tooltip content="关闭（Esc）">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.lightboxClose}
               aria-label="关闭大图"
               onClick={() => setViewing(null)}
             >
               <VscClose />
-            </button>
+            </UiButton>
           </Tooltip>
         </div>
       )}

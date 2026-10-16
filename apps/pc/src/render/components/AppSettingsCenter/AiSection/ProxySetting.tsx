@@ -1,3 +1,4 @@
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 「网络代理」：勾选了「通过代理访问」的模型走这里的代理，其余模型直连。
  * 跟随系统代理（默认）或手动填写地址（http / https / socks4 / socks5）；保存在 ai-providers.json（主进程校验）。
@@ -5,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import type { AIIpcResult } from '../../../types/ai-api';
 import { normalizeProxyUrl, type AIProxyMode, type AIProxySettings } from '@/shared/ai-proxy';
-import Select from '../../Select';
+import Select from '@novel-editor/ui/Select';
 import sharedStyles from '../styles.module.scss';
 import { SettingsRow } from '../layout';
 import styles from './styles.module.scss';
@@ -111,7 +112,8 @@ const ProxySetting: React.FC<ProxySettingProps> = ({ proxiedCount }) => {
             )
           }
         >
-          <input
+          <UiInput
+            unstyled
             className={sharedStyles.input}
             aria-label="代理地址"
             value={url}

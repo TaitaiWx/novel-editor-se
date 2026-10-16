@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import React, { useEffect, useState } from 'react';
 import type { GrowthRuleset } from '@novel-editor/core/growth';
 import styles from './styles.module.scss';
@@ -36,17 +38,19 @@ export const DebugJsonEditor: React.FC<DebugJsonEditorProps> = ({
 
   return (
     <div className={styles.card}>
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={styles.toggle}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         {open ? '▾' : '▸'} 开发者：编辑规则 JSON
-      </button>
+      </UiButton>
       {open && (
         <>
-          <textarea
+          <UiTextArea
+            unstyled
             className={styles.json}
             value={json}
             spellCheck={false}
@@ -54,16 +58,23 @@ export const DebugJsonEditor: React.FC<DebugJsonEditorProps> = ({
             onChange={(event) => setJson(event.target.value)}
           />
           <div className={styles.actions}>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.button}
               onClick={() => setJson(JSON.stringify(ruleset, null, 2))}
             >
               还原
-            </button>
-            <button type="button" className={styles.primary} disabled={busy} onClick={save}>
+            </UiButton>
+            <UiButton
+              unstyled
+              type="button"
+              className={styles.primary}
+              disabled={busy}
+              onClick={save}
+            >
               保存规则
-            </button>
+            </UiButton>
           </div>
         </>
       )}

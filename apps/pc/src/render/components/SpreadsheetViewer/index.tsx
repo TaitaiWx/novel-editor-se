@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { VscLinkExternal } from 'react-icons/vsc';
-import LoadingSpinner from '../LoadingSpinner';
-import ErrorState from '../ErrorState';
+import LoadingSpinner from '@novel-editor/ui/LoadingSpinner';
+import ErrorState from '@novel-editor/ui/ErrorState';
 import styles from './styles.module.scss';
 import { getPathBasename } from '@/render/utils/path';
 
@@ -160,10 +161,10 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ filePath, setting
         <div className={styles.tableArea}>
           <div className={styles.tooLargeHint}>
             <p>该文件较大（{sizeMB} MB），不支持内置预览</p>
-            <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+            <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
               <VscLinkExternal />
               用默认应用打开
-            </button>
+            </UiButton>
           </div>
         </div>
       </div>
@@ -180,10 +181,10 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ filePath, setting
             <span className={styles.badge}>XLSX</span>
           </div>
           <div className={styles.headerRight}>
-            <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+            <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
               <VscLinkExternal />
               用默认应用打开
-            </button>
+            </UiButton>
             {settingsComponent}
           </div>
         </div>
@@ -208,10 +209,10 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ filePath, setting
           )}
         </div>
         <div className={styles.headerRight}>
-          <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+          <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
             <VscLinkExternal />
             用默认应用打开编辑
-          </button>
+          </UiButton>
           {settingsComponent}
         </div>
       </div>
@@ -220,13 +221,14 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ filePath, setting
       {data.sheets.length > 1 && (
         <div className={styles.sheetTabs}>
           {data.sheets.map((sheet, index) => (
-            <button
+            <UiButton
+              unstyled
               key={sheet.name}
               className={`${styles.sheetTab} ${index === activeSheet ? styles.sheetTabActive : ''}`}
               onClick={() => handleSheetClick(index)}
             >
               {sheet.name}
-            </button>
+            </UiButton>
           ))}
         </div>
       )}

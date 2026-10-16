@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 场景视频顶部工具栏：标题｜全局设置（风格 / 比例 / 每镜时长 / 视频服务 / 形象图首帧）｜费用预估 + 生成
  */
@@ -5,8 +6,8 @@ import React from 'react';
 import { VscAdd, VscGoToFile, VscMute, VscUnmute } from 'react-icons/vsc';
 import { ASPECT_RATIOS, type AspectRatio } from '@novel-editor/video';
 import type { AIProviderInfo } from '@/render/types/ai-api';
-import Select from '../../Select';
-import Tooltip from '../../Tooltip';
+import Select from '@novel-editor/ui/Select';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { SCENE_SHOT_DURATIONS, SCENE_VIDEO_STYLES, type SceneVideoState } from '../sceneVideoState';
 import styles from './styles.module.scss';
 
@@ -136,14 +137,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </Tooltip>
         {!servicesLoaded ? null : videoProviders.length === 0 ? (
           <Tooltip content="在设置中心添加视频模型（MiniMax 海螺 / Seedance）；没有配置也可以先拆分镜">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.button}
               data-testid="scene-video-no-provider"
               onClick={onOpenSettings}
             >
               添加视频模型
-            </button>
+            </UiButton>
           </Tooltip>
         ) : (
           <>
@@ -166,7 +168,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
                     : `${provider.label} 目前不支持生成声音（成片保留服务返回的音轨）`
                 }
               >
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.toggle}
                   role="switch"
@@ -182,7 +185,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                     <VscMute aria-hidden="true" />
                   )}
                   <span>生成声音</span>
-                </button>
+                </UiButton>
               </Tooltip>
             )}
           </>
@@ -194,7 +197,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
           {estimateText}
         </span>
         <Tooltip content="在末尾添加一个空白镜头">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label="添加镜头"
@@ -202,17 +206,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
             onClick={onAddShot}
           >
             <VscAdd />
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content="在左侧资料中定位这一场的文件夹（分镜表、成片、样片）">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label="在资料中查看"
             onClick={onReveal}
           >
             <VscGoToFile />
-          </button>
+          </UiButton>
         </Tooltip>
         {state.storyboardConfirmed ? (
           <Tooltip
@@ -222,14 +227,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 : '先配置视频服务'
             }
           >
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.primary}
               disabled={!provider || submitting || pendingCount === 0}
               onClick={onGenerate}
             >
               {generateLabel}
-            </button>
+            </UiButton>
           </Tooltip>
         ) : (
           <Tooltip
@@ -238,7 +244,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
               '检查每个镜头的画面、景别、时长与台词，确认后才能生成视频（不会产生费用）'
             }
           >
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.primary}
               data-testid="confirm-storyboard"
@@ -246,7 +253,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
               onClick={onConfirm}
             >
               确认分镜
-            </button>
+            </UiButton>
           </Tooltip>
         )}
       </div>

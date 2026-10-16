@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState, useEffect, useMemo } from 'react';
 import type { ShortcutInfo } from '../../types';
 import styles from './styles.module.scss';
@@ -78,9 +79,9 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose, onOpenS
       >
         <div className={styles.header}>
           <h3>键盘快捷键</h3>
-          <button className={styles.closeButton} onClick={onClose} aria-label="关闭">
+          <UiButton unstyled className={styles.closeButton} onClick={onClose} aria-label="关闭">
             ×
-          </button>
+          </UiButton>
         </div>
 
         <div className={styles.content}>
@@ -107,7 +108,8 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose, onOpenS
 
         {onOpenSampleData && (
           <div className={styles.footer}>
-            <button
+            <UiButton
+              unstyled
               className={styles.sampleDataBtn}
               onClick={() => {
                 onOpenSampleData();
@@ -130,7 +132,7 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ visible, onClose, onOpenS
                 />
               </svg>
               打开示例项目
-            </button>
+            </UiButton>
           </div>
         )}
       </div>

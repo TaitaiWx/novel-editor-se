@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import type { PersistedOutlineVersionRow } from '@/render/types/electron-api';
 import styles from '../../styles.module.scss';
-import { InlineDiffView } from '../../../InlineDiffView';
+import { InlineDiffView } from '@novel-editor/ui/InlineDiffView';
 import {
   buildStoryIdeaCardTitle,
   buildStoryIdeaTermsPreview,
@@ -91,21 +92,24 @@ export const OutlineVersionsPanel: React.FC<OutlineVersionsPanelProps> = ({
                 )}
               </div>
               <div className={styles.outlineVersionActions}>
-                <button
+                <UiButton
+                  unstyled
                   className={styles.outlineSecondaryButton}
                   onClick={() => handleSetCompareBase(version.id)}
                   disabled={importing}
                 >
                   {compareBaseVersionId === version.id ? '取消 A' : '设为 A'}
-                </button>
-                <button
+                </UiButton>
+                <UiButton
+                  unstyled
                   className={styles.outlineSecondaryButton}
                   onClick={() => handleSetCompareTarget(version.id)}
                   disabled={importing}
                 >
                   {compareTargetVersionId === version.id ? '取消 B' : '设为 B'}
-                </button>
-                <button
+                </UiButton>
+                <UiButton
+                  unstyled
                   className={styles.outlineSecondaryButton}
                   onClick={() =>
                     void handleEditVersion(version.id, version.name, version.note || '')
@@ -113,30 +117,33 @@ export const OutlineVersionsPanel: React.FC<OutlineVersionsPanelProps> = ({
                   disabled={importing}
                 >
                   编辑
-                </button>
+                </UiButton>
                 {version.story_idea_card_id !== null && (
-                  <button
+                  <UiButton
+                    unstyled
                     className={styles.outlineSecondaryButton}
                     onClick={() => jumpToStoryIdeaCard(version.story_idea_card_id)}
                     disabled={importing}
                   >
                     回到灵感
-                  </button>
+                  </UiButton>
                 )}
-                <button
+                <UiButton
+                  unstyled
                   className={styles.outlineSecondaryButton}
                   onClick={() => void handleApplyVersion(version.id, version.name)}
                   disabled={importing}
                 >
                   应用
-                </button>
-                <button
+                </UiButton>
+                <UiButton
+                  unstyled
                   className={styles.outlineSecondaryButton}
                   onClick={() => void handleDeleteVersion(version.id, version.name)}
                   disabled={importing}
                 >
                   删除
-                </button>
+                </UiButton>
               </div>
             </div>
           ))}
@@ -155,13 +162,14 @@ export const OutlineVersionsPanel: React.FC<OutlineVersionsPanelProps> = ({
                 <span>{previewData.targetVersion.total_nodes} 节点</span>
               </div>
             </div>
-            <button
+            <UiButton
+              unstyled
               className={styles.outlineSecondaryButton}
               onClick={() => handleSetCompareBase(null)}
               disabled={importing}
             >
               与当前对比
-            </button>
+            </UiButton>
           </div>
           {previewData.identical ? (
             <div className={styles.outlineVersionPreviewEmpty}>所选版本与当前入库大纲一致</div>

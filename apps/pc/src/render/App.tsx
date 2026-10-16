@@ -1,12 +1,14 @@
+import UiButton from '@novel-editor/ui/Button';
+import CharacterSettingSync from './components/CharacterSettingSync';
 import React, { Suspense, lazy } from 'react';
 import TitleBar from './components/TitleBar';
 import FilePanel from './components/FilePanel';
 import ContentPanel from './components/ContentPanel';
-import { PanelResizer } from './components/PanelResizer';
+import { PanelResizer } from '@novel-editor/ui/PanelResizer';
 import { deferredDialog } from './components/deferred-dialog';
 import { AiConfigProvider } from './components/RightPanel/useAiConfig';
 import StatusBar from './components/StatusBar';
-import ContextMenu from './components/ContextMenu';
+import ContextMenu from '@novel-editor/ui/ContextMenu';
 import InspirationButton from './components/InspirationButton';
 import ContinuationButton from './components/ContinuationButton';
 import SceneVideoButton from './components/SceneVideoButton';
@@ -54,7 +56,7 @@ const AIAssistantDialog = deferredDialog<
 );
 
 const VersionTimeline = lazy(() => import('./components/VersionTimeline'));
-const DiffEditor = lazy(() => import('./components/DiffEditor'));
+const DiffEditor = lazy(() => import('@novel-editor/ui/DiffEditor'));
 const RightPanel = lazy(() => import('./components/RightPanel'));
 
 /**
@@ -237,9 +239,20 @@ const App: React.FC = () => {
   } = editor;
   const { handleExportProject, handleConfirmKnowledgeExport } = projectExport;
 
+  const [settingSyncTarget, setSettingSyncTarget] = React.useState<HTMLSpanElement | null>(null);
+
   return (
     <AiConfigProvider>
       <div className={`${styles.app} ${focusMode ? styles.focusMode : ''}`}>
+        <CharacterSettingSync
+          target={settingSyncTarget}
+          workPath={workScopePath ?? folderPath}
+          filePath={activeDocumentTab}
+          editorViewRef={editorViewRef}
+          enabled={
+            dbReady && derived.storyFileNodes.some((file) => file.path === activeDocumentTab)
+          }
+        />
         {!focusMode && (
           <TitleBar
             focusMode={focusMode}
@@ -269,14 +282,15 @@ const App: React.FC = () => {
           {/* 左侧文件面板卡片；折叠后只保留窗口背景上的展开按钮 */}
           {!focusMode && sidebarCollapsed && (
             <div className={styles.sideRail} data-pane="left-rail">
-              <button
+              <UiButton
+                unstyled
                 className={styles.railToggle}
                 onClick={handleExpandSidebar}
                 title="展开侧边栏"
                 aria-label="展开侧边栏"
               >
                 <VscLayoutSidebarLeft />
-              </button>
+              </UiButton>
             </div>
           )}
           {!focusMode && !sidebarCollapsed && (
@@ -396,6 +410,7 @@ const App: React.FC = () => {
                   <>
                     <InspirationButton shortcut={appSettings.shortcuts.openInspiration} />
                     <ContinuationButton editorViewRef={editorViewRef} />
+                    <span ref={setSettingSyncTarget} />
                     <SceneVideoButton shortcutLabel={formatShortcutLabel('Mod+Alt+V')} />
                     <ReferenceButton fallback={referenceFallback} source={referenceSource} />
                   </>
@@ -432,27 +447,29 @@ const App: React.FC = () => {
               />
             )}
             {focusMode && (
-              <button
+              <UiButton
+                unstyled
                 className={styles.exitFocusBtn}
                 onClick={toggleFocusMode}
                 title="退出聚焦模式 (Esc / F11)"
               >
                 退出聚焦
-              </button>
+              </UiButton>
             )}
           </div>
 
           {/* 右侧拖拽把手 + 右侧信息面板卡片；折叠后只保留展开按钮 */}
           {!focusMode && !rightPanelPoppedOut && rightPanelCollapsed && (
             <div className={`${styles.sideRail} ${styles.sideRailRight}`} data-pane="right-rail">
-              <button
+              <UiButton
+                unstyled
                 className={styles.railToggle}
                 onClick={handleToggleRightPanel}
                 title="展开辅助面板"
                 aria-label="展开辅助面板"
               >
                 <VscLayoutSidebarRight />
-              </button>
+              </UiButton>
             </div>
           )}
           {!focusMode && !rightPanelPoppedOut && !rightPanelCollapsed && (

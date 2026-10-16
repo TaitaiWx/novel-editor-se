@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DEFAULT_VOICE_LANGUAGE, VOICE_LANGUAGES } from '@novel-editor/video';
 import type { AIIpcResult, VideoSettingsInfo } from '../../../types/ai-api';
-import Select from '../../Select';
+import Select from '@novel-editor/ui/Select';
 import { SettingsRow } from '../layout';
 
 /** 配音默认语言（新的场景视频使用；保存在 ai-providers.json 的视频设置里） */

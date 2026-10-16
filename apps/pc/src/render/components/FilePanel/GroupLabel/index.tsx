@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import InlineRenameInput from '../../InlineRenameInput';
-import Tooltip from '../../Tooltip';
+import InlineRenameInput from '@novel-editor/ui/InlineRenameInput';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 interface GroupLabelProps {

@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 3D 预演（动作预演 / previz）：作者描述这个镜头的动作与走位 → 选模型 →「生成预演」，
  * AI 返回经过校验的 PrevizScript（人物关键帧 + 机位关键帧 + 道具 + 时段），确定性的 three.js 引擎按脚本播放动画。
@@ -17,7 +18,7 @@ import {
   withPrevizMood,
   type PrevizScript,
 } from '@novel-editor/video';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import DirectorPanel from './DirectorPanel';
 import FrameOverlay, { type PrevizOverlays } from './FrameOverlay';
 import PlayerBar from './PlayerBar';
@@ -309,7 +310,8 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
             描述动作与走位，AI 生成一段可播放的预演；保存后第一帧作为首帧的构图参考
           </span>
           <Tooltip content="关闭（不保存）">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.iconButton}
               aria-label="关闭预演"
@@ -317,7 +319,7 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
               onClick={onClose}
             >
               <VscClose />
-            </button>
+            </UiButton>
           </Tooltip>
         </header>
         <div className={styles.body}>
@@ -388,14 +390,15 @@ const PrevizDialog: React.FC<PrevizDialogProps> = ({
                   <span style={{ width: `${Math.round(progress * 100)}%` }} />
                 </div>
               )}
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.primary}
                 disabled={!ready || busy}
                 onClick={() => void save()}
               >
                 {progress !== null ? `渲染中 ${Math.round(progress * 100)}%` : '保存预演视频'}
-              </button>
+              </UiButton>
             </footer>
           </aside>
         </div>

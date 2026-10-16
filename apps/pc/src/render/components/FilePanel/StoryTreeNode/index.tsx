@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import type { ContextMenuEvent } from '../../FileTree';
-import InlineRenameInput, { isRenameShortcut } from '../../InlineRenameInput';
+import InlineRenameInput, { isRenameShortcut } from '@novel-editor/ui/InlineRenameInput';
 import { splitNumericPrefix } from '@novel-editor/core/story-layout';
 import { createVolumeWorkspaceTab, stripStoryFileExtension } from '../../../utils/workspace';
 import type { StoryDisplayNode } from '../../../utils/storyStructure';

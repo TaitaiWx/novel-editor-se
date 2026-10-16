@@ -1,8 +1,8 @@
 import React from 'react';
 import { AiOutlineSetting } from 'react-icons/ai';
 import { type SettingsDraft, THOUSAND_CHAR_MARKER_STEP_OPTIONS } from '../../../utils/appSettings';
-import Select from '../../Select';
-import Switch from '../../Switch';
+import Select from '@novel-editor/ui/Select';
+import Switch from '@novel-editor/ui/Switch';
 import type { SystemProfileInfo } from '../constants';
 import type { SettingsFormApi } from '../useSettingsForm';
 import { SettingsGroup, SettingsRow, SettingsSection } from '../layout';

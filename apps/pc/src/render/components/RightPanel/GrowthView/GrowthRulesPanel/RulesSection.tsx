@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useId, useState } from 'react';
 import { VscChevronDown, VscChevronRight } from 'react-icons/vsc';
 import styles from './styles.module.scss';
@@ -30,7 +31,8 @@ export const RulesSection: React.FC<RulesSectionProps> = ({
   return (
     <section className={styles.card} aria-label={title} data-testid={testId}>
       <div className={styles.sectionHead}>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.sectionToggle}
           aria-expanded={open}
@@ -45,7 +47,7 @@ export const RulesSection: React.FC<RulesSectionProps> = ({
               {errorCount}
             </span>
           )}
-        </button>
+        </UiButton>
         {open && actions && <div className={styles.sectionActions}>{actions}</div>}
       </div>
       {open && (

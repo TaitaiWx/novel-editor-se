@@ -1,3 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import React, { useMemo, useState } from 'react';
 import {
   checkSkillPrerequisites,
@@ -181,7 +184,8 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
             <div className={styles.groupName}>{groupName}</div>
             <div className={styles.chips}>
               {items.map((item) => (
-                <button
+                <UiButton
+                  unstyled
                   key={item.id}
                   type="button"
                   aria-pressed={selected.includes(item.id)}
@@ -190,7 +194,7 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
                   onClick={() => toggle(item.id)}
                 >
                   {item.label}
-                </button>
+                </UiButton>
               ))}
             </div>
           </div>
@@ -198,14 +202,15 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
         {selected
           .filter((id) => !options.some((option) => option.id === id))
           .map((id) => (
-            <button
+            <UiButton
+              unstyled
               key={id}
               type="button"
               className={`${styles.chip} ${styles.chipOn}`}
               onClick={() => toggle(id)}
             >
               {id} ×
-            </button>
+            </UiButton>
           ))}
         <form
           className={styles.row}
@@ -218,23 +223,25 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
             }
           }}
         >
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             value={custom}
             placeholder="自定义候选，例如：加入盗贼公会"
             aria-label="自定义候选"
             onChange={(event) => setCustom(event.target.value)}
           />
-          <button type="submit" className={styles.button} disabled={!custom.trim()}>
+          <UiButton unstyled type="submit" className={styles.button} disabled={!custom.trim()}>
             添加
-          </button>
+          </UiButton>
         </form>
       </div>
 
       <div className={styles.card}>
         <div className={styles.settings}>
           <div className={styles.modeSwitch} role="radiogroup" aria-label="成长模式">
-            <button
+            <UiButton
+              unstyled
               type="button"
               role="radio"
               aria-checked={mode === 'controlled'}
@@ -243,8 +250,9 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
               onClick={() => setMode('controlled')}
             >
               受控成长
-            </button>
-            <button
+            </UiButton>
+            <UiButton
+              unstyled
               type="button"
               role="radio"
               aria-checked={mode === 'free'}
@@ -253,11 +261,12 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
               onClick={() => setMode('free')}
             >
               自由成长
-            </button>
+            </UiButton>
           </div>
           <label className={styles.horizon} title="向后推演多少章">
             推演
-            <input
+            <UiInput
+              unstyled
               className={styles.input}
               value={horizon}
               inputMode="numeric"
@@ -267,7 +276,8 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
             章
           </label>
         </div>
-        <textarea
+        <UiTextArea
+          unstyled
           className={styles.rules}
           value={extraRules}
           placeholder="本次推演额外的核心规则，每行一条（可选）"
@@ -276,14 +286,15 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
         />
         <div className={styles.actions}>
           <span className={styles.hint}>推演结果只是提案，采用后才会写入成长卡</span>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.primary}
             disabled={!canRun}
             onClick={() => void run()}
           >
             {running ? '推演中…' : '开始推演'}
-          </button>
+          </UiButton>
         </div>
       </div>
 
@@ -347,7 +358,8 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
                       {branch.warnings[0].message}
                     </div>
                   )}
-                  <button
+                  <UiButton
+                    unstyled
                     type="button"
                     className={confirming === branch.id ? styles.primary : styles.button}
                     disabled={busy || appliedId !== null}
@@ -358,7 +370,7 @@ export const GrowthSimulationPanel: React.FC<GrowthSimulationPanelProps> = ({
                       : confirming === branch.id
                         ? '确认写入成长卡'
                         : '采用此分支'}
-                  </button>
+                  </UiButton>
                 </div>
               );
             })}

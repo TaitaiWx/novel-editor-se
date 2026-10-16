@@ -388,9 +388,69 @@ $muted: var(--ui-fg-muted);
 }
 
 .thumbVideo {
+  position: relative;
   background: linear-gradient(135deg, rgba(86, 156, 214, 0.16), rgba(255, 255, 255, 0.03));
   color: rgba(255, 255, 255, 0.8);
   font-size: 18px;
+}
+.thumbPlayOverlay {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.thumbAudio {
+  position: relative;
+  isolation: isolate;
+  color: var(--ui-fg-primary);
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(130, 164, 184, 0.28), transparent 70%),
+    radial-gradient(ellipse at 85% 90%, rgba(143, 127, 170, 0.22), transparent 65%),
+    linear-gradient(145deg, rgba(99, 139, 151, 0.12), rgba(124, 117, 146, 0.08));
+}
+
+.audioCoverWave {
+  position: absolute;
+  width: 92%;
+  height: 65%;
+  fill: currentColor;
+  opacity: 0.18;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+  pointer-events: none;
+}
+
+.audioCoverIcon {
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(160, 175, 190, 0.25);
+  border-radius: 50%;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+  font-size: 18px;
+  transition: transform 180ms ease;
+}
+
+.thumb:hover,
+.thumb:focus-visible {
+  .audioCoverWave {
+    opacity: 0.3;
+    transform: scaleY(1.06);
+  }
+  .audioCoverIcon {
+    transform: scale(1.06);
+  }
 }
 
 .thumbTitle {
@@ -402,7 +462,9 @@ $muted: var(--ui-fg-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nav {
+  .nav,
+  .audioCoverWave,
+  .audioCoverIcon {
     transition: none;
   }
 }

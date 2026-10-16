@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo, useState } from 'react';
 import { getLevelProgress, type GrowthSheet } from '@novel-editor/core/growth';
 import type { GrowthSnapshot } from '../../../../types/growth-api';
@@ -91,7 +92,8 @@ export const GrowthCharacterPage: React.FC<GrowthCharacterPageProps> = ({
               tourTarget="record"
               onSubmit={(event, force) => growth.applyEvent(event, force, sheet.name)}
             />
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.iconButton}
               aria-label="使用说明"
@@ -99,7 +101,7 @@ export const GrowthCharacterPage: React.FC<GrowthCharacterPageProps> = ({
               onClick={onOpenHelp}
             >
               ?
-            </button>
+            </UiButton>
             <GrowthMoreMenu
               characterName={sheet.name}
               busy={growth.busy}
@@ -138,7 +140,8 @@ export const GrowthCharacterPage: React.FC<GrowthCharacterPageProps> = ({
         </div>
         <nav className={styles.sections} role="tablist" aria-label="成长档案分区">
           {SECTIONS.map(([key, label]) => (
-            <button
+            <UiButton
+              unstyled
               key={key}
               type="button"
               role="tab"
@@ -147,7 +150,7 @@ export const GrowthCharacterPage: React.FC<GrowthCharacterPageProps> = ({
               onClick={() => setSection(key)}
             >
               {label}
-            </button>
+            </UiButton>
           ))}
         </nav>
       </header>

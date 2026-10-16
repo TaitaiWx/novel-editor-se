@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { AiOutlineAlignLeft, AiOutlineEye } from 'react-icons/ai';
 import { VscCode, VscListOrdered } from 'react-icons/vsc';
 import type { EditorView } from '@codemirror/view';
-import TabBar from '../TabBar';
+import TabBar from '@novel-editor/ui/TabBar';
 import { formatShortcutLabel } from '../../utils/appSettings';
 import type {
   CharacterHighlightPattern,
@@ -10,8 +10,8 @@ import type {
   EditorViewportSnapshot,
   InlineDiffRange,
 } from '../TextEditor';
-import SettingsButton from '../SettingsButton';
-import LoadingSpinner from '../LoadingSpinner';
+import SettingsButton from '@novel-editor/ui/SettingsButton';
+import LoadingSpinner from '@novel-editor/ui/LoadingSpinner';
 import ReferencePane from '../ReferencePane';
 import styles from './styles.module.scss';
 

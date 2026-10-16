@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import type { EditorView } from '@codemirror/view';
-import LoadingSpinner from '../LoadingSpinner';
-import ErrorState from '../ErrorState';
-import EmptyState from '../EmptyState';
-import { useToast } from '../Toast';
+import LoadingSpinner from '@novel-editor/ui/LoadingSpinner';
+import ErrorState from '@novel-editor/ui/ErrorState';
+import EmptyState from '@novel-editor/ui/EmptyState';
+import { useToast } from '@novel-editor/ui/Toast';
 import type { CharacterHighlightPattern } from './writing-decorations';
 import type { InlineDiffRange } from './inline-diff';
 import {

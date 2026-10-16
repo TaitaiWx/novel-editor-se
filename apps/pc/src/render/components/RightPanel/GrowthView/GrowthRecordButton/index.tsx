@@ -1,5 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useState } from 'react';
-import Popover from '../../../Popover';
+import Popover from '@novel-editor/ui/Popover';
 import { GrowthRecordForm, type GrowthRecordFormProps } from '../GrowthRecordForm';
 import styles from './styles.module.scss';
 
@@ -22,7 +23,8 @@ export const GrowthRecordButton: React.FC<GrowthRecordButtonProps> = ({
 
   return (
     <>
-      <button
+      <UiButton
+        unstyled
         ref={anchorRef}
         type="button"
         className={variant === 'primary' ? styles.primary : styles.compact}
@@ -36,7 +38,7 @@ export const GrowthRecordButton: React.FC<GrowthRecordButtonProps> = ({
           +
         </span>
         记一笔
-      </button>
+      </UiButton>
       <Popover
         open={open}
         anchorRef={anchorRef}

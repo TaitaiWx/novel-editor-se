@@ -29,7 +29,7 @@ vi.mock('@/render/components/RightPanel/useAiSummaries', () => ({
 vi.mock('@/render/components/RightPanel/useAiConfig', () => ({
   useAiConfig: () => h.aiConfig,
 }));
-vi.mock('@/render/components/Dialog', () => ({
+vi.mock('@novel-editor/ui/Dialog', () => ({
   useDialog: () => ({}),
 }));
 vi.mock('@/render/components/RightPanel/OutlineView/useOutlineVersionCenter', () => ({

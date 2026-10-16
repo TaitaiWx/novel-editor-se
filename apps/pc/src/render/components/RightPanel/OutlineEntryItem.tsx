@@ -1,5 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 import type { OutlineEntry, OutlineAiState, OutlineSummaryAiState } from './types';
 
@@ -122,7 +123,8 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
           </div>
 
           {entry.needsAiTitle && state === 'error' && (
-            <button
+            <UiButton
+              unstyled
               className={styles.outlineRetryButton}
               onClick={(event) => {
                 event.stopPropagation();
@@ -130,11 +132,12 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
               }}
             >
               重试
-            </button>
+            </UiButton>
           )}
 
           {entry.needsAiTitle && aiTitle && !isApplied && canReplaceText && (
-            <button
+            <UiButton
+              unstyled
               className={styles.outlineApplyTitleBtn}
               onClick={(event) => {
                 event.stopPropagation();
@@ -143,7 +146,7 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
               title="将 AI 标题写入正文"
             >
               应用
-            </button>
+            </UiButton>
           )}
           {isApplied && <span className={styles.outlineAppliedTag}>已应用</span>}
 
@@ -173,7 +176,8 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
           )}
           {(summaryState === 'success' || summaryState === 'error') && (
             <Tooltip content="刷新摘要" position="top">
-              <button
+              <UiButton
+                unstyled
                 className={styles.outlineInlineRefreshBtn}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -193,7 +197,7 @@ export const OutlineEntryItem: React.FC<OutlineEntryItemProps> = React.memo(
                 >
                   <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
                 </svg>
-              </button>
+              </UiButton>
             </Tooltip>
           )}
         </div>

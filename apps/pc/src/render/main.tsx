@@ -2,8 +2,8 @@ import { installRendererPreparation } from './utils/rendererPreparation';
 import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import type { Root } from 'react-dom/client';
-import { ToastProvider } from './components/Toast';
-import { DialogProvider } from './components/Dialog';
+import { ToastProvider } from '@novel-editor/ui/Toast';
+import { DialogProvider } from '@novel-editor/ui/Dialog';
 
 // MessagePort 全局监听器：必须在 React 渲染前注册，确保端口到达时不会丢失
 import './utils/messagePortChannel';

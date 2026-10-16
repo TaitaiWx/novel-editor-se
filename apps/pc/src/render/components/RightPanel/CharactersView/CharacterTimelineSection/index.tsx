@@ -1,3 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import React from 'react';
 import sharedStyles from '../../styles.module.scss';
 import styles from './styles.module.scss';
@@ -47,13 +50,14 @@ export const CharacterTimelineSection: React.FC<{
           <span className={sharedStyles.workspaceListHint}>
             按整个作品目录的章节顺序自动提取，可拖动左侧手柄重排，也可直接手工修订和补充
           </span>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={sharedStyles.secondaryButton}
             onClick={handleStartCreateManualTimelineItem}
           >
             新增手工条目
-          </button>
+          </UiButton>
         </div>
       </div>
       {novelCorpusLoading ? (
@@ -81,7 +85,8 @@ export const CharacterTimelineSection: React.FC<{
                 onDrop={(event) => void handleTimelineDrop(event, index)}
               >
                 <div className={styles.characterTimelineMarker}>
-                  <button
+                  <UiButton
+                    unstyled
                     type="button"
                     className={styles.characterTimelineHandle}
                     title={isEditing ? '编辑中不可拖拽' : '拖拽排序'}
@@ -99,7 +104,7 @@ export const CharacterTimelineSection: React.FC<{
                       <span className={styles.characterTimelineHandleDot} />
                       <span className={styles.characterTimelineHandleDot} />
                     </span>
-                  </button>
+                  </UiButton>
                   <div className={styles.characterTimelineIndexBadge}>{chapterBadgeLabel}</div>
                 </div>
                 <div className={styles.characterTimelineBody}>
@@ -126,19 +131,22 @@ export const CharacterTimelineSection: React.FC<{
                   </div>
                   {timelineEditor?.itemId === item.id ? (
                     <div className={styles.characterTimelineEditor}>
-                      <input
+                      <UiInput
+                        unstyled
                         value={timelineDraftChapterLabel}
                         onChange={(event) => setTimelineDraftChapterLabel(event.target.value)}
                         placeholder="章节标签，例如：第23章"
                         className={sharedStyles.formInput}
                       />
-                      <input
+                      <UiInput
+                        unstyled
                         value={timelineDraftTitle}
                         onChange={(event) => setTimelineDraftTitle(event.target.value)}
                         placeholder="经历标题，例如：第三卷 · 身份暴露"
                         className={sharedStyles.formInput}
                       />
-                      <textarea
+                      <UiTextArea
+                        unstyled
                         value={timelineDraftSummary}
                         onChange={(event) => setTimelineDraftSummary(event.target.value)}
                         placeholder="补充这一段经历的真正变化、结果和影响"
@@ -146,60 +154,66 @@ export const CharacterTimelineSection: React.FC<{
                         rows={4}
                       />
                       <div className={styles.characterTimelineActionRow}>
-                        <button
+                        <UiButton
+                          unstyled
                           type="button"
                           className={sharedStyles.submitButton}
                           disabled={timelineSaving}
                           onClick={() => void handleSaveTimelineItem()}
                         >
                           {timelineSaving ? '保存中...' : '保存修订'}
-                        </button>
-                        <button
+                        </UiButton>
+                        <UiButton
+                          unstyled
                           type="button"
                           className={sharedStyles.secondaryButton}
                           onClick={resetTimelineEditor}
                         >
                           取消
-                        </button>
+                        </UiButton>
                       </div>
                     </div>
                   ) : (
                     <>
                       <div className={sharedStyles.workspaceListDesc}>{item.summary}</div>
                       <div className={styles.characterTimelineActionRow}>
-                        <button
+                        <UiButton
+                          unstyled
                           type="button"
                           className={sharedStyles.secondaryButton}
                           onClick={() => handleStartEditTimelineItem(item)}
                         >
                           手工修订
-                        </button>
+                        </UiButton>
                         {canOpenTimelineSource && (
-                          <button
+                          <UiButton
+                            unstyled
                             type="button"
                             className={sharedStyles.secondaryButton}
                             onClick={() => handleOpenTimelineSource(item)}
                           >
                             跳回正文
-                          </button>
+                          </UiButton>
                         )}
                         {item.source === 'auto' && hasTimelineOverride(item) && (
-                          <button
+                          <UiButton
+                            unstyled
                             type="button"
                             className={sharedStyles.secondaryButton}
                             onClick={() => void handleRestoreAutoTimelineItem(item)}
                           >
                             恢复自动
-                          </button>
+                          </UiButton>
                         )}
                         {item.source === 'manual' && (
-                          <button
+                          <UiButton
+                            unstyled
                             type="button"
                             className={sharedStyles.secondaryButton}
                             onClick={() => void handleDeleteManualTimelineItem(item.id)}
                           >
                             删除条目
-                          </button>
+                          </UiButton>
                         )}
                       </div>
                     </>

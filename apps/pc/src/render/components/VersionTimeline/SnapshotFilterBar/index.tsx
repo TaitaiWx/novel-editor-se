@@ -1,3 +1,5 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 /**
  * SnapshotFilterBar — 版本列表筛选栏（关键词 + 时间范围）
  */
@@ -34,7 +36,8 @@ const SnapshotFilterBar: React.FC<SnapshotFilterBarProps> = ({
     <div className={styles.filterBar}>
       <div className={styles.filterSearchWrap}>
         <VscSearch className={styles.filterIcon} />
-        <input
+        <UiInput
+          unstyled
           className={styles.filterSearchInput}
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.target.value)}
@@ -47,13 +50,14 @@ const SnapshotFilterBar: React.FC<SnapshotFilterBarProps> = ({
           <span>时间范围</span>
         </span>
         {TIME_FILTER_OPTIONS.map(([value, label]) => (
-          <button
+          <UiButton
+            unstyled
             key={value}
             className={`${styles.filterChip} ${timeFilter === value ? styles.filterChipActive : ''}`}
             onClick={() => onTimeFilterChange(value)}
           >
             {label}
-          </button>
+          </UiButton>
         ))}
       </div>
       <div className={styles.filterSummary}>

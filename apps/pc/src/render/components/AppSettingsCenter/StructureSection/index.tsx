@@ -1,3 +1,6 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
+import UiTextArea from '@novel-editor/ui/TextArea';
 /**
  * 设置中心「正文结构」：章 / 幕 / 场的识别规则（中文 / English / 数字序号预设 + 自定义正则）
  *
@@ -12,10 +15,10 @@ import {
   STRUCTURE_PRESET_INFO,
   type StructureLineKind,
 } from '@novel-editor/core/structure-rules';
-import Checkbox from '../../Checkbox';
-import Select from '../../Select';
-import Switch from '../../Switch';
-import Tooltip from '../../Tooltip';
+import Checkbox from '@novel-editor/ui/Checkbox';
+import Select from '@novel-editor/ui/Select';
+import Switch from '@novel-editor/ui/Switch';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { SettingsGroup, SettingsRow, SettingsSection } from '../layout';
 import sharedStyles from '../styles.module.scss';
 import styles from './styles.module.scss';
@@ -127,7 +130,8 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
                       onChange={(kind) => api.updateRule(index, { kind })}
                       aria-label={`规则 ${index + 1} 类型`}
                     />
-                    <input
+                    <UiInput
+                      unstyled
                       className={`${sharedStyles.input} ${styles.patternInput}`}
                       value={rule.pattern}
                       spellCheck={false}
@@ -145,14 +149,15 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
                       label="忽略大小写"
                     />
                     <Tooltip content="删除规则">
-                      <button
+                      <UiButton
+                        unstyled
                         type="button"
                         className={styles.iconButton}
                         onClick={() => api.removeRule(index)}
                         aria-label={`删除规则 ${index + 1}`}
                       >
                         <VscTrash />
-                      </button>
+                      </UiButton>
                     </Tooltip>
                   </div>
                   {api.ruleErrors[index] && rule.pattern && (
@@ -160,16 +165,17 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
                   )}
                 </div>
               ))}
-              <button type="button" className={styles.addButton} onClick={api.addRule}>
+              <UiButton unstyled type="button" className={styles.addButton} onClick={api.addRule}>
                 <VscAdd />
                 <span>添加规则</span>
-              </button>
+              </UiButton>
             </div>
           </SettingsGroup>
 
           <SettingsGroup title="试一试" description="输入几行正文，右侧即时显示识别结果。">
             <div className={styles.testBox}>
-              <textarea
+              <UiTextArea
+                unstyled
                 className={styles.testInput}
                 value={testText}
                 onChange={(event) => setTestText(event.target.value)}
@@ -193,18 +199,24 @@ const StructureSection: React.FC<StructureSectionProps> = ({ folderPath }) => {
           </SettingsGroup>
 
           <div className={sharedStyles.actions}>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={sharedStyles.primaryButton}
               onClick={() => void api.save()}
               disabled={!api.canSave || api.status.kind === 'saving'}
             >
               {api.status.kind === 'saving' ? '保存中…' : '保存'}
-            </button>
+            </UiButton>
             {api.dirty && (
-              <button type="button" className={sharedStyles.secondaryButton} onClick={api.reset}>
+              <UiButton
+                unstyled
+                type="button"
+                className={sharedStyles.secondaryButton}
+                onClick={api.reset}
+              >
                 还原
-              </button>
+              </UiButton>
             )}
             {api.status.kind === 'saved' && !api.dirty && (
               <span className={styles.saved} role="status">

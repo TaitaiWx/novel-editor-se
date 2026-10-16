@@ -299,10 +299,12 @@ export function useWorkspaceTabContent(ctx: UseWorkspaceTabContentContext) {
         ? {
             [activeWorkspaceTab as string]: (
               <CharactersView
-                key={`character-${selectedCharacterTabId}-${workspaceCharactersVersion}`}
+                key={`character-${scopePath ?? ''}-${selectedCharacterTabId}`}
+                refreshVersion={workspaceCharactersVersion}
                 folderPath={scopePath}
                 content={editorContent}
                 initialSelectedCharacterId={selectedCharacterTabId}
+                onOpenCharacter={(id) => openFileInTab(createCharacterWorkspaceTab({ id }))}
                 onCharactersChange={syncWorkspaceCharacters}
                 onOpenSourceLocation={handleOpenSourceLocation}
                 growthLevels={growthLevels}

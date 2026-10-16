@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useState } from 'react';
 import { AiOutlineDelete } from 'react-icons/ai';
-import Tooltip from '../../Tooltip';
-import InlineRenameInput, { isRenameShortcut } from '../../InlineRenameInput';
+import Tooltip from '@novel-editor/ui/Tooltip';
+import InlineRenameInput, { isRenameShortcut } from '@novel-editor/ui/InlineRenameInput';
 import { handleRowActivationKey } from '../utils';
 import styles from './styles.module.scss';
 
@@ -113,7 +114,8 @@ const ObjectItemRow: React.FC<ObjectItemRowProps> = ({
       </div>
       {onDelete && (
         <Tooltip content={`删除${kindLabel}`} position="top">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.objectNodeAction}
             onClick={(event) => {
@@ -124,7 +126,7 @@ const ObjectItemRow: React.FC<ObjectItemRowProps> = ({
             title={`删除${kindLabel} ${title}`}
           >
             <AiOutlineDelete />
-          </button>
+          </UiButton>
         </Tooltip>
       )}
     </div>

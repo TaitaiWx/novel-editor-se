@@ -114,6 +114,8 @@ export interface AIProviderUpdate {
 export type AIIpcResult<T> = { ok: true; data: T } | { ok: false; error: SerializedAIError };
 
 export interface AICompletePayload {
+  /** 调用方生成的请求标识；用于取消当前窗口发起的补全。 */
+  requestId?: string;
   /** 文本模型 id；省略时使用默认文本模型 */
   providerId?: string;
   messages?: ChatMessage[];
@@ -124,6 +126,8 @@ export interface AICompletePayload {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** 一次性补全的总时间预算（含重试），由主进程执行取消。 */
+  timeoutMs?: number;
 }
 
 export interface AICompleteResult {

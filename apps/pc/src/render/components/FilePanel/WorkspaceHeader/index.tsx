@@ -1,8 +1,9 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useEffect, useRef, useState } from 'react';
 import { AiOutlineDoubleLeft, AiOutlinePlus, AiOutlineSearch } from 'react-icons/ai';
-import Popover from '../../Popover';
-import Tooltip from '../../Tooltip';
-import InlineRenameInput, { isRenameShortcut } from '../../InlineRenameInput';
+import Popover from '@novel-editor/ui/Popover';
+import Tooltip from '@novel-editor/ui/Tooltip';
+import InlineRenameInput, { isRenameShortcut } from '@novel-editor/ui/InlineRenameInput';
 import { formatShortcutLabel } from '../../../utils/appSettings';
 import ProjectMenu from '../ProjectMenu';
 import ProjectDocsButton from '../ProjectDocsButton';
@@ -127,7 +128,8 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
     className?: string
   ) => (
     <Tooltip content={tooltip} position="bottom">
-      <button
+      <UiButton
+        unstyled
         className={className || styles.workspaceAction}
         onClick={onClick}
         title={tooltip}
@@ -136,7 +138,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         type="button"
       >
         {icon}
-      </button>
+      </UiButton>
     </Tooltip>
   );
 
@@ -194,7 +196,8 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
           onDocContextMenu={onProjectDocContextMenu}
         />
         <Tooltip content={searchLabel} position="bottom">
-          <button
+          <UiButton
+            unstyled
             className={`${styles.workspaceAction} ${showSearch ? styles.workspaceActionActive : ''}`}
             onClick={onToggleSearch}
             title={searchLabel}
@@ -202,10 +205,11 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             type="button"
           >
             <AiOutlineSearch />
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content="新建" position="bottom">
-          <button
+          <UiButton
+            unstyled
             ref={createMenuButtonRef}
             className={`${styles.workspaceAction} ${createMenuOpen ? styles.workspaceActionActive : ''}`}
             onClick={() => setCreateMenuOpen((current) => !current)}
@@ -215,7 +219,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             type="button"
           >
             <AiOutlinePlus />
-          </button>
+          </UiButton>
         </Tooltip>
         <ProjectMenu
           folderPath={folderPath}
@@ -253,7 +257,8 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             item.label === 'divider' ? (
               <div key={`divider-${index}`} className={styles.createMenuDivider} />
             ) : (
-              <button
+              <UiButton
+                unstyled
                 key={item.label}
                 type="button"
                 className={styles.createMenuItem}
@@ -266,7 +271,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                 role="menuitem"
               >
                 {item.label}
-              </button>
+              </UiButton>
             )
           )}
         </div>

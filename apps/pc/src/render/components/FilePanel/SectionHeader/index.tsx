@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import styles from './styles.module.scss';
 
@@ -36,7 +37,8 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
     style={{ paddingLeft: '14px' }}
     onContextMenu={onContextMenu}
   >
-    <button
+    <UiButton
+      unstyled
       type="button"
       className={`${styles.storyNodeButton} ${styles.storyNodeButtonGroup}${
         active ? ` ${styles.storyNodeButtonActive}` : ''
@@ -51,7 +53,7 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
       {icon !== undefined && <span className={styles.storyNodeIcon}>{icon}</span>}
       <span className={styles.storyNodeTitle}>{title}</span>
       {count !== undefined && <span className={styles.supportNodeCount}>{count}</span>}
-    </button>
+    </UiButton>
     {actions !== undefined && <span className={styles.sectionActions}>{actions}</span>}
   </div>
 );

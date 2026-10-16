@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState } from 'react';
 import type { ContinuationContextSummary } from '../TextEditor/assist/types';
 import styles from './styles.module.scss';
@@ -11,14 +12,15 @@ export const ContextDetails: React.FC<ContextDetailsProps> = ({ context }) => {
   const [open, setOpen] = useState(false);
   return (
     <div className={styles.context}>
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={styles.linkButton}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         {open ? '收起本次上下文' : '查看本次上下文'}
-      </button>
+      </UiButton>
       {open && (
         <div className={styles.contextBody}>
           <div className={styles.contextMeta}>

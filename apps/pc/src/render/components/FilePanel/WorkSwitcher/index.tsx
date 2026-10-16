@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useState } from 'react';
 import { AiOutlineBook, AiOutlineCheck, AiOutlineDown, AiOutlinePlus } from 'react-icons/ai';
-import Popover from '../../Popover';
+import Popover from '@novel-editor/ui/Popover';
 import type { WorkScopeOption } from '../../../utils/workScope';
 import styles from './styles.module.scss';
 
@@ -38,7 +39,8 @@ const WorkSwitcher: React.FC<WorkSwitcherProps> = ({
 
   return (
     <div className={styles.workSwitcher}>
-      <button
+      <UiButton
+        unstyled
         ref={anchorRef}
         type="button"
         className={`${styles.trigger}${open ? ` ${styles.triggerOpen}` : ''}`}
@@ -58,7 +60,7 @@ const WorkSwitcher: React.FC<WorkSwitcherProps> = ({
         </span>
         <span className={styles.meta}>{metaOf(current, chapterCounts)}</span>
         <AiOutlineDown className={styles.chevron} />
-      </button>
+      </UiButton>
       <Popover
         open={open}
         anchorRef={anchorRef}
@@ -75,7 +77,8 @@ const WorkSwitcher: React.FC<WorkSwitcherProps> = ({
           {options.map((option) => {
             const selected = option.path === current.path;
             return (
-              <button
+              <UiButton
+                unstyled
                 key={`${option.kind}:${option.path}`}
                 type="button"
                 role="option"
@@ -96,12 +99,13 @@ const WorkSwitcher: React.FC<WorkSwitcherProps> = ({
                   {option.name}
                 </span>
                 <span className={styles.optionMeta}>{metaOf(option, chapterCounts)}</span>
-              </button>
+              </UiButton>
             );
           })}
         </div>
         {onCreate && (
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.createButton}
             onClick={() => {
@@ -111,7 +115,7 @@ const WorkSwitcher: React.FC<WorkSwitcherProps> = ({
           >
             <AiOutlinePlus />
             <span>新建作品</span>
-          </button>
+          </UiButton>
         )}
       </Popover>
     </div>

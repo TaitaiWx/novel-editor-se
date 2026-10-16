@@ -1,0 +1,85 @@
+:root {
+  --z-floating: 11000;
+  --z-toast: 11500;
+  --z-tooltip: 12000;
+  --z-blocking: 99999;
+  --ui-fg-primary: #d4d4d4;
+  --ui-fg-muted: #8b8b8b;
+  --ui-fg-disabled: #666;
+  --ui-bg-surface: #1e1e1e;
+  --ui-bg-elevated: #252526;
+  --ui-border-subtle: #333;
+  --ui-border-strong: #404040;
+  --ui-interaction-hover-bg: rgba(255, 255, 255, 0.06);
+  --ui-interaction-active-bg: rgba(255, 255, 255, 0.1);
+  --ui-interaction-focus-ring: rgba(0, 122, 204, 0.5);
+  --ui-interaction-accent: #007acc;
+  --ui-interaction-accent-soft: rgba(0, 122, 204, 0.14);
+  --ui-interaction-accent-fg: #8cc4ec;
+  --ui-interaction-danger-hover-bg: rgba(248, 81, 73, 0.12);
+  --ui-bg-app: #141415;
+  --ui-bg-card: #1e1e1e;
+  --ui-bg-card-header: #1b1b1c;
+  --ui-card-border: rgba(255, 255, 255, 0.06);
+  --ui-card-radius: 10px;
+  --ui-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 6px 18px rgba(0, 0, 0, 0.16);
+  --ui-pane-gap: 8px;
+  --ui-pane-padding: 8px;
+  --ui-resizer-hover: rgba(86, 156, 214, 0.45);
+  --ui-resizer-active: rgba(86, 156, 214, 0.7);
+  --ui-scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --ui-scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
+}
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  --ui-bg: #202020;
+  --ui-surface: #292929;
+  --ui-text: #ddd;
+  --ui-muted: #aaa;
+  --ui-border: #444;
+  --ui-accent: #9cdcfe;
+}
+body {
+  margin: 0;
+  background: #202020;
+  color: #ddd;
+}
+main {
+  padding: 20px;
+  max-width: 1000px;
+  margin: auto;
+}
+h1 {
+  font-size: 20px;
+}
+section {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid #444;
+}
+form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+output:empty {
+  display: none;
+}
+textarea {
+  width: 100%;
+  min-height: 70px;
+}
+.popup-content {
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+dialog input {
+  display: block;
+  margin-bottom: 16px;
+}

@@ -1,0 +1,82 @@
+{
+  "name": "@novel-editor/ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared UI components for Novel Editor",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm -w test:ui",
+    "test:e2e": "pnpm -w test:ui:e2e",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.7.3"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./ActionButtons": "./src/ActionButtons/index.tsx",
+    "./Checkbox": "./src/Checkbox/index.tsx",
+    "./ColorPicker": "./src/ColorPicker/index.tsx",
+    "./ContextMenu": "./src/ContextMenu/index.tsx",
+    "./CopyTooltip": "./src/CopyTooltip/index.tsx",
+    "./Dialog": "./src/Dialog/index.tsx",
+    "./DiffEditor": "./src/DiffEditor/index.tsx",
+    "./DiffTextInput": "./src/DiffTextInput/index.tsx",
+    "./DiffTextInput/DiffText": "./src/DiffTextInput/DiffText.tsx",
+    "./DiffTextInput/decorations": "./src/DiffTextInput/decorations.ts",
+    "./EmptyState": "./src/EmptyState/index.tsx",
+    "./ErrorState": "./src/ErrorState/index.tsx",
+    "./GenerationStatus": "./src/GenerationStatus/index.tsx",
+    "./InlineDiffView": "./src/InlineDiffView/index.tsx",
+    "./InlineRenameInput": "./src/InlineRenameInput/index.tsx",
+    "./LoadingSpinner": "./src/LoadingSpinner/index.tsx",
+    "./Modal": "./src/Modal/index.tsx",
+    "./NumberInput": "./src/NumberInput/index.tsx",
+    "./NumberInput/model": "./src/NumberInput/model.ts",
+    "./OverlayPortal": "./src/OverlayPortal/index.tsx",
+    "./PanelHeader": "./src/PanelHeader/index.tsx",
+    "./PanelResizer": "./src/PanelResizer/index.tsx",
+    "./Popover": "./src/Popover/index.tsx",
+    "./SearchMultiSelect": "./src/SearchMultiSelect/index.tsx",
+    "./Select": "./src/Select/index.tsx",
+    "./Select/model": "./src/Select/model.ts",
+    "./SettingsButton": "./src/SettingsButton/index.tsx",
+    "./Switch": "./src/Switch/index.tsx",
+    "./TabBar": "./src/TabBar/index.tsx",
+    "./Tabs": "./src/Tabs/index.tsx",
+    "./Toast": "./src/Toast/index.tsx",
+    "./Tooltip": "./src/Tooltip/index.tsx",
+    "./utils/ime": "./src/utils/ime.ts",
+    "./utils/path": "./src/utils/path.ts",
+    "./styles/animation.scss": "./src/styles/animation.scss",
+    "./Avatar": "./src/Avatar/index.tsx",
+    "./WindowControls": "./src/WindowControls/index.tsx",
+    "./Button": "./src/Button/index.tsx",
+    "./Input": "./src/Input/index.tsx",
+    "./TextArea": "./src/TextArea/index.tsx"
+  },
+  "sideEffects": [
+    "**/*.scss",
+    "**/*.css"
+  ],
+  "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/merge": "^6.12.1",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
+    "react-icons": "^5.5.0",
+    "@novel-editor/basic-algorithm": "workspace:*"
+  }
+}

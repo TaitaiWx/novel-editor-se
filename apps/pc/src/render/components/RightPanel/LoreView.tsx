@@ -1,3 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import { useUnsavedChangesGuard } from '@/render/hooks/useUnsavedChangesGuard';
 import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import styles from './styles.module.scss';
@@ -219,14 +222,15 @@ export const LoreView: React.FC<{
         </div>
         <div className={styles.loreSummaryGrid}>
           {(Object.keys(LORE_CATEGORY_LABELS) as LoreCategory[]).map((item) => (
-            <button
+            <UiButton
+              unstyled
               key={item}
               className={`${styles.loreSummaryCard} ${category === item ? styles.loreSummaryCardActive : ''}`}
               onClick={() => setCategory(item)}
             >
               <span className={styles.loreSummaryLabel}>{LORE_CATEGORY_LABELS[item]}</span>
               <span className={styles.loreSummaryValue}>{categoryCounts[item]}</span>
-            </button>
+            </UiButton>
           ))}
         </div>
         <div className={styles.lorePanelCard}>
@@ -235,31 +239,33 @@ export const LoreView: React.FC<{
             <span className={styles.sectionSubtle}>写进这里，后续 AI 诊断和建议都会引用</span>
           </div>
           <div className={styles.loreActionRow}>
-            <button className={styles.addButton} onClick={handleImport}>
+            <UiButton unstyled className={styles.addButton} onClick={handleImport}>
               导入设定 / 大纲
-            </button>
+            </UiButton>
             {editingEntryId !== null && (
-              <button className={styles.deleteInlineButton} onClick={clearComposer}>
+              <UiButton unstyled className={styles.deleteInlineButton} onClick={clearComposer}>
                 取消编辑
-              </button>
+              </UiButton>
             )}
           </div>
-          <input
+          <UiInput
+            unstyled
             className={styles.formInput}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder={`${editingEntryId !== null ? '编辑' : '新增'}${LORE_CATEGORY_LABELS[category]}条目标题`}
           />
-          <textarea
+          <UiTextArea
+            unstyled
             className={styles.formTextarea}
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             rows={3}
             placeholder="记录规则、背景、约束、历史脉络、关键词等"
           />
-          <button className={styles.submitButton} onClick={handleSave}>
+          <UiButton unstyled className={styles.submitButton} onClick={handleSave}>
             {editingEntryId !== null ? '保存修改' : '添加条目'}
-          </button>
+          </UiButton>
           {importResult && <div className={styles.loreImportResult}>{importResult}</div>}
         </div>
       </div>
@@ -272,16 +278,22 @@ export const LoreView: React.FC<{
             <span>AI 引用与诊断</span>
             <div className={styles.loreAuditToolbar}>
               {auditResult && (
-                <button
+                <UiButton
+                  unstyled
                   className={styles.deleteInlineButton}
                   onClick={() => handleCopyAuditText('all', auditResult)}
                 >
                   {copiedAuditKey === 'all' ? '已复制全部' : '复制全部'}
-                </button>
+                </UiButton>
               )}
-              <button className={styles.addButton} onClick={runLoreAudit} disabled={auditLoading}>
+              <UiButton
+                unstyled
+                className={styles.addButton}
+                onClick={runLoreAudit}
+                disabled={auditLoading}
+              >
                 {auditLoading ? '诊断中...' : '诊断设定缺口'}
-              </button>
+              </UiButton>
             </div>
           </div>
           <div className={styles.loreReferenceText}>
@@ -293,12 +305,13 @@ export const LoreView: React.FC<{
                 <div key={section.key} className={styles.loreAuditSectionCard}>
                   <div className={styles.loreAuditSectionHeader}>
                     <span>{section.title}</span>
-                    <button
+                    <UiButton
+                      unstyled
                       className={styles.deleteInlineButton}
                       onClick={() => handleCopyAuditText(section.key, section.body)}
                     >
                       {copiedAuditKey === section.key ? '已复制' : '复制本段'}
-                    </button>
+                    </UiButton>
                   </div>
                   {section.items.length > 0 ? (
                     <div className={styles.loreAuditSectionItems}>
@@ -309,19 +322,21 @@ export const LoreView: React.FC<{
                             <span>{item}</span>
                             <div className={styles.inlineActions}>
                               {section.key === 'template' && (
-                                <button
+                                <UiButton
+                                  unstyled
                                   className={styles.deleteInlineButton}
                                   onClick={() => handleApplyAuditTemplate(item)}
                                 >
                                   写入草稿
-                                </button>
+                                </UiButton>
                               )}
-                              <button
+                              <UiButton
+                                unstyled
                                 className={styles.deleteInlineButton}
                                 onClick={() => handleCopyAuditText(itemKey, item)}
                               >
                                 {copiedAuditKey === itemKey ? '已复制' : '复制'}
-                              </button>
+                              </UiButton>
                             </div>
                           </div>
                         );
@@ -341,16 +356,18 @@ export const LoreView: React.FC<{
         </div>
         <div className={styles.loreCategoryTabs}>
           {(Object.keys(LORE_CATEGORY_LABELS) as LoreCategory[]).map((item) => (
-            <button
+            <UiButton
+              unstyled
               key={item}
               className={`${styles.loreCategoryButton} ${category === item ? styles.loreCategoryActive : ''}`}
               onClick={() => setCategory(item)}
             >
               {LORE_CATEGORY_LABELS[item]}
-            </button>
+            </UiButton>
           ))}
         </div>
-        <input
+        <UiInput
+          unstyled
           className={styles.formInput}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -378,7 +395,8 @@ export const LoreView: React.FC<{
                     <span className={styles.loreEntryTag}>
                       {LORE_CATEGORY_LABELS[entry.category]}
                     </span>
-                    <button
+                    <UiButton
+                      unstyled
                       className={styles.deleteInlineButton}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -386,8 +404,9 @@ export const LoreView: React.FC<{
                       }}
                     >
                       编辑
-                    </button>
-                    <button
+                    </UiButton>
+                    <UiButton
+                      unstyled
                       className={styles.deleteInlineButton}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -395,7 +414,7 @@ export const LoreView: React.FC<{
                       }}
                     >
                       删除
-                    </button>
+                    </UiButton>
                   </div>
                 </div>
                 {(entry.folder || entry.tags.length > 0) && (

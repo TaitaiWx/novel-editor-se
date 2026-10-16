@@ -1,5 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback, useLayoutEffect, useState } from 'react';
-import OverlayPortal from '../../../OverlayPortal';
+import OverlayPortal from '@novel-editor/ui/OverlayPortal';
 import { GROWTH_TOUR_STEPS } from '../growthGuide';
 import styles from './styles.module.scss';
 
@@ -95,18 +96,18 @@ export const GrowthTour: React.FC<GrowthTourProps> = ({ step, onNext, onPrev, on
         <div className={styles.title}>{current.title}</div>
         <p className={styles.text}>{current.text}</p>
         <div className={styles.actions}>
-          <button type="button" className={styles.skip} onClick={onClose}>
+          <UiButton unstyled type="button" className={styles.skip} onClick={onClose}>
             跳过
-          </button>
+          </UiButton>
           <span className={styles.spacer} />
           {step > 0 && (
-            <button type="button" className={styles.secondary} onClick={onPrev}>
+            <UiButton unstyled type="button" className={styles.secondary} onClick={onPrev}>
               上一步
-            </button>
+            </UiButton>
           )}
-          <button type="button" className={styles.primary} onClick={onNext} autoFocus>
+          <UiButton unstyled type="button" className={styles.primary} onClick={onNext} autoFocus>
             {isLast ? '开始使用' : '下一步'}
-          </button>
+          </UiButton>
         </div>
       </div>
     </OverlayPortal>

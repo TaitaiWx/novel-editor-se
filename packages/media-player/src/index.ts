@@ -147,6 +147,8 @@ export {
 export { qualityOptionsFor, type QualityOption } from './useMediaEngine';
 // 截图 / 录制 / 字幕 / 快捷键 / 能力检测
 export { captureFrame, downloadBlob, mediaFileName, type ScreenshotMeta } from './screenshot';
+// 视频列表封面：后台随机抽帧，与播放进度独立。
+export { captureVideoThumbnail } from './thumbnail';
 export {
   RECORDER_MIME_CANDIDATES,
   nextRecordingStatus,

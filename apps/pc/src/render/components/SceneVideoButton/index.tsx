@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { VscDeviceCameraVideo } from 'react-icons/vsc';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { requestOpenSceneVideo } from '../SceneVideoView/events';
 import styles from './styles.module.scss';
 
@@ -18,7 +19,8 @@ const SceneVideoButton: React.FC<SceneVideoButtonProps> = ({ shortcutLabel }) =>
       content={shortcutLabel ? `${SCENE_VIDEO_TIP}（${shortcutLabel}）` : SCENE_VIDEO_TIP}
       position="bottom"
     >
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={styles.pill}
         aria-label="场景视频"
@@ -29,7 +31,7 @@ const SceneVideoButton: React.FC<SceneVideoButtonProps> = ({ shortcutLabel }) =>
       >
         <VscDeviceCameraVideo className={styles.icon} aria-hidden="true" />
         <span className={styles.label}>场景视频</span>
-      </button>
+      </UiButton>
     </Tooltip>
   </span>
 );

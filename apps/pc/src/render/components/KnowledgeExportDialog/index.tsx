@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import type { KnowledgeExportOptions } from '@/render/app/types';
-import Checkbox from '../Checkbox';
+import Checkbox from '@novel-editor/ui/Checkbox';
 import styles from './styles.module.scss';
 
 interface KnowledgeExportDialogProps {
@@ -44,12 +45,17 @@ const KnowledgeExportDialog: React.FC<KnowledgeExportDialogProps> = ({
         label="资料卡"
       />
       <div className={styles.exportPreviewActions}>
-        <button type="button" className={styles.exportPreviewCancel} onClick={onClose}>
+        <UiButton unstyled type="button" className={styles.exportPreviewCancel} onClick={onClose}>
           取消
-        </button>
-        <button type="button" className={styles.exportPreviewConfirm} onClick={onConfirm}>
+        </UiButton>
+        <UiButton
+          unstyled
+          type="button"
+          className={styles.exportPreviewConfirm}
+          onClick={onConfirm}
+        >
           开始导出
-        </button>
+        </UiButton>
       </div>
     </div>
   </div>

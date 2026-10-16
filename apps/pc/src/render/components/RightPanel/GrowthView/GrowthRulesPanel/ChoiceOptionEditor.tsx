@@ -1,3 +1,5 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { VscAdd, VscClose, VscTrash } from 'react-icons/vsc';
 import {
@@ -7,8 +9,8 @@ import {
   type GrowthRuleset,
   type RewardRows,
 } from '@novel-editor/core/growth';
-import NumberInput from '../../../NumberInput';
-import Select from '../../../Select';
+import NumberInput from '@novel-editor/ui/NumberInput';
+import Select from '@novel-editor/ui/Select';
 import { FieldIssue, IconButton, TextField, replaceAt, type IssueMap } from './fields';
 import styles from './styles.module.scss';
 
@@ -77,7 +79,8 @@ export const ChoiceOptionEditor: React.FC<ChoiceOptionEditorProps> = ({
           </IconButton>
         </div>
       </div>
-      <input
+      <UiInput
+        unstyled
         className={`${styles.input} ${styles.description}`}
         aria-label={`${label} 说明`}
         placeholder="选择后会怎样（可选）"
@@ -166,7 +169,8 @@ export const ChoiceOptionEditor: React.FC<ChoiceOptionEditorProps> = ({
         <FieldIssue key={id} issues={issues} path={`${base}.grants.skills.${id}`} />
       ))}
       <div className={styles.inlineActions}>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.linkButton}
           disabled={disabled || !freeAttr}
@@ -177,7 +181,7 @@ export const ChoiceOptionEditor: React.FC<ChoiceOptionEditorProps> = ({
           }
         >
           <VscAdd aria-hidden /> 属性加成
-        </button>
+        </UiButton>
         {freeSkills.length > 0 && (
           <Select
             size="sm"

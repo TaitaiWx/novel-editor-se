@@ -249,6 +249,48 @@ describe('ai-providers-*', () => {
       error: { kind: 'bad-request' },
     });
   });
+
+  it.each([999, 300001, 1000.5, '1000', null, Number.NaN, Number.POSITIVE_INFINITY])(
+    'ai-complete rejects invalid time budget %s before making a network request',
+    async (timeoutMs) => {
+      runtime.getCredentialStore().set('grok', 'test-key');
+      expect(
+        await call('ai-complete', null, { providerId: 'grok', prompt: 'x', timeoutMs })
+      ).toMatchObject({ ok: false, error: { kind: 'bad-request' } });
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it('ai-complete aborts transport at the requested budget and reports timeout rather than cancellation', async () => {
+    runtime.getCredentialStore().set('grok', 'test-key');
+    let transportSignal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      transportSignal = init.signal!;
+      return new Promise((_resolve, reject) => {
+        if (transportSignal!.aborted) reject(transportSignal!.reason);
+        else
+          transportSignal!.addEventListener('abort', () => reject(transportSignal!.reason), {
+            once: true,
+          });
+      });
+    });
+    expect(
+      await call('ai-complete', null, { providerId: 'grok', prompt: 'x', timeoutMs: 1000 })
+    ).toMatchObject({ ok: false, error: { kind: 'timeout' } });
+    expect(transportSignal?.aborted).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('ai-complete preserves non-timeout provider failures when a budget was supplied', async () => {
+    runtime.getCredentialStore().set('grok', 'test-key');
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: { message: 'invalid key' } }), { status: 401 })
+    );
+    expect(
+      await call('ai-complete', null, { providerId: 'grok', prompt: 'x', timeoutMs: 300000 })
+    ).toMatchObject({ ok: false, error: { kind: 'auth' } });
+  });
 });
 
 describe('ai-models-*（IPC）', () => {
@@ -476,6 +518,7 @@ describe('ai-stream-*', () => {
       stream: () => ({
         async *[Symbol.asyncIterator]() {
           await new Promise(() => undefined);
+          yield { type: 'done' };
         },
       }),
     };

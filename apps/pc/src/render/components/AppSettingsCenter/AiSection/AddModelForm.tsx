@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 「添加模型」：每个能力分区底部一个。
  *
@@ -20,9 +22,9 @@ import {
   presetsFor,
   type AIModelPreset,
 } from '@/shared/ai-models';
-import Checkbox from '../../Checkbox';
-import NumberInput from '../../NumberInput';
-import Select from '../../Select';
+import Checkbox from '@novel-editor/ui/Checkbox';
+import NumberInput from '@novel-editor/ui/NumberInput';
+import Select from '@novel-editor/ui/Select';
 import sharedStyles from '../styles.module.scss';
 import FieldRow from './FieldRow';
 import { PROXY_FIELD_DESCRIPTION, SuggestSelect } from './ModelEditForm';
@@ -88,7 +90,8 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ capability, existing, onAdd
 
   if (!open) {
     return (
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={styles.addButton}
         onClick={() => {
@@ -99,7 +102,7 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ capability, existing, onAdd
       >
         <VscAdd aria-hidden="true" />
         添加模型
-      </button>
+      </UiButton>
     );
   }
 
@@ -154,7 +157,8 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ capability, existing, onAdd
         />
       </FieldRow>
       <FieldRow label="接口地址" description="只支持 http(s)，不要包含账号密码。">
-        <input
+        <UiInput
+          unstyled
           className={sharedStyles.input}
           aria-label="接口地址"
           value={draft.baseUrl}
@@ -173,7 +177,8 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ capability, existing, onAdd
         />
       </FieldRow>
       <FieldRow label="显示名称" description="在各功能的模型列表里显示，留空使用默认名称。">
-        <input
+        <UiInput
+          unstyled
           className={sharedStyles.input}
           aria-label="显示名称"
           value={draft.label}
@@ -196,7 +201,8 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ capability, existing, onAdd
             />
           )}
           {!reusing && (
-            <input
+            <UiInput
+              unstyled
               className={sharedStyles.input}
               type="password"
               autoComplete="off"
@@ -252,21 +258,23 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ capability, existing, onAdd
           <span className={styles.statusMuted}>添加后可以在列表里继续修改。</span>
         )}
         <div className={styles.footerButtons}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={`${sharedStyles.secondaryButton} ${styles.footerButton}`}
             onClick={() => setOpen(false)}
           >
             取消
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            unstyled
             type="button"
             className={`${sharedStyles.primaryButton} ${styles.footerButton}`}
             disabled={busy}
             onClick={() => void submit()}
           >
             添加
-          </button>
+          </UiButton>
         </div>
       </div>
     </div>

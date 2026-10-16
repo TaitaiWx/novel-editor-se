@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import React from 'react';
 import styles from './styles.module.scss';
 import { WORKFLOW_DEFS, WORKFLOW_KEYS } from './useAiWorkflow';
@@ -48,7 +50,8 @@ export const AIWorkflowSelector: React.FC<AIWorkflowSelectorProps> = React.memo(
       {/* 工作流选择 */}
       <div className={styles.aiWorkflowBar}>
         {WORKFLOW_KEYS.map((key) => (
-          <button
+          <UiButton
+            unstyled
             key={key}
             className={`${styles.aiWorkflowChip} ${workflow === key ? styles.aiWorkflowChipActive : ''}`}
             onClick={() => {
@@ -57,7 +60,7 @@ export const AIWorkflowSelector: React.FC<AIWorkflowSelectorProps> = React.memo(
             }}
           >
             {WORKFLOW_DEFS[key].title}
-          </button>
+          </UiButton>
         ))}
       </div>
 
@@ -65,7 +68,8 @@ export const AIWorkflowSelector: React.FC<AIWorkflowSelectorProps> = React.memo(
       <div className={styles.aiWorkflowHint}>{WORKFLOW_DEFS[workflow].desc}</div>
 
       {/* 输入区 */}
-      <textarea
+      <UiTextArea
+        unstyled
         className={styles.aiPromptInput}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -75,17 +79,32 @@ export const AIWorkflowSelector: React.FC<AIWorkflowSelectorProps> = React.memo(
 
       {/* 操作栏 */}
       <div className={styles.aiActionBar}>
-        <button className={styles.aiRunButton} onClick={onRun} disabled={loading || !prompt.trim()}>
+        <UiButton
+          unstyled
+          className={styles.aiRunButton}
+          onClick={onRun}
+          disabled={loading || !prompt.trim()}
+        >
           {loading ? '分析中...' : '发送'}
-        </button>
+        </UiButton>
         {onNewSession && hasResult && (
-          <button className={styles.aiHistoryButton} onClick={onNewSession} title="新建分析">
+          <UiButton
+            unstyled
+            className={styles.aiHistoryButton}
+            onClick={onNewSession}
+            title="新建分析"
+          >
             新建
-          </button>
+          </UiButton>
         )}
-        <button className={styles.aiHistoryButton} onClick={onToggleHistory} title="历史记录">
+        <UiButton
+          unstyled
+          className={styles.aiHistoryButton}
+          onClick={onToggleHistory}
+          title="历史记录"
+        >
           {showHistory ? '返回' : `历史 (${historyCount})`}
-        </button>
+        </UiButton>
       </div>
     </>
   )

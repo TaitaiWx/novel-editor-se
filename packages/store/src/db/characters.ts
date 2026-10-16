@@ -1,5 +1,6 @@
 import { getDatabase } from './connection';
 import { buildAllowedUpdate } from './sql-helpers';
+import { cleanCharacterSocialAttributes } from './character-social-cleanup';
 
 /** 角色 */
 export const characterOps = {
@@ -12,7 +13,93 @@ export const characterOps = {
       .prepare(
         'INSERT INTO characters (novel_id, name, role, description, attributes, sort_order) VALUES (?, ?, ?, ?, ?, ?)'
       )
-      .run(novelId, name, role, description, attributes, sortOrder);
+      .run(novelId, name, role, description, cleanCharacterSocialAttributes(attributes), sortOrder);
+  },
+
+  /** 采用人物建议：同名检查、字段 CAS 与来源记录在同一事务内完成。 */
+  applyProfileSuggestion(
+    novelId: number,
+    input: {
+      characterId: number | null;
+      name: string;
+      summary: string;
+      chapter: string;
+      source: 'text' | 'idea';
+      quote: string;
+      changes: { key: string; value: string; expected: string; quote: string }[];
+    }
+  ): { characterId: number; created: boolean } {
+    const db = getDatabase();
+    return db.transaction(() => {
+      const rows = characterOps.getByNovel(novelId) as {
+        id: number;
+        name: string;
+        attributes: string;
+      }[];
+      const normalize = (name: string) => name.trim().normalize('NFKC').toLowerCase();
+      let attributes: Record<string, unknown> = {};
+      if (input.characterId !== null) {
+        const row = rows.find((c) => c.id === input.characterId);
+        if (!row) throw new Error('人物不属于当前作品或已删除，请重新识别');
+        attributes = JSON.parse(row.attributes || '{}');
+      } else if (
+        rows.some((row) => {
+          const saved = JSON.parse(row.attributes || '{}');
+          const aliases = Array.isArray(saved?.aliases)
+            ? saved.aliases.filter((v: unknown) => typeof v === 'string')
+            : [];
+          return [row.name, ...aliases].some((n: string) => normalize(n) === normalize(input.name));
+        })
+      )
+        throw new Error('已有同名或同别名人物，请选择关联已有角色');
+      if (!attributes || Array.isArray(attributes) || typeof attributes !== 'object')
+        throw new Error('人物资料格式无效');
+      const originalDesign = attributes.design;
+      if (
+        originalDesign !== undefined &&
+        (!originalDesign || typeof originalDesign !== 'object' || Array.isArray(originalDesign))
+      )
+        throw new Error('人物设定格式无效');
+      const design = { ...(originalDesign as Record<string, unknown> | undefined) };
+      const evidence =
+        attributes.profileEvidence &&
+        typeof attributes.profileEvidence === 'object' &&
+        !Array.isArray(attributes.profileEvidence)
+          ? { ...(attributes.profileEvidence as Record<string, unknown>) }
+          : {};
+      for (const change of input.changes) {
+        if (['__proto__', 'constructor', 'prototype'].includes(change.key))
+          throw new Error('人物字段无效');
+        if ((design[change.key] ?? '') !== change.expected)
+          throw new Error('人物字段已被修改，请重新识别后核对');
+        design[change.key] = change.value;
+        evidence[change.key] = {
+          source: input.source,
+          chapter: input.chapter,
+          quote: change.quote,
+          at: new Date().toISOString(),
+        };
+      }
+      attributes.design = design;
+      attributes.profileEvidence = evidence;
+      if (input.characterId === null) {
+        attributes.category = 'secondary';
+        attributes.group = '临时人物';
+        attributes.discoveredFrom = { chapter: input.chapter, quote: input.quote };
+        const result = characterOps.create(
+          novelId,
+          input.name.trim(),
+          '',
+          input.summary,
+          JSON.stringify(attributes)
+        );
+        return { characterId: Number(result.lastInsertRowid), created: true };
+      }
+      db.prepare(
+        "UPDATE characters SET attributes = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(cleanCharacterSocialAttributes(JSON.stringify(attributes)), input.characterId);
+      return { characterId: input.characterId, created: false };
+    })();
   },
 
   getByNovel(novelId: number) {
@@ -22,6 +109,17 @@ export const characterOps = {
   },
 
   /** Compare-and-set only the edited nested fields; unrelated attributes never round-trip through a renderer. */
+  patchAttributeGroups(
+    id: number,
+    groups: { section: string; patch: Record<string, string>; expected: Record<string, string> }[]
+  ): void {
+    getDatabase().transaction(() => {
+      for (const group of groups)
+        if (Object.keys(group.patch).length)
+          characterOps.patchAttributeFields(id, group.section, group.patch, group.expected);
+    })();
+  },
+
   patchAttributeFields(
     id: number,
     section: string,
@@ -52,7 +150,7 @@ export const characterOps = {
       attributes[section] = fields;
       db.prepare(
         "UPDATE characters SET attributes = ?, updated_at = datetime('now') WHERE id = ?"
-      ).run(JSON.stringify(attributes), id);
+      ).run(cleanCharacterSocialAttributes(JSON.stringify(attributes)), id);
       return fields;
     })();
   },
@@ -117,6 +215,8 @@ export const characterOps = {
         }
         columns.attributes = JSON.stringify(attributes);
       }
+      if (columns.attributes !== undefined)
+        columns.attributes = cleanCharacterSocialAttributes(columns.attributes);
       const { updates, values } = buildAllowedUpdate(
         columns,
         new Set(['name', 'role', 'description', 'attributes'])

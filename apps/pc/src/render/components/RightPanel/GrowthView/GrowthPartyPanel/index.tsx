@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useState } from 'react';
 import {
   addParty,
@@ -83,7 +85,8 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
                 第 {item.lastSeenChapter} 章后已 {item.chaptersAbsent} 章未出场
                 {item.parties.length > 0 ? ` · 曾在 ${item.parties.join('、')}` : ''}
               </span>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.button}
                 disabled={busy}
@@ -93,7 +96,7 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
                 }
               >
                 已出场
-              </button>
+              </UiButton>
             </div>
           ))
         )}
@@ -123,7 +126,8 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
             {item.notes && <div className={styles.notes}>{item.notes}</div>}
             <div className={styles.partyActions}>
               {item.toChapter === undefined && (
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.button}
                   disabled={busy || toChapter(endChapter) === undefined}
@@ -133,22 +137,24 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
                   }
                 >
                   解散
-                </button>
+                </UiButton>
               )}
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.button}
                 disabled={busy}
                 onClick={() => void commit(() => removeParty(party, item.id))}
               >
                 删除
-              </button>
+              </UiButton>
             </div>
           </div>
         ))}
         <div className={styles.inlineField}>
           <span>解散章节</span>
-          <input
+          <UiInput
+            unstyled
             className={`${styles.input} ${styles.small}`}
             value={endChapter}
             inputMode="numeric"
@@ -174,14 +180,16 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
           }}
         >
           <div className={styles.row}>
-            <input
+            <UiInput
+              unstyled
               className={styles.input}
               value={name}
               placeholder="队伍名"
               aria-label="队伍名"
               onChange={(event) => setName(event.target.value)}
             />
-            <input
+            <UiInput
+              unstyled
               className={`${styles.input} ${styles.small}`}
               value={from}
               placeholder="组队章"
@@ -191,7 +199,8 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
             />
           </div>
           <div className={styles.row}>
-            <input
+            <UiInput
+              unstyled
               className={styles.input}
               value={members}
               placeholder="成员，用逗号分隔"
@@ -199,9 +208,14 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
               list="growth-party-members"
               onChange={(event) => setMembers(event.target.value)}
             />
-            <button type="submit" className={styles.primary} disabled={busy || !name.trim()}>
+            <UiButton
+              unstyled
+              type="submit"
+              className={styles.primary}
+              disabled={busy || !name.trim()}
+            >
               新建队伍
-            </button>
+            </UiButton>
           </div>
           <datalist id="growth-party-members">
             {characterNames.map((item) => (
@@ -222,7 +236,8 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
             <span className={styles.companionSeen}>
               {item.lastSeenChapter !== undefined ? `最近第 ${item.lastSeenChapter} 章` : '未记录'}
             </span>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={`${styles.star} ${item.important ? styles.starOn : ''}`}
               disabled={busy}
@@ -234,7 +249,7 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
               }
             >
               ★
-            </button>
+            </UiButton>
           </div>
         ))}
         <form
@@ -246,7 +261,8 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
             );
           }}
         >
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             value={seenName}
             placeholder="配角名"
@@ -254,7 +270,8 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
             list="growth-party-members"
             onChange={(event) => setSeenName(event.target.value)}
           />
-          <input
+          <UiInput
+            unstyled
             className={`${styles.input} ${styles.small}`}
             value={seenChapter}
             placeholder="章"
@@ -262,9 +279,14 @@ export const GrowthPartyPanel: React.FC<GrowthPartyPanelProps> = ({
             inputMode="numeric"
             onChange={(event) => setSeenChapter(event.target.value)}
           />
-          <button type="submit" className={styles.button} disabled={busy || !seenName.trim()}>
+          <UiButton
+            unstyled
+            type="submit"
+            className={styles.button}
+            disabled={busy || !seenName.trim()}
+          >
             记录出场
-          </button>
+          </UiButton>
         </form>
       </div>
       {error && (

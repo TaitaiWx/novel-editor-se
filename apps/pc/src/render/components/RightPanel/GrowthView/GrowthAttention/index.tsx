@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState } from 'react';
 import type { ForgottenCompanion, GrowthWarning } from '../../../../types/growth-api';
 import { HelpTip } from '../HelpTip';
@@ -40,7 +41,8 @@ export const GrowthAttention: React.FC<GrowthAttentionProps> = ({
     >
       <div className={styles.head}>
         <span className={styles.dot} aria-hidden="true" />
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.toggle}
           aria-expanded={expanded}
@@ -48,7 +50,7 @@ export const GrowthAttention: React.FC<GrowthAttentionProps> = ({
         >
           <span className={styles.summary}>需要留意：{parts.join(' · ')}</span>
           <span className={styles.more}>{expanded ? '收起' : '查看'}</span>
-        </button>
+        </UiButton>
         <HelpTip text={GROWTH_TIPS.warnings} label="提醒说明" />
       </div>
       {expanded && (

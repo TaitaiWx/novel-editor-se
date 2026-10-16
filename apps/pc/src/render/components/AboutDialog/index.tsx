@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 小巧的「关于小说编辑器」窗口（应用菜单、设置菜单、状态栏版本面板均可打开）
  *
@@ -13,8 +14,8 @@ import { useAboutInfo, writeClipboard } from '../../hooks/useAboutInfo';
 import { useLogUpload } from '../../hooks/useLogUpload';
 import { useNow } from '../../hooks/useNow';
 import { isImeComposing } from '../../utils/ime';
-import { useToast } from '../Toast';
-import Tooltip from '../Tooltip';
+import { useToast } from '@novel-editor/ui/Toast';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 /** 「本次已运行」每分钟刷新一次 */
@@ -84,14 +85,15 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ visible, onClose }) => {
         aria-label="关于小说编辑器"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.closeButton}
           onClick={onClose}
           aria-label="关闭关于"
         >
           ×
-        </button>
+        </UiButton>
 
         {info ? (
           <>
@@ -113,17 +115,19 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ visible, onClose }) => {
 
             <div className={styles.actions}>
               <Tooltip content={COPY_DEVICE_ID_TIP}>
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.actionButton}
                   onClick={() => void handleCopyDeviceId()}
                 >
                   <VscCopy />
                   <span>复制设备 ID</span>
-                </button>
+                </UiButton>
               </Tooltip>
               <Tooltip content={UPLOAD_LOG_TIP}>
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.actionButton}
                   onClick={() => void handleUpload()}
@@ -132,7 +136,7 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ visible, onClose }) => {
                 >
                   {running ? <VscLoading className={styles.spin} /> : <VscCloudUpload />}
                   <span>{running ? '打包中…' : '上传日志'}</span>
-                </button>
+                </UiButton>
               </Tooltip>
             </div>
           </>

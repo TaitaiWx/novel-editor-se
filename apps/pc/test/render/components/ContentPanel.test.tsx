@@ -15,7 +15,7 @@ vi.mock('@/render/components/TextEditor', () => ({
   },
 }));
 vi.mock('@/render/components/ReferencePane', () => ({ default: () => null }));
-vi.mock('@/render/components/TabBar', () => ({ default: () => null }));
+vi.mock('@novel-editor/ui/TabBar', () => ({ default: () => null }));
 vi.mock('@/render/components/SettingsButton', () => ({ default: () => null }));
 vi.mock('@/render/components/LoadingSpinner', () => ({ default: () => null }));
 

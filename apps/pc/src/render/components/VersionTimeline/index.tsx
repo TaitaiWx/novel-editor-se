@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * VersionTimeline — 版本历史模态框
  *
@@ -124,7 +125,8 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
           </div>
           <div className={styles.modalActions}>
             {folderPath && (
-              <button
+              <UiButton
+                unstyled
                 className={styles.actionButton}
                 onClick={handleCreateSnapshot}
                 title="保存版本"
@@ -132,11 +134,11 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
               >
                 <VscDiffAdded />
                 <span>{snapshotJob?.status === 'running' ? '保存中...' : '保存版本'}</span>
-              </button>
+              </UiButton>
             )}
-            <button className={styles.closeButton} onClick={onClose} title="关闭">
+            <UiButton unstyled className={styles.closeButton} onClick={onClose} title="关闭">
               <VscClose />
-            </button>
+            </UiButton>
           </div>
         </div>
 

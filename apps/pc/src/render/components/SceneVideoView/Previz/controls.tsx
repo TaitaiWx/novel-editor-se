@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 预演侧栏的通用控件：单选按钮组（不用原生 select）。
  */
@@ -21,7 +22,8 @@ export function Choice<T extends string | number>({
   return (
     <div className={styles.segment} role="radiogroup" aria-label={label}>
       {options.map((option) => (
-        <button
+        <UiButton
+          unstyled
           key={option.id}
           type="button"
           role="radio"
@@ -31,7 +33,7 @@ export function Choice<T extends string | number>({
           onClick={() => onChange(option.id)}
         >
           {option.label}
-        </button>
+        </UiButton>
       ))}
     </div>
   );

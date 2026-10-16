@@ -3,6 +3,7 @@ import { BrowserWindow } from 'electron';
 import { isDatabaseReady, statsOps, settingsOps, aiCacheOps } from '@novel-editor/store';
 import { getAIService, getCredentialStore } from '../../ai/runtime';
 import type { DefaultTextSummary } from '../../ai/service';
+import { getNativeBinding } from '../../native-binding';
 import {
   interceptSettingsWrite,
   sanitizeSettingsForRenderer,
@@ -48,19 +49,30 @@ export function registerSettingsAndCacheHandlers(): void {
     }
     return value;
   });
-  registerWorkspaceHandler('db-settings-set', (_event, key: string, value: string) => {
+  const storedSetting = (key: string, value: string) => {
     // 渲染进程写入的 apiKey 转存到 safeStorage，数据库里不再保存明文
-    const stored =
-      key === SETTINGS_CENTER_KEY && typeof value === 'string'
-        ? interceptSettingsWrite(value, getCredentialStore())
-        : value;
-    settingsOps.set(key, stored);
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send('settings-updated', key);
+    return key === SETTINGS_CENTER_KEY && typeof value === 'string'
+      ? interceptSettingsWrite(value, getCredentialStore())
+      : value;
+  };
+  registerWorkspaceHandler(
+    'db-settings-set',
+    (_event, key: string, value: string) => {
+      settingsOps.set(key, storedSetting(key, value));
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send('settings-updated', key);
+        }
       }
+    },
+    {
+      onDatabaseChanged: (database, _event, key: string, value: string) => {
+        // The gate still holds the original database lease. Do not switch the global
+        // connection or broadcast an old project's write as a change to the new project.
+        settingsOps.setAtPath(database, key, storedSetting(key, value), getNativeBinding());
+      },
     }
-  });
+  );
   registerWorkspaceHandler('db-settings-delete-prefixes', (_event, prefixes: string[]) => {
     const normalized = prefixes.filter(
       (item): item is string => typeof item === 'string' && item.trim().length > 0

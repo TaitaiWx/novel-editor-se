@@ -2282,12 +2282,32 @@
   font-size: 10px;
 }
 
+.graphToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  button {
+    color: var(--ui-fg-primary);
+    background: transparent;
+    border: 1px solid var(--ui-border-strong);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+.graphViewport {
+  overflow: auto;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 12px;
+}
+
 .graphCanvas {
   position: relative;
-  min-height: 240px;
-  padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  min-width: 720px;
+  min-height: 360px;
   background:
     radial-gradient(circle at top, rgba(215, 186, 125, 0.1), transparent 48%),
     rgba(255, 255, 255, 0.02);
@@ -2319,15 +2339,25 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 96px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  box-sizing: border-box;
+  width: 140px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(13, 16, 22, 0.86);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
   transform: translate(-50%, -50%);
   text-align: left;
-  cursor: pointer;
+  cursor: grab;
+  user-select: none;
+  &:active {
+    cursor: grabbing;
+  }
+  &:focus-visible {
+    outline: 2px solid #9bbbd6;
+    outline-offset: 3px;
+  }
   transition:
     border-color 0.2s ease,
     transform 0.2s ease,
@@ -2350,16 +2380,38 @@
   font-size: 13px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .graphNodeMeta {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.54);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graphEdge {
+  cursor: pointer;
+  pointer-events: auto;
+  &:hover .graphEdgeLabel,
+  &:focus-visible .graphEdgeLabel {
+    fill: #ffffff;
+  }
+}
+.graphEdgeHit {
+  pointer-events: stroke;
 }
 
 .graphEdgeLabel {
   fill: rgba(222, 239, 255, 0.88);
-  font-size: 10px;
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: #242424;
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 
 .graphInspector {
@@ -2373,6 +2425,9 @@
 }
 
 .graphInspectorTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 13px;
   font-weight: 700;
   color: #dcecff;

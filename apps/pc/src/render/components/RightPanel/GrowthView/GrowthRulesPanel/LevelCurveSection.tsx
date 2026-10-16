@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo } from 'react';
 import { VscAdd, VscTrash } from 'react-icons/vsc';
 import { levelCurvePreview, type ExpCurve } from '@novel-editor/core/growth';
@@ -55,7 +56,8 @@ export const LevelCurveSection: React.FC<RulesSectionProps> = ({
               ['formula', '公式'],
             ] as const
           ).map(([kind, label]) => (
-            <button
+            <UiButton
+              unstyled
               key={kind}
               type="button"
               role="radio"
@@ -65,7 +67,7 @@ export const LevelCurveSection: React.FC<RulesSectionProps> = ({
               onClick={() => switchKind(kind)}
             >
               {label}
-            </button>
+            </UiButton>
           ))}
         </div>
         <div className={styles.narrow}>
@@ -126,7 +128,8 @@ export const LevelCurveSection: React.FC<RulesSectionProps> = ({
             ))}
           </div>
           <FieldIssue issues={issues} path="levels.curve" />
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.button}
             disabled={disabled}
@@ -136,7 +139,7 @@ export const LevelCurveSection: React.FC<RulesSectionProps> = ({
             }}
           >
             <VscAdd aria-hidden /> 添加一级
-          </button>
+          </UiButton>
         </>
       ) : (
         <>

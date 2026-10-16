@@ -1,3 +1,4 @@
+import { registerCharacterDevelopmentHandlers } from './character-development';
 import { CHARACTER_DESIGN_FIELDS } from '@novel-editor/core/entity-media';
 import { registerWorkspaceHandler } from '../../workspace-ipc';
 import { app } from 'electron';
@@ -36,6 +37,7 @@ export function seedProjectFromDbDir(dbDir: string): SeedProjectResult | null {
 
 /** 数据库初始化 / 关闭、作品与角色 CRUD */
 export function registerProjectHandlers(): void {
+  registerCharacterDevelopmentHandlers();
   // ─── Init / Close ──────────────────────────────────────────────────────────
 
   registerWorkspaceHandler('db-init', async (_event, dbDir: string) => {

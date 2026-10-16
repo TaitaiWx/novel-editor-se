@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState } from 'react';
 import styles from './styles.module.scss';
 import type { StorylineViewMode } from './types';
@@ -73,7 +74,8 @@ export const StorylineView: React.FC<{
             data-overflow-end={toolbarOverflow.end || undefined}
           >
             {STORYLINE_MODES.map(({ mode, label }) => (
-              <button
+              <UiButton
+                unstyled
                 key={mode}
                 type="button"
                 className={`${styles.storylineToggle} ${viewMode === mode ? styles.storylineToggleActive : ''}`}
@@ -82,7 +84,7 @@ export const StorylineView: React.FC<{
                 onClick={() => setViewMode(mode)}
               >
                 {label}
-              </button>
+              </UiButton>
             ))}
           </div>
           {viewMode === 'catalog' ? (

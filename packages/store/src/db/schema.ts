@@ -1,5 +1,6 @@
 /** 表结构定义与增量迁移 */
 import type Database from 'better-sqlite3';
+import { CLEAN_CHARACTER_SOCIAL_SQL } from './character-social-cleanup';
 
 /** 建表和增量迁移作为整体提交，失败时保留迁移前的结构与数据。 */
 export function createTables(database: Database.Database): void {
@@ -257,6 +258,7 @@ function createVideoTaskTable(database: Database.Database): void {
 
 function migrateTables(database: Database.Database): void {
   createVideoTaskTable(database);
+  database.exec(CLEAN_CHARACTER_SOCIAL_SQL);
   // 设定扩展字段（分类目录、图集、封面）
   if (!hasColumn(database, 'world_settings', 'attributes')) {
     database.exec(`ALTER TABLE world_settings ADD COLUMN attributes TEXT DEFAULT '{}';`);

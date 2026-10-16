@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useEffect, useRef, useState } from 'react';
 import type {
   GrowthEventInput,
@@ -7,7 +9,7 @@ import type {
 } from '@novel-editor/core/growth';
 import { HelpTip } from '../HelpTip';
 import { GROWTH_TIPS } from '../growthGuide';
-import Select from '../../../Select';
+import Select from '@novel-editor/ui/Select';
 import styles from './styles.module.scss';
 
 export type RecordType = Exclude<GrowthEventType, 'choice'>;
@@ -173,7 +175,8 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
       <div className={styles.typeRow}>
         <div className={styles.types} role="tablist" aria-label="记录类型">
           {MAIN_TYPES.map(([key, label]) => (
-            <button
+            <UiButton
+              unstyled
               key={key}
               type="button"
               role="tab"
@@ -182,7 +185,7 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
               onClick={() => chooseType(key)}
             >
               {label}
-            </button>
+            </UiButton>
           ))}
         </div>
         <HelpTip text={GROWTH_TIPS[type]} label="这类记录的说明" />
@@ -224,7 +227,8 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
       {valueSpec && (
         <label className={styles.field}>
           <span className={styles.label}>{valueSpec.label}</span>
-          <input
+          <UiInput
+            unstyled
             ref={needsAttribute || needsSkill ? undefined : bindFirst}
             className={styles.input}
             value={value}
@@ -238,7 +242,8 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
 
       <label className={styles.field}>
         <span className={styles.label}>{isNote ? '记下什么' : '发生了什么（可选）'}</span>
-        <input
+        <UiInput
+          unstyled
           ref={isNote ? bindFirst : undefined}
           className={styles.input}
           value={note}
@@ -251,7 +256,8 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
       <div className={styles.footer}>
         <label className={styles.chapter}>
           <span>第</span>
-          <input
+          <UiInput
+            unstyled
             className={styles.chapterInput}
             value={chapter}
             inputMode="numeric"
@@ -267,29 +273,31 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
             </span>
           )}
         </label>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.advancedToggle}
           aria-expanded={advanced}
           onClick={() => setAdvanced((open) => !open)}
         >
           高级
-        </button>
+        </UiButton>
         <span className={styles.spacer} />
         {onCancel && (
-          <button type="button" className={styles.cancel} onClick={onCancel}>
+          <UiButton unstyled type="button" className={styles.cancel} onClick={onCancel}>
             取消
-          </button>
+          </UiButton>
         )}
-        <button type="submit" className={styles.submit} disabled={busy}>
+        <UiButton unstyled type="submit" className={styles.submit} disabled={busy}>
           记下
-        </button>
+        </UiButton>
       </div>
 
       {advanced && (
         <div className={styles.advanced} role="group" aria-label="高级记录类型">
           {ADVANCED_TYPES.map(([key, label]) => (
-            <button
+            <UiButton
+              unstyled
               key={key}
               type="button"
               aria-pressed={type === key}
@@ -297,7 +305,7 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
               onClick={() => chooseType(key)}
             >
               {label}
-            </button>
+            </UiButton>
           ))}
         </div>
       )}
@@ -305,7 +313,8 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
       {error && (
         <div className={styles.error} role="alert">
           <span>{error}</span>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.force}
             disabled={busy}
@@ -313,7 +322,7 @@ export const GrowthRecordForm: React.FC<GrowthRecordFormProps> = ({
             onClick={() => void submit(true)}
           >
             仍然记录
-          </button>
+          </UiButton>
         </div>
       )}
     </form>

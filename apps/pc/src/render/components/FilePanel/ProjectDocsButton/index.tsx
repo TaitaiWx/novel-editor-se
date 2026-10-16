@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useEffect, useRef, useState } from 'react';
 import { AiOutlineRead } from 'react-icons/ai';
-import Popover from '../../Popover';
-import Tooltip from '../../Tooltip';
+import Popover from '@novel-editor/ui/Popover';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import type { ContextMenuEvent } from '../../FileTree';
 import type { FileNode } from '../../../types';
 import { stripStoryFileExtension } from '../../../utils/workspace';
@@ -83,7 +84,8 @@ const ProjectDocsButton: React.FC<ProjectDocsButtonProps> = ({
   return (
     <>
       <Tooltip content={projectDocsTooltip(docs, unseen)} position="bottom">
-        <button
+        <UiButton
+          unstyled
           ref={anchorRef}
           type="button"
           className={`${styles.trigger} ${open ? styles.triggerActive : ''}`}
@@ -95,7 +97,7 @@ const ProjectDocsButton: React.FC<ProjectDocsButtonProps> = ({
         >
           <AiOutlineRead aria-hidden="true" />
           {unseen && <span className={styles.dot} data-testid="project-docs-unseen" />}
-        </button>
+        </UiButton>
       </Tooltip>
       <Popover
         open={open}
@@ -117,7 +119,8 @@ const ProjectDocsButton: React.FC<ProjectDocsButtonProps> = ({
           <ul className={styles.list} role="list">
             {docs.map((doc) => (
               <li key={doc.path}>
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={`${styles.row} ${selectedFile === doc.path ? styles.rowActive : ''}`}
                   title={doc.name}
@@ -133,7 +136,7 @@ const ProjectDocsButton: React.FC<ProjectDocsButtonProps> = ({
                   }}
                 >
                   <span className={styles.label}>{stripStoryFileExtension(doc.name)}</span>
-                </button>
+                </UiButton>
               </li>
             ))}
           </ul>

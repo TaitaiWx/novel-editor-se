@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { AiOutlineRise } from 'react-icons/ai';
-import Tooltip from '../../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 interface CharacterGrowthButtonProps {
@@ -20,7 +21,8 @@ export const CharacterGrowthButton: React.FC<CharacterGrowthButtonProps> = ({
   onOpen,
 }) => (
   <Tooltip content={GROWTH_HINT} position="bottom">
-    <button
+    <UiButton
+      unstyled
       type="button"
       className={styles.button}
       onClick={() => onOpen(characterName)}
@@ -31,7 +33,7 @@ export const CharacterGrowthButton: React.FC<CharacterGrowthButtonProps> = ({
       <AiOutlineRise className={styles.icon} />
       <span>成长档案</span>
       <span className={styles.badge}>{level === null ? '新建' : `Lv.${level}`}</span>
-    </button>
+    </UiButton>
   </Tooltip>
 );
 

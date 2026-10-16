@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  VscChromeMinimize,
-  VscChromeMaximize,
-  VscChromeRestore,
-  VscChromeClose,
-} from 'react-icons/vsc';
-import styles from './styles.module.scss';
+import WindowControlsView from '@novel-editor/ui/WindowControls';
 
 /**
  * 跨平台窗口控制按钮（最小化、最大化/还原、关闭）。
@@ -60,37 +54,13 @@ const WindowControls: React.FC = () => {
   }, []);
 
   return (
-    <div className={`${styles.windowControls} ${platform ? styles[platform] : ''}`}>
-      <button
-        className={`${styles.controlButton} ${styles.minimizeButton}`}
-        onClick={handleMinimize}
-        title="最小化"
-        aria-label="最小化窗口"
-      >
-        <VscChromeMinimize className={styles.controlIcon} />
-      </button>
-      <button
-        className={`${styles.controlButton} ${styles.maximizeButton}`}
-        onClick={handleMaximize}
-        title={isMaximized ? '还原' : '最大化'}
-        aria-label={isMaximized ? '还原窗口' : '最大化窗口'}
-      >
-        {isMaximized ? (
-          <VscChromeRestore className={styles.controlIcon} />
-        ) : (
-          <VscChromeMaximize className={styles.controlIcon} />
-        )}
-      </button>
-      <button
-        className={`${styles.controlButton} ${styles.closeButton}`}
-        onClick={handleClose}
-        title="关闭"
-        aria-label="关闭窗口"
-      >
-        <VscChromeClose className={styles.controlIcon} />
-      </button>
-    </div>
+    <WindowControlsView
+      platform={platform}
+      isMaximized={isMaximized}
+      onMinimize={handleMinimize}
+      onToggleMaximize={handleMaximize}
+      onClose={handleClose}
+    />
   );
 };
-
 export default WindowControls;

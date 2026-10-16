@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 设置中心「关于」分区：与其他分区同一套行式布局（layout/）（应用 / 运行时间 / 设备 ID / 诊断日志）
  *
@@ -11,7 +12,7 @@ import { RELEASE_CHANNEL_LABELS, formatRunningSummary } from '../../../../shared
 import { useAboutInfo, writeClipboard } from '../../../hooks/useAboutInfo';
 import { useLogUpload } from '../../../hooks/useLogUpload';
 import { useNow } from '../../../hooks/useNow';
-import { useToast } from '../../Toast';
+import { useToast } from '@novel-editor/ui/Toast';
 import { SettingsGroup, SettingsRow, SettingsSection } from '../layout';
 import sharedStyles from '../styles.module.scss';
 import styles from './styles.module.scss';
@@ -75,14 +76,15 @@ const AboutSection: React.FC<AboutSectionProps> = ({ active }) => {
               </span>
             }
           >
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={`${sharedStyles.secondaryButton} ${styles.actionButton}`}
               onClick={handleCheckUpdates}
             >
               <VscSync className={styles.buttonIcon} />
               <span>检查更新</span>
-            </button>
+            </UiButton>
           </SettingsRow>
 
           <SettingsRow
@@ -104,7 +106,8 @@ const AboutSection: React.FC<AboutSectionProps> = ({ active }) => {
               </code>
             }
           >
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={`${sharedStyles.secondaryButton} ${styles.actionButton}`}
               onClick={() => void handleCopyDeviceId()}
@@ -112,7 +115,7 @@ const AboutSection: React.FC<AboutSectionProps> = ({ active }) => {
             >
               <VscCopy className={styles.buttonIcon} />
               <span>复制</span>
-            </button>
+            </UiButton>
           </SettingsRow>
 
           <SettingsRow
@@ -136,7 +139,8 @@ const AboutSection: React.FC<AboutSectionProps> = ({ active }) => {
               )
             }
           >
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={`${sharedStyles.secondaryButton} ${styles.actionButton}`}
               onClick={() => void upload.run()}
@@ -149,7 +153,7 @@ const AboutSection: React.FC<AboutSectionProps> = ({ active }) => {
                 <VscCloudUpload className={styles.buttonIcon} />
               )}
               <span>{running ? '打包中…' : '上传日志'}</span>
-            </button>
+            </UiButton>
           </SettingsRow>
         </SettingsGroup>
       ) : (

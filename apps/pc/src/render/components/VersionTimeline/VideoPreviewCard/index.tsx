@@ -2,6 +2,7 @@
  * VideoPreviewCard — 视频版本预览卡片（播放器 + 元信息）
  */
 import React from 'react';
+import VideoPlayer from '../../VideoPlayer';
 import { formatByteSize } from '../utils';
 import styles from './styles.module.scss';
 
@@ -25,7 +26,13 @@ const VideoPreviewCard: React.FC<VideoPreviewCardProps> = ({
       <div className={styles.audioCompareLabel}>{title}</div>
       {dataUrl ? (
         <>
-          <video className={styles.videoPlayer} src={dataUrl} controls preload="metadata" />
+          <VideoPlayer
+            className={styles.videoPlayer}
+            src={{ src: dataUrl, mimeType: mimeType ?? undefined }}
+            title={title}
+            kind="video"
+            maxHeight={320}
+          />
           <div className={styles.videoMetaGrid}>
             <div className={styles.videoMetaItem}>
               <span className={styles.videoMetaLabel}>MIME</span>

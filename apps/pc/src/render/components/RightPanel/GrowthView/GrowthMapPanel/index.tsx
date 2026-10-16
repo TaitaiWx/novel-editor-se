@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useMemo, useState } from 'react';
 import {
   addLocation,
@@ -84,7 +86,8 @@ export const GrowthMapPanel: React.FC<GrowthMapPanelProps> = ({
                   {location.firstChapter !== undefined && (
                     <span className={styles.first}>首见第 {location.firstChapter} 章</span>
                   )}
-                  <button
+                  <UiButton
+                    unstyled
                     type="button"
                     className={styles.remove}
                     disabled={busy}
@@ -92,7 +95,7 @@ export const GrowthMapPanel: React.FC<GrowthMapPanelProps> = ({
                     onClick={() => void commit(() => removeLocation(atlas, location.id))}
                   >
                     ×
-                  </button>
+                  </UiButton>
                 </div>
                 {location.description && (
                   <div className={styles.description}>{location.description}</div>
@@ -133,7 +136,8 @@ export const GrowthMapPanel: React.FC<GrowthMapPanelProps> = ({
           </span>
         </div>
         <div className={styles.row}>
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             value={visitLocation}
             placeholder="地点"
@@ -141,7 +145,8 @@ export const GrowthMapPanel: React.FC<GrowthMapPanelProps> = ({
             list="growth-map-locations"
             onChange={(event) => setVisitLocation(event.target.value)}
           />
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             value={visitCharacter}
             placeholder="角色"
@@ -149,7 +154,8 @@ export const GrowthMapPanel: React.FC<GrowthMapPanelProps> = ({
             list="growth-map-characters"
             onChange={(event) => setVisitCharacter(event.target.value)}
           />
-          <input
+          <UiInput
+            unstyled
             className={`${styles.input} ${styles.small}`}
             value={visitChapter}
             placeholder="章"
@@ -157,13 +163,14 @@ export const GrowthMapPanel: React.FC<GrowthMapPanelProps> = ({
             inputMode="numeric"
             onChange={(event) => setVisitChapter(event.target.value)}
           />
-          <button
+          <UiButton
+            unstyled
             type="submit"
             className={styles.primary}
             disabled={busy || !visitLocation.trim() || !visitCharacter.trim()}
           >
             记录
-          </button>
+          </UiButton>
         </div>
         <datalist id="growth-map-locations">
           {atlas.locations.map((location) => (
@@ -198,21 +205,24 @@ export const GrowthMapPanel: React.FC<GrowthMapPanelProps> = ({
       >
         <div className={styles.title}>新增地点</div>
         <div className={styles.row}>
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             value={name}
             placeholder="地点名"
             aria-label="地点名"
             onChange={(event) => setName(event.target.value)}
           />
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             value={region}
             placeholder="区域"
             aria-label="区域"
             onChange={(event) => setRegion(event.target.value)}
           />
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             value={parent}
             placeholder="上级地点"
@@ -222,16 +232,22 @@ export const GrowthMapPanel: React.FC<GrowthMapPanelProps> = ({
           />
         </div>
         <div className={styles.row}>
-          <input
+          <UiInput
+            unstyled
             className={styles.input}
             value={description}
             placeholder="描述（气候、势力、地标…）"
             aria-label="地点描述"
             onChange={(event) => setDescription(event.target.value)}
           />
-          <button type="submit" className={styles.primary} disabled={busy || !name.trim()}>
+          <UiButton
+            unstyled
+            type="submit"
+            className={styles.primary}
+            disabled={busy || !name.trim()}
+          >
             添加
-          </button>
+          </UiButton>
         </div>
       </form>
       {error && (

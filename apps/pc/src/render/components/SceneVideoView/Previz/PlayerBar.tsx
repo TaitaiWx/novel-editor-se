@@ -1,9 +1,11 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 预演播放条：播放 / 暂停、可拖动的进度条、时间、循环，以及取景辅助线开关。
  */
 import React from 'react';
 import { VscDebugPause, VscPlay, VscSync } from 'react-icons/vsc';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import type { PrevizPlayback } from './usePrevizPlayback';
 import type { PrevizOverlays } from './FrameOverlay';
 import styles from './styles.module.scss';
@@ -27,7 +29,8 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
 }) => (
   <div className={styles.player} role="toolbar" aria-label="预演播放">
     <Tooltip content={playback.playing ? '暂停（空格）' : '播放（空格）'}>
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={styles.playButton}
         aria-label={playback.playing ? '暂停预演' : '播放预演'}
@@ -35,9 +38,10 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
         onClick={playback.toggle}
       >
         {playback.playing ? <VscDebugPause /> : <VscPlay />}
-      </button>
+      </UiButton>
     </Tooltip>
-    <input
+    <UiInput
+      unstyled
       type="range"
       className={styles.scrub}
       aria-label="预演进度"
@@ -55,7 +59,8 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
       {formatSeconds(playback.time)} / {formatSeconds(duration)}
     </span>
     <Tooltip content={playback.loop ? '循环播放：开' : '循环播放：关'}>
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={playback.loop ? styles.toolActive : styles.tool}
         aria-label="循环播放"
@@ -63,25 +68,27 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
         onClick={() => playback.setLoop(!playback.loop)}
       >
         <VscSync />
-      </button>
+      </UiButton>
     </Tooltip>
     <span className={styles.toolGap} />
-    <button
+    <UiButton
+      unstyled
       type="button"
       aria-pressed={overlays.thirds}
       className={overlays.thirds ? styles.toolActive : styles.tool}
       onClick={() => onToggleOverlay('thirds')}
     >
       三分线
-    </button>
-    <button
+    </UiButton>
+    <UiButton
+      unstyled
       type="button"
       aria-pressed={overlays.safe}
       className={overlays.safe ? styles.toolActive : styles.tool}
       onClick={() => onToggleOverlay('safe')}
     >
       安全框
-    </button>
+    </UiButton>
   </div>
 );
 

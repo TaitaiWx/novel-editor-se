@@ -216,6 +216,7 @@ $focus-ring: var(
 
 .control {
   display: inline-flex;
+  flex: 0 0 28px;
   align-items: center;
   justify-content: center;
   width: 28px;
@@ -226,6 +227,7 @@ $focus-ring: var(
   background: transparent;
   color: rgba(255, 255, 255, 0.86);
   font-size: 15px;
+  white-space: nowrap;
   cursor: pointer;
 
   &:hover {
@@ -438,6 +440,42 @@ $focus-ring: var(
 .audioMode {
   overflow: visible;
 
+  // 音频没有画面遮罩，控制项不足一行时自然换行，不能伸出卡片。
+  .bar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+
+    > * {
+      flex-shrink: 0;
+    }
+  }
+
+  // 滑块浮在音量按钮上方，展开时不挤动播放时间和设置按钮。
+  .volume {
+    position: relative;
+  }
+
+  .volumeSlider {
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    z-index: 4;
+    box-sizing: content-box;
+    width: 64px;
+    height: 20px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(24, 24, 27, 0.96);
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .volume:hover .volumeSlider,
+  .volume:focus-within .volumeSlider {
+    margin: 0;
+    pointer-events: auto;
+  }
+
   .video {
     display: none;
   }
@@ -487,6 +525,16 @@ $focus-ring: var(
 }
 
 // 窄播放器：隐藏次要按钮（截图 / 录制 / 画中画），仍可用快捷键
+@container (max-width: 420px) {
+  .audioMode .bar {
+    // 提示组件会包裹按钮，连同包装一起隐藏，避免留下空隙。
+    > .optional,
+    > :has(> .optional) {
+      display: none;
+    }
+  }
+}
+
 @container (max-width: 300px) {
   .optional {
     display: none;

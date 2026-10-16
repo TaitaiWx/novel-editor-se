@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import styles from './styles.module.scss';
 import { useAiConfig } from './useAiConfig';
@@ -380,9 +381,9 @@ export const AIView: React.FC<{
             ))}
           </div>
           {onOpenSettings && (
-            <button className={styles.aiSetupButton} onClick={onOpenSettings}>
+            <UiButton unstyled className={styles.aiSetupButton} onClick={onOpenSettings}>
               前往设置
-            </button>
+            </UiButton>
           )}
         </div>
       );

@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 编辑器内 ::video / ::image / ::audio 指令的媒体（独立的 React root，挂进 CodeMirror widget 的 DOM）：
  * - 视频用自定义播放器（无黑边、悬停浮现控制条），右上角「在旁边看」
@@ -9,7 +10,7 @@ import React from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { VscOpenPreview } from 'react-icons/vsc';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import VideoPlayer, { AudioPlayer } from '../../VideoPlayer';
 import { referenceItemFor, requestOpenReference } from '../../../utils/referencePane';
 
@@ -44,7 +45,8 @@ const BesideButton: React.FC<{ path: string; label: string; listen?: boolean }> 
   };
   return (
     <Tooltip content={`在编辑器旁边${verb}`} position="bottom">
-      <button
+      <UiButton
+        unstyled
         type="button"
         className="cm-lp-media-beside"
         aria-label={`在旁边${verb} ${label}`}
@@ -60,7 +62,7 @@ const BesideButton: React.FC<{ path: string; label: string; listen?: boolean }> 
         }}
       >
         <VscOpenPreview aria-hidden="true" />
-      </button>
+      </UiButton>
     </Tooltip>
   );
 };

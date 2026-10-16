@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const RENDER = path.resolve(__dirname, '../../../src/render');
+const UI = path.resolve(__dirname, '../../../../../packages/ui/src');
 
 function scssFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -28,26 +29,27 @@ describe('浮层层级', () => {
 
   it('任何组件写死的 z-index 都低于浮层：弹窗里打开的下拉列表 / 右键菜单 / 弹出面板不会被遮住', () => {
     const floating = token('z-floating');
-    const offenders = scssFiles(path.join(RENDER, 'components')).flatMap((file) =>
-      readFileSync(file, 'utf-8')
-        .split('\n')
-        .map((line, index) => ({ line, index }))
-        .filter(({ line }) => {
-          const match = /z-index:\s*(\d+)/.exec(line);
-          return match ? Number(match[1]) >= floating : false;
-        })
-        .map(({ index }) => `${path.relative(RENDER, file)}:${index + 1}`)
+    const offenders = [...scssFiles(path.join(RENDER, 'components')), ...scssFiles(UI)].flatMap(
+      (file) =>
+        readFileSync(file, 'utf-8')
+          .split('\n')
+          .map((line, index) => ({ line, index }))
+          .filter(({ line }) => {
+            const match = /z-index:\s*(\d+)/.exec(line);
+            return match ? Number(match[1]) >= floating : false;
+          })
+          .map(({ index }) => `${path.relative(RENDER, file)}:${index + 1}`)
     );
     expect(offenders).toEqual([]);
   });
 
   it('下拉列表、右键菜单、弹出面板、悬停提示使用层级变量', () => {
     const uses = (relative: string, variable: string) =>
-      readFileSync(path.join(RENDER, relative), 'utf-8').includes(`var(--${variable})`);
-    expect(uses('components/Select/styles.module.scss', 'z-floating')).toBe(true);
-    expect(uses('components/ContextMenu/styles.module.scss', 'z-floating')).toBe(true);
-    expect(uses('components/Popover/styles.module.scss', 'z-floating')).toBe(true);
-    expect(uses('components/Tooltip/styles.module.scss', 'z-tooltip')).toBe(true);
-    expect(uses('components/Toast/styles.module.scss', 'z-toast')).toBe(true);
+      readFileSync(path.join(UI, relative), 'utf-8').includes(`var(--${variable})`);
+    expect(uses('Select/styles.module.scss', 'z-floating')).toBe(true);
+    expect(uses('ContextMenu/styles.module.scss', 'z-floating')).toBe(true);
+    expect(uses('Popover/styles.module.scss', 'z-floating')).toBe(true);
+    expect(uses('Tooltip/styles.module.scss', 'z-tooltip')).toBe(true);
+    expect(uses('Toast/styles.module.scss', 'z-toast')).toBe(true);
   });
 });

@@ -5,7 +5,7 @@ import type {
   PersistedOutlineVersionRow,
 } from '@/render/types/electron-api';
 import type { OutlineEntry } from '../types';
-import type { useDialog } from '../../Dialog';
+import type { useDialog } from '@novel-editor/ui/Dialog';
 import type { useOutlineEntries } from '../useOutlineEntries';
 import {
   buildCompareLabel,

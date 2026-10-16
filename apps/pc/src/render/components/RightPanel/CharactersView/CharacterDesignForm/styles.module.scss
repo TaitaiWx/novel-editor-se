@@ -1,19 +1,34 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
   max-width: 760px;
 }
 
-.hint {
+.group {
+  min-width: 0;
   margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.groupTitle {
+  margin-bottom: 14px;
+  padding: 0;
   font-size: 12px;
-  line-height: 1.7;
+  font-weight: 600;
   color: var(--ui-fg-muted);
 }
 
+.groupFields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .saved {
-  margin-left: 8px;
+  margin: 0;
+  font-size: 12px;
   color: #7ab896;
 }
 
@@ -31,28 +46,34 @@
   color: rgba(255, 255, 255, 0.72);
 }
 
-.textarea {
-  box-sizing: border-box;
-  width: 100%;
+.optionalFields {
+  summary {
+    color: var(--ui-fg-muted);
+    font-size: 12px;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+}
+
+.inputShell {
+  position: relative;
   min-width: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.16);
-  color: var(--ui-fg-primary);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.7;
-  resize: none;
-  // 不显示右下角拖拽手柄：高度随内容增长
-  field-sizing: content;
-  outline: none;
-
-  &:focus {
-    border-color: rgba(86, 156, 214, 0.6);
+  &[aria-busy='true'] > div {
+    border-color: rgba(155, 187, 214, 0.4);
   }
-
-  &::placeholder {
-    color: var(--ui-fg-disabled);
-  }
+}
+.fieldStatus {
+  position: absolute;
+  right: 10px;
+  top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 1;
+}
+.inputShell:has(.fieldStatus) :global(.cm-content) {
+  padding-right: 32px;
 }

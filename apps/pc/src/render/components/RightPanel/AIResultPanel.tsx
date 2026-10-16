@@ -1,9 +1,10 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import styles from './styles.module.scss';
 import { tryParseJSON, SEVERITY_LABELS, TYPE_LABELS } from './useAiWorkflow';
 import { hideRawData } from '../../utils/debugMode';
 import type { AIResultItem, FixResult } from './useAiWorkflow';
-import { InlineDiffView } from '../InlineDiffView';
+import { InlineDiffView } from '@novel-editor/ui/InlineDiffView';
 
 // ─── Fix actions bar (copy / save) ─────────────────────────────────────────
 interface AIFixActionsBarProps {
@@ -18,16 +19,22 @@ export const AIFixActionsBar: React.FC<AIFixActionsBarProps> = React.memo(
     <>
       <div className={styles.aiActionDivider} />
       <div className={styles.aiResultActions}>
-        <button className={styles.aiCopyButton} onClick={onCopy} title="复制全部分析结果">
+        <UiButton
+          unstyled
+          className={styles.aiCopyButton}
+          onClick={onCopy}
+          title="复制全部分析结果"
+        >
           {copied ? '✓ 已复制' : '复制全部'}
-        </button>
-        <button
+        </UiButton>
+        <UiButton
+          unstyled
           className={styles.aiSaveButton}
           onClick={onSave}
           title="保存到项目 ai-reports/ 目录"
         >
           {saved ? '✓ 已保存到 ai-reports/' : '保存为文件'}
-        </button>
+        </UiButton>
       </div>
     </>
   )
@@ -242,9 +249,13 @@ const AIResultDisplay: React.FC<{
               {onAutoFix && item.suggestion && (
                 <div className={styles.aiJsonItemActions}>
                   {!fix?.fix && !fix?.loading && (
-                    <button className={styles.aiAutoFixButton} onClick={() => handleFix(idx, item)}>
+                    <UiButton
+                      unstyled
+                      className={styles.aiAutoFixButton}
+                      onClick={() => handleFix(idx, item)}
+                    >
                       ✨ 自动修改
-                    </button>
+                    </UiButton>
                   )}
                   {fix?.loading && (
                     <span className={styles.aiAutoFixLoading}>
@@ -279,12 +290,13 @@ const AIResultDisplay: React.FC<{
                       <div className={styles.aiFixResultHeader}>
                         <span className={styles.aiFixResultLabel}>修改建议</span>
                         <div className={styles.aiFixResultActions}>
-                          <button
+                          <UiButton
+                            unstyled
                             className={styles.aiFixCopyButton}
                             onClick={() => handleCopyFix(idx, fix.fix!.text)}
                           >
                             {fix.copied ? '✓ 已复制' : '复制'}
-                          </button>
+                          </UiButton>
                         </div>
                       </div>
                       <div className={styles.aiFixResultContent}>{fix.fix.text}</div>

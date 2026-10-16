@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useState } from 'react';
 import type { ContinuationLength } from '@novel-editor/ai/prompts';
 import type { AIProviderInfo } from '@/shared/ai';
@@ -6,8 +8,8 @@ import { describeAIError } from '../TextEditor/assist/ai-error';
 import { currentContinuationText } from '../TextEditor/assist/continuation-state';
 import type { ResolvedProvider } from '../../utils/continuationService';
 import { usableModels } from '../../utils/textProviders';
-import Checkbox from '../Checkbox';
-import Select from '../Select';
+import Checkbox from '@novel-editor/ui/Checkbox';
+import Select from '@novel-editor/ui/Select';
 import { ContextDetails } from './ContextDetails';
 import {
   DEFAULT_PANEL_FORM,
@@ -70,9 +72,9 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
         <div className={styles.empty}>
           <strong>AI 还没有配置</strong>
           <span>在设置中心填写 Grok（xAI）或默认 AI 的 API Key 后即可续写。</span>
-          <button type="button" className={styles.primary} onClick={onOpenSettings}>
+          <UiButton unstyled type="button" className={styles.primary} onClick={onOpenSettings}>
             去设置 AI 服务
-          </button>
+          </UiButton>
         </div>
       </div>
     );
@@ -84,7 +86,8 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
         <span className={styles.label}>长度</span>
         <div className={styles.segmented} role="radiogroup" aria-label="续写长度">
           {LENGTHS.map(([value, label]) => (
-            <button
+            <UiButton
+              unstyled
               key={value}
               type="button"
               role="radio"
@@ -93,7 +96,7 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
               onClick={() => update({ length: value })}
             >
               {label}
-            </button>
+            </UiButton>
           ))}
         </div>
       </div>
@@ -102,7 +105,8 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
         <span className={styles.label}>方向</span>
         <div className={styles.segmented} role="radiogroup" aria-label="续写方向">
           {DIRECTIONS.map(([value, label]) => (
-            <button
+            <UiButton
+              unstyled
               key={value}
               type="button"
               role="radio"
@@ -115,10 +119,11 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
               onClick={() => update({ direction: value, customDirection: '' })}
             >
               {label}
-            </button>
+            </UiButton>
           ))}
         </div>
-        <input
+        <UiInput
+          unstyled
           className={styles.input}
           value={form.customDirection}
           placeholder="或者写一句你想要的方向，例如：让苏晴先发现异样"
@@ -148,14 +153,15 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
         />
       </div>
 
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={styles.primary}
         disabled={busy || configured === null}
         onClick={() => onGenerate(form)}
       >
         {busy ? '正在续写…' : '生成建议'}
-      </button>
+      </UiButton>
       {notice && <div className={styles.notice}>{notice}</div>}
 
       {suggestion && suggestion.phase !== 'idle' && (
@@ -166,15 +172,15 @@ export const ContinuationPanel: React.FC<ContinuationPanelProps> = ({
             <>
               <span>建议已插在光标处（{Array.from(text).length} 字），采纳后才写入正文。</span>
               <div className={styles.actions}>
-                <button type="button" className={styles.primarySmall} onClick={onAccept}>
+                <UiButton unstyled type="button" className={styles.primarySmall} onClick={onAccept}>
                   采纳
-                </button>
-                <button type="button" className={styles.ghost} onClick={onDiscard}>
+                </UiButton>
+                <UiButton unstyled type="button" className={styles.ghost} onClick={onDiscard}>
                   放弃
-                </button>
-                <button type="button" className={styles.ghost} onClick={onNext}>
+                </UiButton>
+                <UiButton unstyled type="button" className={styles.ghost} onClick={onNext}>
                   换一个
-                </button>
+                </UiButton>
               </div>
             </>
           )}
@@ -206,18 +212,18 @@ const ErrorBlock: React.FC<{
       {info.hint && <span>{info.hint}</span>}
       <div className={styles.actions}>
         {info.canRetry && (
-          <button type="button" className={styles.primarySmall} onClick={onRetry}>
+          <UiButton unstyled type="button" className={styles.primarySmall} onClick={onRetry}>
             重试
-          </button>
+          </UiButton>
         )}
         {info.needsSettings && (
-          <button type="button" className={styles.ghost} onClick={onOpenSettings}>
+          <UiButton unstyled type="button" className={styles.ghost} onClick={onOpenSettings}>
             去设置
-          </button>
+          </UiButton>
         )}
-        <button type="button" className={styles.ghost} onClick={onDiscard}>
+        <UiButton unstyled type="button" className={styles.ghost} onClick={onDiscard}>
           关闭
-        </button>
+        </UiButton>
       </div>
     </div>
   );

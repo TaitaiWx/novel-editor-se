@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import type { VolumeOutline } from '@novel-editor/basic-algorithm';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 /** 字数显示：1234 → 1.2k，12345 → 1.2 万 */
@@ -63,7 +64,8 @@ export const VolumeOverview: React.FC<{
           className={styles.overviewSlot}
           style={{ flexGrow: Math.max(1, segment.chapters) }}
         >
-          <button
+          <UiButton
+            unstyled
             type="button"
             role="listitem"
             className={styles.overviewSegment}
@@ -73,7 +75,7 @@ export const VolumeOverview: React.FC<{
             onClick={() => onJump(segment.key)}
           >
             <span className={styles.overviewLabel}>{segment.title}</span>
-          </button>
+          </UiButton>
         </Tooltip>
       ))}
     </div>

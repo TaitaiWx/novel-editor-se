@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { marked } from 'marked';
-import LoadingSpinner from '../LoadingSpinner';
-import ErrorState from '../ErrorState';
+import LoadingSpinner from '@novel-editor/ui/LoadingSpinner';
+import ErrorState from '@novel-editor/ui/ErrorState';
 import styles from './styles.module.scss';
 
 const ChangelogViewer: React.FC = () => {

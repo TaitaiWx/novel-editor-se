@@ -1,3 +1,4 @@
+import { canLeaveWorkspace } from '@/render/utils/workspaceLeaveGuard';
 import { useCallback, useRef } from 'react';
 import { getActiveEditor } from '@/render/components/TextEditor/active-editor';
 import type { UiState } from './state/useUiState';
@@ -78,6 +79,8 @@ export function useTabActions(ctx: UseTabActionsContext) {
   const requestClose = useCallback(
     (paths: readonly string[], preferred?: string | null, saveMounted = true) => {
       if (closingRef.current) return;
+      if (activeTabRef.current && paths.includes(activeTabRef.current) && !canLeaveWorkspace(null))
+        return;
       const drafts = paths.filter(
         (item) =>
           isUntitledTabPath(item) && (latest.current.untitledTabContents[item]?.length ?? 0) > 0
@@ -127,25 +130,27 @@ export function useTabActions(ctx: UseTabActionsContext) {
         }
       })();
     },
-    [commitClose]
+    [activeTabRef, commitClose]
   );
 
   // Tab helpers
   const openFileInTab = useCallback(
     (filePath: string) => {
+      if (filePath !== activeTabRef.current && !canLeaveWorkspace(filePath)) return;
       setOpenTabs((prev) => {
         if (prev.includes(filePath)) return prev;
         return [...prev, filePath];
       });
       setActiveTab(filePath);
     },
-    [setActiveTab, setOpenTabs]
+    [activeTabRef, setActiveTab, setOpenTabs]
   );
 
   const closeTab = useCallback((filePath: string) => requestClose([filePath]), [requestClose]);
 
   // Create new untitled tab (Cmd+N, like VS Code)
   const handleNewTab = useCallback(() => {
+    if (!canLeaveWorkspace(null)) return;
     const num = ++untitledCounterRef.current;
     const untitledPath = `__untitled__:Untitled-${num}`;
     setOpenTabs((prev) => [...prev, untitledPath]);
@@ -214,7 +219,7 @@ export function useTabActions(ctx: UseTabActionsContext) {
   );
 
   const handleCloseAllAndSave = useCallback(async () => {
-    if (closingRef.current) return;
+    if (closingRef.current || !canLeaveWorkspace(null)) return;
     closingRef.current = true;
     try {
       const editor = getActiveEditor();

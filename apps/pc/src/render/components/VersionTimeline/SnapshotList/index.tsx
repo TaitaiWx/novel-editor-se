@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * SnapshotList — 版本时间线列表（点击查看对比，悬浮显示重命名/恢复/删除操作）
  */
@@ -54,27 +55,30 @@ const SnapshotList: React.FC<SnapshotListProps> = ({
             </span>
           </div>
           <div className={styles.commitActions}>
-            <button
+            <UiButton
+              unstyled
               className={styles.commitActionBtn}
               onClick={(e) => onRename(snapshot, e)}
               title="重命名版本"
             >
               <VscEdit />
-            </button>
-            <button
+            </UiButton>
+            <UiButton
+              unstyled
               className={styles.commitActionBtn}
               onClick={(e) => onRestore(snapshot, e)}
               title="恢复当前文件到此版本"
             >
               ↺
-            </button>
-            <button
+            </UiButton>
+            <UiButton
+              unstyled
               className={`${styles.commitActionBtn} ${styles.dangerBtn}`}
               onClick={(e) => onDelete(snapshot, e)}
               title="删除版本"
             >
               <VscTrash />
-            </button>
+            </UiButton>
           </div>
         </div>
       ))}

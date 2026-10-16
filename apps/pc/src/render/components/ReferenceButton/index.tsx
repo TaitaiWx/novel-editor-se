@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useEffect, useRef, useState } from 'react';
 import { VscFileMedia } from 'react-icons/vsc';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import {
   REFERENCE_STATE_EVENT,
   announceReferenceAutoSource,
@@ -52,7 +53,8 @@ const ReferenceButton: React.FC<ReferenceButtonProps> = ({ fallback = EMPTY, sou
   return (
     <span className={styles.slot}>
       <Tooltip content={tip} position="bottom">
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={open ? `${styles.pill} ${styles.active}` : styles.pill}
           aria-label="参考"
@@ -63,7 +65,7 @@ const ReferenceButton: React.FC<ReferenceButtonProps> = ({ fallback = EMPTY, sou
         >
           <VscFileMedia className={styles.icon} aria-hidden="true" />
           <span className={styles.label}>参考</span>
-        </button>
+        </UiButton>
       </Tooltip>
     </span>
   );

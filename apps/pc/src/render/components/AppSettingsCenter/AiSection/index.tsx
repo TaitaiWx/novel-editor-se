@@ -12,7 +12,7 @@ import { AiOutlineApi } from 'react-icons/ai';
 import type { SettingsDraft } from '../../../utils/appSettings';
 import type { AICapability, AIProviderInfo } from '../../../types/ai-api';
 import type { SettingsFormApi } from '../useSettingsForm';
-import Switch from '../../Switch';
+import Switch from '@novel-editor/ui/Switch';
 import { SettingsGroup, SettingsRow, SettingsSection } from '../layout';
 import AddModelForm from './AddModelForm';
 import ModelRow from './ModelRow';

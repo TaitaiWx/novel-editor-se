@@ -1,3 +1,4 @@
+import { parseDevelopmentMap, type DevelopmentMap } from '@novel-editor/core/character-development';
 import {
   isDesignEmpty,
   parseCharacterDesign,
@@ -14,6 +15,7 @@ export interface CharacterAttributesPayload {
   avatar?: string;
   /** 人物设计：外貌、服装、性格、背景、说话方式（AI 出图 / 续写 / 场景视频读取） */
   design?: CharacterDesign;
+  development?: DevelopmentMap;
   /** 图集：形象图、三视图、服装、表情、背景 */
   media?: MediaItem[];
   /** 声音（对白配音）：厂商音色 id、性别、年龄、音色描述，可选 */
@@ -117,6 +119,7 @@ export function parseCharacterAttributes(
 ): {
   avatar?: string;
   design: CharacterDesign;
+  development: DevelopmentMap;
   media: MediaItem[];
   voice?: CharacterVoice;
   aliases: string[];
@@ -131,6 +134,7 @@ export function parseCharacterAttributes(
     return {
       avatar: typeof parsed?.avatar === 'string' ? parsed.avatar : undefined,
       design: parseCharacterDesign(parsed?.design),
+      development: parseDevelopmentMap(parsed?.development),
       media: parseMediaItems(parsed?.media),
       voice: parseCharacterVoice(parsed?.voice),
       aliases: normalizeCharacterAliases(parsed?.aliases),
@@ -146,6 +150,7 @@ export function parseCharacterAttributes(
   } catch {
     return {
       design: parseCharacterDesign(null),
+      development: {},
       media: [],
       aliases: [],
       category: inferCharacterCategoryFromRole(role),
@@ -168,6 +173,7 @@ export function stringifyCharacterAttributes(
   return JSON.stringify({
     ...(attributes.avatar ? { avatar: attributes.avatar } : {}),
     ...(isDesignEmpty(design) ? {} : { design }),
+    ...(attributes.development ? { development: parseDevelopmentMap(attributes.development) } : {}),
     ...(media.length ? { media } : {}),
     ...(voice ? { voice } : {}),
     aliases: normalizeCharacterAliases(attributes.aliases),
@@ -203,6 +209,7 @@ export function mapCharacterRows(
       currentState: attrs.currentState,
       avatar: attrs.avatar || undefined,
       design: attrs.design,
+      development: attrs.development,
       media: attrs.media,
       ...(attrs.voice ? { voice: attrs.voice } : {}),
       aliases: attrs.aliases,

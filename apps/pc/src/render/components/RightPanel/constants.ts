@@ -31,6 +31,15 @@ export const RELATION_TONE_LABELS: Record<RelationTone, string> = {
   other: '其他',
 };
 
+/** 图谱连线与关系类型选择器共用柔和配色。 */
+export const RELATION_TONE_COLORS: Record<RelationTone, string> = {
+  ally: '#92bda9',
+  rival: '#d79494',
+  family: '#b6a0d2',
+  mentor: '#cfb477',
+  other: '#93aabd',
+};
+
 export const CAMP_LABELS: Record<CharacterCamp, string> = {
   protagonist: '主角团',
   antagonist: '对立阵营',

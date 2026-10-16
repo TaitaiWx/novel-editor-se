@@ -1,3 +1,6 @@
+import type { EnrichmentExtras } from '@novel-editor/core/character-enrichment';
+import type { ProfileApplyRequest } from '@novel-editor/core/character-discovery';
+import type { DevelopmentChange, DevelopmentMap } from '@novel-editor/core/character-development';
 import type { CharacterDesign } from '@novel-editor/core/entity-media';
 /**
  * Electron API 类型定义
@@ -151,6 +154,31 @@ export interface ElectronAPI {
   // 成长记录器通道的类型见 ./growth-api.ts
   ipcRenderer: GrowthInvokeOverloads &
     AIInvokeOverloads & {
+      invoke(
+        channel: 'db-character-list-by-folder',
+        workPath: string
+      ): Promise<
+        Array<{ id: number; name: string; role: string; description: string; attributes: string }>
+      >;
+      invoke(
+        channel: 'db-character-patch-profile-draft',
+        workPath: string,
+        characterId: number,
+        patch: Record<string, string>,
+        expected: Record<string, string>,
+        extras?: EnrichmentExtras
+      ): Promise<Record<string, string>>;
+      invoke(
+        channel: 'db-character-apply-profile',
+        workPath: string,
+        input: ProfileApplyRequest
+      ): Promise<{ characterId: number; created: boolean }>;
+      invoke(
+        channel: 'db-character-patch-development',
+        workPath: string,
+        characterId: number,
+        changes: DevelopmentChange[]
+      ): Promise<DevelopmentMap>;
       invoke(
         channel: 'db-character-update',
         id: number,

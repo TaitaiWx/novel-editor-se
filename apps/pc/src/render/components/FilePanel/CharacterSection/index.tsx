@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo, useState } from 'react';
 import {
   AiOutlineAppstore,
@@ -12,7 +13,7 @@ import { GROWTH_GUIDE } from '../../RightPanel/GrowthView/growthGuide';
 import { CHARACTER_GUIDE } from '../../RightPanel/CharactersView/characterGuide';
 import type { Character } from '../../RightPanel/types';
 import CharacterAvatar from '../../CharacterAvatar';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import SectionHeader from '../SectionHeader';
 import ObjectItemRow from '../ObjectItemRow';
 import GroupLabel from '../GroupLabel';
@@ -158,34 +159,37 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
         actions={
           <>
             <Tooltip content="使用说明：人物设计、图集、成长档案与关系" position="top">
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.headerAction}
                 onClick={() => setHelp('character')}
                 aria-label="角色使用说明"
               >
                 <AiOutlineQuestionCircle />
-              </button>
+              </UiButton>
             </Tooltip>
             <Tooltip content="人物总览：每个人物的形象、设计、成长与关系" position="top">
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.headerAction}
                 onClick={() => (onOpenOverview ? onOpenOverview() : onOpenGrowth?.(null))}
                 aria-label="打开人物总览"
               >
                 <AiOutlineAppstore />
-              </button>
+              </UiButton>
             </Tooltip>
             <Tooltip content="新建人物" position="top">
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.headerAction}
                 onClick={onCreateCharacter}
                 aria-label="新建人物"
               >
                 <AiOutlinePlus />
-              </button>
+              </UiButton>
             </Tooltip>
           </>
         }
@@ -277,17 +281,23 @@ const CharacterSection: React.FC<CharacterSectionProps> = ({
                 <div className={styles.hintTitle}>先建一个人物</div>
                 <div className={styles.hintText}>{CHARACTER_SECTION_HINT}。</div>
                 <div className={styles.hintActions}>
-                  <button type="button" className={styles.hintButton} onClick={onCreateCharacter}>
+                  <UiButton
+                    unstyled
+                    type="button"
+                    className={styles.hintButton}
+                    onClick={onCreateCharacter}
+                  >
                     <AiOutlinePlus />
                     新建人物
-                  </button>
-                  <button
+                  </UiButton>
+                  <UiButton
+                    unstyled
                     type="button"
                     className={styles.hintLink}
                     onClick={() => setHelp('character')}
                   >
                     怎么用？
-                  </button>
+                  </UiButton>
                 </div>
               </div>
             ))}

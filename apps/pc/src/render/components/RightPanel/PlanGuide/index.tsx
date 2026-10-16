@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useState } from 'react';
 import { AiOutlineQuestionCircle } from 'react-icons/ai';
-import Popover from '../../Popover';
-import Tooltip from '../../Tooltip';
+import Popover from '@novel-editor/ui/Popover';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 export interface PlanGuideContent {
@@ -37,7 +38,8 @@ const PlanGuide: React.FC<{ guide: PlanGuideContent; label: string }> = ({ guide
     <div className={styles.guide} data-testid="plan-guide">
       <span className={styles.summary}>{guide.summary}</span>
       <Tooltip content={`${label}怎么用`}>
-        <button
+        <UiButton
+          unstyled
           ref={anchorRef}
           type="button"
           className={styles.help}
@@ -47,7 +49,7 @@ const PlanGuide: React.FC<{ guide: PlanGuideContent; label: string }> = ({ guide
         >
           <AiOutlineQuestionCircle aria-hidden="true" />
           怎么用
-        </button>
+        </UiButton>
       </Tooltip>
       <Popover
         open={open}

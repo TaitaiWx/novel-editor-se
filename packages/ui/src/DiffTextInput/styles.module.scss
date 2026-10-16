@@ -1,0 +1,71 @@
+.input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--ui-fg-primary);
+  overflow: hidden;
+  &:focus-within {
+    border-color: rgba(86, 156, 214, 0.6);
+  }
+  &[data-disabled] {
+    opacity: 0.75;
+  }
+  :global(.cm-editor) {
+    font: inherit;
+    font-size: 13px;
+    background: transparent;
+  }
+  :global(.cm-focused) {
+    outline: none;
+  }
+  :global(.cm-scroller) {
+    font-family: inherit;
+    line-height: 1.7;
+    max-height: 360px;
+    overflow: auto;
+  }
+  :global(.cm-content) {
+    min-height: max(88px, calc(var(--diff-input-rows) * 1.7em + 16px));
+    box-sizing: border-box;
+    padding: 8px 10px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    caret-color: var(--ui-fg-primary);
+  }
+  :global(.cm-line) {
+    padding: 0;
+  }
+  :global(.cm-placeholder) {
+    color: var(--ui-fg-disabled);
+  }
+  :global(.cm-cursor) {
+    border-left-color: var(--ui-fg-primary);
+  }
+  :global(.cm-selectionBackground) {
+    background: rgba(86, 156, 214, 0.25) !important;
+  }
+}
+.input :global(.diff-text-added),
+.added {
+  color: #91c8a4;
+}
+.input :global(.diff-text-deleted),
+.deleted {
+  color: var(--ui-fg-muted, #969696);
+  background: rgba(210, 112, 108, 0.18);
+  text-decoration: line-through;
+  text-decoration-color: #cc8d88;
+  border-radius: 2px;
+  white-space: pre-wrap;
+}
+.input :global(.diff-text-deleted) {
+  user-select: none;
+}
+
+.input[data-single-line] :global(.cm-content) {
+  min-height: 30px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}

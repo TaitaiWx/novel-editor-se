@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback } from 'react';
 import styles from './styles.module.scss';
 import { WORKFLOW_DEFS, getSeverityCounts, getHistorySummary } from './useAiWorkflow';
@@ -74,13 +75,14 @@ export const AIHistoryDrawer: React.FC<AIHistoryDrawerProps> = React.memo(
                   {formatTimestamp(record.timestamp)}
                 </span>
               </div>
-              <button
+              <UiButton
+                unstyled
                 className={styles.aiHistoryItemDelete}
                 onClick={(e) => handleDelete(e, record.id)}
                 title="删除此记录"
               >
                 ✕
-              </button>
+              </UiButton>
             </div>
           );
         })}

@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { VscClose } from 'react-icons/vsc';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 export interface PlanVariant {
@@ -36,14 +37,15 @@ const PlanVariantPicker: React.FC<PlanVariantPickerProps> = ({
     <header className={styles.head}>
       <span className={styles.heading}>{heading}</span>
       <Tooltip content="都不要（不会改动现有内容）">
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.iconButton}
           aria-label="关闭方案"
           onClick={onDismiss}
         >
           <VscClose />
-        </button>
+        </UiButton>
       </Tooltip>
     </header>
     <ul className={styles.list} role="list">
@@ -58,14 +60,15 @@ const PlanVariantPicker: React.FC<PlanVariantPickerProps> = ({
               <li key={index}>{line}</li>
             ))}
           </ol>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.apply}
             disabled={busy}
             onClick={() => onApply(variant.id)}
           >
             采用这个
-          </button>
+          </UiButton>
         </li>
       ))}
     </ul>

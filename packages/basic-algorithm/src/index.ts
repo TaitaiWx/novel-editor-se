@@ -3,3 +3,4 @@ export * from './chunking';
 export * from './diff';
 export * from './outline';
 export * from './volume-plan';
+export * from './diff/inline';

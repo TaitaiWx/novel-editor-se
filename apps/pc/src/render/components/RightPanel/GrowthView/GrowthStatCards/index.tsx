@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo, useState } from 'react';
 import {
   checkSkillPrerequisites,
@@ -167,7 +168,8 @@ export const GrowthChoicesCard: React.FC<ChoicesCardProps> = ({
                 const key = `${group.id}:${option.id}`;
                 const armed = confirming === key;
                 return (
-                  <button
+                  <UiButton
+                    unstyled
                     key={option.id}
                     type="button"
                     className={`${styles.choiceOption} ${armed ? styles.choiceArmed : ''}`}
@@ -184,7 +186,7 @@ export const GrowthChoicesCard: React.FC<ChoicesCardProps> = ({
                     onBlur={() => armed && setConfirming(null)}
                   >
                     {armed ? `确认选择「${option.name}」` : option.name}
-                  </button>
+                  </UiButton>
                 );
               })}
             </div>

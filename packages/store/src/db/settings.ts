@@ -1,4 +1,13 @@
 import { getDatabase } from './connection';
+import Database from 'better-sqlite3';
+
+function writeSetting(database: Database.Database, key: string, value: string) {
+  return database
+    .prepare(
+      'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?'
+    )
+    .run(key, value, value);
+}
 
 /** 设置 */
 export const settingsOps = {
@@ -10,11 +19,20 @@ export const settingsOps = {
   },
 
   set(key: string, value: string) {
-    return getDatabase()
-      .prepare(
-        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?'
-      )
-      .run(key, value, value);
+    return writeSetting(getDatabase(), key, value);
+  },
+
+  /** Finish a queued save to an existing, leased DB without changing the active connection. */
+  setAtPath(databasePath: string, key: string, value: string, nativeBinding?: string) {
+    const database = new Database(databasePath, {
+      fileMustExist: true,
+      ...(nativeBinding ? { nativeBinding } : {}),
+    });
+    try {
+      return writeSetting(database, key, value);
+    } finally {
+      database.close();
+    }
   },
 
   delete(key: string) {

@@ -1,3 +1,5 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   applyVolumePlanOverlay,
@@ -233,7 +235,8 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
             void generate().then(setStatus);
           }}
         >
-          <input
+          <UiInput
+            unstyled
             className={styles.intentInput}
             value={state.intent}
             placeholder="这一卷想写什么？（可不填）"
@@ -243,9 +246,9 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
               update((prev) => ({ ...prev, intent }));
             }}
           />
-          <button type="submit" className={styles.primaryButton} disabled={generating}>
+          <UiButton unstyled type="submit" className={styles.primaryButton} disabled={generating}>
             {generating ? '生成中…' : '生成卷纲'}
-          </button>
+          </UiButton>
         </form>
 
         {variantsApi.variants.length > 0 && (
@@ -267,7 +270,8 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
 
         <div className={styles.modeSwitch} role="tablist" aria-label="卷纲视图">
           {VOLUME_PLAN_MODES.map((item) => (
-            <button
+            <UiButton
+              unstyled
               key={item.mode}
               type="button"
               role="tab"
@@ -276,7 +280,7 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
               onClick={() => setMode(item.mode)}
             >
               {item.label}
-            </button>
+            </UiButton>
           ))}
         </div>
 
@@ -306,7 +310,8 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
                     </p>
                   )}
                   <div className={styles.moreActions}>
-                    <button
+                    <UiButton
+                      unstyled
                       type="button"
                       disabled={!hasGenerated}
                       onClick={() =>
@@ -320,15 +325,17 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
                       }
                     >
                       清除生成的说明与建议
-                    </button>
-                    <button
+                    </UiButton>
+                    <UiButton
+                      unstyled
                       type="button"
                       disabled={!hasOverrides}
                       onClick={() => update((prev) => ({ ...prev, beatEdits: {}, beatOrder: {} }))}
                     >
                       撤销所有改写与排序
-                    </button>
-                    <button
+                    </UiButton>
+                    <UiButton
+                      unstyled
                       type="button"
                       disabled={state.structure === null}
                       onClick={() =>
@@ -336,7 +343,7 @@ export const VolumePlanView: React.FC<VolumePlanViewProps> = React.memo(
                       }
                     >
                       恢复自动结构
-                    </button>
+                    </UiButton>
                   </div>
                 </>
               }

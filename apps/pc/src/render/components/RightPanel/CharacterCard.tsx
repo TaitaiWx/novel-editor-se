@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo } from 'react';
 import CharacterAvatar from '../CharacterAvatar';
 import type { Character } from './types';
@@ -87,7 +88,8 @@ export const CharacterCard: React.FC<{
                     {c.role}
                   </span>
                 )}
-                <button
+                <UiButton
+                  unstyled
                   className={styles.deleteCardButton}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -96,7 +98,7 @@ export const CharacterCard: React.FC<{
                   title="删除角色"
                 >
                   ×
-                </button>
+                </UiButton>
               </div>
               {c.description && <div className={styles.cardDesc}>{truncDesc}</div>}
             </div>

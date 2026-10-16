@@ -12,8 +12,8 @@ import {
   type VideoPlayerHandle,
   type VideoPlayerProps,
 } from '@novel-editor/media-player';
-import Tooltip from '../Tooltip';
-import { useOptionalToast } from '../Toast';
+import Tooltip from '@novel-editor/ui/Tooltip';
+import { useOptionalToast } from '@novel-editor/ui/Toast';
 import { saveGeneratedMedia } from '../../utils/mediaExport';
 
 export { formatTime } from '@novel-editor/media-player';

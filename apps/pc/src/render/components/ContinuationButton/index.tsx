@@ -1,8 +1,9 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { VscSparkle } from 'react-icons/vsc';
-import Popover from '../Popover';
-import Tooltip from '../Tooltip';
+import Popover from '@novel-editor/ui/Popover';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { ContinuationPanel } from './ContinuationPanel';
 import { useContinuationPanel } from './useContinuationPanel';
 import styles from './styles.module.scss';
@@ -26,7 +27,8 @@ const ContinuationButton: React.FC<ContinuationButtonProps> = ({ editorViewRef }
   return (
     <span className={styles.pillSlot}>
       <Tooltip content={CONTINUATION_TIP} position="bottom">
-        <button
+        <UiButton
+          unstyled
           ref={anchorRef}
           type="button"
           className={styles.pill}
@@ -38,7 +40,7 @@ const ContinuationButton: React.FC<ContinuationButtonProps> = ({ editorViewRef }
         >
           <VscSparkle className={styles.icon} aria-hidden="true" />
           <span className={styles.pillLabel}>续写</span>
-        </button>
+        </UiButton>
       </Tooltip>
       <Popover
         open={open}

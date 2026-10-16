@@ -93,7 +93,11 @@ export function useWorkspaceEntities(ctx: UseWorkspaceEntitiesContext) {
       }
     };
     void loadWorkspaceEntities();
+    const dispose = ipc.on('character-development-updated', (_event, root: string) => {
+      if (root === workScopePath) void loadWorkspaceEntities();
+    });
     return () => {
+      if (typeof dispose === 'function') dispose();
       cancelled = true;
     };
   }, [

@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import type { ContextMenuState, CreatingType, KnowledgeExportOptions } from '@/render/app/types';
 import type { SettingsTab } from '@/render/components/AppSettingsCenter';
-import { useDialog } from '@/render/components/Dialog';
-import { useToast } from '@/render/components/Toast';
+import { useDialog } from '@novel-editor/ui/Dialog';
+import { useToast } from '@novel-editor/ui/Toast';
 
 // 显式命名上下文类型，便于声明文件输出（原始接口未导出）
 type RawToastApi = ReturnType<typeof useToast>;

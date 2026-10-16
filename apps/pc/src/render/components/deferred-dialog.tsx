@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { Component, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './deferred-dialog.module.scss';
@@ -24,8 +25,14 @@ function DialogPlaceholder({ active, onClose, onRetry }: PlaceholderProps) {
         <p role={onRetry ? 'alert' : 'status'}>
           {onRetry ? '窗口加载失败，请重试。' : '正在打开…'}
         </p>
-        {onRetry && <button onClick={onRetry}>重试</button>}
-        <button onClick={onClose}>关闭</button>
+        {onRetry && (
+          <UiButton unstyled onClick={onRetry}>
+            重试
+          </UiButton>
+        )}
+        <UiButton unstyled onClick={onClose}>
+          关闭
+        </UiButton>
       </div>
     </div>,
     document.body

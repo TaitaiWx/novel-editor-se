@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { VscAccount, VscAdd, VscSymbolColor } from 'react-icons/vsc';
 import { formatLastAppearance, type CharacterCardModel, type LastAppearance } from './model';
@@ -110,26 +111,27 @@ const CharacterHoverCard: React.FC<CharacterHoverCardProps> = ({
 
       <div className={styles.actions}>
         {onOpen && (
-          <button type="button" onMouseDown={keepEditorFocus} onClick={onOpen}>
+          <UiButton unstyled type="button" onMouseDown={keepEditorFocus} onClick={onOpen}>
             <VscAccount aria-hidden="true" />
             打开人物
-          </button>
+          </UiButton>
         )}
         {onRecord && canRecord && (
-          <button
+          <UiButton
+            unstyled
             type="button"
             onMouseDown={keepEditorFocus}
             onClick={(event) => onRecord(event.currentTarget.getBoundingClientRect())}
           >
             <VscAdd aria-hidden="true" />
             记一笔
-          </button>
+          </UiButton>
         )}
         {onHighlightAll && (
-          <button type="button" onMouseDown={keepEditorFocus} onClick={onHighlightAll}>
+          <UiButton unstyled type="button" onMouseDown={keepEditorFocus} onClick={onHighlightAll}>
             <VscSymbolColor aria-hidden="true" />
             高亮全部
-          </button>
+          </UiButton>
         )}
       </div>
     </div>

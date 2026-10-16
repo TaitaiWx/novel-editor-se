@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 参考窗格：写作时在编辑器右侧看图片 / 视频（本章引用、场景视频的成片与样片、人物 / 设定图集、资料）。
  *
@@ -12,7 +13,7 @@
  */
 import React, { useCallback, useRef, useState } from 'react';
 import { VscClose, VscScreenFull, VscScreenNormal } from 'react-icons/vsc';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import {
   NOVEL_EDITOR_PATH_MIME,
   REFERENCE_TILE_MIME,
@@ -103,14 +104,15 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
         <header className={styles.head}>
           <span className={styles.title}>参考</span>
           <Tooltip content="关闭参考">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.iconButton}
               aria-label="关闭参考"
               onClick={close}
             >
               <VscClose />
-            </button>
+            </UiButton>
           </Tooltip>
         </header>
         <div className={styles.empty} data-testid="reference-empty">
@@ -135,24 +137,26 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
             {current.title}
           </span>
           <Tooltip content="展开到编辑器旁边">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.iconButton}
               aria-label="展开参考窗格"
               onClick={() => setMode('docked')}
             >
               <VscScreenFull />
-            </button>
+            </UiButton>
           </Tooltip>
           <Tooltip content="关闭参考">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.iconButton}
               aria-label="关闭参考"
               onClick={close}
             >
               <VscClose />
-            </button>
+            </UiButton>
           </Tooltip>
         </div>
       </aside>
@@ -202,19 +206,26 @@ const ReferencePane: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
           </span>
         )}
         <Tooltip content="缩成右下角的小卡片">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label="缩成小卡片"
             onClick={() => setMode('mini')}
           >
             <VscScreenNormal />
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content="关闭参考">
-          <button type="button" className={styles.iconButton} aria-label="关闭参考" onClick={close}>
+          <UiButton
+            unstyled
+            type="button"
+            className={styles.iconButton}
+            aria-label="关闭参考"
+            onClick={close}
+          >
             <VscClose />
-          </button>
+          </UiButton>
         </Tooltip>
       </header>
       <div className={styles.body}>

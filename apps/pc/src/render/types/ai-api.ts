@@ -89,6 +89,10 @@ export interface AIInvokeOverloads {
     payload: AICompletePayload
   ): Promise<AIIpcResult<AICompleteResult>>;
   invoke(
+    channel: 'ai-complete-cancel',
+    requestId: string
+  ): Promise<AIIpcResult<{ cancelled: boolean }>>;
+  invoke(
     channel: 'ai-stream-start',
     payload: AICompletePayload
   ): Promise<AIIpcResult<{ streamId: string }>>;

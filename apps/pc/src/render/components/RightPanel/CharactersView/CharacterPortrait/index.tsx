@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useEffect, useRef, useState } from 'react';
 import { loadAvatarSource } from '../../../../utils/characterAvatar';
 import styles from './styles.module.scss';
@@ -74,7 +76,8 @@ export const CharacterPortrait: React.FC<CharacterPortraitProps> = ({
   const initial = Array.from(name.trim())[0] ?? '?';
   return (
     <figure className={styles.portrait} data-testid="character-portrait">
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={`${styles.frame} ${src ? '' : styles.frameEmpty}`}
         style={{ '--portrait-accent': color } as React.CSSProperties}
@@ -101,8 +104,9 @@ export const CharacterPortrait: React.FC<CharacterPortraitProps> = ({
             保存中…
           </span>
         )}
-      </button>
-      <input
+      </UiButton>
+      <UiInput
+        unstyled
         ref={inputRef}
         type="file"
         accept="image/png,image/jpeg,image/gif,image/webp"

@@ -1,0 +1,28 @@
+.base {
+  box-sizing: border-box;
+  font: inherit;
+  resize: none;
+}
+.control {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border-strong, #404040);
+  border-radius: 7px;
+  background: var(--ui-bg-surface, #1e1e1e);
+  color: var(--ui-fg-primary, #d4d4d4);
+  font: inherit;
+  line-height: 1.6;
+  &::placeholder {
+    color: var(--ui-fg-muted, #8b8b8b);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--ui-interaction-focus-ring, #9cdcfe);
+    outline-offset: 1px;
+  }
+  &:disabled {
+    opacity: 0.5;
+  }
+  resize: none;
+}

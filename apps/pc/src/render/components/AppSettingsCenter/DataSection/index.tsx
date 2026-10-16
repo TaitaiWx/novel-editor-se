@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { AiOutlineDatabase } from 'react-icons/ai';
 import type { ClearDataScope } from '../constants';
@@ -67,33 +68,36 @@ const DataSection: React.FC<DataSectionProps> = ({
             <div className={styles.confirm} role="alert">
               <div className={styles.confirmText}>{item.confirmText}</div>
               <div className={styles.confirmActions}>
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.neutralButton}
                   onClick={() => setClearConfirmScope(null)}
                 >
                   取消
-                </button>
-                <button
+                </UiButton>
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.dangerButton}
                   onClick={() => void handleClearData(item.scope)}
                 >
                   {item.confirmAction}
-                </button>
+                </UiButton>
               </div>
             </div>
           )
         }
       >
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={danger ? styles.dangerButton : styles.neutralButton}
           aria-expanded={confirming}
           onClick={() => setClearConfirmScope(confirming ? null : item.scope)}
         >
           {item.action}
-        </button>
+        </UiButton>
       </SettingsRow>
     );
   };

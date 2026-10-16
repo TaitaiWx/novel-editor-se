@@ -1,5 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useEffect, useRef, useState } from 'react';
-import OverlayPortal from '../../../OverlayPortal';
+import OverlayPortal from '@novel-editor/ui/OverlayPortal';
 import type { GuideBlock, GuideContent } from '../../../../utils/guideContent';
 import { GROWTH_GUIDE, GROWTH_TOUR_STORAGE_KEY } from '../growthGuide';
 import styles from './styles.module.scss';
@@ -106,14 +107,15 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({
       <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label={guide.title}>
         <header className={styles.header}>
           <h2 className={styles.title}>{guide.title}</h2>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.close}
             aria-label="关闭使用说明"
             onClick={onClose}
           >
             ×
-          </button>
+          </UiButton>
         </header>
         <div ref={bodyRef} className={styles.body}>
           <p className={styles.summary}>{guide.summary}</p>
@@ -145,9 +147,14 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({
           {footerAction ? (
             <>
               <span className={styles.footerHint}>{footerAction.hint}</span>
-              <button type="button" className={styles.footerButton} onClick={footerAction.onClick}>
+              <UiButton
+                unstyled
+                type="button"
+                className={styles.footerButton}
+                onClick={footerAction.onClick}
+              >
                 {footerAction.label}
-              </button>
+              </UiButton>
             </>
           ) : (
             <>
@@ -156,9 +163,9 @@ export const GrowthHelp: React.FC<GrowthHelpProps> = ({
                   ? '下次打开成长卡时会重新显示引导'
                   : '也可以在终端用 ne growth --help 查看'}
               </span>
-              <button type="button" className={styles.footerButton} onClick={replayTour}>
+              <UiButton unstyled type="button" className={styles.footerButton} onClick={replayTour}>
                 重新查看引导
-              </button>
+              </UiButton>
             </>
           )}
         </footer>

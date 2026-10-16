@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import React from 'react';
+import { editorText, replaceEditorText } from '../../../testUtils/codeMirror';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
@@ -69,11 +70,11 @@ afterEach(() => {
   clearAvatarCache();
 });
 
-describe('人物详情分页（人物设计 / 图集 / 成长档案 / 经历 / 关系）', () => {
+describe('人物详情分页', () => {
   it.each(['主要角色', '次要角色'])('同名自定义分组 %s 显示并选中默认标签', (group) => {
     const character = { ...linZhou, group, media: [] };
     const { update } = renderDetail({ focusedCharacter: character, characters: [character] });
-    fireEvent.click(screen.getByRole('tab', { name: '关系与高亮' }));
+    fireEvent.click(screen.getByRole('tab', { name: '设置' }));
     const select = screen.getByRole('combobox', { name: '人物分组' });
     expect(select.textContent).toBe(group);
     fireEvent.click(select);
@@ -83,21 +84,24 @@ describe('人物详情分页（人物设计 / 图集 / 成长档案 / 经历 / �
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('分页齐全，计数显示在分页上；默认「人物设计」，失焦保存设计字段', async () => {
+  it('分页齐全，计数显示在分页上；默认「人物」，失焦保存设计字段', async () => {
     const { update } = renderDetail();
     const tabs = screen.getAllByRole('tab');
     expect(tabs.map((tab) => tab.textContent)).toEqual([
-      '人物设计',
-      '图集1',
+      '人物',
+      '背景',
+      '社会关系',
+      '能力与资源',
+      '剧情发展',
       '成长档案Lv.4',
-      '经历与状态',
-      '关系与高亮',
+      '人物图集1',
+      '设置',
     ]);
-    expect(CHARACTER_DETAIL_TABS).toHaveLength(5);
+    expect(CHARACTER_DETAIL_TABS).toHaveLength(8);
     const design = screen.getByTestId('character-design');
-    expect((within(design).getByLabelText('人物外貌') as HTMLTextAreaElement).value).toBe('黑发');
+    expect(editorText(within(design).getByLabelText('人物外貌'))).toBe('黑发');
     const personality = within(design).getByLabelText('人物性格');
-    fireEvent.change(personality, { target: { value: ' 嘴硬心软 ' } });
+    replaceEditorText(personality, ' 嘴硬心软 ');
     fireEvent.blur(personality);
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(1, {
@@ -109,9 +113,9 @@ describe('人物详情分页（人物设计 / 图集 / 成长档案 / 经历 / �
     update.mockClear();
     fireEvent.blur(within(design).getByLabelText('人物外貌'));
     expect(update).not.toHaveBeenCalled();
-    // 简介（资料摘要）在设计分页里
+    // 简介（资料摘要）在分页之外，切换时仍可见
     expect(
-      within(screen.getByRole('tabpanel', { name: '人物设计' })).getByText('青石镇长大的少年')
+      within(screen.getByRole('region', { name: '资料摘要' })).getByText('青石镇长大的少年')
     ).toBeTruthy();
   });
 
@@ -130,9 +134,9 @@ describe('人物详情分页（人物设计 / 图集 / 成长档案 / 经历 / �
     fireEvent.click(screen.getByRole('tab', { name: /成长档案/ }));
     expect(screen.getByTestId('growth-embed').textContent).toBe('成长：林舟');
     expect(renderGrowth).toHaveBeenCalledWith('林舟');
-    // 标题区的「成长档案」按钮切到本页的成长档案分页（不另开标签）
-    fireEvent.click(screen.getByRole('tab', { name: '人物设计' }));
-    fireEvent.click(screen.getByLabelText(/的成长档案$/));
+    // 来回切换后仍使用同一个成长档案入口
+    fireEvent.click(screen.getByRole('tab', { name: '人物' }));
+    fireEvent.click(screen.getByRole('tab', { name: /成长档案/ }));
     expect(screen.getByRole('tab', { name: /成长档案/ }).getAttribute('aria-selected')).toBe(
       'true'
     );

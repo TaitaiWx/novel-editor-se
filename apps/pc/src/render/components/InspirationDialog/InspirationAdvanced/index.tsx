@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React, { useState } from 'react';
 import type { StoryIdeaCardRow } from '@/render/types/electron-api';
 import {
@@ -14,7 +16,7 @@ import {
   type InspirationSlot,
   type InspirationSource,
 } from '../inspiration';
-import Select from '../../Select';
+import Select from '@novel-editor/ui/Select';
 import styles from './styles.module.scss';
 
 const SOURCES = Object.keys(INSPIRATION_SOURCE_LABELS) as InspirationSource[];
@@ -70,7 +72,8 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
         <div className={styles.groupLabel}>词源</div>
         <div className={styles.chips} role="radiogroup" aria-label="词源">
           {SOURCES.map((item) => (
-            <button
+            <UiButton
+              unstyled
               key={item}
               type="button"
               role="radio"
@@ -79,7 +82,7 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
               onClick={() => onSourceChange(item)}
             >
               {INSPIRATION_SOURCE_LABELS[item]}
-            </button>
+            </UiButton>
           ))}
         </div>
       </div>
@@ -89,7 +92,8 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
           <div className={styles.groupLabel}>AI 扩写范围</div>
           <div className={styles.chips} role="radiogroup" aria-label="AI 扩写范围">
             {SCOPES.map((item) => (
-              <button
+              <UiButton
+                unstyled
                 key={item}
                 type="button"
                 role="radio"
@@ -98,7 +102,7 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
                 onClick={() => onScopeChange(item)}
               >
                 {STORY_IDEA_GENERATION_SCOPE_LABELS[item]}
-              </button>
+              </UiButton>
             ))}
           </div>
         </div>
@@ -118,7 +122,8 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
               }))}
               onChange={setTermSlot}
             />
-            <input
+            <UiInput
+              unstyled
               className={styles.input}
               aria-label="新词"
               placeholder="例如：雨夜的渡口"
@@ -126,9 +131,9 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
               value={term}
               onChange={(event) => setTerm(event.target.value)}
             />
-            <button type="submit" className={styles.addButton} disabled={!term.trim()}>
+            <UiButton unstyled type="submit" className={styles.addButton} disabled={!term.trim()}>
               加入
-            </button>
+            </UiButton>
           </div>
           {termNotice && <div className={styles.notice}>{termNotice}</div>}
         </form>
@@ -141,7 +146,8 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
             <ul className={styles.history} aria-label="灵感历史">
               {history.map(({ card, draw }) => (
                 <li key={card.id}>
-                  <button
+                  <UiButton
+                    unstyled
                     type="button"
                     className={styles.historyItem}
                     title="回填这一签"
@@ -149,7 +155,7 @@ export const InspirationAdvanced: React.FC<InspirationAdvancedProps> = ({
                   >
                     <span className={styles.historyTitle}>{card.title}</span>
                     <span className={styles.historyText}>{formatInspiration(draw)}</span>
-                  </button>
+                  </UiButton>
                 </li>
               ))}
             </ul>

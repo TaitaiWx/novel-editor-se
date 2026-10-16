@@ -21,6 +21,8 @@ export interface ScreenshotOptions {
   quality?: number;
   /** 文件名前缀（通常是视频标题） */
   baseName?: string;
+  /** 缩略图可限制输出宽度；默认保留原始分辨率。 */
+  maxWidth?: number;
 }
 
 const EXTENSIONS: Record<string, string> = {
@@ -78,11 +80,17 @@ export async function captureFrame(
   video: HTMLVideoElement,
   options: ScreenshotOptions = {}
 ): Promise<{ blob: Blob; meta: ScreenshotMeta }> {
-  const width = video.videoWidth;
-  const height = video.videoHeight;
-  if (!width || !height || video.readyState < 2) {
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
+  if (!sourceWidth || !sourceHeight || video.readyState < 2) {
     throw new PlayerError('not-ready', '视频画面还没有加载好，稍后再截图');
   }
+  const scale =
+    options.maxWidth && Number.isFinite(options.maxWidth) && options.maxWidth > 0
+      ? Math.min(1, options.maxWidth / sourceWidth)
+      : 1;
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
   const mimeType = options.mimeType ?? 'image/png';
   const canvas = document.createElement('canvas');
   canvas.width = width;

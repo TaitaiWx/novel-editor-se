@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo, useState } from 'react';
 import {
   describeGrowthEvent,
@@ -70,13 +71,14 @@ export const GrowthTimeline: React.FC<GrowthTimelineProps> = ({ ruleset, sheet }
         ))}
       </ol>
       {groups.length > limit && (
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.more}
           onClick={() => setLimit((value) => value + PAGE_SIZE)}
         >
           显示更早的记录
-        </button>
+        </UiButton>
       )}
     </section>
   );

@@ -1,3 +1,5 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { AiOutlineKey } from 'react-icons/ai';
 import {
@@ -42,7 +44,8 @@ const ShortcutsSection: React.FC<ShortcutsSectionProps> = ({
           align="start"
         >
           <div className={styles.shortcutEditor}>
-            <input
+            <UiInput
+              unstyled
               className={sharedStyles.input}
               value={settings.shortcuts[field.key]}
               onChange={(e) => setShortcuts(field.key, e.target.value)}
@@ -54,13 +57,14 @@ const ShortcutsSection: React.FC<ShortcutsSectionProps> = ({
               <span className={styles.shortcutHint}>
                 当前显示：{formatShortcutLabel(settings.shortcuts[field.key])}
               </span>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={sharedStyles.secondaryButton}
                 onClick={() => resetShortcut(field.key)}
               >
                 恢复默认
-              </button>
+              </UiButton>
             </div>
           </div>
         </SettingsRow>
@@ -79,7 +83,8 @@ const ShortcutsSection: React.FC<ShortcutsSectionProps> = ({
     </SettingsGroup>
 
     <div className={sharedStyles.actions}>
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={sharedStyles.primaryButton}
         onClick={() => {
@@ -88,7 +93,7 @@ const ShortcutsSection: React.FC<ShortcutsSectionProps> = ({
         }}
       >
         打开快捷键总览
-      </button>
+      </UiButton>
     </div>
   </SettingsSection>
 );

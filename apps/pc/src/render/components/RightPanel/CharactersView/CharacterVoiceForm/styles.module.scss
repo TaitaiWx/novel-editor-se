@@ -1,17 +1,8 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   max-width: 760px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--ui-fg-muted);
 }
 
 .field {
@@ -27,25 +18,48 @@
   color: rgba(255, 255, 255, 0.72);
 }
 
-.input {
-  box-sizing: border-box;
-  width: 100%;
+.multilineField {
+  align-items: start;
+
+  .label {
+    padding-top: 8px;
+  }
+}
+
+.inputShell {
+  position: relative;
   min-width: 0;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.16);
-  color: var(--ui-fg-primary);
-  font: inherit;
-  font-size: 13px;
-  outline: none;
-
-  &:focus {
-    border-color: rgba(86, 156, 214, 0.6);
+  &[aria-busy='true'] > div {
+    border-color: rgba(155, 187, 214, 0.4);
   }
+}
+.fieldStatus {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 1;
+}
+.inputShell:has(.fieldStatus) :global(.cm-content) {
+  padding-right: 32px;
+}
 
-  &::placeholder {
-    color: var(--ui-fg-disabled);
-  }
+.multilineField .fieldStatus {
+  top: 12px;
+  transform: none;
+}
+
+.genderControl {
+  min-width: 0;
+}
+.genderDiff {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
 }

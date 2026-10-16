@@ -87,6 +87,19 @@ export function useCharacterStore({
     onCharactersChange?.(characters);
   }, [characters, charactersLoaded, onCharactersChange]);
 
+  useEffect(() => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+    const dispose = ipc.on('character-development-updated', (_event, root: string) => {
+      const scope = scopeRef.current;
+      if (root === scope?.folderPath && scope.novelId !== null)
+        void loadCharactersFromDb(scope.novelId);
+    });
+    return () => {
+      if (typeof dispose === 'function') dispose();
+    };
+  }, [loadCharactersFromDb]);
+
   const handleDelete = useCallback(
     async (index: number) => {
       const char = characters[index];

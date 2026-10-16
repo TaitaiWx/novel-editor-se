@@ -1,8 +1,9 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { VscAdd, VscClose } from 'react-icons/vsc';
 import type { GrowthRuleset, SkillDef, SkillPrerequisites } from '@novel-editor/core/growth';
-import Select from '../../../Select';
-import NumberInput from '../../../NumberInput';
+import Select from '@novel-editor/ui/Select';
+import NumberInput from '@novel-editor/ui/NumberInput';
 import { FieldIssue, IconButton, NumberField, renameRecordKey, type IssueMap } from './fields';
 import styles from './styles.module.scss';
 
@@ -152,7 +153,8 @@ export const SkillPrerequisitesEditor: React.FC<SkillPrerequisitesEditorProps> =
         </div>
       ))}
       <div className={styles.inlineActions}>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.linkButton}
           disabled={disabled || !freeSkill}
@@ -160,8 +162,9 @@ export const SkillPrerequisitesEditor: React.FC<SkillPrerequisitesEditorProps> =
           onClick={() => freeSkill && set({ ...pre, skills: { ...skillReqs, [freeSkill.id]: 1 } })}
         >
           <VscAdd aria-hidden /> 前置技能
-        </button>
-        <button
+        </UiButton>
+        <UiButton
+          unstyled
           type="button"
           className={styles.linkButton}
           disabled={disabled || !freeAttr}
@@ -172,7 +175,7 @@ export const SkillPrerequisitesEditor: React.FC<SkillPrerequisitesEditorProps> =
           }
         >
           <VscAdd aria-hidden /> 属性条件
-        </button>
+        </UiButton>
       </div>
     </div>
   );

@@ -59,6 +59,20 @@ function release(key: string, entry: MediaEntry): void {
   entry.promise.then((url) => URL.revokeObjectURL(url)).catch(() => undefined);
 }
 
+/** 后台抽帧与主播放器共享读取；完成后立即释放大视频的 blob 引用。 */
+export function acquireReferenceMedia(path: string, version: number) {
+  const { entry, promise } = acquire(path, version);
+  let released = false;
+  return {
+    promise,
+    release: () => {
+      if (released) return;
+      released = true;
+      release(cacheKey(path, version), entry);
+    },
+  };
+}
+
 /**
  * 读取参考窗格里的一张图 / 一段视频（经 read-file-binary），生成 blob 地址；切换或卸载时释放。
  * version 变化（文件在磁盘上被修改）时重新读取，新内容不用重新打开窗格就能看到。

@@ -1,10 +1,12 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 规则之书编辑器的共用小组件：字段问题提示、带 Tooltip 的图标按钮、带标签的数字输入
  */
 import React from 'react';
 import type { GrowthRuleset, RulesetIssue, RulesetRef } from '@novel-editor/core/growth';
-import NumberInput from '../../../NumberInput';
-import Tooltip from '../../../Tooltip';
+import NumberInput from '@novel-editor/ui/NumberInput';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 /** 字段路径 → 问题列表 */
@@ -77,7 +79,8 @@ export const IconButton: React.FC<IconButtonProps> = ({
   children,
 }) => (
   <Tooltip content={label} delay={300}>
-    <button
+    <UiButton
+      unstyled
       type="button"
       className={danger ? styles.iconDanger : styles.icon}
       aria-label={label}
@@ -85,7 +88,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
       onClick={onClick}
     >
       {children}
-    </button>
+    </UiButton>
   </Tooltip>
 );
 
@@ -164,7 +167,8 @@ export const TextField: React.FC<TextFieldProps> = ({
 }) => (
   <label className={`${styles.field} ${className ?? ''}`}>
     <span className={styles.fieldLabel}>{label}</span>
-    <input
+    <UiInput
+      unstyled
       className={`${styles.input} ${issues && path && hasError(issues, path) ? styles.invalid : ''}`}
       aria-label={ariaLabel ?? label}
       aria-invalid={issues && path ? hasError(issues, path) : undefined}

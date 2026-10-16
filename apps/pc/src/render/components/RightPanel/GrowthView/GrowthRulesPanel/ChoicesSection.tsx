@@ -1,3 +1,5 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
 import React from 'react';
 import { VscAdd, VscTrash } from 'react-icons/vsc';
 import {
@@ -46,7 +48,8 @@ export const ChoicesSection: React.FC<ChoicesSectionProps> = ({
       errorCount={countErrorsUnder(issues, 'choiceGroups')}
       testId="growth-rules-choices"
       actions={
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.button}
           disabled={disabled}
@@ -58,7 +61,7 @@ export const ChoicesSection: React.FC<ChoicesSectionProps> = ({
           }
         >
           <VscAdd aria-hidden /> 添加抉择
-        </button>
+        </UiButton>
       }
     >
       {draft.choiceGroups.length === 0 && (
@@ -122,7 +125,8 @@ export const ChoicesSection: React.FC<ChoicesSectionProps> = ({
                 </IconButton>
               </div>
             </div>
-            <input
+            <UiInput
+              unstyled
               className={`${styles.input} ${styles.description}`}
               aria-label={`${label} 说明`}
               placeholder="什么时候、为什么要做这个选择（可选）"
@@ -154,7 +158,8 @@ export const ChoicesSection: React.FC<ChoicesSectionProps> = ({
                 />
               ))}
             </div>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.linkButton}
               disabled={disabled}
@@ -163,7 +168,7 @@ export const ChoicesSection: React.FC<ChoicesSectionProps> = ({
               }
             >
               <VscAdd aria-hidden /> 添加选项
-            </button>
+            </UiButton>
           </div>
         );
       })}

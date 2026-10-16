@@ -1,8 +1,9 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AIView } from './AIView';
 import type { AISessionState } from './AIView';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import {
   AssistantContextSection,
   type AssistantContextSectionProps,
@@ -82,19 +83,23 @@ export const AIAssistantDialog: React.FC<{
             <span>AI 助手</span>
             <div className={styles.aiDialogHeaderActions}>
               <Tooltip content={expanded ? '收起面板' : '展开面板'} position="bottom">
-                <button className={styles.aiDialogExpand} onClick={() => setExpanded(!expanded)}>
+                <UiButton
+                  unstyled
+                  className={styles.aiDialogExpand}
+                  onClick={() => setExpanded(!expanded)}
+                >
                   {expanded ? '⊟' : '⊞'}
-                </button>
+                </UiButton>
               </Tooltip>
               <Tooltip content="在新窗口中打开" position="bottom">
-                <button className={styles.aiDialogExpand} onClick={handleOpenNewWindow}>
+                <UiButton unstyled className={styles.aiDialogExpand} onClick={handleOpenNewWindow}>
                   ⧉
-                </button>
+                </UiButton>
               </Tooltip>
               <Tooltip content="关闭" position="bottom">
-                <button className={styles.aiDialogClose} onClick={onClose}>
+                <UiButton unstyled className={styles.aiDialogClose} onClick={onClose}>
                   ✕
-                </button>
+                </UiButton>
               </Tooltip>
             </div>
           </div>

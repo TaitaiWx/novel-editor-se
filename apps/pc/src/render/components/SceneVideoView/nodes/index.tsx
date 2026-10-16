@@ -1,7 +1,9 @@
-import React from 'react';
+import UiButton from '@novel-editor/ui/Button';
+import React, { useRef } from 'react';
+import VideoPlayer, { type VideoPlayerHandle } from '../../VideoPlayer';
 import { VscDebugRestart, VscLoading, VscPlay } from 'react-icons/vsc';
 import type { Shot } from '@novel-editor/video';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import CharacterAvatar from '../../CharacterAvatar';
 import { useSceneMediaUrl, type ReadSceneFile } from '../media/MediaPlayer';
 import { MediaImage } from '../../EntityGallery/MediaTile';
@@ -59,7 +61,8 @@ export const SceneNode: React.FC<{
       <span className={styles.kind}>场景</span>
       <span className={styles.title}>{scene}</span>
       <Tooltip content="按场景正文重新拆分镜（会替换当前分镜，已生成的成片保留）">
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.iconButton}
           aria-label="重新拆分镜"
@@ -67,7 +70,7 @@ export const SceneNode: React.FC<{
           onClick={onResplit}
         >
           {splitting ? <VscLoading className={styles.spin} /> : <VscDebugRestart />}
-        </button>
+        </UiButton>
       </Tooltip>
     </header>
     <p className={styles.meta}>
@@ -84,6 +87,44 @@ export const SceneNode: React.FC<{
 
 // ─── 镜头 ───────────────────────────────────────────────────────────────
 
+/** 画布内复用应用播放器；交互区不参与节点拖动。 */
+const CanvasVideo: React.FC<{
+  url: string;
+  title: string;
+  testId: string;
+  hoverPreview?: boolean;
+}> = ({ url, title, testId, hoverPreview = false }) => {
+  const player = useRef<VideoPlayerHandle>(null);
+  return (
+    <div
+      className={styles.canvasPlayer}
+      data-no-drag
+      onMouseEnter={
+        hoverPreview
+          ? () => {
+              void player.current?.play().catch(() => undefined);
+            }
+          : undefined
+      }
+      onMouseLeave={hoverPreview ? () => player.current?.pause() : undefined}
+    >
+      <VideoPlayer
+        ref={player}
+        src={url}
+        title={title}
+        kind="video"
+        className={styles.thumbPlayer}
+        videoTestId={testId}
+        defaultMuted={hoverPreview}
+        defaultLoop={hoverPreview}
+        mediaSession={!hoverPreview}
+        showTitle={false}
+        controls={{ screenshot: false, record: false, pip: false, settings: false }}
+      />
+    </div>
+  );
+};
+
 const ShotThumb: React.FC<{ readFile: ReadSceneFile; fileName: string; label: string }> = ({
   readFile,
   fileName,
@@ -93,20 +134,7 @@ const ShotThumb: React.FC<{ readFile: ReadSceneFile; fileName: string; label: st
   if (!url) {
     return <span className={styles.thumbText}>{error ? '无法读取成片' : '读取中…'}</span>;
   }
-  return (
-    <video
-      className={styles.thumbVideo}
-      src={url}
-      muted
-      loop
-      playsInline
-      preload="metadata"
-      data-testid="shot-video"
-      aria-label={`${label} 成片`}
-      onMouseEnter={(event) => void event.currentTarget.play().catch(() => undefined)}
-      onMouseLeave={(event) => event.currentTarget.pause()}
-    />
-  );
+  return <CanvasVideo url={url} title={`${label} 成片`} testId="shot-video" hoverPreview />;
 };
 
 export interface ShotNodeProps {
@@ -180,7 +208,8 @@ export const ShotNode: React.FC<ShotNodeProps> = ({
           {shot.shotSize} · {shot.durationSec}s
         </span>
         <Tooltip content={tip}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label={`${regenerate ? '重新生成' : '生成'}${label}`}
@@ -188,7 +217,7 @@ export const ShotNode: React.FC<ShotNodeProps> = ({
             onClick={onGenerate}
           >
             {regenerate ? <VscDebugRestart /> : <VscPlay />}
-          </button>
+          </UiButton>
         </Tooltip>
       </header>
       <div className={styles.thumb} style={ratioStyle(aspectRatio)} data-state={progress.kind}>
@@ -220,7 +249,7 @@ export const ShotNode: React.FC<ShotNodeProps> = ({
         )}
         {progress.kind !== 'done' && keyframe && <span className={styles.versionBadge}>首帧</span>}
         {progress.kind === 'done' && (
-          <span className={styles.versionBadge}>
+          <span className={`${styles.versionBadge} ${styles.playerVersionBadge}`}>
             v{progress.version}
             {progress.versions > 1 ? ` / ${progress.versions}` : ''}
           </span>
@@ -265,14 +294,7 @@ export const OutputNode: React.FC<{
         {stitchProgress !== null ? (
           <span className={styles.thumbText}>合成中 {Math.round(stitchProgress)}%</span>
         ) : url ? (
-          <video
-            className={styles.thumbVideo}
-            src={url}
-            controls
-            preload="metadata"
-            data-testid="scene-video-animatic"
-            aria-label="样片"
-          />
+          <CanvasVideo url={url} title="样片" testId="scene-video-animatic" />
         ) : animatic ? (
           // 样片已经有了（可能十几 MB）：读取中 / 读取失败时说清楚，不再显示「全部镜头生成后…」
           <span className={styles.thumbText} data-testid="scene-video-animatic-loading">

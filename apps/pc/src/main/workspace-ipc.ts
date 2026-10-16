@@ -146,6 +146,11 @@ async function resourcesFor(
 
 /** Scoped declarations are admission metadata; handlers still enforce path authorization. */
 interface WorkspaceHandlerOptions {
+  /** Handle a queued operation against its original, leased database; never retarget it. */
+  onDatabaseChanged?: (
+    database: string,
+    ...args: Parameters<Parameters<typeof ipcMain.handle>[1]>
+  ) => unknown;
   /** Synchronous lifecycle admission; return a cleanup to release when the operation settles. */
   beforeAdmission?: (
     ...args: Parameters<Parameters<typeof ipcMain.handle>[1]>
@@ -174,8 +179,11 @@ export function registerWorkspaceHandler(
     });
     const invoke = () => {
       // A queued database switch must never let an operation access an undeclared new DB.
-      if (resources && usesDatabase(channel) && databasePath() !== database)
+      if (resources && usesDatabase(channel) && databasePath() !== database) {
+        if (database && options.onDatabaseChanged)
+          return options.onDatabaseChanged(database, event, ...args);
         throw new Error('项目数据库已切换，请重新执行此操作');
+      }
       return listener(event, ...args);
     };
     if (networkOnly.has(channel))

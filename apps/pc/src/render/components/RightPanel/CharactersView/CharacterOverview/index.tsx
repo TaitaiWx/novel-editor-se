@@ -1,12 +1,13 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo, useState } from 'react';
 import {
-  CHARACTER_DESIGN_FIELDS,
+  CHARACTER_TRAIT_FIELD_KEYS,
   parseCharacterDesign,
   resolveCover,
 } from '@novel-editor/core/entity-media';
 import CharacterAvatar from '../../../CharacterAvatar';
 import { MediaImage } from '../../../EntityGallery/MediaTile';
-import Tooltip from '../../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { CHARACTER_CATEGORY_LABELS } from '../../utils';
 import type { Character } from '../../types';
 import styles from './styles.module.scss';
@@ -15,13 +16,13 @@ export interface CharacterOverviewSummary {
   id: number;
   name: string;
   cover?: string;
-  /** 已填写的人物设计字段数 / 总数 */
+  /** 已填写的人物资料字段数 / 总数 */
   designFilled: number;
   designTotal: number;
   imageCount: number;
   hasTurnaround: boolean;
   level: number | null;
-  /** 待补充的提示（缺三视图 / 缺人物设计 / 还没有成长档案） */
+  /** 待补充的提示（缺三视图 / 缺人物资料 / 还没有成长档案） */
   hints: string[];
 }
 
@@ -31,11 +32,11 @@ export function summarizeCharacter(
   level: number | null
 ): CharacterOverviewSummary {
   const design = parseCharacterDesign(character.design);
-  const designFilled = CHARACTER_DESIGN_FIELDS.filter(({ key }) => design[key].trim()).length;
+  const designFilled = CHARACTER_TRAIT_FIELD_KEYS.filter((key) => design[key].trim()).length;
   const media = character.media ?? [];
   const hasTurnaround = media.some((item) => item.kind === 'turnaround');
   const hints: string[] = [];
-  if (designFilled === 0) hints.push('缺人物设计');
+  if (designFilled === 0) hints.push('缺人物资料');
   if (!hasTurnaround) hints.push('缺三视图');
   if (level === null) hints.push('没有成长档案');
   return {
@@ -43,7 +44,7 @@ export function summarizeCharacter(
     name: character.name,
     cover: resolveCover(media, character.avatar),
     designFilled,
-    designTotal: CHARACTER_DESIGN_FIELDS.length,
+    designTotal: CHARACTER_TRAIT_FIELD_KEYS.length,
     imageCount: media.length,
     hasTurnaround,
     level,
@@ -109,9 +110,7 @@ export const CharacterOverview: React.FC<CharacterOverviewProps> = ({
         <div>
           <div className={styles.eyebrow}>人物总览</div>
           <h2 className={styles.title}>人物</h2>
-          <p className={styles.desc}>
-            每个人物有设计、图集和成长档案。卡片上的提示告诉你还缺什么：三视图让视频里的人物不崩，人物设计让续写不跑偏。
-          </p>
+          <p className={styles.desc}>分别管理人物、身世关系、能力资源、剧情发展与成长记录。</p>
         </div>
         <div className={styles.stats}>
           <span>人物 {stats.total}</span>
@@ -123,7 +122,8 @@ export const CharacterOverview: React.FC<CharacterOverviewProps> = ({
 
       <div className={styles.tabs} role="tablist" aria-label="人物总览">
         {tabs.map(([id, label]) => (
-          <button
+          <UiButton
+            unstyled
             key={id}
             type="button"
             role="tab"
@@ -132,7 +132,7 @@ export const CharacterOverview: React.FC<CharacterOverviewProps> = ({
             onClick={() => setTab(id)}
           >
             {label}
-          </button>
+          </UiButton>
         ))}
       </div>
 
@@ -140,7 +140,8 @@ export const CharacterOverview: React.FC<CharacterOverviewProps> = ({
         <ul className={styles.grid} role="list" aria-label="人物">
           {summaries.map(({ character, summary }) => (
             <li key={summary.id}>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.card}
                 aria-label={`打开人物 ${summary.name}`}
@@ -170,7 +171,7 @@ export const CharacterOverview: React.FC<CharacterOverviewProps> = ({
                     {character.role ? ` · ${character.role}` : ''}
                   </span>
                   <span className={styles.meta}>
-                    设计 {summary.designFilled}/{summary.designTotal} · 图片 {summary.imageCount}
+                    特质 {summary.designFilled}/{summary.designTotal} · 图片 {summary.imageCount}
                   </span>
                   {summary.hints.length > 0 && (
                     <span className={styles.hints}>
@@ -182,15 +183,20 @@ export const CharacterOverview: React.FC<CharacterOverviewProps> = ({
                     </span>
                   )}
                 </span>
-              </button>
+              </UiButton>
             </li>
           ))}
           {onCreateCharacter && (
             <li>
               <Tooltip content="新建人物：之后在人物详情里补设计、图集和成长档案">
-                <button type="button" className={styles.addCard} onClick={onCreateCharacter}>
+                <UiButton
+                  unstyled
+                  type="button"
+                  className={styles.addCard}
+                  onClick={onCreateCharacter}
+                >
                   ＋ 新建人物
-                </button>
+                </UiButton>
               </Tooltip>
             </li>
           )}

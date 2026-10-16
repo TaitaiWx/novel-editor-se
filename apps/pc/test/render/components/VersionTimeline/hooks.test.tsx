@@ -21,8 +21,8 @@ const { toast, dialog } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/render/components/Toast', () => ({ useToast: () => toast }));
-vi.mock('@/render/components/Dialog', () => ({ useDialog: () => dialog }));
+vi.mock('@novel-editor/ui/Toast', () => ({ useToast: () => toast }));
+vi.mock('@novel-editor/ui/Dialog', () => ({ useDialog: () => dialog }));
 
 type InvokeHandler = (channel: string, ...args: unknown[]) => unknown;
 

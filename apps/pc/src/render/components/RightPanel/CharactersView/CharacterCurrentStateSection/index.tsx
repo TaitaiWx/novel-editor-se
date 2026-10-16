@@ -1,3 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import React from 'react';
 import sharedStyles from '../../styles.module.scss';
 import styles from './styles.module.scss';
@@ -36,30 +39,33 @@ export const CharacterCurrentStateSection: React.FC<{
           </span>
           {currentStateEditing ? (
             <>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={sharedStyles.submitButton}
                 disabled={currentStateSaving}
                 onClick={() => void handleSaveCurrentState()}
               >
                 {currentStateSaving ? '保存中...' : '保存当前状态'}
-              </button>
-              <button
+              </UiButton>
+              <UiButton
+                unstyled
                 type="button"
                 className={sharedStyles.secondaryButton}
                 onClick={handleCancelEditCurrentState}
               >
                 取消
-              </button>
+              </UiButton>
             </>
           ) : (
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={sharedStyles.secondaryButton}
               onClick={handleStartEditCurrentState}
             >
               编辑当前状态
-            </button>
+            </UiButton>
           )}
         </div>
       </div>
@@ -67,7 +73,8 @@ export const CharacterCurrentStateSection: React.FC<{
         <div className={styles.characterCurrentStateEditor}>
           {currentStateDraftItems.map((item) => (
             <div key={item.id} className={styles.characterCurrentStateEditorRow}>
-              <input
+              <UiInput
+                unstyled
                 value={item.label}
                 onChange={(event) =>
                   handleCurrentStateDraftChange(item.id, 'label', event.target.value)
@@ -75,7 +82,8 @@ export const CharacterCurrentStateSection: React.FC<{
                 placeholder="状态标签，例如：修为 / 当前危机"
                 className={sharedStyles.formInput}
               />
-              <textarea
+              <UiTextArea
+                unstyled
                 value={item.value}
                 onChange={(event) =>
                   handleCurrentStateDraftChange(item.id, 'value', event.target.value)
@@ -84,22 +92,24 @@ export const CharacterCurrentStateSection: React.FC<{
                 className={sharedStyles.formTextarea}
                 rows={2}
               />
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={sharedStyles.secondaryButton}
                 onClick={() => handleRemoveCurrentStateItem(item.id)}
               >
                 删除
-              </button>
+              </UiButton>
             </div>
           ))}
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={sharedStyles.secondaryButton}
             onClick={handleAddCurrentStateItem}
           >
             新增状态项
-          </button>
+          </UiButton>
         </div>
       ) : displayCurrentStateItems.length > 0 ? (
         <div className={styles.characterCurrentStateList}>

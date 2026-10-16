@@ -1,10 +1,13 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiInput from '@novel-editor/ui/Input';
+import UiTextArea from '@novel-editor/ui/TextArea';
 import React from 'react';
 import styles from '../../styles.module.scss';
 import type { Character, CharacterCategory } from '../../types';
 import { CHARACTER_CATEGORY_LABELS, inferCharacterCategoryFromRole } from '../../utils';
 import { CharacterCard } from '../../CharacterCard';
-import Select from '../../../Select';
-import Switch from '../../../Switch';
+import Select from '@novel-editor/ui/Select';
+import Switch from '@novel-editor/ui/Switch';
 import { CATEGORY_OPTIONS, type CharacterCategoryFilter } from '../helpers';
 import type { CharacterListEditor } from '../useCharacterListEditor';
 
@@ -76,16 +79,17 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
       <div className={styles.sectionHeader}>
         <span>角色列表</span>
         <div className={styles.actionGroup}>
-          <button
+          <UiButton
+            unstyled
             className={styles.addButton}
             onClick={onGenerateCharacterGraph}
             disabled={aiGenerating}
           >
             {aiGenerating ? 'AI 生成中...' : 'AI 生成人物图'}
-          </button>
-          <button className={styles.addButton} onClick={toggleAdding}>
+          </UiButton>
+          <UiButton unstyled className={styles.addButton} onClick={toggleAdding}>
             {adding ? '取消' : '+ 添加'}
-          </button>
+          </UiButton>
         </div>
       </div>
       <div className={styles.characterHeroCard}>
@@ -103,7 +107,8 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
         </div>
       </div>
       <div className={styles.characterToolbar}>
-        <input
+        <UiInput
+          unstyled
           value={characterSearch}
           onChange={(event) => setCharacterSearch(event.target.value)}
           placeholder="快速筛选人物、定位、描述或别名"
@@ -117,33 +122,36 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
               ['secondary', '次要角色'],
             ] as Array<[CharacterCategoryFilter, string]>
           ).map(([value, label]) => (
-            <button
+            <UiButton
+              unstyled
               key={value}
               type="button"
               className={`${styles.filterChip} ${categoryFilter === value ? styles.filterChipActive : ''}`}
               onClick={() => setCategoryFilter(value)}
             >
               {label}
-            </button>
+            </UiButton>
           ))}
         </div>
         <div className={styles.bulkActionRow}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.secondaryButton}
             disabled={filteredCharacters.length === 0 || bulkUpdatingCategory !== null}
             onClick={() => void handleBulkApplyCategory('major')}
           >
             {bulkUpdatingCategory === 'major' ? '批量处理中...' : '批量设为主要角色'}
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            unstyled
             type="button"
             className={styles.secondaryButton}
             disabled={filteredCharacters.length === 0 || bulkUpdatingCategory !== null}
             onClick={() => void handleBulkApplyCategory('secondary')}
           >
             {bulkUpdatingCategory === 'secondary' ? '批量处理中...' : '批量设为次要角色'}
-          </button>
+          </UiButton>
         </div>
       </div>
       {adding && (
@@ -160,7 +168,8 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
                 <span className={styles.avatarPlaceholder}>+</span>
               )}
             </div>
-            <input
+            <UiInput
+              unstyled
               ref={avatarInputRef}
               type="file"
               accept="image/*"
@@ -169,7 +178,8 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
             />
             <span className={styles.avatarHint}>角色头像</span>
           </div>
-          <input
+          <UiInput
+            unstyled
             placeholder="角色名称"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -177,7 +187,8 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
             className={styles.formInput}
             autoFocus
           />
-          <input
+          <UiInput
+            unstyled
             placeholder="角色定位 (主角/配角/反派...)"
             value={newRole}
             onChange={(e) => {
@@ -199,7 +210,8 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
               onChange={setNewCategory}
             />
           </label>
-          <textarea
+          <UiTextArea
+            unstyled
             placeholder="角色描述、设定..."
             value={newDesc}
             onChange={(e) => setNewDesc(e.target.value)}
@@ -209,7 +221,8 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
           <div className={styles.highlightConfigRow}>
             <label className={styles.highlightColorField}>
               <span className={styles.highlightFieldLabel}>正文高亮颜色</span>
-              <input
+              <UiInput
+                unstyled
                 type="color"
                 value={newHighlightColor}
                 onChange={(e) => setNewHighlightColor(e.target.value)}
@@ -224,9 +237,9 @@ export const CharacterListPanel: React.FC<CharacterListPanelProps> = ({
               label="仅在每章第一次出现时高亮"
             />
           </div>
-          <button className={styles.submitButton} onClick={handleAdd}>
+          <UiButton unstyled className={styles.submitButton} onClick={handleAdd}>
             确认添加
-          </button>
+          </UiButton>
         </div>
       )}
       {characters.length === 0 && !adding && (

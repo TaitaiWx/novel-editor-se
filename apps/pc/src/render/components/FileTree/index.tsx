@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { BsCameraReelsFill } from 'react-icons/bs';
-import InlineRenameInput, { isRenameShortcut } from '../InlineRenameInput';
+import InlineRenameInput, { isRenameShortcut } from '@novel-editor/ui/InlineRenameInput';
 import type { FileNode, FileInfo, FileInfoBatchEntry } from '../../types';
 import { isImeComposing } from '../../utils/ime';
 import { buildFileTooltip, describeFileName, formatFileSize } from './fileDisplay';

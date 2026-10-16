@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { VscLinkExternal, VscWand } from 'react-icons/vsc';
-import LoadingSpinner from '../LoadingSpinner';
-import ErrorState from '../ErrorState';
+import LoadingSpinner from '@novel-editor/ui/LoadingSpinner';
+import ErrorState from '@novel-editor/ui/ErrorState';
 import styles from './styles.module.scss';
 import { getPathBasename } from '@/render/utils/path';
 
@@ -176,10 +177,10 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ filePath, setti
         <div className={styles.slidesArea}>
           <div className={styles.tooLargeHint}>
             <p>该文件较大（{sizeMB} MB），不支持内置预览</p>
-            <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+            <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
               <VscLinkExternal />
               用默认应用打开
-            </button>
+            </UiButton>
           </div>
         </div>
       </div>
@@ -211,7 +212,8 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ filePath, setti
           <span className={styles.meta}>{data.slideCount} 张幻灯片</span>
         </div>
         <div className={styles.headerRight}>
-          <button
+          <UiButton
+            unstyled
             className={styles.openExternalBtn}
             onClick={handleBeautify}
             disabled={beautifying}
@@ -219,11 +221,11 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ filePath, setti
           >
             <VscWand />
             {beautifying ? '美化中…' : '美化导出'}
-          </button>
-          <button className={styles.openExternalBtn} onClick={handleOpenExternal}>
+          </UiButton>
+          <UiButton unstyled className={styles.openExternalBtn} onClick={handleOpenExternal}>
             <VscLinkExternal />
             用默认应用打开编辑
-          </button>
+          </UiButton>
           {settingsComponent}
         </div>
       </div>

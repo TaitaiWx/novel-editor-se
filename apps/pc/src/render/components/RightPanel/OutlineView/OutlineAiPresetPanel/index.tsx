@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import styles from '../../styles.module.scss';
 import {
@@ -40,7 +41,8 @@ export const OutlineAiPresetPanel: React.FC<OutlineAiPresetPanelProps> = ({
             aiOutlineOptions.granularity === preset.value.granularity &&
             aiOutlineOptions.maxDepth === preset.value.maxDepth;
           return (
-            <button
+            <UiButton
+              unstyled
               key={preset.key}
               className={`${styles.outlineAiPresetCard} ${active ? styles.outlineAiPresetCardActive : ''}`}
               onClick={() => setAiOutlineOptions(preset.value)}
@@ -53,7 +55,7 @@ export const OutlineAiPresetPanel: React.FC<OutlineAiPresetPanelProps> = ({
                 {OUTLINE_AI_GRANULARITY_LABELS[preset.value.granularity]} / {preset.value.maxDepth}{' '}
                 层
               </span>
-            </button>
+            </UiButton>
           );
         })}
       </div>
@@ -61,40 +63,43 @@ export const OutlineAiPresetPanel: React.FC<OutlineAiPresetPanelProps> = ({
         <div className={styles.outlineAiPresetGroup}>
           <span className={styles.outlineAiPresetGroupLabel}>风格</span>
           {(['balanced', 'cinematic', 'detailed', 'suspense'] as OutlineAiStyle[]).map((style) => (
-            <button
+            <UiButton
+              unstyled
               key={style}
               className={`${styles.outlineAiPresetOption} ${aiOutlineOptions.style === style ? styles.outlineAiPresetOptionActive : ''}`}
               onClick={() => setAiOutlineOptions((prev) => ({ ...prev, style }))}
               disabled={importing}
             >
               {OUTLINE_AI_STYLE_LABELS[style]}
-            </button>
+            </UiButton>
           ))}
         </div>
         <div className={styles.outlineAiPresetGroup}>
           <span className={styles.outlineAiPresetGroupLabel}>粒度</span>
           {(['coarse', 'medium', 'fine'] as OutlineAiGranularity[]).map((granularity) => (
-            <button
+            <UiButton
+              unstyled
               key={granularity}
               className={`${styles.outlineAiPresetOption} ${aiOutlineOptions.granularity === granularity ? styles.outlineAiPresetOptionActive : ''}`}
               onClick={() => setAiOutlineOptions((prev) => ({ ...prev, granularity }))}
               disabled={importing}
             >
               {OUTLINE_AI_GRANULARITY_LABELS[granularity]}
-            </button>
+            </UiButton>
           ))}
         </div>
         <div className={styles.outlineAiPresetGroup}>
           <span className={styles.outlineAiPresetGroupLabel}>层级深度</span>
           {[1, 2, 3, 4].map((depth) => (
-            <button
+            <UiButton
+              unstyled
               key={depth}
               className={`${styles.outlineAiPresetOption} ${aiOutlineOptions.maxDepth === depth ? styles.outlineAiPresetOptionActive : ''}`}
               onClick={() => setAiOutlineOptions((prev) => ({ ...prev, maxDepth: depth }))}
               disabled={importing}
             >
               {depth} 层
-            </button>
+            </UiButton>
           ))}
         </div>
       </div>

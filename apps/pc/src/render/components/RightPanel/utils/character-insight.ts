@@ -1,5 +1,5 @@
 import type { Character, CharacterCamp, CharacterLink, CharacterRelation } from '../types';
-import { ROLE_COLORS } from '../constants';
+import { ROLE_COLORS, RELATION_TONE_LABELS } from '../constants';
 
 export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -49,6 +49,13 @@ export function buildCharacterLinks(characters: Character[]): CharacterLink[] {
     targetId: characters[index + 1].id,
     label: character.role && characters[index + 1].role ? '角色关联' : '待定义',
   }));
+}
+
+/** 旧占位文案不能当作真实关系；保留已有数据，提示作者补充。 */
+export function relationDisplayLabel(relation: CharacterRelation): string {
+  const label = relation.label.trim();
+  if (label && !['角色关联', '待定义', '其他'].includes(label)) return label;
+  return relation.tone !== 'other' ? RELATION_TONE_LABELS[relation.tone] : '关系待补充';
 }
 
 export function getRoleColor(role: string): string {

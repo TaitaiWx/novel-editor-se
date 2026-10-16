@@ -1,7 +1,8 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useState } from 'react';
 import { AiOutlineEllipsis } from 'react-icons/ai';
-import Popover from '../../../Popover';
-import Tooltip from '../../../Tooltip';
+import Popover from '@novel-editor/ui/Popover';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 interface OutlineToolbarProps {
@@ -51,17 +52,19 @@ const OutlineToolbar: React.FC<OutlineToolbarProps> = ({
             : '按本章正文的标题与段落整理出章纲（开启 AI 后可一次生成多种方案）'
         }
       >
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.primary}
           disabled={!canGenerate || busy}
           onClick={aiReady ? onGenerateVariants : onRebuild}
         >
           {busy ? '处理中…' : aiReady ? '生成章纲' : '从正文整理'}
-        </button>
+        </UiButton>
       </Tooltip>
       <Tooltip content="更多：导入、生成设置、保存为版本、清空">
-        <button
+        <UiButton
+          unstyled
           ref={moreRef}
           type="button"
           className={styles.iconButton}
@@ -71,7 +74,7 @@ const OutlineToolbar: React.FC<OutlineToolbarProps> = ({
           onClick={() => setOpen((value) => !value)}
         >
           <AiOutlineEllipsis />
-        </button>
+        </UiButton>
       </Tooltip>
       <Popover
         open={open}
@@ -86,7 +89,8 @@ const OutlineToolbar: React.FC<OutlineToolbarProps> = ({
       >
         <div className={styles.menu} role="menu" aria-label="章纲更多操作">
           {aiReady && (
-            <button
+            <UiButton
+              unstyled
               type="button"
               role="menuitem"
               className={styles.item}
@@ -94,9 +98,10 @@ const OutlineToolbar: React.FC<OutlineToolbarProps> = ({
               onClick={() => run(onRebuild)}
             >
               从正文整理（不用 AI）
-            </button>
+            </UiButton>
           )}
-          <button
+          <UiButton
+            unstyled
             type="button"
             role="menuitem"
             className={styles.item}
@@ -104,18 +109,20 @@ const OutlineToolbar: React.FC<OutlineToolbarProps> = ({
             onClick={() => run(onImport)}
           >
             导入大纲文件…
-          </button>
+          </UiButton>
           {aiReady && (
-            <button
+            <UiButton
+              unstyled
               type="button"
               role="menuitem"
               className={styles.item}
               onClick={() => run(onTogglePreset)}
             >
               {presetOpen ? '收起生成设置' : '生成设置（粒度 / 层数）'}
-            </button>
+            </UiButton>
           )}
-          <button
+          <UiButton
+            unstyled
             type="button"
             role="menuitem"
             className={styles.item}
@@ -123,9 +130,10 @@ const OutlineToolbar: React.FC<OutlineToolbarProps> = ({
             onClick={() => run(onSaveVersion)}
           >
             保存为大纲版本
-          </button>
+          </UiButton>
           {hasPersisted && (
-            <button
+            <UiButton
+              unstyled
               type="button"
               role="menuitem"
               className={`${styles.item} ${styles.danger}`}
@@ -133,7 +141,7 @@ const OutlineToolbar: React.FC<OutlineToolbarProps> = ({
               onClick={() => run(onClear)}
             >
               清空章纲
-            </button>
+            </UiButton>
           )}
         </div>
       </Popover>

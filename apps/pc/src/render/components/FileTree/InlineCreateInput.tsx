@@ -1,3 +1,4 @@
+import UiInput from '@novel-editor/ui/Input';
 /** 文件树里的行内新建输入框（新建文件 / 目录时出现在树中），从 index.tsx 拆出 */
 import React, { useEffect, useRef, useState } from 'react';
 import { isImeComposing } from '../../utils/ime';
@@ -49,7 +50,8 @@ const InlineCreateInput: React.FC<{
           <span className={`${styles.expandIcon} ${styles.hidden}`}>&#9654;</span>
         ) : null}
         <span className={`${styles.fileIcon} ${styles[className]}`}>{icon}</span>
-        <input
+        <UiInput
+          unstyled
           ref={inputRef}
           className={styles.inlineInput}
           value={value}

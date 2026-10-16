@@ -1,5 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
- * 参考列表：缩略图网格（图片显示缩略图，视频显示播放图标、音频显示喇叭图标 + 标题），选中的高亮；填满窗格剩余空间，可滚动。
+ * 参考列表：图片和视频显示缩略图，音频显示专用封面；选中的高亮，可滚动。
  *
  * - 来源分组：本章 / 场景视频 / 人物 / 添加的，来源变化处显示小标题
  * - 拖动缩略图排序（键盘：Alt + ← / → 移动选中的参考）；拖到编辑器里插入 ::image / ::video / ::audio 指令
@@ -15,12 +16,23 @@ import {
 } from '../../utils/referencePane';
 import { dropTargetIndex, groupOf } from '../../utils/referenceSources';
 import { useReferenceMedia } from './useReferenceMedia';
+import { useVideoThumbnail } from './useVideoThumbnail';
 import { readDroppedPaths } from './dropPaths';
 import styles from './styles.module.scss';
 
+// 音频封面的静态装饰，不代表实际音量或播放状态。
+const AUDIO_COVER_BARS = [
+  10, 18, 30, 20, 42, 56, 36, 64, 46, 28, 50, 70, 44, 30, 58, 40, 24, 34, 18, 10,
+];
+
 const Thumb: React.FC<{ item: ReferenceItem; version: number }> = ({ item, version }) => {
-  // 视频不为缩略图整段读取，只显示播放图标
+  const anchor = useRef<HTMLSpanElement>(null);
   const { url } = useReferenceMedia(item.kind === 'image' && !item.pending ? item : null, version);
+  const poster = useVideoThumbnail(
+    item.kind === 'video' && !item.pending ? item.path : null,
+    version,
+    anchor
+  );
   if (item.pending) {
     return (
       <span className={styles.thumbMedia} aria-hidden="true">
@@ -31,11 +43,35 @@ const Thumb: React.FC<{ item: ReferenceItem; version: number }> = ({ item, versi
   if (item.kind === 'video' || item.kind === 'audio') {
     return (
       <span
-        className={`${styles.thumbMedia} ${styles.thumbVideo}`}
+        ref={anchor}
+        className={`${styles.thumbMedia} ${item.kind === 'audio' ? styles.thumbAudio : styles.thumbVideo}`}
         aria-hidden="true"
         data-kind={item.kind}
       >
-        {item.kind === 'audio' ? <VscUnmute /> : <VscPlay />}
+        {poster && <img src={poster} alt="" draggable={false} />}
+        {item.kind === 'audio' ? (
+          <>
+            <svg className={styles.audioCoverWave} viewBox="0 0 160 80" focusable="false">
+              {AUDIO_COVER_BARS.map((height, index) => (
+                <rect
+                  key={index}
+                  x={index * 8 + 2}
+                  y={(80 - height) / 2}
+                  width="3"
+                  height={height}
+                  rx="1.5"
+                />
+              ))}
+            </svg>
+            <span className={styles.audioCoverIcon}>
+              <VscUnmute />
+            </span>
+          </>
+        ) : (
+          <span className={poster ? styles.thumbPlayOverlay : undefined}>
+            <VscPlay />
+          </span>
+        )}
       </span>
     );
   }
@@ -142,7 +178,8 @@ const ReferenceGrid: React.FC<{
                   if (paths.length > 0) onAddPaths(paths, after ? itemIndex + 1 : itemIndex);
                 }}
               >
-                <button
+                <UiButton
+                  unstyled
                   ref={selected ? selectedRef : undefined}
                   type="button"
                   role="option"
@@ -182,7 +219,7 @@ const ReferenceGrid: React.FC<{
                 >
                   <Thumb item={item} version={versions[item.path] ?? 0} />
                   <span className={styles.thumbTitle}>{item.title}</span>
-                </button>
+                </UiButton>
               </li>
             </React.Fragment>
           );

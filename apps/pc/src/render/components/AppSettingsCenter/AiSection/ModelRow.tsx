@@ -1,11 +1,12 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 模型列表的一行：显示名称、服务商 · 模型、状态；默认标记 /「设为默认」、测试连接、编辑（就地展开）、删除、启用开关
  */
 import React, { useId, useState } from 'react';
 import { VscEdit, VscTrash } from 'react-icons/vsc';
 import type { AIIpcResult, AIProviderInfo, AIProviderUpdate } from '../../../types/ai-api';
-import Switch from '../../Switch';
-import Tooltip from '../../Tooltip';
+import Switch from '@novel-editor/ui/Switch';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import ModelEditForm from './ModelEditForm';
 import styles from './styles.module.scss';
 
@@ -112,23 +113,25 @@ const ModelRow: React.FC<ModelRowProps> = ({
         <div className={styles.panelActions}>
           {!info.isDefault && (
             <Tooltip content={DEFAULT_HINTS[info.kind]}>
-              <button type="button" className={styles.textButton} onClick={onSetDefault}>
+              <UiButton unstyled type="button" className={styles.textButton} onClick={onSetDefault}>
                 设为默认
-              </button>
+              </UiButton>
             </Tooltip>
           )}
           <Tooltip content={info.configured ? '用已保存的 Key 测试连接' : '先填写并保存 API Key'}>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.textButton}
               disabled={testing || !info.configured}
               onClick={() => void test()}
             >
               测试连接
-            </button>
+            </UiButton>
           </Tooltip>
           <Tooltip content={expanded ? '收起' : '编辑'}>
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={`${styles.iconButton} ${expanded ? styles.iconButtonActive : ''}`}
               aria-label={`编辑 ${info.label}`}
@@ -137,17 +140,18 @@ const ModelRow: React.FC<ModelRowProps> = ({
               onClick={onToggleExpanded}
             >
               <VscEdit aria-hidden="true" />
-            </button>
+            </UiButton>
           </Tooltip>
           <Tooltip content="删除（Key 一起删除）">
-            <button
+            <UiButton
+              unstyled
               type="button"
               className={styles.iconButton}
               aria-label={`删除 ${info.label}`}
               onClick={() => setConfirmingRemove(true)}
             >
               <VscTrash aria-hidden="true" />
-            </button>
+            </UiButton>
           </Tooltip>
           <Tooltip content={info.enabled ? '停用这个模型' : '启用这个模型'}>
             <Switch
@@ -167,16 +171,17 @@ const ModelRow: React.FC<ModelRowProps> = ({
                 删除「{info.label}」？Key 与配置会一起删除。
               </span>
               <div className={styles.footerButtons}>
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.textButton}
                   onClick={() => setConfirmingRemove(false)}
                 >
                   取消
-                </button>
-                <button type="button" className={styles.dangerButton} onClick={onRemove}>
+                </UiButton>
+                <UiButton unstyled type="button" className={styles.dangerButton} onClick={onRemove}>
                   确认删除
-                </button>
+                </UiButton>
               </div>
             </>
           ) : (

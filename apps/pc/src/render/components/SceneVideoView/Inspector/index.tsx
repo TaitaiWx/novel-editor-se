@@ -1,3 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiTextArea from '@novel-editor/ui/TextArea';
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 画布右侧的检查器：编辑选中的节点（场景 / 人物 / 镜头 / 样片）。没有选中节点时不显示。
  */
@@ -11,9 +14,9 @@ import {
   type ShotSize,
 } from '@novel-editor/video';
 import type { VideoTask } from '@/render/types/ai-api';
-import NumberInput from '../../NumberInput';
-import Select from '../../Select';
-import Tooltip from '../../Tooltip';
+import NumberInput from '@novel-editor/ui/NumberInput';
+import Select from '@novel-editor/ui/Select';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import CharacterAvatar from '../../CharacterAvatar';
 import { MediaImage } from '../../EntityGallery/MediaTile';
 import MediaPlayer, { type ReadSceneFile } from '../media/MediaPlayer';
@@ -40,14 +43,15 @@ const Panel: React.FC<{ title: string; onClose: () => void; children: React.Reac
     <header className={styles.head}>
       <h2 className={styles.title}>{title}</h2>
       <Tooltip content="关闭（Esc）">
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.iconButton}
           aria-label="关闭检查器"
           onClick={onClose}
         >
           <VscClose />
-        </button>
+        </UiButton>
       </Tooltip>
     </header>
     <div className={styles.scroll}>{children}</div>
@@ -93,12 +97,12 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
         <div className={styles.seedHint} role="status">
           <span>已载入上次保存的分镜。这次选中的文字与保存的场景正文不同。</span>
           <span className={styles.inlineActions}>
-            <button type="button" className={styles.linkButton} onClick={onApplySeed}>
+            <UiButton unstyled type="button" className={styles.linkButton} onClick={onApplySeed}>
               用选中的文字替换
-            </button>
-            <button type="button" className={styles.linkButton} onClick={onDismissSeed}>
+            </UiButton>
+            <UiButton unstyled type="button" className={styles.linkButton} onClick={onDismissSeed}>
               保持不变
-            </button>
+            </UiButton>
           </span>
         </div>
       )}
@@ -109,7 +113,8 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
             {state.chapter} · {state.scene}
           </span>
         </label>
-        <textarea
+        <UiTextArea
+          unstyled
           id={`${idPrefix}-source`}
           className={styles.textarea}
           rows={12}
@@ -125,7 +130,8 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
         <label className={styles.label} htmlFor={`${idPrefix}-location`}>
           地点
         </label>
-        <input
+        <UiInput
+          unstyled
           id={`${idPrefix}-location`}
           className={styles.input}
           list={`${idPrefix}-lore`}
@@ -149,7 +155,8 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
             <span key={name} className={styles.chip}>
               <CharacterAvatar name={name} src={avatarByName.get(name) ?? null} size={20} />
               {name}
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.chipRemove}
                 aria-label={`移除人物 ${name}`}
@@ -161,7 +168,7 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
                 }
               >
                 <VscClose />
-              </button>
+              </UiButton>
             </span>
           ))}
           {state.characters.length === 0 && (
@@ -187,7 +194,8 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
         <label className={styles.label} htmlFor={`${idPrefix}-style`}>
           自定义风格
         </label>
-        <input
+        <UiInput
+          unstyled
           id={`${idPrefix}-style`}
           className={styles.input}
           value={isCustomStyle ? state.style : ''}
@@ -229,9 +237,9 @@ export const CharacterInspector: React.FC<{
         ? `生成这一场的镜头时，自动带上 ${name} 的 ${referenceCount} 张参考图（三视图优先），外貌、服装等人物设计也会自动写进提示词。`
         : `${name} 还没有三视图或形象图。在人物详情 → 图集里上传或生成一张三视图，生成的画面更容易保持一致。`}
     </p>
-    <button type="button" className={styles.button} onClick={onRemove}>
+    <UiButton unstyled type="button" className={styles.button} onClick={onRemove}>
       从这一场移除
-    </button>
+    </UiButton>
   </Panel>
 );
 
@@ -300,7 +308,8 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
     <Panel title={label} onClose={onClose}>
       <div className={styles.inlineActions}>
         <Tooltip content="前移（与上一个镜头交换）">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label={`前移${label}`}
@@ -308,10 +317,11 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
             onClick={() => onMove(-1)}
           >
             <VscArrowLeft />
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content="后移（与下一个镜头交换）">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label={`后移${label}`}
@@ -319,18 +329,19 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
             onClick={() => onMove(1)}
           >
             <VscArrowRight />
-          </button>
+          </UiButton>
         </Tooltip>
         <span className={styles.spacer} />
         <Tooltip content="删除镜头（已生成的成片仍保留在资料里）">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label={`删除${label}`}
             onClick={onRemove}
           >
             <VscTrash />
-          </button>
+          </UiButton>
         </Tooltip>
       </div>
       <div className={styles.row}>
@@ -362,7 +373,8 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
       </div>
       <label className={styles.field}>
         <span className={styles.label}>画面描述</span>
-        <textarea
+        <UiTextArea
+          unstyled
           className={styles.textarea}
           aria-label={`${label} 画面描述`}
           rows={5}
@@ -373,7 +385,8 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
       </label>
       <label className={styles.field}>
         <span className={styles.label}>运镜</span>
-        <input
+        <UiInput
+          unstyled
           className={styles.input}
           aria-label={`${label} 运镜`}
           value={shot.camera ?? ''}
@@ -391,25 +404,27 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
             <span className={styles.label}>版本（样片使用「选用」的版本）</span>
             {onOpenBeside && previewFile && (
               <Tooltip content="在编辑器旁边打开，边看边写">
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.linkButton}
                   onClick={() => onOpenBeside(previewFile)}
                 >
                   在旁边看
-                </button>
+                </UiButton>
               </Tooltip>
             )}
             {onExportVersion && previewFile && (
               <Tooltip content={`导出 ${previewFile}（原格式，不转码）`}>
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.linkButton}
                   aria-label={`导出 ${previewFile}`}
                   onClick={() => onExportVersion(previewFile)}
                 >
                   导出
-                </button>
+                </UiButton>
               </Tooltip>
             )}
           </span>
@@ -428,7 +443,8 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
                   role="listitem"
                   className={`${styles.versionChip} ${previewFile === version.fileName ? styles.versionChipActive : ''}`}
                 >
-                  <button
+                  <UiButton
+                    unstyled
                     type="button"
                     className={styles.versionButton}
                     aria-label={`预览 ${label} v${version.version}`}
@@ -436,9 +452,10 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
                   >
                     v{version.version}
                     {isChosen && <span className={styles.chosenMark}>选用</span>}
-                  </button>
+                  </UiButton>
                   {!isChosen && (
-                    <button
+                    <UiButton
+                      unstyled
                       type="button"
                       className={styles.versionButton}
                       aria-label={`选用 ${label} v${version.version}`}
@@ -450,7 +467,7 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({
                       }
                     >
                       选用
-                    </button>
+                    </UiButton>
                   )}
                 </span>
               );
@@ -518,46 +535,50 @@ export const OutputInspector: React.FC<{
           stitchSupported ? '用当前选用的版本合成一条样片，保存到资料' : '当前环境不支持 WebCodecs'
         }
       >
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.button}
           disabled={!stitchSupported || !canStitch || stitchProgress !== null}
           onClick={onStitch}
         >
           {stitchProgress !== null ? `合成中 ${Math.round(stitchProgress)}%` : '现在合成样片'}
-        </button>
+        </UiButton>
       </Tooltip>
       {animatics.length > 0 && (
         <ul className={styles.fileList} aria-label="样片">
           {animatics.map((fileName) => (
             <li key={fileName}>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={`${styles.linkButton} ${current === fileName ? styles.linkButtonActive : ''}`}
                 onClick={() => setPicked(fileName)}
               >
                 {fileName}
-              </button>
+              </UiButton>
               <Tooltip content="在左侧资料中定位这个文件">
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.linkButton}
                   aria-label={`在资料中定位 ${fileName}`}
                   onClick={() => onRevealFile(fileName)}
                 >
                   定位
-                </button>
+                </UiButton>
               </Tooltip>
               {onOpenBeside && (
                 <Tooltip content="在编辑器旁边打开，边看边写">
-                  <button
+                  <UiButton
+                    unstyled
                     type="button"
                     className={styles.linkButton}
                     aria-label={`在旁边看 ${fileName}`}
                     onClick={() => onOpenBeside(fileName)}
                   >
                     在旁边看
-                  </button>
+                  </UiButton>
                 </Tooltip>
               )}
             </li>

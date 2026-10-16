@@ -175,10 +175,10 @@ describe('CharactersView', () => {
     );
     const lin = await screen.findByRole('button', { name: '打开人物 林舟' });
     expect(lin.textContent).toContain('Lv.4');
-    expect(lin.textContent).toContain('设计 2/5 · 图片 1');
+    expect(lin.textContent).toContain('特质 2/12 · 图片 1');
     expect(lin.textContent).not.toContain('缺三视图');
     const bai = screen.getByRole('button', { name: '打开人物 白芷' });
-    expect(bai.textContent).toContain('缺人物设计');
+    expect(bai.textContent).toContain('缺人物资料');
     expect(bai.textContent).toContain('缺三视图');
     expect(bai.textContent).toContain('没有成长档案');
     fireEvent.click(lin);

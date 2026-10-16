@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { VscClose, VscRefresh } from 'react-icons/vsc';
@@ -185,9 +186,15 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
             <h2 className={styles.title}>灵感</h2>
             <p className={styles.subtitle}>卡文时抽一签：人物、地点、冲突各来一张。</p>
           </div>
-          <button type="button" className={styles.iconButton} aria-label="关闭" onClick={onClose}>
+          <UiButton
+            unstyled
+            type="button"
+            className={styles.iconButton}
+            aria-label="关闭"
+            onClick={onClose}
+          >
             <VscClose />
-          </button>
+          </UiButton>
         </div>
 
         {draw ? (
@@ -201,7 +208,8 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
                 <div className={styles.slotTerm} data-testid={`inspiration-${slot}`}>
                   {draw[slot]}
                 </div>
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.rerollButton}
                   aria-label={`换一张${INSPIRATION_SLOT_LABELS[slot]}签`}
@@ -209,7 +217,7 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
                 >
                   <VscRefresh />
                   换一签
-                </button>
+                </UiButton>
               </div>
             ))}
           </div>
@@ -220,7 +228,8 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
         {draw ? (
           // 层级：左侧次要「全部重抽」；右侧 复制 / AI 扩写（次要）+ 插入到光标处（主操作，最右）
           <div className={styles.actions}>
-            <button
+            <UiButton
+              unstyled
               ref={drawButtonRef}
               type="button"
               className={styles.ghostButton}
@@ -228,17 +237,19 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
             >
               <VscRefresh aria-hidden="true" />
               全部重抽
-            </button>
+            </UiButton>
             <div className={styles.actionsEnd}>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.secondaryButton}
                 onClick={() => void handleCopy(drawnText)}
               >
                 复制
-              </button>
+              </UiButton>
               {aiConfig.enabled && (
-                <button
+                <UiButton
+                  unstyled
                   type="button"
                   className={styles.secondaryButton}
                   disabled={!aiReady || ai.status === 'loading'}
@@ -246,46 +257,50 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
                   onClick={() => void handleExpand()}
                 >
                   {ai.status === 'loading' ? '扩写中…' : '交给 AI 扩写'}
-                </button>
+                </UiButton>
               )}
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.primaryButton}
                 onClick={() => handleInsert(drawnText)}
               >
                 插入到光标处
-              </button>
+              </UiButton>
             </div>
           </div>
         ) : (
-          <button
+          <UiButton
+            unstyled
             ref={drawButtonRef}
             type="button"
             className={styles.drawButton}
             onClick={handleDrawAll}
           >
             抽一签
-          </button>
+          </UiButton>
         )}
 
         {ai.status === 'done' && (
           <div className={styles.aiResult} aria-label="AI 扩写结果">
             <div className={styles.aiText}>{ai.text}</div>
             <div className={styles.aiActions}>
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.secondaryButton}
                 onClick={() => void handleCopy(ai.text)}
               >
                 复制扩写
-              </button>
-              <button
+              </UiButton>
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.primaryButton}
                 onClick={() => handleInsert(ai.text)}
               >
                 插入扩写
-              </button>
+              </UiButton>
             </div>
           </div>
         )}
@@ -296,7 +311,8 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
           </div>
         )}
 
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.disclosure}
           aria-expanded={showAdvanced}
@@ -306,7 +322,7 @@ const InspirationDialog: React.FC<InspirationDialogProps> = ({
             {showAdvanced ? '▾' : '▸'}
           </span>
           更多选项
-        </button>
+        </UiButton>
         {showAdvanced && (
           <InspirationAdvanced
             source={source}

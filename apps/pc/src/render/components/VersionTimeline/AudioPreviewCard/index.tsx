@@ -1,8 +1,9 @@
 /**
  * AudioPreviewCard — 音频版本预览卡片（波形 + 播放器 + 元信息）
  */
-import React, { useState, useEffect, useRef } from 'react';
-import { drawWaveform } from '../waveform';
+import React, { useState, useEffect } from 'react';
+import { AudioPlayer } from '../../VideoPlayer';
+import { computePeaksChunked, PEAK_RESOLUTION } from '@novel-editor/media-player';
 import { formatByteSize, formatDuration } from '../utils';
 import styles from './styles.module.scss';
 
@@ -25,23 +26,23 @@ const AudioPreviewCard: React.FC<AudioPreviewCardProps> = ({
   const [sampleRate, setSampleRate] = useState<number | null>(null);
   const [channels, setChannels] = useState<number | null>(null);
   const [bitrateKbps, setBitrateKbps] = useState<number | null>(null);
-  const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [waveform, setWaveform] = useState<{ source: string; peaks: number[] } | null>(null);
 
   useEffect(() => {
     let disposed = false;
+    const controller = new AbortController();
+    setDuration(null);
+    setSampleRate(null);
+    setChannels(null);
+    setBitrateKbps(null);
+    setWaveform(null);
     let audioContext: AudioContext | null = null;
 
     const analyzeAudio = async () => {
-      if (!dataUrl) {
-        setDuration(null);
-        setSampleRate(null);
-        setChannels(null);
-        setBitrateKbps(null);
-        return;
-      }
+      if (!dataUrl) return;
 
       try {
-        const response = await fetch(dataUrl);
+        const response = await fetch(dataUrl, { signal: controller.signal });
         const arrayBuffer = await response.arrayBuffer();
         const AudioContextCtor = window.AudioContext;
         if (!AudioContextCtor) {
@@ -64,9 +65,14 @@ const AudioPreviewCard: React.FC<AudioPreviewCardProps> = ({
           setBitrateKbps(null);
         }
 
-        if (waveformCanvasRef.current) {
-          drawWaveform(waveformCanvasRef.current, decoded);
-        }
+        const peaks = await computePeaksChunked(
+          Array.from({ length: decoded.numberOfChannels }, (_, index) =>
+            decoded.getChannelData(index)
+          ),
+          PEAK_RESOLUTION,
+          { signal: controller.signal }
+        );
+        if (!disposed) setWaveform({ source: dataUrl, peaks });
       } catch {
         if (!disposed) {
           setSampleRate(null);
@@ -74,7 +80,7 @@ const AudioPreviewCard: React.FC<AudioPreviewCardProps> = ({
           setBitrateKbps(null);
         }
       } finally {
-        if (audioContext) {
+        if (audioContext && audioContext.state !== 'closed') {
           void audioContext.close();
         }
       }
@@ -84,6 +90,7 @@ const AudioPreviewCard: React.FC<AudioPreviewCardProps> = ({
 
     return () => {
       disposed = true;
+      controller.abort();
       if (audioContext && audioContext.state !== 'closed') {
         void audioContext.close();
       }
@@ -95,24 +102,14 @@ const AudioPreviewCard: React.FC<AudioPreviewCardProps> = ({
       <div className={styles.audioCompareLabel}>{title}</div>
       {dataUrl ? (
         <>
-          <canvas
-            ref={waveformCanvasRef}
-            className={styles.waveformCanvas}
-            width={560}
-            height={144}
-          />
-          <audio
+          <AudioPlayer
+            key={dataUrl}
             className={styles.audioPlayer}
-            controls
-            preload="metadata"
-            onLoadedMetadata={(event) => {
-              setDuration(
-                Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : null
-              );
-            }}
-          >
-            <source src={dataUrl} type={mimeType ?? undefined} />
-          </audio>
+            src={{ src: dataUrl, mimeType: mimeType ?? undefined }}
+            title={title}
+            waveform={waveform?.source === dataUrl ? waveform.peaks : 'decorative'}
+            onMetadata={({ duration }) => setDuration(Number.isFinite(duration) ? duration : null)}
+          />
           <div className={styles.audioMetaGrid}>
             <div className={styles.audioMetaItem}>
               <span className={styles.audioMetaLabel}>格式</span>

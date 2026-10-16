@@ -11,7 +11,7 @@ import { registerWorkspaceHandler } from '../workspace-ipc';
  * - ai-stream-start / ai-stream-cancel：流式补全，片段通过 webContents.send('ai-stream-event') 推送，
  *   只推给发起请求的窗口；窗口关闭时自动取消该窗口的所有流
  */
-import { BrowserWindow, type WebContents } from 'electron';
+import { BrowserWindow, ipcMain, type WebContents } from 'electron';
 import { randomUUID } from 'crypto';
 import { AIError, toAIError, type StreamChunk } from '@novel-editor/ai';
 import {
@@ -174,6 +174,18 @@ export function registerAIProviderHandlers(
   getService: () => AIService = getAIService,
   streams: AIStreamManager = new AIStreamManager(getService)
 ): AIStreamManager {
+  const completions = new Map<string, ActiveStream>();
+  const watchedSenders = new Set<number>();
+  // 取消只操作本窗口的内存控制器，不能排进它正在取消的工作区任务队列。
+  ipcMain.handle('ai-complete-cancel', (event, requestId: unknown) =>
+    guard(() => {
+      if (typeof requestId !== 'string' || !/^[\w:-]{1,100}$/.test(requestId))
+        throw new AIError({ kind: 'bad-request', message: 'AI 请求标识无效' });
+      const request = completions.get(`${event.sender.id}:${requestId}`);
+      request?.controller.abort();
+      return { cancelled: !!request };
+    })
+  );
   registerWorkspaceHandler(
     'ai-providers-list',
     (): Promise<AIIpcResult<AIProviderInfo[]>> => guard(() => getService().listProviders())
@@ -221,11 +233,62 @@ export function registerAIProviderHandlers(
   registerWorkspaceHandler('ai-providers-test', (_event, id: unknown) => test(id));
   registerWorkspaceHandler(
     'ai-complete',
-    (_event, payload: AICompletePayload): Promise<AIIpcResult<AICompleteResult>> =>
+    (event, payload: AICompletePayload): Promise<AIIpcResult<AICompleteResult>> =>
       guard(async () => {
-        const result = await getService().complete(payload);
-        return { text: result.text, model: result.model, finishReason: result.finishReason };
-      })
+        const timeoutMs = payload?.timeoutMs;
+        if (
+          timeoutMs !== undefined &&
+          (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000)
+        )
+          throw new AIError({ kind: 'bad-request', message: 'AI 请求时间预算无效' });
+        const cancellation = payload?.requestId
+          ? completions.get(`${event.sender.id}:${payload.requestId}`)?.controller.signal
+          : undefined;
+        const deadline = timeoutMs === undefined ? undefined : AbortSignal.timeout(timeoutMs);
+        const signals = [cancellation, deadline].filter((value): value is AbortSignal => !!value);
+        const signal = signals.length ? AbortSignal.any(signals) : undefined;
+        try {
+          signal?.throwIfAborted();
+          const result = await getService().complete(payload, signal);
+          signal?.throwIfAborted();
+          return { text: result.text, model: result.model, finishReason: result.finishReason };
+        } catch (error) {
+          if (cancellation?.aborted) throw new AIError({ kind: 'aborted', message: '已取消生成' });
+          if (deadline?.aborted)
+            throw new AIError({
+              kind: 'timeout',
+              message: '此部分生成超时，请重试；已生成的草稿会保留。',
+            });
+          throw error;
+        }
+      }),
+    {
+      // 在工作区任务排队之前登记，快速点击取消也能中止尚未发出的请求。
+      beforeAdmission: (event, payload: AICompletePayload) => {
+        if (payload?.requestId === undefined) return;
+        if (typeof payload.requestId !== 'string' || !/^[\w:-]{1,100}$/.test(payload.requestId))
+          throw new AIError({ kind: 'bad-request', message: 'AI 请求标识无效' });
+        const key = `${event.sender.id}:${payload.requestId}`;
+        if (completions.has(key))
+          throw new AIError({ kind: 'bad-request', message: 'AI 请求标识重复' });
+        if (
+          [...completions.values()].filter((item) => item.senderId === event.sender.id).length >= 8
+        )
+          throw new AIError({ kind: 'rate-limit', message: '同时进行的 AI 生成过多，请稍后再试' });
+        completions.set(key, { senderId: event.sender.id, controller: new AbortController() });
+        if (!watchedSenders.has(event.sender.id)) {
+          watchedSenders.add(event.sender.id);
+          event.sender.once('destroyed', () => {
+            watchedSenders.delete(event.sender.id);
+            for (const request of completions.values())
+              if (request.senderId === event.sender.id) request.controller.abort();
+          });
+        }
+        return () => {
+          completions.delete(key);
+        };
+      },
+    }
   );
   registerWorkspaceHandler('ai-stream-start', (event, payload: AICompletePayload) =>
     guard(() => ({ streamId: streams.start(toSender(event.sender), payload) }))

@@ -2,7 +2,7 @@
  * useSnapshotJob — 创建版本快照任务并轮询进度
  */
 import { useState, useCallback, useRef } from 'react';
-import { useToast } from '../Toast';
+import { useToast } from '@novel-editor/ui/Toast';
 import type { SnapshotJobStatus } from './types';
 
 interface UseSnapshotJobOptions {

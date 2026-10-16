@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React from 'react';
 import { VscLightbulb } from 'react-icons/vsc';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { formatShortcutLabel } from '@/render/utils/appSettings';
 import { requestOpenInspiration } from '../InspirationDialog/inspiration';
 import styles from './styles.module.scss';
@@ -23,7 +24,8 @@ const InspirationButton: React.FC<InspirationButtonProps> = ({ shortcut, variant
 
   if (variant === 'primary') {
     return (
-      <button
+      <UiButton
+        unstyled
         type="button"
         className={styles.primary}
         onClick={() => requestOpenInspiration()}
@@ -37,7 +39,7 @@ const InspirationButton: React.FC<InspirationButtonProps> = ({ shortcut, variant
             {shortcutLabel}
           </kbd>
         )}
-      </button>
+      </UiButton>
     );
   }
 
@@ -48,7 +50,8 @@ const InspirationButton: React.FC<InspirationButtonProps> = ({ shortcut, variant
         content={shortcutLabel ? `${INSPIRATION_TIP}（${shortcutLabel}）` : INSPIRATION_TIP}
         position="bottom"
       >
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.pill}
           aria-label="灵感"
@@ -58,7 +61,7 @@ const InspirationButton: React.FC<InspirationButtonProps> = ({ shortcut, variant
         >
           <VscLightbulb className={styles.icon} aria-hidden="true" />
           <span className={styles.label}>灵感</span>
-        </button>
+        </UiButton>
       </Tooltip>
     </span>
   );

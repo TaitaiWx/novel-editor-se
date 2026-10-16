@@ -1,10 +1,11 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { VscHistory, VscSync, VscError, VscCheck } from 'react-icons/vsc';
 import { formatNumber } from '@novel-editor/helpers';
 import type { UpdateStatus } from '@/render/types/electron-api';
 import { analyzeContentStats } from '../../utils/contentStats';
 import { getPathBasename } from '../../utils/path';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import { requestOpenAboutDialog } from '../../hooks/useAboutDialogListener';
 import styles from './styles.module.scss';
 
@@ -440,9 +441,14 @@ const StatusBar: React.FC<StatusBarProps> = ({
                 <div className={styles.panelTitle}>检查更新</div>
                 <div className={styles.panelMetaRow}>
                   <span>当前版本 {appVersion}</span>
-                  <button type="button" className={styles.panelLink} onClick={handleOpenAbout}>
+                  <UiButton
+                    unstyled
+                    type="button"
+                    className={styles.panelLink}
+                    onClick={handleOpenAbout}
+                  >
                     关于…
-                  </button>
+                  </UiButton>
                 </div>
                 {/* Progress bar */}
                 {typeof downloadPercent === 'number' && updateStatus?.availableVersion && (
@@ -495,13 +501,14 @@ const StatusBar: React.FC<StatusBarProps> = ({
               </div>
               {/* Check button */}
               <div className={styles.panelFooter}>
-                <button
+                <UiButton
+                  unstyled
                   className={styles.checkBtn}
                   onClick={handleCheckUpdates}
                   disabled={updateStatus?.checking}
                 >
                   {updateStatus?.checking ? '检查中...' : '检查更新'}
-                </button>
+                </UiButton>
               </div>
             </div>
           )}

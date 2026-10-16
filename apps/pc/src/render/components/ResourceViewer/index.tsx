@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { VscCode, VscFileMedia, VscFilePdf, VscJson, VscMarkdown, VscMusic } from 'react-icons/vsc';
-import LoadingSpinner from '../LoadingSpinner';
-import ErrorState from '../ErrorState';
-import EmptyState from '../EmptyState';
+import LoadingSpinner from '@novel-editor/ui/LoadingSpinner';
+import ErrorState from '@novel-editor/ui/ErrorState';
+import EmptyState from '@novel-editor/ui/EmptyState';
 import styles from './styles.module.scss';
 import { getPathBasename } from '@/render/utils/path';
 import PdfDocumentView from './PdfDocumentView';

@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useEffect, useState } from 'react';
-import Popover from '../Popover';
-import Tooltip from '../Tooltip';
+import Popover from '@novel-editor/ui/Popover';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 import type { OutlineEntry, OutlinePopoverAnchor } from './types';
 
@@ -106,7 +107,8 @@ export const OutlinePopover: React.FC<OutlinePopoverProps> = React.memo(
             <span className={styles.outlinePopoverAiBadge}>AI 生成</span>
             <div className={styles.outlinePopoverSummary}>{summaryText}</div>
             <Tooltip content="刷新总结" position="top">
-              <button
+              <UiButton
+                unstyled
                 className={styles.outlineSummaryRefresh}
                 onClick={() => onRefreshSummary(entry)}
                 aria-label="刷新总结"
@@ -123,7 +125,7 @@ export const OutlinePopover: React.FC<OutlinePopoverProps> = React.memo(
                 >
                   <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
                 </svg>
-              </button>
+              </UiButton>
             </Tooltip>
           </>
         ) : summaryState === 'error' ? (
@@ -131,12 +133,13 @@ export const OutlinePopover: React.FC<OutlinePopoverProps> = React.memo(
             <Tooltip content={summaryError || '摘要生成失败'} position="top">
               <span className={styles.outlinePopoverErrorText}>摘要生成失败</span>
             </Tooltip>
-            <button
+            <UiButton
+              unstyled
               className={styles.outlinePopoverRetryBtn}
               onClick={() => onRefreshSummary(entry)}
             >
               重试
-            </button>
+            </UiButton>
           </div>
         ) : (
           /* idle — AI summary not yet requested */

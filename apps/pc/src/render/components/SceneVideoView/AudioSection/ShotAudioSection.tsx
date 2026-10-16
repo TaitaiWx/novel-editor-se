@@ -1,3 +1,6 @@
+import UiButton from '@novel-editor/ui/Button';
+import UiTextArea from '@novel-editor/ui/TextArea';
+import UiInput from '@novel-editor/ui/Input';
 /**
  * 镜头检查器「对白 / 音效」分区：
  * - 对白：说话人（这一场的出场人物 + 旁白）、台词、情绪（可选）、开始时间（可选，默认紧接上一句），
@@ -17,9 +20,9 @@ import {
   type SfxCue,
   type Shot,
 } from '@novel-editor/video';
-import NumberInput from '../../NumberInput';
-import Select from '../../Select';
-import Tooltip from '../../Tooltip';
+import NumberInput from '@novel-editor/ui/NumberInput';
+import Select from '@novel-editor/ui/Select';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import AudioPreview from './AudioPreview';
 import styles from './styles.module.scss';
 
@@ -122,7 +125,8 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
                   : '先在设置中心配置配音服务'
               }
             >
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.linkButton}
                 disabled={!canSynthesize || anyBusy || pending === 0}
@@ -135,7 +139,7 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
                 }
               >
                 {anyBusy ? '配音中…' : `全部生成配音${pending ? `（${pending}）` : ''}`}
-              </button>
+              </UiButton>
             </Tooltip>
           )}
         </div>
@@ -165,17 +169,19 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
                     }
                   />
                   <Tooltip content="删除这句对白">
-                    <button
+                    <UiButton
+                      unstyled
                       type="button"
                       className={styles.iconButton}
                       aria-label={`删除${lineLabel}`}
                       onClick={() => setLines(lines.filter((item) => item.id !== line.id))}
                     >
                       <VscTrash />
-                    </button>
+                    </UiButton>
                   </Tooltip>
                 </div>
-                <textarea
+                <UiTextArea
+                  unstyled
                   className={styles.textarea}
                   aria-label={`${lineLabel} 台词`}
                   rows={2}
@@ -204,7 +210,8 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
                         : '先在设置中心配置配音服务'
                     }
                   >
-                    <button
+                    <UiButton
+                      unstyled
                       type="button"
                       className={line.audioFile ? styles.button : styles.buttonPrimary}
                       aria-label={`为${lineLabel}生成配音`}
@@ -212,7 +219,7 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
                       onClick={() => onSynthesize([line.id])}
                     >
                       {busy ? '配音中…' : line.audioFile ? '重新配音' : '生成配音'}
-                    </button>
+                    </UiButton>
                   </Tooltip>
                   {line.audioFile && (
                     <span className={styles.statusOk}>
@@ -232,9 +239,9 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
           })}
         </ol>
         {lines.length < DIALOGUE_MAX_LINES && (
-          <button type="button" className={styles.button} onClick={addLine}>
+          <UiButton unstyled type="button" className={styles.button} onClick={addLine}>
             <VscAdd /> 添加对白
-          </button>
+          </UiButton>
         )}
       </section>
 
@@ -248,7 +255,8 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
             return (
               <li key={cue.id} className={styles.card} data-testid="sfx-cue">
                 <div className={styles.cardHead}>
-                  <input
+                  <UiInput
+                    unstyled
                     className={styles.input}
                     aria-label={`${cueLabel} 描述`}
                     value={cue.prompt ?? ''}
@@ -258,14 +266,15 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
                     }
                   />
                   <Tooltip content="删除这个音效">
-                    <button
+                    <UiButton
+                      unstyled
                       type="button"
                       className={styles.iconButton}
                       aria-label={`删除${cueLabel}`}
                       onClick={() => setCues(cues.filter((item) => item.id !== cue.id))}
                     >
                       <VscTrash />
-                    </button>
+                    </UiButton>
                   </Tooltip>
                 </div>
                 <div className={styles.row}>
@@ -273,24 +282,26 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
                     {cue.path ? (cue.path.split('/').pop() ?? cue.path) : '没有音效文件'}
                   </span>
                   <Tooltip content="选择本地音效（混进样片），复制到 资料/音效/">
-                    <button
+                    <UiButton
+                      unstyled
                       type="button"
                       className={styles.linkButton}
                       onClick={() => void chooseCueFile(cue.id)}
                     >
                       {cue.path ? '更换' : '选择文件'}
-                    </button>
+                    </UiButton>
                   </Tooltip>
                   {cue.path && (
                     <Tooltip content="不用音效文件">
-                      <button
+                      <UiButton
+                        unstyled
                         type="button"
                         className={styles.iconButton}
                         aria-label={`移除${cueLabel}的文件`}
                         onClick={() => updateCue(cue.id, { path: undefined })}
                       >
                         <VscClose />
-                      </button>
+                      </UiButton>
                     </Tooltip>
                   )}
                 </div>
@@ -333,7 +344,8 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
           })}
         </ul>
         {cues.length < SFX_MAX_CUES && (
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.button}
             onClick={() =>
@@ -351,7 +363,7 @@ const ShotAudioSection: React.FC<ShotAudioSectionProps> = ({
             }
           >
             <VscAdd /> 添加音效
-          </button>
+          </UiButton>
         )}
       </section>
     </>

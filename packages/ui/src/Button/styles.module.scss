@@ -1,0 +1,39 @@
+.base {
+  box-sizing: border-box;
+  font: inherit;
+}
+.control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--ui-border-strong, #404040);
+  border-radius: 7px;
+  background: var(--ui-bg-elevated, #252526);
+  color: var(--ui-fg-primary, #d4d4d4);
+  font: inherit;
+  cursor: pointer;
+  &[data-variant='primary'] {
+    background: var(--ui-interaction-accent-soft, rgba(0, 122, 204, 0.14));
+    color: var(--ui-interaction-accent-fg, #8cc4ec);
+  }
+  &[data-variant='ghost'] {
+    background: transparent;
+    border-color: transparent;
+  }
+  &[data-variant='danger'] {
+    color: #e6a5a0;
+  }
+  &:hover:not(:disabled) {
+    background: var(--ui-interaction-hover-bg, rgba(255, 255, 255, 0.06));
+  }
+  &:focus-visible {
+    outline: 2px solid var(--ui-interaction-focus-ring, #9cdcfe);
+    outline-offset: 2px;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}

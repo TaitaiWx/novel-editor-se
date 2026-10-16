@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 场景视频画布：节点 + 连线，可平移 / 缩放 / 拖动节点（不依赖第三方画布库）
  *
@@ -8,7 +9,7 @@
  */
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { VscAdd, VscRemove, VscScreenFull } from 'react-icons/vsc';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import {
   edgePath,
   fitViewport,
@@ -294,30 +295,33 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
       </div>
       <div className={styles.zoomBar} role="toolbar" aria-label="画布缩放">
         <Tooltip content="缩小（⌘ / Ctrl + 滚轮）">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.zoomButton}
             aria-label="缩小"
             onClick={() => zoomBy(1 / ZOOM_STEP)}
           >
             <VscRemove />
-          </button>
+          </UiButton>
         </Tooltip>
         <span className={styles.zoomValue} aria-live="polite">
           {Math.round((viewport?.zoom ?? 1) * 100)}%
         </span>
         <Tooltip content="放大（⌘ / Ctrl + 滚轮）">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.zoomButton}
             aria-label="放大"
             onClick={() => zoomBy(ZOOM_STEP)}
           >
             <VscAdd />
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content="适应画布：显示全部节点">
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.zoomButton}
             aria-label="适应画布"
@@ -327,7 +331,7 @@ const SceneCanvas: React.FC<SceneCanvasProps> = ({
             }}
           >
             <VscScreenFull />
-          </button>
+          </UiButton>
         </Tooltip>
       </div>
     </div>

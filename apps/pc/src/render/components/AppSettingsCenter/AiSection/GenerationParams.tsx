@@ -3,7 +3,7 @@
  * 每个文本模型都显示同一组、同样的范围与说明；失焦即保存（onCommit，可清空恢复默认）。
  */
 import React from 'react';
-import NumberInput from '../../NumberInput';
+import NumberInput from '@novel-editor/ui/NumberInput';
 import FieldRow from './FieldRow';
 import styles from './styles.module.scss';
 

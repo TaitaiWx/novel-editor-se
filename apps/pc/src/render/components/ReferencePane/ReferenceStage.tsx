@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * 参考窗格的主画面：贴在顶部、按比例适应宽度（不留大块空白）。
  * - 图片：单击在「适应宽度 ↔ 原始大小」之间切换，原始大小时可滚动 / 拖动查看
@@ -7,7 +8,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { VscChevronLeft, VscChevronRight } from 'react-icons/vsc';
-import Tooltip from '../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import VideoPlayer, { AudioPlayer } from '../VideoPlayer';
 import type { ReferenceItem } from '../../utils/referencePane';
 import { useReferenceMedia } from './useReferenceMedia';
@@ -184,24 +185,26 @@ const ReferenceStage: React.FC<{
     {multiple && (
       <>
         <Tooltip content="上一张（←）" className={`${styles.navSlot} ${styles.navPrev}`}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.nav}
             aria-label="上一张参考"
             onClick={() => onStep(-1)}
           >
             <VscChevronLeft />
-          </button>
+          </UiButton>
         </Tooltip>
         <Tooltip content="下一张（→）" className={`${styles.navSlot} ${styles.navNext}`}>
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.nav}
             aria-label="下一张参考"
             onClick={() => onStep(1)}
           >
             <VscChevronRight />
-          </button>
+          </UiButton>
         </Tooltip>
       </>
     )}

@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 /**
  * PdfPreviewContent — PDF 版本预览（缩略图侧栏 + 主页面渲染）
  */
@@ -148,7 +149,8 @@ const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({
           const pageNumber = index + 1;
           const thumbnail = thumbnailMap[pageNumber];
           return (
-            <button
+            <UiButton
+              unstyled
               key={pageNumber}
               className={`${styles.pdfThumbButton} ${pageNumber === safeCurrentPage ? styles.pdfThumbButtonActive : ''}`}
               onClick={() => onPageChange(pageNumber)}
@@ -159,29 +161,31 @@ const PdfPreviewContent: React.FC<PdfPreviewContentProps> = ({
               ) : (
                 <span className={styles.pdfThumbPlaceholder}>渲染中...</span>
               )}
-            </button>
+            </UiButton>
           );
         })}
       </div>
       <div className={styles.pdfMainStage}>
         <div className={styles.pdfToolbar}>
-          <button
+          <UiButton
+            unstyled
             className={styles.pdfPageButton}
             disabled={safeCurrentPage <= 1}
             onClick={() => onPageChange(Math.max(1, safeCurrentPage - 1))}
           >
             上一页
-          </button>
+          </UiButton>
           <span className={styles.pdfPageIndicator}>
             第 {safeCurrentPage} / {pageCount} 页
           </span>
-          <button
+          <UiButton
+            unstyled
             className={styles.pdfPageButton}
             disabled={safeCurrentPage >= pageCount}
             onClick={() => onPageChange(Math.min(pageCount, safeCurrentPage + 1))}
           >
             下一页
-          </button>
+          </UiButton>
         </div>
         <div className={styles.pdfCanvasStage}>
           {mainPageDataUrl ? (

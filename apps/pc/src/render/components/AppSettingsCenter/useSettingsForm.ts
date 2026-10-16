@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useToast } from '../Toast';
+import { useToast } from '@novel-editor/ui/Toast';
 import {
   type SettingsDraft,
   type ShortcutSettings,

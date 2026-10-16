@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo, useState } from 'react';
 import { getLevelProgress, latestChapterOfSheet } from '@novel-editor/core/growth';
 import type { GrowthSnapshot } from '../../../../types/growth-api';
@@ -59,11 +60,12 @@ export const GrowthOverview: React.FC<GrowthOverviewProps> = ({
         </div>
         <div className={styles.actions}>
           {onCreate && (
-            <button type="button" className={styles.primary} onClick={onCreate}>
+            <UiButton unstyled type="button" className={styles.primary} onClick={onCreate}>
               + 新建成长卡
-            </button>
+            </UiButton>
           )}
-          <button
+          <UiButton
+            unstyled
             type="button"
             className={styles.iconButton}
             aria-label="使用说明"
@@ -71,7 +73,7 @@ export const GrowthOverview: React.FC<GrowthOverviewProps> = ({
             onClick={onOpenHelp}
           >
             ?
-          </button>
+          </UiButton>
         </div>
       </header>
       <nav className={styles.sections} role="tablist" aria-label="总览分区">
@@ -81,7 +83,8 @@ export const GrowthOverview: React.FC<GrowthOverviewProps> = ({
             ['world', '世界'],
           ] as Array<[OverviewSection, string]>
         ).map(([key, label]) => (
-          <button
+          <UiButton
+            unstyled
             key={key}
             type="button"
             role="tab"
@@ -90,7 +93,7 @@ export const GrowthOverview: React.FC<GrowthOverviewProps> = ({
             onClick={() => setSection(key)}
           >
             {label}
-          </button>
+          </UiButton>
         ))}
       </nav>
 
@@ -110,20 +113,21 @@ export const GrowthOverview: React.FC<GrowthOverviewProps> = ({
               </p>
               <div className={styles.emptyActions}>
                 {onCreate && (
-                  <button type="button" className={styles.primary} onClick={onCreate}>
+                  <UiButton unstyled type="button" className={styles.primary} onClick={onCreate}>
                     + 新建成长卡
-                  </button>
+                  </UiButton>
                 )}
-                <button type="button" className={styles.secondary} onClick={onOpenHelp}>
+                <UiButton unstyled type="button" className={styles.secondary} onClick={onOpenHelp}>
                   查看使用说明
-                </button>
+                </UiButton>
               </div>
             </section>
           ) : (
             <ul className={styles.grid}>
               {cards.map(({ sheet, progress, latest, attention, hasError }) => (
                 <li key={sheet.name}>
-                  <button
+                  <UiButton
+                    unstyled
                     type="button"
                     className={styles.card}
                     aria-label={`打开 ${sheet.name} 的成长卡`}
@@ -149,7 +153,7 @@ export const GrowthOverview: React.FC<GrowthOverviewProps> = ({
                       </span>
                       <span>{latest > 0 ? `最近 第 ${latest} 章` : '尚未记录'}</span>
                     </span>
-                  </button>
+                  </UiButton>
                 </li>
               ))}
             </ul>
@@ -158,14 +162,15 @@ export const GrowthOverview: React.FC<GrowthOverviewProps> = ({
             <div className={styles.suggest}>
               <span className={styles.suggestLabel}>人物库中还没建卡：</span>
               {withoutSheet.map((item) => (
-                <button
+                <UiButton
+                  unstyled
                   key={item.name}
                   type="button"
                   className={styles.suggestItem}
                   onClick={() => onOpenCharacter(item.name)}
                 >
                   + {item.name}
-                </button>
+                </UiButton>
               ))}
             </div>
           )}

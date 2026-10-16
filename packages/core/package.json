@@ -28,6 +28,9 @@
     "./entity-media": "./src/entity-media.ts",
     "./internal-data": "./src/internal-data.ts",
     "./novel-format": "./src/novel-format.ts",
-    "./structure-rules": "./src/structure-rules.ts"
+    "./structure-rules": "./src/structure-rules.ts",
+    "./character-development": "./src/character-development.ts",
+    "./character-discovery": "./src/character-discovery.ts",
+    "./character-enrichment": "./src/character-enrichment.ts"
   }
 }

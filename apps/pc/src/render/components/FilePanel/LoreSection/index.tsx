@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useMemo, useState } from 'react';
 import {
   AiOutlineAppstore,
@@ -14,7 +15,7 @@ import {
 import type { LoreCategory, LoreEntry } from '../../RightPanel/types';
 import { LORE_CATEGORY_LABELS } from '../../RightPanel/constants';
 import CharacterAvatar from '../../CharacterAvatar';
-import Tooltip from '../../Tooltip';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import SectionHeader from '../SectionHeader';
 import ObjectItemRow from '../ObjectItemRow';
 import GroupLabel from '../GroupLabel';
@@ -130,7 +131,8 @@ const LoreSection: React.FC<LoreSectionProps> = ({
     const open = filtering || !closed.has(key);
     return (
       <div key={key} role="group" aria-label={`设定目录 ${node.path}`}>
-        <button
+        <UiButton
+          unstyled
           type="button"
           className={styles.folder}
           style={{ paddingLeft: 30 + depth * 12 }}
@@ -148,7 +150,7 @@ const LoreSection: React.FC<LoreSectionProps> = ({
           <AiOutlineFolder aria-hidden="true" />
           <span className={styles.folderName}>{node.name}</span>
           <span className={styles.folderCount}>{node.total}</span>
-        </button>
+        </UiButton>
         {open && (
           <>
             {node.folders.map((child) => renderFolder(child, depth + 1, scope))}
@@ -173,24 +175,26 @@ const LoreSection: React.FC<LoreSectionProps> = ({
         actions={
           <>
             <Tooltip content="设定总览：分类、标签与配图" position="top">
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.headerAction}
                 onClick={onOpenAll}
                 aria-label="打开设定总览"
               >
                 <AiOutlineAppstore />
-              </button>
+              </UiButton>
             </Tooltip>
             <Tooltip content="新建设定" position="top">
-              <button
+              <UiButton
+                unstyled
                 type="button"
                 className={styles.headerAction}
                 onClick={onCreate}
                 aria-label="新建设定"
               >
                 <AiOutlinePlus />
-              </button>
+              </UiButton>
             </Tooltip>
           </>
         }

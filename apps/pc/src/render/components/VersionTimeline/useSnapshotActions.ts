@@ -3,8 +3,8 @@
  */
 import type React from 'react';
 import { useCallback } from 'react';
-import { useToast } from '../Toast';
-import { useDialog } from '../Dialog';
+import { useToast } from '@novel-editor/ui/Toast';
+import { useDialog } from '@novel-editor/ui/Dialog';
 import type {
   BinaryReadResult,
   DiffRequestHandler,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { AiOutlineLock } from 'react-icons/ai';
-import EmptyState from '../EmptyState';
+import EmptyState from '@novel-editor/ui/EmptyState';
 import {
   INTERNAL_DATA_OWNER_LABELS,
   internalDataMessage,

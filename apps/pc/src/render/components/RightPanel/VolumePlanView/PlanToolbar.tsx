@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef, useState } from 'react';
 import { AiOutlineDown, AiOutlineEllipsis } from 'react-icons/ai';
 import {
@@ -6,8 +7,8 @@ import {
   getStructureLabel,
   type VolumeStructureId,
 } from '@novel-editor/basic-algorithm';
-import Popover from '../../Popover';
-import Tooltip from '../../Tooltip';
+import Popover from '@novel-editor/ui/Popover';
+import Tooltip from '@novel-editor/ui/Tooltip';
 import styles from './styles.module.scss';
 
 /** 结构选项的一句话说明（菜单副标题） */
@@ -44,7 +45,8 @@ export const PlanToolbar: React.FC<PlanToolbarProps> = ({
     <div className={styles.structureRow}>
       <span className={styles.structureLabel}>结构</span>
       <Tooltip content="按哪种结构给本卷分段（只影响卷纲，不改正文）" position="bottom">
-        <button
+        <UiButton
+          unstyled
           ref={structureRef}
           type="button"
           className={styles.structureChip}
@@ -55,11 +57,12 @@ export const PlanToolbar: React.FC<PlanToolbarProps> = ({
         >
           {getStructureLabel(structure)}
           <AiOutlineDown aria-hidden="true" />
-        </button>
+        </UiButton>
       </Tooltip>
       <span className={styles.toolbarSpacer} />
       <Tooltip content="更多操作" position="bottom">
-        <button
+        <UiButton
+          unstyled
           ref={moreRef}
           type="button"
           className={styles.iconButton}
@@ -69,7 +72,7 @@ export const PlanToolbar: React.FC<PlanToolbarProps> = ({
           onClick={() => setMoreOpen((open) => !open)}
         >
           <AiOutlineEllipsis />
-        </button>
+        </UiButton>
       </Tooltip>
 
       <Popover
@@ -85,7 +88,8 @@ export const PlanToolbar: React.FC<PlanToolbarProps> = ({
       >
         <div className={styles.menu} role="menu" aria-label="卷纲结构">
           {structureOptions(hasMarkers).map((id) => (
-            <button
+            <UiButton
+              unstyled
               key={id}
               type="button"
               role="menuitemradio"
@@ -98,7 +102,7 @@ export const PlanToolbar: React.FC<PlanToolbarProps> = ({
             >
               <span className={styles.menuItemTitle}>{getStructureLabel(id)}</span>
               <span className={styles.menuItemHint}>{describeStructure(id)}</span>
-            </button>
+            </UiButton>
           ))}
         </div>
       </Popover>

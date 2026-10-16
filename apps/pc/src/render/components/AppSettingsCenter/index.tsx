@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useRef } from 'react';
 import type { SettingsDraft } from '../../utils/appSettings';
 import styles from './styles.module.scss';
@@ -71,21 +72,22 @@ const AppSettingsCenter: React.FC<AppSettingsCenterProps> = ({
       >
         <div className={styles.header}>
           <h3>设置中心</h3>
-          <button className={styles.closeButton} onClick={onClose} aria-label="关闭设置">
+          <UiButton unstyled className={styles.closeButton} onClick={onClose} aria-label="关闭设置">
             ×
-          </button>
+          </UiButton>
         </div>
 
         <div className={styles.body}>
           <aside className={styles.sidebar}>
             {VALID_TABS.map((tab) => (
-              <button
+              <UiButton
+                unstyled
                 key={tab}
                 className={`${styles.tabButton} ${activeTab === tab ? styles.active : ''}`}
                 onClick={() => setActiveTab(tab)}
               >
                 {TAB_LABELS[tab]}
-              </button>
+              </UiButton>
             ))}
           </aside>
 

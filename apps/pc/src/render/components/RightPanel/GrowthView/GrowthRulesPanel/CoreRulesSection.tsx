@@ -1,3 +1,5 @@
+import UiInput from '@novel-editor/ui/Input';
+import UiButton from '@novel-editor/ui/Button';
 import React, { useState } from 'react';
 import { VscClose, VscTrash } from 'react-icons/vsc';
 import {
@@ -6,9 +8,9 @@ import {
   type CoreRuleCheck,
   type GrowthRuleset,
 } from '@novel-editor/core/growth';
-import NumberInput from '../../../NumberInput';
+import NumberInput from '@novel-editor/ui/NumberInput';
 import { defaultCheck, type CheckKind } from './model';
-import Select from '../../../Select';
+import Select from '@novel-editor/ui/Select';
 import {
   FieldIssue,
   IconButton,
@@ -280,7 +282,8 @@ export const CoreRulesSection: React.FC<CoreRulesSectionProps> = ({
           add();
         }}
       >
-        <input
+        <UiInput
+          unstyled
           className={`${styles.input} ${styles.grow}`}
           value={text}
           placeholder="新增一条核心规则"
@@ -288,9 +291,14 @@ export const CoreRulesSection: React.FC<CoreRulesSectionProps> = ({
           disabled={disabled}
           onChange={(event) => setText(event.target.value)}
         />
-        <button type="submit" className={styles.button} disabled={disabled || !text.trim()}>
+        <UiButton
+          unstyled
+          type="submit"
+          className={styles.button}
+          disabled={disabled || !text.trim()}
+        >
           添加
-        </button>
+        </UiButton>
       </form>
     </RulesSection>
   );

@@ -1,3 +1,7 @@
+import {
+  describeDevelopment,
+  LEGACY_DEVELOPMENT_FIELDS,
+} from '@novel-editor/core/character-development';
 /**
  * 续写上下文的资料来源（当前作品）：人物卡、成长档案与核心规则、当前章章纲
  *
@@ -20,10 +24,17 @@ export function charactersForContext(characters: readonly Character[]): ContextC
     .map((item) => {
       // 人物设计（外貌 / 服装 / 性格 / 背景 / 说话方式）让续写不跑偏人设
       const design = parseCharacterDesign(item.design);
-      const designText = CHARACTER_DESIGN_FIELDS.filter(({ key }) => design[key])
+      const designText = CHARACTER_DESIGN_FIELDS.filter(
+        ({ key }) => design[key] && !Object.hasOwn(LEGACY_DEVELOPMENT_FIELDS, key)
+      )
         .map(({ key, label }) => `${label}：${design[key].replace(/\s+/g, ' ')}`)
         .join('；');
-      const summary = [item.role.trim(), item.description.replace(/\s+/g, ' ').trim(), designText]
+      const summary = [
+        item.role.trim(),
+        item.description.replace(/\s+/g, ' ').trim(),
+        designText,
+        describeDevelopment(item.development, item.design),
+      ]
         .filter(Boolean)
         .join('；');
       const status = item.currentState

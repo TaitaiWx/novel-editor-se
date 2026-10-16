@@ -1,6 +1,7 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useEffect, useRef, useState } from 'react';
 import { consumeGrowthSheetCreation } from '../../../utils/growthIndex';
-import { useOptionalToast } from '../../Toast';
+import { useOptionalToast } from '@novel-editor/ui/Toast';
 import { GrowthCharacterPage } from './GrowthCharacterPage';
 import { GrowthHelp } from './GrowthHelp';
 import { GrowthOverview } from './GrowthOverview';
@@ -114,9 +115,14 @@ export const GrowthView: React.FC<GrowthViewProps> = ({
     return (
       <div className={styles.placeholder}>
         <div className={styles.errorText}>成长档案读取失败：{growth.error}</div>
-        <button type="button" className={styles.button} onClick={() => void growth.reload()}>
+        <UiButton
+          unstyled
+          type="button"
+          className={styles.button}
+          onClick={() => void growth.reload()}
+        >
           重试
-        </button>
+        </UiButton>
       </div>
     );
   }
@@ -167,9 +173,9 @@ export const GrowthView: React.FC<GrowthViewProps> = ({
     body = (
       <div className={styles.placeholder}>
         <div>当前作品还没有「{pinnedName}」的成长卡</div>
-        <button type="button" className={styles.button} onClick={createPinnedSheet}>
+        <UiButton unstyled type="button" className={styles.button} onClick={createPinnedSheet}>
           为「{pinnedName}」新建成长卡
-        </button>
+        </UiButton>
       </div>
     );
   } else if (!pinnedSheet) {

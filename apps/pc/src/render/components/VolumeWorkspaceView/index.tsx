@@ -1,3 +1,4 @@
+import UiButton from '@novel-editor/ui/Button';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { FileNode } from '../../types';
 import { useDebounce } from '../RightPanel/useDebounce';
@@ -140,15 +141,30 @@ const VolumeWorkspaceView: React.FC<VolumeWorkspaceViewProps> = React.memo(
         </div>
 
         <div className={styles.toolbar}>
-          <button type="button" className={styles.actionButton} onClick={onCreateChapter}>
+          <UiButton
+            unstyled
+            type="button"
+            className={styles.actionButton}
+            onClick={onCreateChapter}
+          >
             新建章
-          </button>
-          <button type="button" className={styles.secondaryButton} onClick={onCreateDraftFolder}>
+          </UiButton>
+          <UiButton
+            unstyled
+            type="button"
+            className={styles.secondaryButton}
+            onClick={onCreateDraftFolder}
+          >
             新建稿夹
-          </button>
-          <button type="button" className={styles.secondaryButton} onClick={onCreateDraft}>
+          </UiButton>
+          <UiButton
+            unstyled
+            type="button"
+            className={styles.secondaryButton}
+            onClick={onCreateDraft}
+          >
             新建稿
-          </button>
+          </UiButton>
         </div>
 
         <div className={styles.grid}>
@@ -195,7 +211,8 @@ const VolumeWorkspaceView: React.FC<VolumeWorkspaceViewProps> = React.memo(
           {chapterFiles.length > 0 ? (
             <div className={styles.fileList}>
               {chapterFiles.map((file) => (
-                <button
+                <UiButton
+                  unstyled
                   key={file.path}
                   type="button"
                   className={styles.fileRow}
@@ -203,7 +220,7 @@ const VolumeWorkspaceView: React.FC<VolumeWorkspaceViewProps> = React.memo(
                 >
                   <span className={styles.fileTag}>章</span>
                   <span className={styles.fileName}>{file.name.replace(/\.[^.]+$/, '')}</span>
-                </button>
+                </UiButton>
               ))}
             </div>
           ) : (
@@ -215,7 +232,8 @@ const VolumeWorkspaceView: React.FC<VolumeWorkspaceViewProps> = React.memo(
               <div className={styles.subsectionTitle}>样稿 / 测试稿</div>
               <div className={styles.fileList}>
                 {draftFiles.map((file) => (
-                  <button
+                  <UiButton
+                    unstyled
                     key={file.path}
                     type="button"
                     className={styles.fileRow}
@@ -223,7 +241,7 @@ const VolumeWorkspaceView: React.FC<VolumeWorkspaceViewProps> = React.memo(
                   >
                     <span className={`${styles.fileTag} ${styles.fileTagMuted}`}>稿</span>
                     <span className={styles.fileName}>{file.name.replace(/\.[^.]+$/, '')}</span>
-                  </button>
+                  </UiButton>
                 ))}
               </div>
             </>
